@@ -9,4 +9,5 @@ Scope {
   VolumeOsd {}
   Lock {}
   LockShortcut {}
+  TrayMenu {}
 }

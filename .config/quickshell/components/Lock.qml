@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
@@ -18,6 +19,8 @@ PanelWindow {
     WlrLayershell.exclusiveZone: -1
 
     visible: LockState.locked
+
+    property bool wrongPassword: false
 
     anchors {
         top: true
@@ -52,7 +55,12 @@ PanelWindow {
 
         id: loginBox
 
-        anchors.centerIn: parent
+        property real shakeOffset: 0
+
+        anchors {
+            centerIn: parent
+            horizontalCenterOffset: shakeOffset
+        }
 
         width: 0
         height: 4
@@ -136,7 +144,7 @@ PanelWindow {
 
                     id: avatar
 
-                    source: "file:///home/fayelia/.face"
+                    source: "file://" + Quickshell.env("HOME") + "/.face"
 
                     width: 192
                     height: 192
@@ -171,22 +179,28 @@ PanelWindow {
                     width: 240
                     height: 30
 
-                    placeholderText: "Password"
+                    placeholderText: authProcess.running ? "Checking..." : "Password"
 
                     echoMode: TextInput.Password
 
                     horizontalAlignment: TextInput.AlignHCenter
                     verticalAlignment: TextInput.AlignVCenter
 
+                    enabled: !authProcess.running
+
 
                     background: Rectangle {
 
                         color: Qt.rgba(0,0,0,0.3)
 
-                        border.color: Theme.fgcolor
+                        border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
                         border.width: 2
 
                         radius: 0
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: 150 }
+                        }
                     }
 
 
@@ -208,12 +222,52 @@ PanelWindow {
 
             color: "transparent"
 
-            border.color: Theme.fgcolor
+            border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
             border.width: 2
 
             z: 10
+
+            Behavior on border.color {
+                ColorAnimation { duration: 150 }
+            }
         }
 
+    }
+
+    Process {
+
+        id: authProcess
+
+        stdinEnabled: true
+
+        onExited: (exitCode, exitStatus) => {
+
+            if (exitCode === 0) {
+                unlock()
+            } else {
+                failedLogin()
+            }
+        }
+    }
+
+    SequentialAnimation {
+
+        id: shakeAnim
+
+        NumberAnimation { target: loginBox; property: "shakeOffset"; to: -12; duration: 60; easing.type: Easing.OutQuad }
+        NumberAnimation { target: loginBox; property: "shakeOffset"; to: 12; duration: 60; easing.type: Easing.OutQuad }
+        NumberAnimation { target: loginBox; property: "shakeOffset"; to: -8; duration: 60; easing.type: Easing.OutQuad }
+        NumberAnimation { target: loginBox; property: "shakeOffset"; to: 0; duration: 60; easing.type: Easing.OutQuad }
+    }
+
+    Timer {
+
+        id: wrongFlashTimer
+
+        interval: 400
+        repeat: false
+
+        onTriggered: root.wrongPassword = false
     }
 
 
@@ -258,16 +312,13 @@ PanelWindow {
 
     function attemptLogin(password) {
 
-        console.log("Trying password")
-
-        // temporary testing
-        if (password === "jaje") {
-
-            unlock()
+        if (password.length === 0 || authProcess.running) {
+            return
         }
-        else{
 
-            failedLogin()}
+        authProcess.command = [Quickshell.shellDir + "/helpers/auth", Quickshell.env("USER")]
+        authProcess.running = true
+        authProcess.write(password + "\n")
 
     }
 
@@ -282,6 +333,12 @@ PanelWindow {
     function failedLogin() {
 
         passwordInput.clear()
+
+        root.wrongPassword = true
+        wrongFlashTimer.restart()
+        shakeAnim.restart()
+
+        passwordInput.forceActiveFocus()
 
     }
 

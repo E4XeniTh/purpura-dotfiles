@@ -38,6 +38,7 @@ Scope {
                     anchors.margins: 10
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
+                    screen: modelData
                 }
             }
         }
