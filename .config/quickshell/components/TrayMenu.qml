@@ -34,7 +34,7 @@ Scope {
             }
 
             implicitWidth: 160
-            implicitHeight: Math.max(entryColumn.height, 1)
+            implicitHeight: Math.max(entryColumn.height + (2 * 5), 1)
 
             color: "transparent"
 
@@ -48,7 +48,6 @@ Scope {
 
                 width: 0
                 height: 4
-
                 color: Theme.fillcolorSolid
 
                 states: [
@@ -71,7 +70,7 @@ Scope {
                             target: menuBox
 
                             width: 160
-                            height: Math.max(entryColumn.height, 1)
+                            height: Math.max(entryColumn.height + (2 * 5), 1)
                         }
                     }
 
@@ -83,9 +82,9 @@ Scope {
 
                         NumberAnimation {
 
-                            properties: "width,height"
+                            properties: "height"
 
-                            duration: 150
+                            duration: 350
 
                             easing.type: Easing.OutCubic
 
@@ -97,13 +96,14 @@ Scope {
 
                 Item {
                     id: contentMask
-
                     anchors.fill: parent
+                    anchors.topMargin: 5
+                    anchors.bottomMargin: 5
                     clip: true
+
 
                     Column {
                         id: entryColumn
-
                         width: 160
 
                         Repeater {
@@ -141,12 +141,12 @@ Scope {
 
                                     Text {
                                         anchors {
-                                            left: parent.left
-                                            right: parent.right
-                                            verticalCenter: parent.verticalCenter
+                                            fill: parent
                                             leftMargin: 10
                                             rightMargin: 10
                                         }
+
+                                        verticalAlignment: Text.AlignVCenter
 
                                         text: entryDelegate.modelData.isSeparator ? "" : entryDelegate.modelData.text
                                         color: entryDelegate.modelData.enabled ? Theme.fgcolor : Qt.rgba(1, 1, 1, 0.35)
