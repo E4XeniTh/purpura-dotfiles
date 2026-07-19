@@ -162,7 +162,7 @@ PanelWindow {
 
                         color: "transparent"
 
-                        border.color: Theme.fgcolor
+                        border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
                         border.width: 2
 
                         radius: 0

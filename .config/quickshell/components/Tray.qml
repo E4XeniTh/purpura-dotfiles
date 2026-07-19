@@ -35,8 +35,8 @@ Rectangle {
 
                 required property var modelData
 
-                width: 16
-                height: 16
+                width: 30
+                height: width
 
                 Image {
                     anchors.fill: parent
@@ -62,7 +62,7 @@ Rectangle {
                                 // this item's offset within the tray row. Keep these in
                                 // sync if the bar's layout ever changes.
                                 TrayMenuState.marginLeft = 10 + trayItem.x
-                                TrayMenuState.marginTop = 5
+                                TrayMenuState.marginTop = 4
                                 TrayMenuState.screen = root.screen
                                 TrayMenuState.menu = trayItem.modelData.menu
                             } else {
