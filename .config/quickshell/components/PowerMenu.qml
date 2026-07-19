@@ -75,7 +75,7 @@ PanelWindow {
 
                     target: menuBox
 
-                    width: 470
+                    width: 725
                     height: 2
 
                 }
@@ -90,8 +90,8 @@ PanelWindow {
 
                     target: menuBox
 
-                    width: 470
-                    height: 130
+                    width: 725
+                    height: 200
 
                 }
             }

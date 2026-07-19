@@ -10,8 +10,8 @@ Item {
 
     property string icon: ""
 
-    width: 90
-    height: 90
+    width: 150
+    height: 150
 
     Rectangle {
         anchors.fill: parent
@@ -24,7 +24,7 @@ Item {
 
         IconImage {
             anchors.centerIn: parent
-            implicitSize: 44
+            implicitSize: 88
             source: Quickshell.iconPath(root.icon)
         }
     }
