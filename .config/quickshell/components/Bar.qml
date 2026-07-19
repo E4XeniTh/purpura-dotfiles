@@ -75,7 +75,7 @@ Scope {
                             if (mouse.button === Qt.LeftButton) {
                                 PowerMenuState.open = true
                             } else if (mouse.button === Qt.RightButton) {
-                                LockState.locked = true
+                                LockMenuState.locked = true
                             }
                         }
                     }
