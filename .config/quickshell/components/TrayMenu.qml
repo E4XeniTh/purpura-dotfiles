@@ -198,7 +198,9 @@ Scope {
             Timer {
                 id: menuOpenTimer
 
-                interval: 80
+                // Must match the transition's duration below, so phase 1
+                // (width) fully finishes before phase 2 (height) starts.
+                interval: 350
                 repeat: false
 
                 onTriggered: {
