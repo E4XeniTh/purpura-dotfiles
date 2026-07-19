@@ -61,8 +61,8 @@ Rectangle {
                                 // Bar.qml's own margins (10 left, 10 top, 48 tall) plus
                                 // this item's offset within the tray row. Keep these in
                                 // sync if the bar's layout ever changes.
-                                TrayMenuState.marginLeft = 10 + 10 + trayItem.x
-                                TrayMenuState.marginTop = 10 + 48 + 4
+                                TrayMenuState.marginLeft = 10 + trayItem.x
+                                TrayMenuState.marginTop = 5
                                 TrayMenuState.screen = root.screen
                                 TrayMenuState.menu = trayItem.modelData.menu
                             } else {

@@ -33,7 +33,7 @@ Scope {
                 left: TrayMenuState.marginLeft
             }
 
-            implicitWidth: 180
+            implicitWidth: 160
             implicitHeight: Math.max(entryColumn.height, 1)
 
             color: "transparent"
@@ -99,7 +99,7 @@ Scope {
                                     }
 
                                     text: entryDelegate.modelData.isSeparator ? "" : entryDelegate.modelData.text
-                                    color: entryDelegate.modelData.enabled ? "white" : Qt.rgba(1, 1, 1, 0.35)
+                                    color: entryDelegate.modelData.enabled ? Theme.fgcolor : Qt.rgba(1, 1, 1, 0.35)
                                     elide: Text.ElideRight
                                 }
 
