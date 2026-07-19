@@ -82,7 +82,7 @@ Scope {
 
                         NumberAnimation {
 
-                            properties: "height"
+                            properties: "width,height"
 
                             duration: 350
 
