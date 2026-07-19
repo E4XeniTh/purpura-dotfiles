@@ -10,4 +10,5 @@ Scope {
   Lock {}
   LockShortcut {}
   TrayMenu {}
+  PowerMenu {}
 }
