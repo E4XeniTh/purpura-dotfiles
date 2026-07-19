@@ -12,6 +12,6 @@ Text {
         interval: 1000
         running: true
         repeat: true
-        onTriggered: root.text = Qt.formatDateTime(new Date(), "hh:mm:ss")
+        onTriggered: root.text = Qt.formatDateTime(new Date(), "hh:mm")
     }
 }

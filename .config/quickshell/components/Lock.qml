@@ -39,7 +39,7 @@ PanelWindow {
 
         anchors.fill: parent
 
-        color: Qt.rgba(0,0,0,0.35)
+        color: Qt.rgba(0,0,0,0.55)
 
         opacity: 0
 
