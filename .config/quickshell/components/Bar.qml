@@ -1,7 +1,6 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Widgets
 import QtQuick
 
 Scope {
@@ -10,7 +9,7 @@ Scope {
     Variants {
         model: Quickshell.screens
         PanelWindow {
-            visible: !LockState.locked
+            visible: !LockMenuState.locked
             id: bar
             property var modelData
             screen: modelData
@@ -42,48 +41,40 @@ Scope {
                     screen: modelData
                 }
 
-                Clock {
-                    anchors.centerIn: parent
-                }
-
                 Rectangle {
-                    id: powerButton
+                    id: dashboardToggle
 
-                    anchors {
-                        right: parent.right
-                        verticalCenter: parent.verticalCenter
-                        margins: 10
-                    }
+                    anchors.centerIn: parent
 
                     width: 32
-                    height: 24
-                    radius: 8
-                    color: Theme.fillcolor
+                    height: 32
+                    radius: 0
+                    color: Theme.fgcolor
 
-                    IconImage {
-                        anchors.centerIn: parent
-                        implicitSize: 16
-                        source: Quickshell.iconPath("system-shutdown-symbolic")
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 3
+
+                        source: "file://" + Quickshell.env("HOME") + "/.face"
+
+                        fillMode: Image.PreserveAspectCrop
+                        clip: true
                     }
 
                     MouseArea {
                         anchors.fill: parent
+                        onClicked: DashboardState.toggle(modelData)
+                    }
+                }
 
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton
-
-                        onClicked: (mouse) => {
-                            if (mouse.button === Qt.LeftButton) {
-                                PowerMenuState.open = true
-                            } else if (mouse.button === Qt.RightButton) {
-                                LockMenuState.locked = true
-                            }
-                        }
+                Clock {
+                    anchors {
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                        margins: 10
                     }
                 }
             }
         }
     }
 }
-
-
-

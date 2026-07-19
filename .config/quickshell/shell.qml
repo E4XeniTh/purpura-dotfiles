@@ -11,4 +11,5 @@ Scope {
   LockMenuShortcut {}
   TrayMenu {}
   PowerMenu {}
+  Dashboard {}
 }
