@@ -16,13 +16,10 @@ Scope {
             property var modelData
             screen: modelData
 
-            property bool everActivated: false
-
             visible: TrayMenuState.open && TrayMenuState.screen === modelData
 
             WlrLayershell.namespace: "trayMenu"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: visible ? WlrLayershell.OnDemand : WlrLayershell.None
 
             exclusiveZone: 0
 
@@ -40,18 +37,6 @@ Scope {
             implicitHeight: Math.max(entryColumn.height, 1)
 
             color: "transparent"
-
-            // Best-effort dismiss when focus moves elsewhere. Only reacts
-            // once we've actually been active, so opening the window doesn't
-            // immediately close it before the compositor grants focus.
-            onActiveChanged: {
-                if (active) {
-                    everActivated = true
-                } else if (everActivated) {
-                    everActivated = false
-                    TrayMenuState.close()
-                }
-            }
 
             QsMenuOpener {
                 id: opener
