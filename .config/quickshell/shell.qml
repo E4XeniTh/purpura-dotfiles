@@ -7,8 +7,8 @@ Scope {
   property bool wrongPassword: false
   Bar {}
   VolumeOsd {}
-  Lock {}
-  LockShortcut {}
+  LockMenu {}
+  LockMenuShortcut {}
   TrayMenu {}
   PowerMenu {}
 }
