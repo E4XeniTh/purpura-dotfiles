@@ -7,7 +7,7 @@ GlobalShortcut {
 
     onPressed: {
 
-        LockMenuState.locked = true
+        LockScreenState.locked = true
     }
 
 }

@@ -3,6 +3,7 @@ import Quickshell.Services.SystemTray
 import QtQuick
 import QtQuick.Controls
 import Quickshell.Io
+import "../"
 
 Rectangle {
     id: root

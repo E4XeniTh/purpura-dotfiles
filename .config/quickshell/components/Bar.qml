@@ -1,7 +1,12 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Widgets
 import QtQuick
+import "lockscreen"
+import "powermenu"
+import "dashboard"
+import "tray"
 
 Scope {
     id: root
@@ -9,7 +14,7 @@ Scope {
     Variants {
         model: Quickshell.screens
         PanelWindow {
-            visible: !LockMenuState.locked && !PowerMenuState.open
+            visible: !LockScreenState.locked && !PowerMenuState.open
             id: bar
             property var modelData
             screen: modelData
@@ -67,11 +72,26 @@ Scope {
                     }
                 }
 
-                Clock {
+                // Placeholder for now - will open a notification manager
+                // once one exists.
+                Rectangle {
+                    id: notificationButton
+
                     anchors {
                         right: parent.right
                         verticalCenter: parent.verticalCenter
                         margins: 10
+                    }
+
+                    width: 32
+                    height: 24
+                    radius: 8
+                    color: Theme.fillcolor
+
+                    IconImage {
+                        anchors.centerIn: parent
+                        implicitSize: 16
+                        source: Quickshell.iconPath("preferences-system-notifications-symbolic")
                     }
                 }
             }

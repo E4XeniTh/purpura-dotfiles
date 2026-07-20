@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import QtQuick
+import "../"
 
 // Themed right-click context menu for tray items (components/Tray.qml).
 // One PanelWindow per screen, shown only on the screen a menu was opened on.
@@ -48,7 +49,7 @@ Scope {
 
                 width: 0
                 height: 2
-                color: Theme.fillcolorSolid
+                color: Theme.fillcolor
 
                 states: [
 

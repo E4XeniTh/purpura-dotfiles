@@ -1,7 +1,11 @@
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
+import "../"
+import "../powermenu"
+import "../lockscreen"
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as TrayMenu.qml. dashBox is
@@ -172,24 +176,39 @@ Scope {
 
                                 property string weatherText: "Loading..."
 
+                                // curl, not XMLHttpRequest: wttr.in serves
+                                // plain text to curl-like clients but an
+                                // HTML page to browser-like ones, and QML's
+                                // XHR reads as the latter - this is very
+                                // likely why the old XHR version showed
+                                // garbage instead of a real reading.
+                                Process {
+                                    id: weatherProcess
+
+                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C+%t"]
+
+                                    stdout: SplitParser {
+                                        onRead: (line) => {
+                                            if (line.trim().length > 0) {
+                                                weatherBox.weatherText = line.trim()
+                                            }
+                                        }
+                                    }
+
+                                    onExited: (exitCode) => {
+                                        if (exitCode !== 0) {
+                                            weatherBox.weatherText = "Weather unavailable"
+                                        }
+                                    }
+                                }
+
                                 Timer {
                                     interval: 15 * 60 * 1000
                                     running: true
                                     repeat: true
                                     triggeredOnStart: true
 
-                                    onTriggered: {
-                                        const xhr = new XMLHttpRequest()
-                                        xhr.onreadystatechange = () => {
-                                            if (xhr.readyState === XMLHttpRequest.DONE) {
-                                                weatherBox.weatherText = xhr.status === 200
-                                                    ? xhr.responseText.trim()
-                                                    : "Weather unavailable"
-                                            }
-                                        }
-                                        xhr.open("GET", "https://wttr.in/?format=%C+%t")
-                                        xhr.send()
-                                    }
+                                    onTriggered: weatherProcess.running = true
                                 }
 
                                 Text {
@@ -214,7 +233,7 @@ Scope {
 
                                 Calendar {
                                     anchors.fill: parent
-                                    anchors.margins: 12
+                                    anchors.margins: 8
                                 }
                             }
                         }
@@ -343,7 +362,7 @@ Scope {
                                             anchors.fill: parent
                                             onClicked: {
                                                 DashboardState.close()
-                                                LockMenuState.locked = true
+                                                LockScreenState.locked = true
                                             }
                                         }
                                     }

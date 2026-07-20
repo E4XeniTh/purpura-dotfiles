@@ -1,4 +1,5 @@
 import QtQuick
+import "../"
 
 // Simple current-month calendar. Self-contained (no external services).
 Item {
@@ -12,7 +13,7 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: 12
+        spacing: 8
 
         Item {
             width: root.width

@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Services.Mpris
+import "../"
 
 // Media controls + album art, with a cava audio visualizer running behind
 // it. Loaded lazily via Loader from Dashboard.qml so a wrong MPRIS/cava API

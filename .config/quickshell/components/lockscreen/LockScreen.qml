@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
+import "../"
 
 PanelWindow {
 
@@ -18,7 +19,7 @@ PanelWindow {
 
     WlrLayershell.exclusiveZone: -1
 
-    visible: LockMenuState.locked
+    visible: LockScreenState.locked
 
     property bool wrongPassword: false
 
@@ -326,7 +327,7 @@ PanelWindow {
 
         passwordInput.clear()
 
-        LockMenuState.locked = false
+        LockScreenState.locked = false
 
     }
 
@@ -353,7 +354,7 @@ PanelWindow {
 
         passwordInput.clear()
 
-        LockMenuState.locked = true
+        LockScreenState.locked = true
 
     }
 

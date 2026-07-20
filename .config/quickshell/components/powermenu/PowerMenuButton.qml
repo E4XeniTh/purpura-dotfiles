@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Widgets
+import "../"
 
 // Large icon-only button used inside PowerMenu.qml.
 Item {
