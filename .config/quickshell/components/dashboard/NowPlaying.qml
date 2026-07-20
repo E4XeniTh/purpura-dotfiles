@@ -31,26 +31,6 @@ Item {
         }
     }
 
-    Row {
-        anchors.fill: parent
-        spacing: 1
-
-        Repeater {
-            model: root.barLevels
-
-            delegate: Rectangle {
-                required property int modelData
-
-                anchors.bottom: parent.bottom
-
-                width: parent.width / Math.max(root.barLevels.length, 1)
-                height: parent.height * (modelData / 100)
-
-                color: Qt.rgba(150, 0, 250, 0.25)
-            }
-        }
-    }
-
     Column {
         anchors.fill: parent
         spacing: 10
@@ -60,6 +40,7 @@ Item {
             height: parent.width * 0.65
             border.width: 2
             border.color: Theme.fgcolor
+            color: "transparent"
 
             Image {
                 anchors.fill: parent
@@ -74,7 +55,7 @@ Item {
                 visible: !root.player
                 text: "N/A"
                 color: Theme.fgcolor
-                font.pixelSize: 128
+                font.pixelSize: 96
             }
         }
 

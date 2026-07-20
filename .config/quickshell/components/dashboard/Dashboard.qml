@@ -158,7 +158,7 @@ Scope {
 
                                 Clock {
                                     anchors.centerIn: parent
-                                    font.pixelSize: parent.height * 0.5
+                                    font.pixelSize: parent.height * 0.75
                                     color: Theme.fgcolor
                                 }
                             }
@@ -217,7 +217,7 @@ Scope {
 
                                     text: weatherBox.weatherText
                                     color: Theme.fgcolor
-                                    font.pixelSize: 14
+                                    font.pixelSize: 22
                                     elide: Text.ElideRight
                                     horizontalAlignment: Text.AlignHCenter
                                 }
@@ -265,7 +265,7 @@ Scope {
                                     spacing: 10
 
                                     Repeater {
-                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "bluetooth-symbolic", "", ""]
+                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", ""]
 
                                         delegate: Rectangle {
                                             required property string modelData
@@ -321,18 +321,18 @@ Scope {
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: 16
+                                    spacing: 32
 
                                     Rectangle {
-                                        width: 48
-                                        height: 48
+                                        width: 86
+                                        height: 86
                                         color: mouseAreaPower.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 26
+                                            implicitSize: 64
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
@@ -348,15 +348,15 @@ Scope {
                                     }
 
                                     Rectangle {
-                                        width: 48
-                                        height: 48
+                                        width: 86
+                                        height: 86
                                         color: mouseAreaLock.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 26
+                                            implicitSize: 64
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
