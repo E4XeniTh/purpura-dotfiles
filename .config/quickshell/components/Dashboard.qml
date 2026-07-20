@@ -12,7 +12,7 @@ import QtQuick
 Scope {
     id: root
 
-    readonly property int dashWidth: 400
+    readonly property int dashWidth: 800
 
     Variants {
         model: Quickshell.screens
@@ -27,20 +27,18 @@ Scope {
 
             WlrLayershell.namespace: "dashboard"
             WlrLayershell.layer: WlrLayer.Overlay
-
-            exclusiveZone: 0
-
             anchors {
                 top: true
-                left: true
             }
+            exclusiveZone: 0
 
             margins {
                 // Bar's own top margin (10) + height (48) - border width (2),
                 // so this window's top edge lands exactly on the bar's
                 // bottom border instead of leaving a gap or a seam.
-                top: 56
+                top: 10
                 left: (modelData.width - root.dashWidth) / 2
+                right: (modelData.width + root.dashWidth) / 2
             }
 
             implicitWidth: root.dashWidth
@@ -50,6 +48,8 @@ Scope {
 
             Rectangle {
                 id: dashBox
+
+                anchors.horizontalCenter: parent.horizontalCenter
 
                 width: 0
                 height: 4
