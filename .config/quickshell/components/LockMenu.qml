@@ -63,7 +63,7 @@ PanelWindow {
         }
 
         width: 0
-        height: 4
+        height: 2
 
         color: Qt.rgba(0,0,0,1)
 

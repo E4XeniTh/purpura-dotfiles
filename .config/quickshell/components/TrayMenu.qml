@@ -47,7 +47,7 @@ Scope {
                 id: menuBox
 
                 width: 0
-                height: 4
+                height: 2
                 color: Theme.fillcolorSolid
 
                 states: [

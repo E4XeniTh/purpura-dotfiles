@@ -36,7 +36,7 @@ Scope {
                 // Bar's own top margin (10) + height (48) - border width (2),
                 // so this window's top edge lands exactly on the bar's
                 // bottom border instead of leaving a gap or a seam.
-                top: 10
+                top: 4
                 left: (modelData.width - root.dashWidth) / 2
                 right: (modelData.width + root.dashWidth) / 2
             }
