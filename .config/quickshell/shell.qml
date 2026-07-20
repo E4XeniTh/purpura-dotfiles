@@ -1,6 +1,7 @@
 //@ pragma UseQApplication
 // shell.qml
 import Quickshell
+import QtQuick
 import "components"
 import "components/lockscreen"
 import "components/tray"
