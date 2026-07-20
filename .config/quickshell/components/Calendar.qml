@@ -12,19 +12,29 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: 6
+        spacing: 12
 
-        Text {
-            text: Qt.formatDate(root.today, "MMMM yyyy")
-            color: "black"
-            font.pixelSize: 14
-            font.bold: true
+        Row {
+            Text {
+                id: monthtext
+                text: Qt.formatDate(root.today, "MMMM")
+                color: Theme.fgcolor
+                font.pixelSize: 14
+                font.bold: true
+            }
+
+            Text {
+                id: yeartext
+                text: Qt.formatDate(root.today, "yyyy")
+                color: Theme.fgcolor
+                font.pixelSize: 14
+                font.bold: true
+            }
         }
-
         Grid {
             columns: 7
             columnSpacing: 2
-            rowSpacing: 2
+            rowSpacing: 4
 
             Repeater {
                 model: ["S", "M", "T", "W", "T", "F", "S"]
@@ -33,14 +43,14 @@ Item {
                     required property string modelData
 
                     width: (root.width - 12) / 7
-                    height: 16
+                    height: 24
 
                     horizontalAlignment: Text.AlignHCenter
                     text: modelData
-                    color: "black"
-                    font.pixelSize: 10
+                    color: Theme.fgcolordark
+                    font.pixelSize: 12
                     font.bold: true
-                    opacity: 0.6
+                    opacity: 1
                 }
             }
 
@@ -67,13 +77,13 @@ Item {
                     height: 20
                     radius: 0
 
-                    color: isToday ? "black" : "transparent"
+                    color: isToday ? Theme.fgcolordark : "transparent"
 
                     Text {
                         anchors.centerIn: parent
                         text: dayCell.index + 1
-                        color: dayCell.isToday ? Theme.fgcolor : "black"
-                        font.pixelSize: 10
+                        color: dayCell.isToday ? Theme.fgcolor : Theme.fgcolordark
+                        font.pixelSize: 12
                         font.bold: dayCell.isToday
                     }
                 }

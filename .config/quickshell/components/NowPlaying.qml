@@ -30,24 +30,6 @@ Item {
         }
     }
 
-    property var barLevels: []
-
-    Process {
-        id: cavaProcess
-
-        command: ["cava", "-p", Quickshell.shellDir + "/cava/config"]
-        running: true
-
-        stdout: SplitParser {
-            onRead: (line) => {
-                const parts = line.split(";").filter(p => p.length > 0)
-                if (parts.length > 0) {
-                    root.barLevels = parts.map(p => parseInt(p, 10) || 0)
-                }
-            }
-        }
-    }
-
     Row {
         anchors.fill: parent
         spacing: 1
@@ -63,7 +45,7 @@ Item {
                 width: parent.width / Math.max(root.barLevels.length, 1)
                 height: parent.height * (modelData / 100)
 
-                color: Qt.rgba(0, 0, 0, 0.25)
+                color: Qt.rgba(150, 0, 250, 0.25)
             }
         }
     }
@@ -75,8 +57,8 @@ Item {
         Rectangle {
             width: parent.width
             height: parent.width * 0.65
-
-            color: Qt.rgba(0, 0, 0, 0.15)
+            border.width: 2
+            border.color: Theme.fgcolor
 
             Image {
                 anchors.fill: parent
@@ -89,16 +71,16 @@ Item {
             Text {
                 anchors.centerIn: parent
                 visible: !root.player
-                text: "Nothing playing"
-                color: "black"
-                font.pixelSize: 12
+                text: "N/A"
+                color: Theme.fgcolor
+                font.pixelSize: 128
             }
         }
 
         Text {
             width: parent.width
             text: root.player && root.player.trackTitle ? root.player.trackTitle : ""
-            color: "black"
+            color: Theme.fgcolor
             font.pixelSize: 13
             font.bold: true
             elide: Text.ElideRight
@@ -108,7 +90,7 @@ Item {
         Text {
             width: parent.width
             text: root.player && root.player.trackArtist ? root.player.trackArtist : ""
-            color: "black"
+            color: Theme.fgcolor
             font.pixelSize: 11
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
@@ -130,16 +112,16 @@ Item {
                 delegate: Rectangle {
                     required property var modelData
 
-                    width: 26
-                    height: 26
+                    width: 36
+                    height: 36
 
                     color: "transparent"
                     border.width: 1
-                    border.color: "black"
+                    border.color: Theme.fgcolor
 
                     IconImage {
                         anchors.centerIn: parent
-                        implicitSize: 15
+                        implicitSize: 18
                         source: Quickshell.iconPath(modelData.icon)
                     }
 

@@ -39,7 +39,7 @@ Scope {
                 // Bar's own top margin (10) + height (48) - border width
                 // (2), so this window's top edge lands on the bar's bottom
                 // border instead of leaving a gap or a seam.
-                top: 56
+                top: 4
             }
 
             implicitWidth: root.dashWidth
@@ -57,7 +57,7 @@ Scope {
 
                 // Fully opaque - each section below sits on top of this in
                 // its own Theme.fgcolor card.
-                color: Qt.rgba(0, 0, 0, 1)
+                color: Theme.fillcolor
 
                 states: [
 
@@ -124,20 +124,22 @@ Scope {
                         Column {
                             id: leftColumn
 
-                            width: 260
+                            width: (parent.width * 0.35) - 16
                             height: root.columnHeight
                             spacing: 10
 
                             // top left, 1/5: large numerical clock
                             Rectangle {
+
                                 width: parent.width
                                 height: (root.columnHeight - 2 * parent.spacing) * 0.2
-                                color: Theme.fgcolor
-
+                                color: Theme.fillcolor
+                                border.width: 2
+                                border.color: Theme.fgcolor
                                 Clock {
                                     anchors.centerIn: parent
-                                    font.pixelSize: 34
-                                    color: "black"
+                                    font.pixelSize: 64
+                                    color: Theme.fgcolor
                                 }
                             }
 
@@ -147,8 +149,10 @@ Scope {
                                 id: weatherBox
 
                                 width: parent.width
-                                height: (root.columnHeight - 2 * parent.spacing) * 0.2
-                                color: Theme.fgcolor
+                                height: (root.columnHeight - 2 * parent.spacing) * 0.3
+                                color: Theme.fillcolor
+                                border.width: 2
+                                border.color: Theme.fgcolor
 
                                 property string weatherText: "Loading..."
 
@@ -177,7 +181,7 @@ Scope {
                                     width: parent.width - 16
 
                                     text: weatherBox.weatherText
-                                    color: "black"
+                                    color: Theme.fgcolor
                                     font.pixelSize: 14
                                     elide: Text.ElideRight
                                     horizontalAlignment: Text.AlignHCenter
@@ -187,8 +191,10 @@ Scope {
                             // bottom left, 3/5: calendar
                             Rectangle {
                                 width: parent.width
-                                height: (root.columnHeight - 2 * parent.spacing) * 0.6
-                                color: Theme.fgcolor
+                                height: (root.columnHeight - 2 * parent.spacing) * 0.5
+                                color: Theme.fillcolor
+                                border.width: 2
+                                border.color: Theme.fgcolor
 
                                 Calendar {
                                     anchors.fill: parent
@@ -201,7 +207,7 @@ Scope {
                         Column {
                             id: centerColumn
 
-                            width: 176
+                            width: (parent.width * 0.30) - 32
                             height: root.columnHeight
                             spacing: 10
 
@@ -209,12 +215,12 @@ Scope {
                             // network, bluetooth, two spares)
                             Rectangle {
                                 width: parent.width
-                                height: 70
-                                color: Theme.fgcolor
+                                height: 40
+                                color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: 8
+                                    spacing: 10
 
                                     Repeater {
                                         model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "bluetooth-symbolic", "", ""]
@@ -222,15 +228,15 @@ Scope {
                                         delegate: Rectangle {
                                             required property string modelData
 
-                                            width: 26
-                                            height: 26
-                                            color: "transparent"
-                                            border.width: 1
-                                            border.color: "black"
+                                            width: 32
+                                            height: 32
+                                            color: Theme.fillcolor
+                                            border.width: 2
+                                            border.color: Theme.fgcolor
 
                                             IconImage {
                                                 anchors.centerIn: parent
-                                                implicitSize: 15
+                                                implicitSize: 20
                                                 visible: modelData.length > 0
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
                                             }
@@ -242,19 +248,21 @@ Scope {
                             // middle center: avatar
                             Rectangle {
                                 width: parent.width
-                                height: root.columnHeight - 70 - 90 - 2 * parent.spacing
+                                height: parent.width
                                 color: Theme.fgcolor
 
                                 Rectangle {
                                     anchors.centerIn: parent
 
-                                    width: 72
-                                    height: 72
-                                    color: "black"
+                                    width: parent.width
+                                    height: parent.width
+                                    color: Theme.fillcolor
+                                    border.width: 2
+                                    border.color: Theme.fgcolor
 
                                     Image {
                                         anchors.fill: parent
-                                        anchors.margins: 3
+                                        anchors.margins: 2
 
                                         source: "file://" + Quickshell.env("HOME") + "/.face"
                                         fillMode: Image.PreserveAspectCrop
@@ -267,7 +275,7 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: 90
-                                color: Theme.fgcolor
+                                color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
@@ -276,9 +284,9 @@ Scope {
                                     Rectangle {
                                         width: 48
                                         height: 48
-                                        color: "black"
+                                        color: Theme.fillcolor
                                         border.width: 2
-                                        border.color: Theme.fgcolordark
+                                        border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
@@ -298,9 +306,9 @@ Scope {
                                     Rectangle {
                                         width: 48
                                         height: 48
-                                        color: "black"
+                                        color: Theme.fillcolor
                                         border.width: 2
-                                        border.color: Theme.fgcolordark
+                                        border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
@@ -319,17 +327,12 @@ Scope {
                                 }
                             }
                         }
-
-                        // ---------------- RIGHT COLUMN ----------------
-                        // Now playing + cava. Loaded lazily by path (not
-                        // instantiated directly) so a wrong MPRIS/cava API
-                        // guess only blanks this card instead of breaking
-                        // the whole shell - verify this one live.
                         Rectangle {
-                            width: 300
+                            width: (parent.width * 0.35) - 16
                             height: root.columnHeight
-                            color: Theme.fgcolor
-
+                            color: Theme.fillcolor
+                            border.width: 2
+                            border.color: Theme.fgcolor
                             Loader {
                                 anchors.fill: parent
                                 anchors.margins: 12
