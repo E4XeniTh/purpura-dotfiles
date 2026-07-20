@@ -17,4 +17,5 @@ Singleton {
     // automatically whenever fgcolor changes - no separate hex to maintain.
     readonly property color fgcolordark: Qt.darker(fgcolor, 1.5)
     readonly property color fgcolorlight: Qt.lighter(fgcolor, 1.5)
+    readonly property color fgcolorhover: Qt.darker(fgcolor, 5.0)
 }

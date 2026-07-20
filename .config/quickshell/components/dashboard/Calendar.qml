@@ -13,7 +13,7 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: 8
+        spacing: 16
 
         Item {
             width: root.width
@@ -22,7 +22,7 @@ Item {
             Text {
                 id: monthtext
                 anchors.left: parent.left
-                text: Qt.formatDate(root.today, "MMMM")
+                text: Qt.formatDate(root.today, "    MMMM")
                 color: Theme.fgcolor
                 font.pixelSize: 14
                 font.bold: true
@@ -31,7 +31,7 @@ Item {
             Text {
                 id: yeartext
                 anchors.right: parent.right
-                text: Qt.formatDate(root.today, "yyyy")
+                text: Qt.formatDate(root.today, "yyyy   ")
                 color: Theme.fgcolor
                 font.pixelSize: 14
                 font.bold: true
@@ -52,6 +52,7 @@ Item {
                     height: 24
 
                     horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignCenter
                     text: modelData
                     color: Theme.fgcolordark
                     font.pixelSize: 12
@@ -91,6 +92,8 @@ Item {
                         color: dayCell.isToday ? Theme.fgcolor : Theme.fgcolordark
                         font.pixelSize: 12
                         font.bold: dayCell.isToday
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
                     }
                 }
             }

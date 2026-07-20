@@ -18,7 +18,7 @@ Item {
         anchors.fill: parent
 
         radius: 0
-        color: mouseArea.containsMouse ? Theme.fgcolordark : "transparent"
+        color: mouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
 
         border.width: 2
         border.color: Theme.fgcolor

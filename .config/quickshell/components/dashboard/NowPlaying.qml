@@ -116,7 +116,7 @@ Item {
                     width: 36
                     height: 36
 
-                    color: "transparent"
+                    color: mouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
                     border.width: 1
                     border.color: Theme.fgcolor
 
@@ -127,6 +127,8 @@ Item {
                     }
 
                     MouseArea {
+                        id: mouseArea
+                        hoverEnabled: true
                         anchors.fill: parent
                         onClicked: modelData.action()
                     }

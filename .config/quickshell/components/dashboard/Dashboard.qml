@@ -326,7 +326,7 @@ Scope {
                                     Rectangle {
                                         width: 48
                                         height: 48
-                                        color: Theme.fillcolor
+                                        color: mouseAreaPower.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
@@ -337,7 +337,9 @@ Scope {
                                         }
 
                                         MouseArea {
+                                            id: mouseAreaPower
                                             anchors.fill: parent
+                                            hoverEnabled: true
                                             onClicked: {
                                                 DashboardState.close()
                                                 PowerMenuState.open = true
@@ -348,7 +350,7 @@ Scope {
                                     Rectangle {
                                         width: 48
                                         height: 48
-                                        color: Theme.fillcolor
+                                        color: mouseAreaLock.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
@@ -359,7 +361,9 @@ Scope {
                                         }
 
                                         MouseArea {
+                                            id: mouseAreaLock
                                             anchors.fill: parent
+                                            hoverEnabled: true
                                             onClicked: {
                                                 DashboardState.close()
                                                 LockScreenState.locked = true
