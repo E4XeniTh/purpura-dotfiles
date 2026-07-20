@@ -4,15 +4,13 @@ import Quickshell.Widgets
 import QtQuick
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
-// same two-phase stretch-then-drop animation as TrayMenu.qml, but is
-// positioned to overlap the bar's own bottom border by exactly its width
-// (2px) so the two read as one continuous shape instead of a separate
-// floating box. Content is a placeholder for now (just the relocated power
-// button) - meant to grow over time.
+// same two-phase stretch-then-drop animation as TrayMenu.qml. dashBox is
+// fully opaque; each section inside sits in its own Theme.fgcolor card.
 Scope {
     id: root
 
     readonly property int dashWidth: 800
+    readonly property int columnHeight: 460
 
     Variants {
         model: Quickshell.screens
@@ -27,18 +25,21 @@ Scope {
 
             WlrLayershell.namespace: "dashboard"
             WlrLayershell.layer: WlrLayer.Overlay
+
+            exclusiveZone: 0
+
+            // Anchoring only the top edge (no left/right) lets the
+            // compositor center the window on that axis natively, instead
+            // of us computing screen-width math.
             anchors {
                 top: true
             }
-            exclusiveZone: 0
 
             margins {
-                // Bar's own top margin (10) + height (48) - border width (2),
-                // so this window's top edge lands exactly on the bar's
-                // bottom border instead of leaving a gap or a seam.
-                top: 4
-                left: (modelData.width - root.dashWidth) / 2
-                right: (modelData.width + root.dashWidth) / 2
+                // Bar's own top margin (10) + height (48) - border width
+                // (2), so this window's top edge lands on the bar's bottom
+                // border instead of leaving a gap or a seam.
+                top: 56
             }
 
             implicitWidth: root.dashWidth
@@ -54,7 +55,9 @@ Scope {
                 width: 0
                 height: 4
 
-                color: Theme.fillcolor
+                // Fully opaque - each section below sits on top of this in
+                // its own Theme.fgcolor card.
+                color: Qt.rgba(0, 0, 0, 1)
 
                 states: [
 
@@ -106,46 +109,232 @@ Scope {
                     anchors.fill: parent
                     clip: true
 
-                    Column {
+                    Row {
                         id: dashContent
 
                         width: root.dashWidth
 
                         topPadding: 16
                         bottomPadding: 16
+                        leftPadding: 16
+                        rightPadding: 16
+                        spacing: 16
 
-                        Row {
-                            anchors.horizontalCenter: parent.horizontalCenter
+                        // ---------------- LEFT COLUMN ----------------
+                        Column {
+                            id: leftColumn
 
+                            width: 260
+                            height: root.columnHeight
+                            spacing: 10
+
+                            // top left, 1/5: large numerical clock
                             Rectangle {
-                                id: powerButton
+                                width: parent.width
+                                height: (root.columnHeight - 2 * parent.spacing) * 0.2
+                                color: Theme.fgcolor
 
-                                width: 32
-                                height: 24
-                                radius: 8
-                                color: Theme.fillcolor
-
-                                IconImage {
+                                Clock {
                                     anchors.centerIn: parent
-                                    implicitSize: 16
-                                    source: Quickshell.iconPath("system-shutdown-symbolic")
+                                    font.pixelSize: 34
+                                    color: "black"
+                                }
+                            }
+
+                            // middle left, 1/5: current weather (wttr.in,
+                            // no API key needed - refreshes every 15 min)
+                            Rectangle {
+                                id: weatherBox
+
+                                width: parent.width
+                                height: (root.columnHeight - 2 * parent.spacing) * 0.2
+                                color: Theme.fgcolor
+
+                                property string weatherText: "Loading..."
+
+                                Timer {
+                                    interval: 15 * 60 * 1000
+                                    running: true
+                                    repeat: true
+                                    triggeredOnStart: true
+
+                                    onTriggered: {
+                                        const xhr = new XMLHttpRequest()
+                                        xhr.onreadystatechange = () => {
+                                            if (xhr.readyState === XMLHttpRequest.DONE) {
+                                                weatherBox.weatherText = xhr.status === 200
+                                                    ? xhr.responseText.trim()
+                                                    : "Weather unavailable"
+                                            }
+                                        }
+                                        xhr.open("GET", "https://wttr.in/?format=%C+%t")
+                                        xhr.send()
+                                    }
                                 }
 
-                                MouseArea {
+                                Text {
+                                    anchors.centerIn: parent
+                                    width: parent.width - 16
+
+                                    text: weatherBox.weatherText
+                                    color: "black"
+                                    font.pixelSize: 14
+                                    elide: Text.ElideRight
+                                    horizontalAlignment: Text.AlignHCenter
+                                }
+                            }
+
+                            // bottom left, 3/5: calendar
+                            Rectangle {
+                                width: parent.width
+                                height: (root.columnHeight - 2 * parent.spacing) * 0.6
+                                color: Theme.fgcolor
+
+                                Calendar {
                                     anchors.fill: parent
+                                    anchors.margins: 12
+                                }
+                            }
+                        }
 
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        // --------------- CENTER COLUMN ----------------
+                        Column {
+                            id: centerColumn
 
-                                    onClicked: (mouse) => {
-                                        if (mouse.button === Qt.LeftButton) {
-                                            PowerMenuState.open = true
-                                            DashboardState.close()
-                                        } else if (mouse.button === Qt.RightButton) {
-                                            LockMenuState.locked = true
-                                            DashboardState.close()
+                            width: 176
+                            height: root.columnHeight
+                            spacing: 10
+
+                            // top center: 5 placeholder buttons (volume,
+                            // network, bluetooth, two spares)
+                            Rectangle {
+                                width: parent.width
+                                height: 70
+                                color: Theme.fgcolor
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 8
+
+                                    Repeater {
+                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "bluetooth-symbolic", "", ""]
+
+                                        delegate: Rectangle {
+                                            required property string modelData
+
+                                            width: 26
+                                            height: 26
+                                            color: "transparent"
+                                            border.width: 1
+                                            border.color: "black"
+
+                                            IconImage {
+                                                anchors.centerIn: parent
+                                                implicitSize: 15
+                                                visible: modelData.length > 0
+                                                source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
+                                            }
                                         }
                                     }
                                 }
+                            }
+
+                            // middle center: avatar
+                            Rectangle {
+                                width: parent.width
+                                height: root.columnHeight - 70 - 90 - 2 * parent.spacing
+                                color: Theme.fgcolor
+
+                                Rectangle {
+                                    anchors.centerIn: parent
+
+                                    width: 72
+                                    height: 72
+                                    color: "black"
+
+                                    Image {
+                                        anchors.fill: parent
+                                        anchors.margins: 3
+
+                                        source: "file://" + Quickshell.env("HOME") + "/.face"
+                                        fillMode: Image.PreserveAspectCrop
+                                        clip: true
+                                    }
+                                }
+                            }
+
+                            // bottom center: power + lock
+                            Rectangle {
+                                width: parent.width
+                                height: 90
+                                color: Theme.fgcolor
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 16
+
+                                    Rectangle {
+                                        width: 48
+                                        height: 48
+                                        color: "black"
+                                        border.width: 2
+                                        border.color: Theme.fgcolordark
+
+                                        IconImage {
+                                            anchors.centerIn: parent
+                                            implicitSize: 26
+                                            source: Quickshell.iconPath("system-shutdown-symbolic")
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                DashboardState.close()
+                                                PowerMenuState.open = true
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        width: 48
+                                        height: 48
+                                        color: "black"
+                                        border.width: 2
+                                        border.color: Theme.fgcolordark
+
+                                        IconImage {
+                                            anchors.centerIn: parent
+                                            implicitSize: 26
+                                            source: Quickshell.iconPath("system-lock-screen-symbolic")
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            onClicked: {
+                                                DashboardState.close()
+                                                LockMenuState.locked = true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ---------------- RIGHT COLUMN ----------------
+                        // Now playing + cava. Loaded lazily by path (not
+                        // instantiated directly) so a wrong MPRIS/cava API
+                        // guess only blanks this card instead of breaking
+                        // the whole shell - verify this one live.
+                        Rectangle {
+                            width: 300
+                            height: root.columnHeight
+                            color: Theme.fgcolor
+
+                            Loader {
+                                anchors.fill: parent
+                                anchors.margins: 12
+
+                                source: "NowPlaying.qml"
                             }
                         }
                     }
