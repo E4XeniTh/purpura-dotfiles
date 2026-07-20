@@ -9,7 +9,7 @@ Scope {
     Variants {
         model: Quickshell.screens
         PanelWindow {
-            visible: !LockMenuState.locked
+            visible: !LockMenuState.locked && !PowerMenuState.open
             id: bar
             property var modelData
             screen: modelData
