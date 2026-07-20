@@ -14,9 +14,13 @@ Item {
         anchors.fill: parent
         spacing: 12
 
-        Row {
+        Item {
+            width: root.width
+            height: monthtext.height
+
             Text {
                 id: monthtext
+                anchors.left: parent.left
                 text: Qt.formatDate(root.today, "MMMM")
                 color: Theme.fgcolor
                 font.pixelSize: 14
@@ -25,6 +29,7 @@ Item {
 
             Text {
                 id: yeartext
+                anchors.right: parent.right
                 text: Qt.formatDate(root.today, "yyyy")
                 color: Theme.fgcolor
                 font.pixelSize: 14

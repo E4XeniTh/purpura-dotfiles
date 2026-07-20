@@ -6,11 +6,16 @@ import QtQuick
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as TrayMenu.qml. dashBox is
 // fully opaque; each section inside sits in its own Theme.fgcolor card.
+//
+// Sizing rule: dashWidth/columnHeight scale with the screen, and every
+// section within is a fraction of *available* space (container size minus
+// its own padding/spacing), so fractions on the same axis always sum to
+// 1.0 with no leftover/overflow. Small fixed-purpose elements (icon sizes,
+// border widths, small button/font sizes) are kept as plain pixel values
+// on purpose - scaling those by screen size tends to look wrong long
+// before it looks "adaptive".
 Scope {
     id: root
-
-    readonly property int dashWidth: 800
-    readonly property int columnHeight: 460
 
     Variants {
         model: Quickshell.screens
@@ -20,6 +25,11 @@ Scope {
 
             property var modelData
             screen: modelData
+
+            // Screen-relative base size. ~0.42/0.43 reproduces the 800x460
+            // this was tuned at on a 1920x1080 screen, just no longer fixed.
+            property real dashWidth: modelData.width * 0.42
+            property real columnHeight: modelData.height * 0.43
 
             visible: DashboardState.open && DashboardState.screen === modelData
 
@@ -42,7 +52,7 @@ Scope {
                 top: 4
             }
 
-            implicitWidth: root.dashWidth
+            implicitWidth: dashWidth
             implicitHeight: Math.max(dashContent.height, 1)
 
             color: "transparent"
@@ -67,7 +77,7 @@ Scope {
                         PropertyChanges {
                             target: dashBox
 
-                            width: root.dashWidth
+                            width: dashWidth
                             height: 2
                         }
                     },
@@ -78,7 +88,7 @@ Scope {
                         PropertyChanges {
                             target: dashBox
 
-                            width: root.dashWidth
+                            width: dashWidth
                             height: Math.max(dashContent.height, 1)
                         }
                     }
@@ -112,7 +122,7 @@ Scope {
                     Row {
                         id: dashContent
 
-                        width: root.dashWidth
+                        width: dashWidth
 
                         topPadding: 16
                         bottomPadding: 16
@@ -120,36 +130,42 @@ Scope {
                         rightPadding: 16
                         spacing: 16
 
+                        // Space actually left for the 3 columns once outer
+                        // padding and the 2 inter-column gaps are removed.
+                        // Column width fractions below sum to 1.0 against
+                        // this, not against the raw dashWidth.
+                        readonly property real availableWidth: width - leftPadding - rightPadding - 2 * spacing
+
                         // ---------------- LEFT COLUMN ----------------
                         Column {
                             id: leftColumn
 
-                            width: (parent.width * 0.35) - 16
-                            height: root.columnHeight
+                            width: dashContent.availableWidth * 0.35
+                            height: columnHeight
                             spacing: 10
 
-                            // top left, 1/5: large numerical clock
+                            // top left: large numerical clock
                             Rectangle {
-
                                 width: parent.width
-                                height: (root.columnHeight - 2 * parent.spacing) * 0.2
+                                height: (columnHeight - 2 * parent.spacing) * 0.2
                                 color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
+
                                 Clock {
                                     anchors.centerIn: parent
-                                    font.pixelSize: 64
+                                    font.pixelSize: parent.height * 0.5
                                     color: Theme.fgcolor
                                 }
                             }
 
-                            // middle left, 1/5: current weather (wttr.in,
-                            // no API key needed - refreshes every 15 min)
+                            // middle left: current weather (wttr.in, no API
+                            // key needed - refreshes every 15 min)
                             Rectangle {
                                 id: weatherBox
 
                                 width: parent.width
-                                height: (root.columnHeight - 2 * parent.spacing) * 0.3
+                                height: (columnHeight - 2 * parent.spacing) * 0.3
                                 color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
@@ -188,10 +204,10 @@ Scope {
                                 }
                             }
 
-                            // bottom left, 3/5: calendar
+                            // bottom left: calendar
                             Rectangle {
                                 width: parent.width
-                                height: (root.columnHeight - 2 * parent.spacing) * 0.5
+                                height: (columnHeight - 2 * parent.spacing) * 0.5
                                 color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
@@ -207,15 +223,22 @@ Scope {
                         Column {
                             id: centerColumn
 
-                            width: (parent.width * 0.30) - 32
-                            height: root.columnHeight
+                            width: dashContent.availableWidth * 0.30
+                            height: columnHeight
                             spacing: 10
+
+                            readonly property real availableHeight: columnHeight - 2 * spacing
+                            readonly property real topHeight: availableHeight * 0.15
+                            readonly property real bottomHeight: availableHeight * 0.2
+                            // Square, but never taller than its share of
+                            // the column's height budget.
+                            readonly property real avatarSize: Math.min(width, availableHeight - topHeight - bottomHeight)
 
                             // top center: 5 placeholder buttons (volume,
                             // network, bluetooth, two spares)
                             Rectangle {
                                 width: parent.width
-                                height: 40
+                                height: centerColumn.topHeight
                                 color: "transparent"
 
                                 Row {
@@ -248,14 +271,14 @@ Scope {
                             // middle center: avatar
                             Rectangle {
                                 width: parent.width
-                                height: parent.width
-                                color: Theme.fgcolor
+                                height: Math.max(0, centerColumn.availableHeight - centerColumn.topHeight - centerColumn.bottomHeight)
+                                color: "transparent"
 
                                 Rectangle {
                                     anchors.centerIn: parent
 
-                                    width: parent.width
-                                    height: parent.width
+                                    width: centerColumn.avatarSize
+                                    height: centerColumn.avatarSize
                                     color: Theme.fillcolor
                                     border.width: 2
                                     border.color: Theme.fgcolor
@@ -274,7 +297,7 @@ Scope {
                             // bottom center: power + lock
                             Rectangle {
                                 width: parent.width
-                                height: 90
+                                height: centerColumn.bottomHeight
                                 color: "transparent"
 
                                 Row {
@@ -327,17 +350,44 @@ Scope {
                                 }
                             }
                         }
-                        Rectangle {
-                            width: (parent.width * 0.35) - 16
-                            height: root.columnHeight
-                            color: Theme.fillcolor
-                            border.width: 2
-                            border.color: Theme.fgcolor
-                            Loader {
-                                anchors.fill: parent
-                                anchors.margins: 12
 
-                                source: "NowPlaying.qml"
+                        // ---------------- RIGHT COLUMN ----------------
+                        // Now playing (2/3) + an empty 1/3 reserved for
+                        // future content.
+                        Column {
+                            id: rightColumn
+
+                            width: dashContent.availableWidth * 0.35
+                            height: columnHeight
+                            spacing: 10
+
+                            // Now playing + cava. Loaded lazily by path
+                            // (not instantiated directly) so a wrong
+                            // MPRIS/cava API guess only blanks this card
+                            // instead of breaking the whole shell - verify
+                            // this one live.
+                            Rectangle {
+                                width: parent.width
+                                height: (columnHeight - parent.spacing) * (2 / 3)
+                                color: Theme.fillcolor
+                                border.width: 2
+                                border.color: Theme.fgcolor
+
+                                Loader {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+
+                                    source: "NowPlaying.qml"
+                                }
+                            }
+
+                            // Reserved for future use.
+                            Rectangle {
+                                width: parent.width
+                                height: (columnHeight - parent.spacing) * (1 / 3)
+                                color: Theme.fillcolor
+                                border.width: 2
+                                border.color: Theme.fgcolor
                             }
                         }
                     }
