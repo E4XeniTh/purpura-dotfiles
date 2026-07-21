@@ -3,7 +3,7 @@ import QtQuick
 Text {
     id: root
 
-    text: Qt.formatDateTime(new Date(), "hh:mm:ss")
+    text: Qt.formatDateTime(new Date(), "hh:mm")
 
     font.pixelSize: 18
     color: Theme.fgcolor

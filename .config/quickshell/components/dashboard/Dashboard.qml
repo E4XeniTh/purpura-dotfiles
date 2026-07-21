@@ -158,6 +158,7 @@ Scope {
 
                                 Clock {
                                     anchors.centerIn: parent
+                                    font.family: "monospace"
                                     font.pixelSize: parent.height * 0.75
                                     color: Theme.fgcolor
                                 }
@@ -217,6 +218,7 @@ Scope {
 
                                     text: weatherBox.weatherText
                                     color: Theme.fgcolor
+                                    font.family: "monospace"
                                     font.pixelSize: 22
                                     elide: Text.ElideRight
                                     horizontalAlignment: Text.AlignHCenter
@@ -234,6 +236,7 @@ Scope {
                                 Calendar {
                                     anchors.fill: parent
                                     anchors.margins: 8
+                                    anchors.topMargin: 20
                                 }
                             }
                         }
@@ -245,59 +248,45 @@ Scope {
                             width: dashContent.availableWidth * 0.30
                             height: columnHeight
                             spacing: 10
-
-                            readonly property real availableHeight: columnHeight - 2 * spacing
-                            readonly property real topHeight: availableHeight * 0.15
-                            readonly property real bottomHeight: availableHeight * 0.2
                             // Square, but never taller than its share of
                             // the column's height budget.
-                            readonly property real avatarSize: Math.min(width, availableHeight - topHeight - bottomHeight)
 
                             // top center: 5 placeholder buttons (volume,
                             // network, bluetooth, two spares)
                             Rectangle {
+                                id: greetingtext
                                 width: parent.width
-                                height: centerColumn.topHeight
+                                height: 32
                                 color: "transparent"
-
-                                Row {
+                                border.width: 2
+                                border.color: Theme.fgcolor
+                                Text {
                                     anchors.centerIn: parent
-                                    spacing: 10
 
-                                    Repeater {
-                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", ""]
+                                    text: "fayelia@factory"
+                                    // or simply:
+                                    // text: "hostname@username"
 
-                                        delegate: Rectangle {
-                                            required property string modelData
+                                    color: Theme.fgcolor
+                                    font.family: "monospace"
+                                    font.pixelSize: 16
 
-                                            width: 32
-                                            height: 32
-                                            color: Theme.fillcolor
-                                            border.width: 2
-                                            border.color: Theme.fgcolor
-
-                                            IconImage {
-                                                anchors.centerIn: parent
-                                                implicitSize: 20
-                                                visible: modelData.length > 0
-                                                source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
-                                            }
-                                        }
-                                    }
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
                                 }
                             }
 
-                            // middle center: avatar
                             Rectangle {
+                                id: avatarbox
                                 width: parent.width
-                                height: Math.max(0, centerColumn.availableHeight - centerColumn.topHeight - centerColumn.bottomHeight)
+                                height: parent.width
                                 color: "transparent"
 
                                 Rectangle {
                                     anchors.centerIn: parent
 
-                                    width: centerColumn.avatarSize
-                                    height: centerColumn.avatarSize
+                                    width: parent.width
+                                    height: parent.height
                                     color: Theme.fillcolor
                                     border.width: 2
                                     border.color: Theme.fgcolor
@@ -313,26 +302,41 @@ Scope {
                                 }
                             }
 
-                            // bottom center: power + lock
                             Rectangle {
                                 width: parent.width
-                                height: centerColumn.bottomHeight
+                                height: {
+                                    columnHeight -
+                                    greetingtext.height -
+                                    avatarbox.height -
+                                    powerrow.height -
+                                    systemicons.height -
+                                    (parent.spacing * 4)
+                                }
+                                color: "Transparent"
+                                border.width: 2
+                                border.color: Theme.fgcolor
+                            }
+
+                            Rectangle {
+                                id: powerrow
+                                width: parent.width
+                                height: 48
                                 color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: 32
+                                    spacing: powerrow.width / 11
 
                                     Rectangle {
-                                        width: 86
-                                        height: 86
+                                        width: powerrow.width / 2.2
+                                        height: 48
                                         color: mouseAreaPower.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 64
+                                            implicitSize: 36
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
@@ -348,15 +352,15 @@ Scope {
                                     }
 
                                     Rectangle {
-                                        width: 86
-                                        height: 86
+                                        width: powerrow.width / 2.2
+                                        height: 48
                                         color: mouseAreaLock.containsMouse ? Theme.fgcolorhover : "transparent"
                                         border.width: 2
                                         border.color: Theme.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 64
+                                            implicitSize: 36
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
@@ -367,6 +371,40 @@ Scope {
                                             onClicked: {
                                                 DashboardState.close()
                                                 LockScreenState.locked = true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Item {}
+
+                            Rectangle {
+                                id: systemicons
+                                width: parent.width
+                                height: 32
+                                color: "transparent"
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+
+                                    Repeater {
+                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", "", ""]
+
+                                        delegate: Rectangle {
+                                            required property string modelData
+
+                                            width: 32
+                                            height: 32
+                                            color: Theme.fillcolor
+                                            border.width: 2
+                                            border.color: Theme.fgcolor
+
+                                            IconImage {
+                                                anchors.centerIn: parent
+                                                implicitSize: 20
+                                                visible: modelData.length > 0
+                                                source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
                                             }
                                         }
                                     }

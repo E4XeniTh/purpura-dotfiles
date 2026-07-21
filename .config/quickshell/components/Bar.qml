@@ -47,26 +47,19 @@ Scope {
                 }
 
                 Rectangle {
-                    id: dashboardToggle
-
                     anchors.centerIn: parent
-
-                    width: 32
-                    height: 32
-                    radius: 0
-                    color: Theme.fgcolor
-
-                    Image {
-                        anchors.fill: parent
-                        anchors.margins: 3
-
-                        source: "file://" + Quickshell.env("HOME") + "/.face"
-
-                        fillMode: Image.PreserveAspectCrop
-                        clip: true
+                    width: clock.implicitWidth + 16
+                    height: clock.implicitHeight + 4
+                    border.width: 2
+                    border.color: Theme.fgcolor
+                    color: mouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                    Clock {
+                        id: clock
+                        anchors.centerIn: parent
                     }
-
                     MouseArea {
+                        id: mouseArea
+                        hoverEnabled: true
                         anchors.fill: parent
                         onClicked: DashboardState.toggle(modelData)
                     }
@@ -90,8 +83,8 @@ Scope {
 
                     IconImage {
                         anchors.centerIn: parent
-                        implicitSize: 16
-                        source: Quickshell.iconPath("preferences-system-notifications-symbolic")
+                        implicitSize: 32
+                        source: Quickshell.iconPath("notifications-symbolic")
                     }
                 }
             }

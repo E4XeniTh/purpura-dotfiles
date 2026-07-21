@@ -78,10 +78,14 @@ Item {
             horizontalAlignment: Text.AlignHCenter
         }
 
+        Item {
+            width: 1
+            height: 6   // however much space you want
+        }
+
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 8
-
             Repeater {
                 model: [
                     { icon: "media-playlist-shuffle-symbolic", action: function() { if (root.player) root.player.shuffle = !root.player.shuffle } },
