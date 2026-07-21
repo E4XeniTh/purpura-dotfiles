@@ -56,13 +56,13 @@ Scope {
                     height: clock.implicitHeight + 4
                     border.width: 2
                     border.color: Theme.fgcolor
-                    color: mouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                    color: clockmouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
                     Clock {
                         id: clock
                         anchors.centerIn: parent
                     }
                     MouseArea {
-                        id: mouseArea
+                        id: clockmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
                         onClicked: DashboardState.toggle(modelData)
@@ -80,12 +80,21 @@ Scope {
                         margins: 10
                     }
 
-                    width: 32
-                    height: 24
-                    color: "Transparent"
+                    border.width: 2
+                    border.color: Theme.fgcolor
+                    width: 34
+                    height: 34
+                    color: notifmouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+
+                    MouseArea {
+                        id: notifmouseArea
+                        hoverEnabled: true
+                        anchors.fill: parent
+                        // onClicked: DashboardState.toggle(modelData)
+                    }
 
                     IconImage {
-                        anchors.centerIn: parent
+
                         implicitSize: 32
                         source: Quickshell.iconPath("notifications-symbolic")
                     }
