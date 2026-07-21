@@ -9,7 +9,9 @@ Item {
     readonly property int year: today.getFullYear()
     readonly property int month: today.getMonth()
     readonly property int daysInMonth: new Date(year, month + 1, 0).getDate()
-    readonly property int firstWeekday: new Date(year, month, 1).getDay()
+    // Date.getDay() is Sunday-first (0-6). +6 mod 7 re-bases it to
+    // Monday-first (0 = Monday ... 6 = Sunday) for the European week.
+    readonly property int firstWeekday: (new Date(year, month, 1).getDay() + 6) % 7
 
     Column {
         anchors.fill: parent
@@ -43,7 +45,7 @@ Item {
             rowSpacing: 4
 
             Repeater {
-                model: ["S", "M", "T", "W", "T", "F", "S"]
+                model: ["M", "T", "W", "T", "F", "S", "S"]
 
                 delegate: Text {
                     required property string modelData

@@ -241,7 +241,10 @@ Item {
                     anchors.fill: parent
                     onClicked: {
                         if (root.player) {
-                            root.player.loopState = (root.player.loopState + 1) % 3
+                            // Plain on/off, not a 3-way cycle: 0 is
+                            // assumed to be "off", so this just flips
+                            // between that and 1 ("repeat one").
+                            root.player.loopState = root.player.loopState ? 0 : 1
                         }
                     }
                 }
