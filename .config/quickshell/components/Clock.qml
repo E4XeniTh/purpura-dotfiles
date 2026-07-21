@@ -5,7 +5,7 @@ Text {
 
     text: Qt.formatDateTime(new Date(), "hh:mm")
 
-    font.pixelSize: 18
+    font.pixelSize: 22
     color: Theme.fgcolor
 
     Timer {
