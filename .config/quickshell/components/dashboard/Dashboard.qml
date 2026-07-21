@@ -251,7 +251,7 @@ Scope {
                                             left: parent.left
                                             verticalCenter: parent.verticalCenter
                                         }
-                                        implicitSize: 72
+                                        implicitSize: 84
                                         source: Quickshell.iconPath(weatherBox.iconForCondition(weatherBox.conditionText))
                                     }
 
@@ -273,7 +273,7 @@ Scope {
                                         }
 
                                         width: parent.width - weatherIconImage.width - 12
-                                        spacing: 4
+                                        spacing: 0
 
                                         Text {
                                             width: parent.width
