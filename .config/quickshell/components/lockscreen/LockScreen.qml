@@ -1,9 +1,9 @@
 import QtQuick
 import QtQuick.Controls
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
-import Quickshell.Services.Pam
 import Qt5Compat.GraphicalEffects
 import "../"
 
@@ -22,7 +22,6 @@ PanelWindow {
     visible: LockScreenState.locked
 
     property bool wrongPassword: false
-    property bool unlockInProgress: false
 
     anchors {
         top: true
@@ -181,14 +180,14 @@ PanelWindow {
                     width: 240
                     height: 30
 
-                    placeholderText: root.unlockInProgress ? "Checking..." : "Password"
+                    placeholderText: authProcess.running ? "Checking..." : "Password"
 
                     echoMode: TextInput.Password
 
                     horizontalAlignment: TextInput.AlignHCenter
                     verticalAlignment: TextInput.AlignVCenter
 
-                    enabled: !root.unlockInProgress
+                    enabled: !authProcess.running
 
 
                     background: Rectangle {
@@ -236,29 +235,15 @@ PanelWindow {
 
     }
 
-    // Custom PAM config bundled alongside the shell (pam/password.conf)
-    // instead of a system /etc/pam.d/ service - PamContext's
-    // configDirectory uses pam_start_confdir() under the hood, so no
-    // sudo/system install step is needed. "auth include system-auth"
-    // still gets you the system's real auth stack (faillock, etc.) -
-    // include directives resolve against /etc/pam.d/ regardless of
-    // which directory the top-level service file was loaded from.
-    PamContext {
-        id: pam
+    Process {
 
-        configDirectory: Quickshell.shellDir + "/pam"
-        config: "password.conf"
+        id: authProcess
 
-        onPamMessage: {
-            if (this.responseRequired) {
-                this.respond(passwordInput.text)
-            }
-        }
+        stdinEnabled: true
 
-        onCompleted: (result) => {
-            root.unlockInProgress = false
+        onExited: (exitCode, exitStatus) => {
 
-            if (result === PamResult.Success) {
+            if (exitCode === 0) {
                 unlock()
             } else {
                 failedLogin()
@@ -328,12 +313,13 @@ PanelWindow {
 
     function attemptLogin(password) {
 
-        if (password.length === 0 || root.unlockInProgress) {
+        if (password.length === 0 || authProcess.running) {
             return
         }
 
-        root.unlockInProgress = true
-        pam.start()
+        authProcess.command = [Quickshell.shellDir + "/helpers/auth", Quickshell.env("USER")]
+        authProcess.running = true
+        authProcess.write(password + "\n")
 
     }
 
