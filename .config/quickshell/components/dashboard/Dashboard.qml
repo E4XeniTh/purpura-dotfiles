@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
+import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
 import "../powermenu"
@@ -175,21 +176,32 @@ Scope {
                                 border.width: 2
                                 border.color: Theme.fgcolor
 
-                                property string weatherIcon: ""
-                                property string weatherText: "Loading..."
+                                property string conditionText: "Loading..."
+                                property string tempText: ""
 
-                                // One request instead of two: this used to
-                                // be a separate weatherProcess/tempProcess
-                                // pair, but only weatherProcess was ever
-                                // actually started, so tempText sat on
-                                // "Loading..." forever. "|" is a literal
-                                // delimiter (not whitespace) since the
-                                // condition text itself contains spaces
-                                // ("Partly cloudy").
+                                // Freedesktop's weather-*-symbolic set doesn't
+                                // have a one-to-one entry for every wttr.in
+                                // condition string, so this is a coarse
+                                // keyword match rather than a precise table -
+                                // good enough for a small bar widget icon.
+                                function iconForCondition(condition) {
+                                    const c = condition.toLowerCase()
+                                    if (c.includes("thunder")) return "weather-storm-symbolic"
+                                    if (c.includes("snow") || c.includes("sleet") || c.includes("ice")) return "weather-snow-symbolic"
+                                    if (c.includes("rain") || c.includes("drizzle") || c.includes("shower")) return "weather-showers-symbolic"
+                                    if (c.includes("fog") || c.includes("mist") || c.includes("haze")) return "weather-fog-symbolic"
+                                    if (c.includes("overcast")) return "weather-overcast-symbolic"
+                                    if (c.includes("cloud")) return "weather-few-clouds-symbolic"
+                                    return "weather-clear-symbolic"
+                                }
+
+                                // "|" is a literal delimiter (not whitespace)
+                                // since the condition text itself contains
+                                // spaces ("Partly cloudy").
                                 Process {
                                     id: weatherProcess
 
-                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%c|%C+%t"]
+                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C|%t"]
 
                                     stdout: SplitParser {
                                         onRead: (line) => {
@@ -198,14 +210,15 @@ Scope {
                                                 return
                                             }
                                             const parts = trimmed.split("|")
-                                            weatherBox.weatherIcon = parts[0]
-                                            weatherBox.weatherText = parts.length > 1 ? parts[1] : trimmed
+                                            weatherBox.conditionText = parts[0]
+                                            weatherBox.tempText = parts.length > 1 ? parts[1] : ""
                                         }
                                     }
 
                                     onExited: (exitCode) => {
                                         if (exitCode !== 0) {
-                                            weatherBox.weatherText = "Weather unavailable"
+                                            weatherBox.conditionText = "Weather unavailable"
+                                            weatherBox.tempText = ""
                                         }
                                     }
                                 }
@@ -228,26 +241,60 @@ Scope {
                                     }
                                 }
 
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 12
+                                Item {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
 
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: weatherBox.weatherIcon
-                                        font.pixelSize: 32
+                                    IconImage {
+                                        id: weatherIconImage
+
+                                        anchors {
+                                            left: parent.left
+                                            verticalCenter: parent.verticalCenter
+                                        }
+
+                                        implicitSize: 32
+                                        source: Quickshell.iconPath(weatherBox.iconForCondition(weatherBox.conditionText))
+                                    }
+
+                                    // Symbolic icons are a plain alpha-masked
+                                    // shape, so ColorOverlay can tint them
+                                    // cleanly to the theme color - this
+                                    // paints over weatherIconImage, which is
+                                    // why it's declared after it.
+                                    ColorOverlay {
+                                        anchors.fill: weatherIconImage
+                                        source: weatherIconImage
                                         color: Theme.fgcolor
                                     }
 
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        width: weatherBox.width - 80
-                                        text: weatherBox.weatherText
-                                        color: Theme.fgcolor
-                                        font.family: "monospace"
-                                        font.pixelSize: 16
-                                        elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignLeft
+                                    Column {
+                                        anchors {
+                                            right: parent.right
+                                            verticalCenter: parent.verticalCenter
+                                        }
+
+                                        width: parent.width - weatherIconImage.width - 12
+                                        spacing: 2
+
+                                        Text {
+                                            width: parent.width
+                                            text: weatherBox.conditionText
+                                            color: Theme.fgcolor
+                                            font.family: "monospace"
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignRight
+                                            elide: Text.ElideLeft
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: weatherBox.tempText
+                                            color: Theme.fgcolor
+                                            font.family: "monospace"
+                                            font.pixelSize: 13
+                                            horizontalAlignment: Text.AlignRight
+                                        }
                                     }
                                 }
 
