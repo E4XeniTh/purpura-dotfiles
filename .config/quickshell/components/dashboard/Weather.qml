@@ -123,6 +123,15 @@ Item {
                                             text: weatherBox.tempText
                                             color: Theme.fgcolor
                                             font.family: "monospace"
+                                            font.pixelSize: 12
+                                            horizontalAlignment: Text.AlignRight
+                                        }
+
+                                        Text {
+                                            width: parent.width
+                                            text: weatherBox.tempText
+                                            color: Theme.fgcolor
+                                            font.family: "monospace"
                                             font.pixelSize: 36
                                             horizontalAlignment: Text.AlignRight
                                         }
