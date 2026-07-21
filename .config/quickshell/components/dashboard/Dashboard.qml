@@ -175,55 +175,40 @@ Scope {
                                 border.width: 2
                                 border.color: Theme.fgcolor
 
+                                property string weatherIcon: ""
                                 property string weatherText: "Loading..."
-                                property string tempText: "Loading..."
 
-                                // curl, not XMLHttpRequest: wttr.in serves
-                                // plain text to curl-like clients but an
-                                // HTML page to browser-like ones, and QML's
-                                // XHR reads as the latter - this is very
-                                // likely why the old XHR version showed
-                                // garbage instead of a real reading.
+                                // One request instead of two: this used to
+                                // be a separate weatherProcess/tempProcess
+                                // pair, but only weatherProcess was ever
+                                // actually started, so tempText sat on
+                                // "Loading..." forever. "|" is a literal
+                                // delimiter (not whitespace) since the
+                                // condition text itself contains spaces
+                                // ("Partly cloudy").
                                 Process {
                                     id: weatherProcess
 
-                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C"]
+                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%c|%C+%t"]
 
                                     stdout: SplitParser {
                                         onRead: (line) => {
-                                            if (line.trim().length > 0) {
-                                                weatherBox.weatherText = line.trim()
+                                            const trimmed = line.trim()
+                                            if (trimmed.length === 0) {
+                                                return
                                             }
+                                            const parts = trimmed.split("|")
+                                            weatherBox.weatherIcon = parts[0]
+                                            weatherBox.weatherText = parts.length > 1 ? parts[1] : trimmed
                                         }
                                     }
 
                                     onExited: (exitCode) => {
                                         if (exitCode !== 0) {
-                                            weatherBox.weatherText = "Weather"
+                                            weatherBox.weatherText = "Weather unavailable"
                                         }
                                     }
                                 }
-
-                                Process {
-                                    id: tempProcess
-
-                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%t"]
-
-                                    stdout: SplitParser {
-                                        onRead: (line) => {
-                                            if (line.trim().length > 0) {
-                                                weatherBox.tempText = line.trim()
-                                            }
-                                        }
-                                    }
-
-                                    onExited: (exitCode) => {
-                                        if (exitCode !== 0) {
-                                            weatherBox.tempText = "Unavailable"
-                                        }
-                                    }
-                                }
-
 
                                 Timer {
                                     interval: 15 * 60 * 1000
@@ -231,30 +216,38 @@ Scope {
                                     repeat: true
                                     triggeredOnStart: true
 
-                                    onTriggered: weatherProcess.running = true
+                                    onTriggered: {
+                                        // Force a real false->true transition.
+                                        // Re-assigning `true` while it's
+                                        // already true (left over from the
+                                        // last run) is a no-op in QML, so
+                                        // this is what actually makes it
+                                        // re-fetch on every interval.
+                                        weatherProcess.running = false
+                                        weatherProcess.running = true
+                                    }
                                 }
-                                Column {
-                                    padding: 20
-                                    width: parent.width
-                                    height: parent.height
-                                    spacing: height / 4
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 12
+
                                     Text {
-                                        width: parent.width - (parent.padding * 2)
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: weatherBox.weatherIcon
+                                        font.pixelSize: 32
+                                        color: Theme.fgcolor
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: weatherBox.width - 80
                                         text: weatherBox.weatherText
                                         color: Theme.fgcolor
                                         font.family: "monospace"
-                                        font.pixelSize: 22
+                                        font.pixelSize: 16
                                         elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
-                                    Text {
-                                        width: parent.width - (parent.padding * 2)
-                                        text: weatherBox.tempText
-                                        color: Theme.fgcolor
-                                        font.family: "monospace"
-                                        font.pixelSize: 22
-                                        elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignHCenter
+                                        horizontalAlignment: Text.AlignLeft
                                     }
                                 }
 
