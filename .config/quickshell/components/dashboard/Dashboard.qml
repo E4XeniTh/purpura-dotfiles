@@ -214,12 +214,28 @@ Scope {
                                 color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
+
+                                property string hostname: ""
+
+                                // One-shot, not periodic - the machine's
+                                // hostname doesn't change at runtime.
+                                Process {
+                                    running: true
+                                    command: ["hostname"]
+
+                                    stdout: SplitParser {
+                                        onRead: (line) => {
+                                            if (line.trim().length > 0) {
+                                                greetingtext.hostname = line.trim()
+                                            }
+                                        }
+                                    }
+                                }
+
                                 Text {
                                     anchors.centerIn: parent
 
-                                    text: "fayelia@factory"
-                                    // or simply:
-                                    // text: "hostname@username"
+                                    text: Quickshell.env("USER") + "@" + (greetingtext.hostname.length > 0 ? greetingtext.hostname : "...")
 
                                     color: Theme.fgcolor
                                     font.family: "monospace"
