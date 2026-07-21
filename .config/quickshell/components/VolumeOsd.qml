@@ -80,7 +80,7 @@ Scope {
 
 						implicitHeight: 10
 						radius: 0
-						color: Theme.fgcolordark
+						color: Pipewire.defaultAudioSink?.audio.muted ? "darkred" : Theme.fgcolordark
 
 						Rectangle {
 							anchors {
@@ -89,7 +89,8 @@ Scope {
 								bottom: parent.bottom
 							}
 							color: Pipewire.defaultAudioSink?.audio.muted ? "red" : Theme.fgcolor
-							implicitWidth: Pipewire.defaultAudioSink?.audio.muted ? parent.width : parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
+							// implicitWidth: Pipewire.defaultAudioSink?.audio.muted ? parent.width : parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
+							implicitWidth: parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
 							radius: parent.radius
 						}
 					}

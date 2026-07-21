@@ -176,6 +176,7 @@ Scope {
                                 border.color: Theme.fgcolor
 
                                 property string weatherText: "Loading..."
+                                property string tempText: "Loading..."
 
                                 // curl, not XMLHttpRequest: wttr.in serves
                                 // plain text to curl-like clients but an
@@ -186,7 +187,7 @@ Scope {
                                 Process {
                                     id: weatherProcess
 
-                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C+%t"]
+                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C"]
 
                                     stdout: SplitParser {
                                         onRead: (line) => {
@@ -198,10 +199,31 @@ Scope {
 
                                     onExited: (exitCode) => {
                                         if (exitCode !== 0) {
-                                            weatherBox.weatherText = "Weather unavailable"
+                                            weatherBox.weatherText = "Weather"
                                         }
                                     }
                                 }
+
+                                Process {
+                                    id: tempProcess
+
+                                    command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%t"]
+
+                                    stdout: SplitParser {
+                                        onRead: (line) => {
+                                            if (line.trim().length > 0) {
+                                                weatherBox.tempText = line.trim()
+                                            }
+                                        }
+                                    }
+
+                                    onExited: (exitCode) => {
+                                        if (exitCode !== 0) {
+                                            weatherBox.tempText = "Unavailable"
+                                        }
+                                    }
+                                }
+
 
                                 Timer {
                                     interval: 15 * 60 * 1000
@@ -211,18 +233,31 @@ Scope {
 
                                     onTriggered: weatherProcess.running = true
                                 }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    width: parent.width - 16
-
-                                    text: weatherBox.weatherText
-                                    color: Theme.fgcolor
-                                    font.family: "monospace"
-                                    font.pixelSize: 22
-                                    elide: Text.ElideRight
-                                    horizontalAlignment: Text.AlignHCenter
+                                Column {
+                                    padding: 20
+                                    width: parent.width
+                                    height: parent.height
+                                    spacing: height / 4
+                                    Text {
+                                        width: parent.width - (parent.padding * 2)
+                                        text: weatherBox.weatherText
+                                        color: Theme.fgcolor
+                                        font.family: "monospace"
+                                        font.pixelSize: 22
+                                        elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    Text {
+                                        width: parent.width - (parent.padding * 2)
+                                        text: weatherBox.tempText
+                                        color: Theme.fgcolor
+                                        font.family: "monospace"
+                                        font.pixelSize: 22
+                                        elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
                                 }
+
                             }
 
                             // bottom left: calendar
