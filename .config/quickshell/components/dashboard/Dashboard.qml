@@ -243,17 +243,15 @@ Scope {
 
                                 Item {
                                     anchors.fill: parent
-                                    anchors.margins: 10
+                                    anchors.margins: 20
 
                                     IconImage {
                                         id: weatherIconImage
-
                                         anchors {
                                             left: parent.left
                                             verticalCenter: parent.verticalCenter
                                         }
-
-                                        implicitSize: 32
+                                        implicitSize: 72
                                         source: Quickshell.iconPath(weatherBox.iconForCondition(weatherBox.conditionText))
                                     }
 
@@ -275,15 +273,16 @@ Scope {
                                         }
 
                                         width: parent.width - weatherIconImage.width - 12
-                                        spacing: 2
+                                        spacing: 4
 
                                         Text {
                                             width: parent.width
                                             text: weatherBox.conditionText
                                             color: Theme.fgcolor
                                             font.family: "monospace"
-                                            font.pixelSize: 13
+                                            font.pixelSize: 12
                                             horizontalAlignment: Text.AlignRight
+                                            verticalAlignment: Text.AlignBottom
                                             elide: Text.ElideLeft
                                         }
 
@@ -292,7 +291,7 @@ Scope {
                                             text: weatherBox.tempText
                                             color: Theme.fgcolor
                                             font.family: "monospace"
-                                            font.pixelSize: 13
+                                            font.pixelSize: 36
                                             horizontalAlignment: Text.AlignRight
                                         }
                                     }

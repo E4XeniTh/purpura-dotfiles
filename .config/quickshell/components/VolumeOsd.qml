@@ -48,8 +48,8 @@ Scope {
 			margins.bottom: screen.height / 8
 			exclusiveZone: 0
 
-			implicitWidth: 300
-			implicitHeight: 40
+			implicitWidth: 400
+			implicitHeight: 48
 			color: "transparent"
 
 			// An empty click mask prevents the window from blocking mouse events.
@@ -70,7 +70,7 @@ Scope {
 					}
 
 					IconImage {
-						implicitSize: 30
+						implicitSize: 36
 						source: Pipewire.defaultAudioSink?.audio.muted ? Quickshell.iconPath("audio-volume-muted-symbolic") : Quickshell.iconPath("audio-volume-high-symbolic")
 					}
 
@@ -78,7 +78,7 @@ Scope {
 						// Stretches to fill all left-over space
 						Layout.fillWidth: true
 
-						implicitHeight: 10
+						implicitHeight: 12
 						radius: 0
 						color: Pipewire.defaultAudioSink?.audio.muted ? "darkred" : Theme.fgcolordark
 
