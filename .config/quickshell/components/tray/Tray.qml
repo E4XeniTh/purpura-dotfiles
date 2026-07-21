@@ -12,11 +12,11 @@ Rectangle {
     // right monitor.
     property var screen: null
 
-    radius: 8
-    color: Theme.fillcolor
+    color: "transparent"
 
+    property alias trayWidth: trayRow.width
     implicitHeight: 24
-    implicitWidth: trayRow.width + 12
+    implicitWidth: trayRow.width
 
     Process {
         id: killProcess
@@ -24,7 +24,6 @@ Rectangle {
 
     Row {
         id: trayRow
-
         anchors.centerIn: parent
         spacing: 8
 
@@ -36,7 +35,7 @@ Rectangle {
 
                 required property var modelData
 
-                width: 30
+                width: 26
                 height: width
 
                 Image {

@@ -257,7 +257,7 @@ Scope {
                                 id: greetingtext
                                 width: parent.width
                                 height: 32
-                                color: "transparent"
+                                color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
                                 Text {
@@ -312,7 +312,7 @@ Scope {
                                     systemicons.height -
                                     (parent.spacing * 4)
                                 }
-                                color: "Transparent"
+                                color: Theme.fillcolor
                                 border.width: 2
                                 border.color: Theme.fgcolor
                             }
@@ -321,7 +321,7 @@ Scope {
                                 id: powerrow
                                 width: parent.width
                                 height: 48
-                                color: "transparent"
+                                color: Theme.fillcolor
 
                                 Row {
                                     anchors.centerIn: parent
@@ -382,7 +382,7 @@ Scope {
                                 id: systemicons
                                 width: parent.width
                                 height: 32
-                                color: "transparent"
+                                color: Theme.fillcolor
 
                                 Row {
                                     anchors.centerIn: parent

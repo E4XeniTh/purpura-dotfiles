@@ -40,6 +40,10 @@ Scope {
                 border.width: 2
                 border.color: Theme.fgcolor
                 Tray {
+                    border.width: 2
+                    border.color: Theme.fgcolor
+                    width: trayWidth < 16 ? 0 : trayWidth + 16
+                    implicitHeight: 26+8
                     anchors.margins: 10
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
@@ -78,8 +82,7 @@ Scope {
 
                     width: 32
                     height: 24
-                    radius: 8
-                    color: Theme.fillcolor
+                    color: "Transparent"
 
                     IconImage {
                         anchors.centerIn: parent
