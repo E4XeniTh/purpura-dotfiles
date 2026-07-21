@@ -115,16 +115,9 @@ Item {
                                             font.pixelSize: 12
                                             horizontalAlignment: Text.AlignRight
                                             verticalAlignment: Text.AlignBottom
-                                            elide: Text.ElideLeft
-                                        }
-
-                                        Text {
-                                            width: parent.width
-                                            text: weatherBox.tempText
-                                            color: Theme.fgcolor
-                                            font.family: "monospace"
-                                            font.pixelSize: 12
-                                            horizontalAlignment: Text.AlignRight
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
                                         }
 
                                         Text {
