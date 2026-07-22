@@ -3,7 +3,6 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
-import "dashboard"
 import "../Config.js" as Config
 
 Scope {
@@ -67,11 +66,27 @@ Scope {
                         id: clock
                         anchors.centerIn: parent
                     }
+
+                    // Dashboard.qml is a separate file/Scope with its own
+                    // open/screen state now - same IPC path as `qs ipc
+                    // call dashboard toggle`. Note this always targets
+                    // the primary screen (no click-position context over
+                    // IPC), so on multi-monitor setups this may open the
+                    // dashboard on a different monitor than the one you
+                    // clicked.
+                    Process {
+                        id: dashboardToggleProcess
+                        command: ["qs", "ipc", "call", "dashboard", "toggle"]
+                    }
+
                     MouseArea {
                         id: clockmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
-                        onClicked: DashboardState.toggle(modelData)
+                        onClicked: {
+                            dashboardToggleProcess.running = false
+                            dashboardToggleProcess.running = true
+                        }
                     }
                 }
 

@@ -22,18 +22,35 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
+    property bool open: false
+    property var screen: null
+
+    function close() {
+        open = false
+        screen = null
+    }
+
+    function toggle(screen_) {
+        if (open && screen === screen_) {
+            close()
+        } else {
+            open = true
+            screen = screen_
+        }
+    }
+
     IpcHandler {
         target: "dashboard"
 
         // A keybind/IPC call carries no click position, so there's no
         // "which screen was clicked" the way there is from Bar.qml's
         // clock button - this just always targets the primary screen.
-        function toggle(): void { DashboardState.toggle(Quickshell.screens[0]) }
+        function toggle(): void { root.toggle(Quickshell.screens[0]) }
         function show(): void {
-            DashboardState.open = true
-            DashboardState.screen = Quickshell.screens[0]
+            root.open = true
+            root.screen = Quickshell.screens[0]
         }
-        function hide(): void { DashboardState.close() }
+        function hide(): void { root.close() }
     }
 
     Variants {
@@ -50,7 +67,7 @@ Scope {
             property real dashWidth: modelData.width * 0.42
             property real columnHeight: modelData.height * 0.43
 
-            visible: DashboardState.open && DashboardState.screen === modelData
+            visible: root.open && root.screen === modelData
 
             WlrLayershell.namespace: "dashboard"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -340,7 +357,7 @@ Scope {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
-                                                DashboardState.close()
+                                                root.close()
                                                 openPowerMenuProcess.running = false
                                                 openPowerMenuProcess.running = true
                                             }
@@ -373,7 +390,7 @@ Scope {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
-                                                DashboardState.close()
+                                                root.close()
                                                 lockProcess.running = false
                                                 lockProcess.running = true
                                             }

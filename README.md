@@ -15,11 +15,12 @@ at the base of the quickshell config.
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
 
-Dashboard is the only multi-file component (`components/dashboard/`). Bar,
-Notification, LockScreen, PowerMenu and Tray are each a single
-`components/*.qml` file - no separate `...State.qml` singletons. Cross-file
-control (a keybind, or one component nudging another) goes through each
-file's `IpcHandler`:
+Dashboard is the only multi-file component (`components/dashboard/`: the
+main file plus Calendar/Weather/NowPlaying). No component has a
+`...State.qml` singleton anymore - each keeps its own open/closed state
+locally and exposes it through an `IpcHandler`, which is also how
+cross-file control (a keybind, or one component nudging another) works
+now:
 
 ```bash
 qs ipc call notificationpanel toggle   # show / hide also work

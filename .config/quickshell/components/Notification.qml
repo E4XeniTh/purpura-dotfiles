@@ -161,10 +161,22 @@ Scope {
 
                 ColumnLayout {
                     id: centerCol
+
+                    // Fixed width instead of anchoring left+right to
+                    // mainRect: mainRect.anchors.fill is panelBox, and
+                    // panelBox's own width/height are themselves driven
+                    // by centerCol (below/states). Anchoring centerCol's
+                    // width to that same chain re-creates the circular
+                    // dependency the height fix already had to break -
+                    // width just wasn't obviously circular the same way
+                    // until you trace it through. A literal width removes
+                    // any coupling in either direction: 400 (panelBox's
+                    // fixed open width) minus 10px margin on each side.
+                    width: 380
+
                     anchors {
                         top: parent.top
                         left: parent.left
-                        right: parent.right
                         margins: 10
                     }
                     spacing: 10
@@ -182,6 +194,7 @@ Scope {
                         }
 
                         Text {
+                            visible: historyModel.count > 0
                             text: "Clear all"
                             color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolordark
                             font.family: Config.fontfamily
