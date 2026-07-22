@@ -46,6 +46,7 @@ Scope {
     }
 
     PanelWindow {
+        visible: !root.centerOpen
         anchors { top: true; right: true }
         margins { top: 10; right: 10 }
 
@@ -140,7 +141,7 @@ Scope {
     }
 
     PanelWindow {
-        margins { top: 10; right: 10 }
+        margins { top: 4; right: 10 }
         anchors { top: true; right: true }
         visible: root.centerOpen
 
