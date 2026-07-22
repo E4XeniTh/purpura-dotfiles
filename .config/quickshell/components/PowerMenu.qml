@@ -284,7 +284,16 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-                            logoutProcess.running = true
+
+                            // execDetached, not a tracked Process: qs
+                            // asking hyprshutdown to close apps includes
+                            // asking qs itself to close, and a regular
+                            // Process here is still a child Quickshell
+                            // manages the lifecycle of - it was getting
+                            // killed along with qs before it could reach
+                            // its own --post-cmd exit dispatch. Detached,
+                            // it survives qs closing entirely.
+                            Quickshell.execDetached(["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"])
                         }
                     }
                 }
@@ -360,17 +369,6 @@ PanelWindow {
     Process {
         id: suspendProcess
         command: ["systemctl", "suspend"]
-    }
-
-    Process {
-        id: logoutProcess
-
-        // hyprshutdown's own internal Hyprland-exit call still uses the
-        // legacy `hyprctl dispatch exit` string dispatcher, which doesn't
-        // reach anything under Lua config mode - --post-cmd's value has
-        // to be ONE array element (no shell here to rejoin split words
-        // back into a single argument the way a shell command line would).
-        command: ["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"]
     }
 
 }
