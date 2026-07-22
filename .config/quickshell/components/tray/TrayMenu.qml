@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import QtQuick
 import "../"
+import "../../Config.js" as Config
 
 // Themed right-click context menu for tray items (components/Tray.qml).
 // One PanelWindow per screen, shown only on the screen a menu was opened on.
@@ -49,7 +50,7 @@ Scope {
 
                 width: 0
                 height: 2
-                color: Theme.fillcolor
+                color: Config.fillcolor
 
                 states: [
 
@@ -130,7 +131,7 @@ Scope {
                                     }
 
                                     height: 1
-                                    color: Theme.fgcolordark
+                                    color: Config.fgcolordark
                                 }
 
                                 Rectangle {
@@ -138,7 +139,7 @@ Scope {
 
                                     anchors.fill: parent
 
-                                    color: entryMouse.containsMouse ? Theme.fgcolordark : "transparent"
+                                    color: entryMouse.containsMouse ? Config.fgcolordark : "transparent"
 
                                     Text {
                                         anchors {
@@ -150,7 +151,7 @@ Scope {
                                         verticalAlignment: Text.AlignVCenter
 
                                         text: entryDelegate.modelData.isSeparator ? "" : entryDelegate.modelData.text
-                                        color: entryDelegate.modelData.enabled ? Theme.fgcolor : Qt.rgba(1, 1, 1, 0.35)
+                                        color: entryDelegate.modelData.enabled ? Config.fgcolor : Qt.rgba(1, 1, 1, 0.35)
                                         elide: Text.ElideRight
                                     }
 
@@ -178,7 +179,7 @@ Scope {
                     color: "transparent"
 
                     border.width: 2
-                    border.color: Theme.fgcolor
+                    border.color: Config.fgcolor
 
                     radius: 0
 

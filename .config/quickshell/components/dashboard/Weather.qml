@@ -4,6 +4,7 @@ import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
+import "../../Config.js" as Config
 
 Item {
                                 id: weatherBox
@@ -95,7 +96,7 @@ Item {
                                     ColorOverlay {
                                         anchors.fill: weatherIconImage
                                         source: weatherIconImage
-                                        color: Theme.fgcolor
+                                        color: Config.fgcolor
                                     }
 
                                     Column {
@@ -110,7 +111,7 @@ Item {
                                         Text {
                                             width: parent.width
                                             text: weatherBox.conditionText
-                                            color: Theme.fgcolor
+                                            color: Config.fgcolor
                                             font.family: "monospace"
                                             font.pixelSize: 12
                                             horizontalAlignment: Text.AlignRight
@@ -123,7 +124,7 @@ Item {
                                         Text {
                                             width: parent.width
                                             text: weatherBox.tempText
-                                            color: Theme.fgcolor
+                                            color: Config.fgcolor
                                             font.family: "monospace"
                                             font.pixelSize: 36
                                             horizontalAlignment: Text.AlignRight

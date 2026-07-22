@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 import "../"
+import "../../Config.js" as Config
 
 PanelWindow {
 
@@ -175,7 +176,7 @@ PanelWindow {
 
             color: "transparent"
 
-            border.color: Theme.fgcolor
+            border.color: Config.fgcolor
             border.width: 2
 
             z: 10

@@ -5,6 +5,7 @@ import Quickshell.Widgets
 import Quickshell.Services.Mpris
 import Qt5Compat.GraphicalEffects
 import "../"
+import "../../Config.js" as Config
 
 // Media controls + album art, with a cava audio visualizer running behind
 // it. Loaded lazily via Loader from Dashboard.qml so a wrong MPRIS/cava API
@@ -40,7 +41,7 @@ Item {
             width: parent.width
             height: parent.width * 0.65
             border.width: 2
-            border.color: Theme.fgcolor
+            border.color: Config.fgcolor
             color: "transparent"
 
             Image {
@@ -55,7 +56,7 @@ Item {
                 anchors.centerIn: parent
                 visible: !root.player
                 text: "♪"
-                color: Theme.fgcolor
+                color: Config.fgcolor
                 font.pixelSize: 72
                 font.bold: true
                 elide: Text.ElideRight
@@ -66,7 +67,7 @@ Item {
         Text {
             width: parent.width
             text: root.player && root.player.trackTitle ? root.player.trackTitle : "No media detected"
-            color: Theme.fgcolor
+            color: Config.fgcolor
             font.pixelSize: 13
             font.bold: true
             elide: Text.ElideRight
@@ -76,7 +77,7 @@ Item {
         Text {
             width: parent.width
             text: root.player && root.player.trackArtist ? root.player.trackArtist : ""
-            color: Theme.fgcolor
+            color: Config.fgcolor
             font.pixelSize: 11
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
@@ -98,9 +99,9 @@ Item {
                 width: 36
                 height: 36
 
-                color: shuffleMouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                color: shuffleMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                 border.width: 1
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
 
                 IconImage {
                     id: shuffleIcon
@@ -112,7 +113,7 @@ Item {
                 ColorOverlay {
                     anchors.fill: shuffleIcon
                     source: shuffleIcon
-                    color: root.player && root.player.shuffle ? Theme.fgcolor : Theme.fgcolordark
+                    color: root.player && root.player.shuffle ? Config.fgcolor : Config.fgcolordark
                 }
 
                 MouseArea {
@@ -131,9 +132,9 @@ Item {
                 width: 36
                 height: 36
 
-                color: prevMouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                color: prevMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                 border.width: 1
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
@@ -162,9 +163,9 @@ Item {
                 width: 36
                 height: 36
 
-                color: playMouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                color: playMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                 border.width: 1
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
@@ -188,9 +189,9 @@ Item {
                 width: 36
                 height: 36
 
-                color: nextMouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                color: nextMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                 border.width: 1
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
@@ -221,9 +222,9 @@ Item {
                 width: 36
                 height: 36
 
-                color: repeatMouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                color: repeatMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                 border.width: 1
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
 
                 IconImage {
                     id: repeatIcon
@@ -235,7 +236,7 @@ Item {
                 ColorOverlay {
                     anchors.fill: repeatIcon
                     source: repeatIcon
-                    color: root.player && root.player.loopState ? Theme.fgcolor : Theme.fgcolordark
+                    color: root.player && root.player.loopState ? Config.fgcolor : Config.fgcolordark
                 }
 
                 MouseArea {

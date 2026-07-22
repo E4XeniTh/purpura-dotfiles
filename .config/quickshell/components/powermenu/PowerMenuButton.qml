@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import "../"
+import "../../Config.js" as Config
 
 // Large icon-only button used inside PowerMenu.qml.
 Item {
@@ -18,10 +19,10 @@ Item {
         anchors.fill: parent
 
         radius: 0
-        color: mouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+        color: mouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
         border.width: 2
-        border.color: Theme.fgcolor
+        border.color: Config.fgcolor
 
         IconImage {
             anchors.centerIn: parent

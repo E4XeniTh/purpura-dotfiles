@@ -1,7 +1,6 @@
 //@ pragma UseQApplication
 // shell.qml
 import Quickshell
-import QtQuick
 import "components"
 import "components/lockscreen"
 import "components/tray"
@@ -17,5 +16,4 @@ Scope {
   TrayMenu {}
   PowerMenu {}
   Dashboard {}
-  Loader { source: "components/ThemeLoader.qml" }
 }

@@ -7,6 +7,7 @@ import "lockscreen"
 import "powermenu"
 import "dashboard"
 import "tray"
+import "../Config.js" as Config
 
 Scope {
     id: root
@@ -35,13 +36,13 @@ Scope {
             color: "transparent"
             Rectangle {
                 anchors.fill: parent
-                color: Theme.fillcolor
+                color: Config.fillcolor
                 radius: 0
                 border.width: 2
-                border.color: Theme.fgcolor
+                border.color: Config.fgcolor
                 Tray {
                     border.width: 2
-                    border.color: Theme.fgcolor
+                    border.color: Config.fgcolor
                     width: trayWidth < 16 ? 0 : trayWidth + 16
                     implicitHeight: 26+8
                     anchors.margins: 10
@@ -55,8 +56,8 @@ Scope {
                     width: clock.implicitWidth + 16
                     height: clock.implicitHeight + 4
                     border.width: 2
-                    border.color: Theme.fgcolor
-                    color: clockmouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                    border.color: Config.fgcolor
+                    color: clockmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                     Clock {
                         id: clock
                         anchors.centerIn: parent
@@ -81,10 +82,10 @@ Scope {
                     }
 
                     border.width: 2
-                    border.color: Theme.fgcolor
+                    border.color: Config.fgcolor
                     width: 34
                     height: 34
-                    color: notifmouseArea.containsMouse ? Theme.fgcolorhover : "transparent"
+                    color: notifmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
                     MouseArea {
                         id: notifmouseArea

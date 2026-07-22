@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Services.Pipewire
 import Quickshell.Widgets
+import "../Config.js" as Config
 
 Scope {
 	id: root
@@ -57,10 +58,10 @@ Scope {
 
 			Rectangle {
 				anchors.fill: parent
-				color: Theme.fillcolor
+				color: Config.fillcolor
 				radius: 0
 				border.width: 2
-				border.color: Theme.fgcolor
+				border.color: Config.fgcolor
 
 				RowLayout {
 					anchors {
@@ -80,7 +81,7 @@ Scope {
 
 						implicitHeight: 12
 						radius: 0
-						color: Pipewire.defaultAudioSink?.audio.muted ? "darkred" : Theme.fgcolordark
+						color: Pipewire.defaultAudioSink?.audio.muted ? "darkred" : Config.fgcolordark
 
 						Rectangle {
 							anchors {
@@ -88,7 +89,7 @@ Scope {
 								top: parent.top
 								bottom: parent.bottom
 							}
-							color: Pipewire.defaultAudioSink?.audio.muted ? "red" : Theme.fgcolor
+							color: Pipewire.defaultAudioSink?.audio.muted ? "red" : Config.fgcolor
 							// implicitWidth: Pipewire.defaultAudioSink?.audio.muted ? parent.width : parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
 							implicitWidth: parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
 							radius: parent.radius

@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
 import "../"
+import "../../Config.js" as Config
 
 PanelWindow {
 
@@ -163,7 +164,7 @@ PanelWindow {
 
                         color: "transparent"
 
-                        border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
+                        border.color: root.wrongPassword ? "#ff3b3b" : Config.fgcolor
                         border.width: 2
 
                         radius: 0
@@ -194,7 +195,7 @@ PanelWindow {
 
                         color: Qt.rgba(0,0,0,0.3)
 
-                        border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
+                        border.color: root.wrongPassword ? "#ff3b3b" : Config.fgcolor
                         border.width: 2
 
                         radius: 0
@@ -223,7 +224,7 @@ PanelWindow {
 
             color: "transparent"
 
-            border.color: root.wrongPassword ? "#ff3b3b" : Theme.fgcolor
+            border.color: root.wrongPassword ? "#ff3b3b" : Config.fgcolor
             border.width: 2
 
             z: 10

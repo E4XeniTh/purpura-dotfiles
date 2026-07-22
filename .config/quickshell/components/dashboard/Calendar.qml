@@ -1,5 +1,6 @@
 import QtQuick
 import "../"
+import "../../Config.js" as Config
 
 // Simple current-month calendar. Self-contained (no external services).
 Item {
@@ -25,7 +26,7 @@ Item {
                 id: monthtext
                 anchors.left: parent.left
                 text: Qt.formatDate(root.today, "    MMMM")
-                color: Theme.fgcolor
+                color: Config.fgcolor
                 font.pixelSize: 14
                 font.bold: true
             }
@@ -34,7 +35,7 @@ Item {
                 id: yeartext
                 anchors.right: parent.right
                 text: Qt.formatDate(root.today, "yyyy   ")
-                color: Theme.fgcolor
+                color: Config.fgcolor
                 font.pixelSize: 14
                 font.bold: true
             }
@@ -56,7 +57,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignCenter
                     text: modelData
-                    color: Theme.fgcolordark
+                    color: Config.fgcolordark
                     font.pixelSize: 12
                     font.bold: true
                     opacity: 1
@@ -86,12 +87,12 @@ Item {
                     height: 20
                     radius: 0
 
-                    color: isToday ? Theme.fgcolordark : "transparent"
+                    color: isToday ? Config.fgcolordark : "transparent"
 
                     Text {
                         anchors.centerIn: parent
                         text: dayCell.index + 1
-                        color: dayCell.isToday ? Theme.fgcolor : Theme.fgcolordark
+                        color: dayCell.isToday ? Config.fgcolor : Config.fgcolordark
                         font.pixelSize: 12
                         font.bold: dayCell.isToday
                         horizontalAlignment: Text.AlignHCenter

@@ -1,4 +1,5 @@
 import QtQuick
+import "../Config.js" as Config
 
 Text {
     id: root
@@ -6,7 +7,7 @@ Text {
     text: Qt.formatDateTime(new Date(), "hh:mm")
 
     font.pixelSize: 22
-    color: Theme.fgcolor
+    color: Config.fgcolor
 
     Timer {
         interval: 1000

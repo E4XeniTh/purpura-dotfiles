@@ -7,10 +7,11 @@ import QtQuick
 import "../"
 import "../powermenu"
 import "../lockscreen"
+import "../../Config.js" as Config
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as TrayMenu.qml. dashBox is
-// fully opaque; each section inside sits in its own Theme.fgcolor card.
+// fully opaque; each section inside sits in its own Config.fgcolor card.
 //
 // Sizing rule: dashWidth/columnHeight scale with the screen, and every
 // section within is a fraction of *available* space (container size minus
@@ -71,8 +72,8 @@ Scope {
                 height: 4
 
                 // Fully opaque - each section below sits on top of this in
-                // its own Theme.fgcolor card.
-                color: Theme.fillcolor
+                // its own Config.fgcolor card.
+                color: Config.fillcolor
 
                 states: [
 
@@ -153,15 +154,15 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.2
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
 
                                 Clock {
                                     anchors.centerIn: parent
                                     font.family: "monospace"
                                     font.pixelSize: parent.height * 0.75
-                                    color: Theme.fgcolor
+                                    color: Config.fgcolor
                                 }
                             }
 
@@ -171,9 +172,9 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.3
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
 
                                 Weather {
                                     anchors.fill: parent
@@ -184,9 +185,9 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.5
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
 
                                 Calendar {
                                     anchors.fill: parent
@@ -212,9 +213,9 @@ Scope {
                                 id: greetingtext
                                 width: parent.width
                                 height: 32
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
 
                                 property string hostname: ""
 
@@ -238,7 +239,7 @@ Scope {
 
                                     text: Quickshell.env("USER") + "@" + (greetingtext.hostname.length > 0 ? greetingtext.hostname : "...")
 
-                                    color: Theme.fgcolor
+                                    color: Config.fgcolor
                                     font.family: "monospace"
                                     font.pixelSize: 16
 
@@ -258,9 +259,9 @@ Scope {
 
                                     width: parent.width
                                     height: parent.height
-                                    color: Theme.fillcolor
+                                    color: Config.fillcolor
                                     border.width: 2
-                                    border.color: Theme.fgcolor
+                                    border.color: Config.fgcolor
 
                                     Image {
                                         anchors.fill: parent
@@ -283,16 +284,16 @@ Scope {
                                     systemicons.height -
                                     (parent.spacing * 4)
                                 }
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
                             }
 
                             Rectangle {
                                 id: powerrow
                                 width: parent.width
                                 height: 48
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
 
                                 Row {
                                     anchors.centerIn: parent
@@ -301,9 +302,9 @@ Scope {
                                     Rectangle {
                                         width: powerrow.width / 2.2
                                         height: 48
-                                        color: mouseAreaPower.containsMouse ? Theme.fgcolorhover : "transparent"
+                                        color: mouseAreaPower.containsMouse ? Config.fgcolorhover : "transparent"
                                         border.width: 2
-                                        border.color: Theme.fgcolor
+                                        border.color: Config.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
@@ -325,9 +326,9 @@ Scope {
                                     Rectangle {
                                         width: powerrow.width / 2.2
                                         height: 48
-                                        color: mouseAreaLock.containsMouse ? Theme.fgcolorhover : "transparent"
+                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : "transparent"
                                         border.width: 2
-                                        border.color: Theme.fgcolor
+                                        border.color: Config.fgcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
@@ -353,7 +354,7 @@ Scope {
                                 id: systemicons
                                 width: parent.width
                                 height: 32
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
 
                                 Row {
                                     anchors.centerIn: parent
@@ -367,9 +368,9 @@ Scope {
 
                                             width: 32
                                             height: 32
-                                            color: Theme.fillcolor
+                                            color: Config.fillcolor
                                             border.width: 2
-                                            border.color: Theme.fgcolor
+                                            border.color: Config.fgcolor
 
                                             IconImage {
                                                 anchors.centerIn: parent
@@ -401,9 +402,9 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (2 / 3)
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
 
                                 Loader {
                                     anchors.fill: parent
@@ -417,9 +418,9 @@ Scope {
                             Rectangle {
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (1 / 3)
-                                color: Theme.fillcolor
+                                color: Config.fillcolor
                                 border.width: 2
-                                border.color: Theme.fgcolor
+                                border.color: Config.fgcolor
                             }
                         }
                     }
@@ -431,7 +432,7 @@ Scope {
                     color: "transparent"
 
                     border.width: 2
-                    border.color: Theme.fgcolor
+                    border.color: Config.fgcolor
 
                     radius: 0
 
