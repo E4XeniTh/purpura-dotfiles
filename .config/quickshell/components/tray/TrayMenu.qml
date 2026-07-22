@@ -1,5 +1,6 @@
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Io
 import QtQuick
 import "../"
 import "../../Config.js" as Config
@@ -8,6 +9,17 @@ import "../../Config.js" as Config
 // One PanelWindow per screen, shown only on the screen a menu was opened on.
 Scope {
     id: root
+
+    IpcHandler {
+        target: "trayMenu"
+
+        // hide() only - no toggle/show. Opening a specific menu needs
+        // that tray item's QsMenuHandle, its screen, and click-position
+        // margins (see Tray.qml's right-click handler), none of which a
+        // bare IPC call carries. Closing whatever's currently open is
+        // the one action that needs no context.
+        function hide(): void { TrayMenuState.close() }
+    }
 
     Variants {
         model: Quickshell.screens

@@ -23,6 +23,20 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
+    IpcHandler {
+        target: "dashboard"
+
+        // A keybind/IPC call carries no click position, so there's no
+        // "which screen was clicked" the way there is from Bar.qml's
+        // clock button - this just always targets the primary screen.
+        function toggle(): void { DashboardState.toggle(Quickshell.screens[0]) }
+        function show(): void {
+            DashboardState.open = true
+            DashboardState.screen = Quickshell.screens[0]
+        }
+        function hide(): void { DashboardState.close() }
+    }
+
     Variants {
         model: Quickshell.screens
 

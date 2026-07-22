@@ -34,6 +34,16 @@ PanelWindow {
 
     color: "transparent"
 
+    IpcHandler {
+        target: "lockscreen"
+
+        // Lock only - no unlock/toggle. A real unlock has to go through
+        // PAM (attemptLogin/unlock() below); exposing an IPC unlock here
+        // would be a permanent, unauthenticated bypass reachable from
+        // any local process, unlike the explicitly-temporary debug
+        // GlobalShortcut in LockScreenShortcut.qml.
+        function lock(): void { LockScreenState.locked = true }
+    }
 
     Rectangle {
 

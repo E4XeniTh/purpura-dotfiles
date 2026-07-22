@@ -28,6 +28,12 @@ PanelWindow {
 
     color: "transparent"
 
+    IpcHandler {
+        target: "powermenu"
+        function toggle(): void { PowerMenuState.open = !PowerMenuState.open }
+        function show(): void { PowerMenuState.open = true }
+        function hide(): void { PowerMenuState.open = false }
+    }
 
     Rectangle {
 

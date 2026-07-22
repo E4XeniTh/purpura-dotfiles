@@ -17,7 +17,32 @@ Scope {
 
         onNotification: n => {
             n.tracked = true
+
+            // Snapshot the fields we need as plain values rather than
+            // keeping a reference to `n` itself - once it's dismissed
+            // (timeout or click) the live Notification object is no
+            // longer guaranteed to be valid, but history needs to
+            // outlive that.
+            historyModel.insert(0, {
+                summary: n.summary,
+                body: n.body,
+                appIcon: n.appIcon,
+                image: n.image,
+                urgency: n.urgency
+            })
+
+            while (historyModel.count > 50) {
+                historyModel.remove(historyModel.count - 1)
+            }
         }
+    }
+
+    // Persistent notification history for the center panel - separate
+    // from server.trackedNotifications, which only holds the still-active
+    // notifications shown as toasts above and loses entries the moment
+    // they're dismissed or time out.
+    ListModel {
+        id: historyModel
     }
 
     PanelWindow {
@@ -154,12 +179,95 @@ Scope {
                             font.bold: true
                         }
 
-                        // TODO: "Clear all" needs a real history list to
-                        // clear - trackedNotifications only holds the
-                        // still-active ones shown as toasts, not a
-                        // persistent history. Referenced `history` here
-                        // was never defined anywhere, so this was dead on
-                        // arrival; re-add once history tracking exists.
+                        Text {
+                            text: "Clear all"
+                            color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolordark
+                            font.family: "monospace"
+                            font.pixelSize: 12
+
+                            MouseArea {
+                                id: clearAllMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: historyModel.clear()
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        visible: historyModel.count === 0
+                        text: "No notifications"
+                        color: Config.fgcolordark
+                        font.family: "monospace"
+                        font.pixelSize: 12
+                        horizontalAlignment: Text.AlignHCenter
+                    }
+
+                    ListView {
+                        id: historyList
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(contentHeight, 420)
+                        visible: historyModel.count > 0
+                        clip: true
+                        spacing: 8
+                        model: historyModel
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        delegate: Rectangle {
+                            width: historyList.width
+                            height: 60
+                            color: Config.fillcolor
+                            border.width: 2
+                            border.color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 10
+                                spacing: 10
+
+                                Image {
+                                    Layout.preferredHeight: 36
+                                    Layout.preferredWidth: 36
+                                    Layout.alignment: Qt.AlignTop
+                                    fillMode: Image.PreserveAspectFit
+                                    visible: source.toString() !== ""
+                                    source: model.image || model.appIcon || ""
+                                }
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: model.summary
+                                        color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
+                                        font.family: "monospace"
+                                        font.pixelSize: 14
+                                        font.bold: true
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        visible: text !== ""
+                                        text: model.body
+                                        color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolorlight
+                                        font.family: "monospace"
+                                        font.pixelSize: 14 - 2
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
+                                }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: historyModel.remove(index)
+                            }
+                        }
                     }
                 }
 
