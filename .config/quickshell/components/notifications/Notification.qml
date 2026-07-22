@@ -131,13 +131,15 @@ Scope {
                 border.width: 2
                 border.color: Config.fgcolor
                 clip: true
-                width: centerCol.width
-                height: centerCol.implicitHeight
 
                 ColumnLayout {
                     id: centerCol
-                    anchors.fill: parent
-                    anchors.margins: 10
+                    anchors {
+                        top: parent.top
+                        left: parent.left
+                        right: parent.right
+                        margins: 10
+                    }
                     spacing: 10
 
                     RowLayout {
