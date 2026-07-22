@@ -54,15 +54,18 @@ Item {
             Text {
                 anchors.centerIn: parent
                 visible: !root.player
-                text: "N/A"
+                text: "♪"
                 color: Theme.fgcolor
-                font.pixelSize: 96
+                font.pixelSize: 72
+                font.bold: true
+                elide: Text.ElideRight
+                horizontalAlignment: Text.AlignHCenter
             }
         }
 
         Text {
             width: parent.width
-            text: root.player && root.player.trackTitle ? root.player.trackTitle : ""
+            text: root.player && root.player.trackTitle ? root.player.trackTitle : "No media detected"
             color: Theme.fgcolor
             font.pixelSize: 13
             font.bold: true
