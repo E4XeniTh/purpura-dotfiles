@@ -293,7 +293,7 @@ Scope {
                                 id: powerrow
                                 width: parent.width
                                 height: 48
-                                color: Config.fillcolor
+                                color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
@@ -302,7 +302,7 @@ Scope {
                                     Rectangle {
                                         width: powerrow.width / 2.2
                                         height: 48
-                                        color: mouseAreaPower.containsMouse ? Config.fgcolorhover : "transparent"
+                                        color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
                                         border.width: 2
                                         border.color: Config.fgcolor
 
@@ -326,7 +326,7 @@ Scope {
                                     Rectangle {
                                         width: powerrow.width / 2.2
                                         height: 48
-                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : "transparent"
+                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
                                         border.width: 2
                                         border.color: Config.fgcolor
 
@@ -354,7 +354,7 @@ Scope {
                                 id: systemicons
                                 width: parent.width
                                 height: 32
-                                color: Config.fillcolor
+                                color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent

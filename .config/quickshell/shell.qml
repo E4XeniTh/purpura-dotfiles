@@ -6,6 +6,7 @@ import "components/lockscreen"
 import "components/tray"
 import "components/powermenu"
 import "components/dashboard"
+import "components/notifications"
 
 Scope {
   property bool wrongPassword: false
@@ -16,4 +17,5 @@ Scope {
   TrayMenu {}
   PowerMenu {}
   Dashboard {}
+  Notification {}
 }

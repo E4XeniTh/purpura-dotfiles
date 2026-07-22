@@ -99,7 +99,7 @@ Item {
                 width: 36
                 height: 36
 
-                color: shuffleMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                color: shuffleMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                 border.width: 1
                 border.color: Config.fgcolor
 
@@ -132,7 +132,7 @@ Item {
                 width: 36
                 height: 36
 
-                color: prevMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                color: prevMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                 border.width: 1
                 border.color: Config.fgcolor
 
@@ -163,7 +163,7 @@ Item {
                 width: 36
                 height: 36
 
-                color: playMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                color: playMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                 border.width: 1
                 border.color: Config.fgcolor
 
@@ -189,7 +189,7 @@ Item {
                 width: 36
                 height: 36
 
-                color: nextMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                color: nextMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                 border.width: 1
                 border.color: Config.fgcolor
 
@@ -222,7 +222,7 @@ Item {
                 width: 36
                 height: 36
 
-                color: repeatMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                color: repeatMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                 border.width: 1
                 border.color: Config.fgcolor
 
