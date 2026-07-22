@@ -1,8 +1,8 @@
 # purpura-dotfiles
 
 Hyprland + Quickshell desktop shell. Sharp corners, translucent black panels,
-purple accents — the accent color auto-follows Hyprland's `col.active_border`,
-so re-theming is just a `hyprland.conf` edit away.
+purple accents — colors and other shell-wide settings live in `Config.js`
+at the base of the quickshell config.
 
 ## What's in here
 
@@ -59,8 +59,6 @@ binary is gitignored since it's machine-specific.
 **CLI tools** (invoked directly, not linked against)
 - `curl` — weather (`dashboard/Weather.qml`)
 - `hostname` — dashboard greeting text
-- `grep` — reading the accent color out of `hyprland.conf`
-  (`ThemeLoader.qml`)
 - `systemctl`, `hyprctl` — power menu actions (systemd and Hyprland are
   already required, not extra installs)
 
@@ -81,7 +79,8 @@ binary is gitignored since it's machine-specific.
 
 ## Notes
 
-- The accent color reads from `hyprland.conf` once at Quickshell startup
-  (`ThemeLoader.qml`). Change `col.active_border` and restart `qs` to
-  re-theme.
+- Colors and other shell-wide settings live in `Config.js` (base of the
+  quickshell config, imported as `Config` from any component). Edit it and
+  restart `qs` to re-theme. Will also hold notification/options-menu
+  settings once those exist.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
