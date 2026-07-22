@@ -52,12 +52,12 @@ Scope {
 
         implicitWidth: 380
         implicitHeight: Math.max(1, column.implicitHeight)
-        color: Config.fillcolor
+        color: "transparent"
 
         ColumnLayout {
             id: column
             width: parent.width
-            spacing: 10
+            spacing: 4
 
             Repeater {
                 model: server.trackedNotifications
