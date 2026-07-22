@@ -45,13 +45,12 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- Switched from "kde" to "hyprqt6engine" so Qt6 apps pick up
 -- hyprqt6engine.conf's color_scheme instead of needing a full Plasma
 -- install. See ~/.config/hypr/hyprqt6engine.conf.
-hl.env("QT_QPA_PLATFORMTHEME", "hyprqt6engine")
+hl.env("QT_QPA_PLATFORMTHEME", "kde")
 -- Belt-and-suspenders alongside kdeglobals' [KDE] widgetStyle=kvantum:
 -- strict KDE Frameworks apps (Kate) were still showing default/white
 -- chrome even after that, which QT_STYLE_OVERRIDE forces regardless of
 -- whether an app actually reads kdeglobals' widgetStyle key outside a
 -- full Plasma session.
-hl.env("QT_STYLE_OVERRIDE", "kvantum")
 hl.env("XDG_MENU_PREFIX", "arch-")
 
 --#######################################################################################
