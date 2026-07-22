@@ -113,7 +113,7 @@ Item {
                                             text: weatherBox.conditionText
                                             color: Config.fgcolor
                                             font.family: Config.fontfamily
-                                            font.pixelSize: 12
+                                            font.pixelSize: 16
                                             horizontalAlignment: Text.AlignRight
                                             verticalAlignment: Text.AlignBottom
                                             wrapMode: Text.WordWrap
@@ -126,7 +126,7 @@ Item {
                                             text: weatherBox.tempText
                                             color: Config.fgcolor
                                             font.family: Config.fontfamily
-                                            font.pixelSize: 36
+                                            font.pixelSize: 32
                                             horizontalAlignment: Text.AlignRight
                                         }
                                     }

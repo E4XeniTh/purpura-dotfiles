@@ -25,8 +25,9 @@ Item {
             Text {
                 id: monthtext
                 anchors.left: parent.left
-                text: Qt.formatDate(root.today, "    MMMM")
+                text: Qt.formatDate(root.today, "  MMMM")
                 color: Config.fgcolor
+                font.family: Config.fontfamily
                 font.pixelSize: 14
                 font.bold: true
             }
@@ -34,8 +35,9 @@ Item {
             Text {
                 id: yeartext
                 anchors.right: parent.right
-                text: Qt.formatDate(root.today, "yyyy   ")
+                text: Qt.formatDate(root.today, "yyyy  ")
                 color: Config.fgcolor
+                font.family: Config.fontfamily
                 font.pixelSize: 14
                 font.bold: true
             }
@@ -57,7 +59,8 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignCenter
                     text: modelData
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
                     font.pixelSize: 12
                     font.bold: true
                     opacity: 1
@@ -92,7 +95,8 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: dayCell.index + 1
-                        color: dayCell.isToday ? Config.fgcolor : Config.fgcolordark
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
                         font.pixelSize: 12
                         font.bold: dayCell.isToday
                         horizontalAlignment: Text.AlignHCenter
