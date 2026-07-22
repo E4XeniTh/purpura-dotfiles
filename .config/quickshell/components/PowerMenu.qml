@@ -185,7 +185,7 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-                            shutdownProcess.running = true
+                            Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl poweroff"])
                         }
                     }
                 }
@@ -218,7 +218,7 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-                            rebootProcess.running = true
+                            Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl reboot"])
                         }
                     }
                 }
@@ -251,7 +251,7 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-                            suspendProcess.running = true
+                            Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl suspend"])
                         }
                     }
                 }
@@ -284,15 +284,6 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-
-                            // execDetached, not a tracked Process: qs
-                            // asking hyprshutdown to close apps includes
-                            // asking qs itself to close, and a regular
-                            // Process here is still a child Quickshell
-                            // manages the lifecycle of - it was getting
-                            // killed along with qs before it could reach
-                            // its own --post-cmd exit dispatch. Detached,
-                            // it survives qs closing entirely.
                             Quickshell.execDetached(["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"])
                         }
                     }
@@ -354,21 +345,6 @@ PanelWindow {
 
         }
 
-    }
-
-    Process {
-        id: shutdownProcess
-        command: ["systemctl", "poweroff"]
-    }
-
-    Process {
-        id: rebootProcess
-        command: ["systemctl", "reboot"]
-    }
-
-    Process {
-        id: suspendProcess
-        command: ["systemctl", "suspend"]
     }
 
 }
