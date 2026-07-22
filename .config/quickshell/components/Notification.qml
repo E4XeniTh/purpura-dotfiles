@@ -162,6 +162,13 @@ Scope {
             color: "transparent"
             width: centerCol.width
             height: centerCol.implicitHeight
+
+            // No anchor at all defaults to the window's top-left, so as
+            // width grew the box appeared to grow rightward from a fixed
+            // left edge. Anchoring the right edge to the window's right
+            // instead makes it grow from the right, matching every other
+            // panel in this shell (all anchored top+right themselves).
+            anchors.right: parent.right
             Rectangle {
                 id: mainRect
                 anchors.fill: parent
@@ -341,7 +348,7 @@ Scope {
 
                         properties: "width,height"
 
-                        duration: 250
+                        duration: 300
 
                         easing.type: Easing.OutCubic
 
@@ -366,7 +373,7 @@ Scope {
 
                 // Must match the transition's duration above, so phase 1
                 // (width) fully finishes before phase 2 (height) starts.
-                interval: 250
+                interval: 300
                 repeat: false
 
                 onTriggered: {
