@@ -169,6 +169,7 @@ hl.bind(mainMod .. " + F11", hl.dsp.window.fullscreen({ mode = "fullscreen", act
 hl.bind(mainMod .. " + space", hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(browser))
 hl.bind(mainMod .. " + L", hl.dsp.global("quickshell:lockscreen"))
+hl.bind(mainMod .. " + delete", hl.dsp.global("quickshell:powermenu"))
 hl.bind(mainMod .. " + O", hl.dsp.exec_cmd(noteapp))
 
 hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }))

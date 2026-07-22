@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
+import Quickshell.Hyprland
 import Quickshell.Io
 import "../Config.js" as Config
 
@@ -37,6 +38,13 @@ PanelWindow {
         function hide(): void { root.open = false }
     }
 
+    GlobalShortcut {
+        name: "powermenu"
+
+        onPressed: {
+            root.open = true
+        }
+    }
 
     Rectangle {
 
