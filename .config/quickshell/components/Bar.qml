@@ -3,19 +3,24 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
-import "lockscreen"
-import "powermenu"
 import "dashboard"
-import "tray"
 import "../Config.js" as Config
 
 Scope {
     id: root
+
+    // PowerMenu/LockScreen are separate files with their own IpcHandler-
+    // driven state now (no more shared *State.qml singleton to read), so
+    // shell.qml passes these down from the actual PowerMenu/LockScreen
+    // instances it creates.
+    property bool locked: false
+    property bool powerMenuOpen: false
+
     // Falls back to a sane default until hyprctl responds
     Variants {
         model: Quickshell.screens
         PanelWindow {
-            visible: !LockScreenState.locked && !PowerMenuState.open
+            visible: !root.locked && !root.powerMenuOpen
             id: bar
             property var modelData
             screen: modelData
@@ -70,8 +75,6 @@ Scope {
                     }
                 }
 
-                // Placeholder for now - will open a notification manager
-                // once one exists.
                 Rectangle {
                     id: notificationButton
 
@@ -87,11 +90,23 @@ Scope {
                     height: 34
                     color: notifmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
+                    // Notification.qml is a separate file/Scope with its own
+                    // centerOpen - the only way in is through its
+                    // IpcHandler, same as `qs ipc call notificationpanel
+                    // toggle` from a terminal.
+                    Process {
+                        id: notifToggleProcess
+                        command: ["qs", "ipc", "call", "notificationpanel", "toggle"]
+                    }
+
                     MouseArea {
                         id: notifmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
-                        // onClicked: DashboardState.toggle(modelData)
+                        onClicked: {
+                            notifToggleProcess.running = false
+                            notifToggleProcess.running = true
+                        }
                     }
 
                     IconImage {

@@ -8,11 +8,26 @@ at the base of the quickshell config.
 
 | Component | What it does |
 |---|---|
-| **Bar** | Top bar: tray, clock (opens the dashboard), notification icon (placeholder) |
+| **Bar** | Top bar: tray, clock (opens the dashboard), notification icon (opens the notification center) |
 | **Dashboard** | Dropdown from the bar: clock, weather, calendar, now-playing + media controls, quick toggles, power/lock |
+| **Notification center** | Toast popups for new notifications, plus a persistent (capped, newest-first) history panel with clear-all/dismiss |
 | **Lock screen** | Full-screen lock, authenticates via PAM |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
+
+Dashboard is the only multi-file component (`components/dashboard/`). Bar,
+Notification, LockScreen, PowerMenu and Tray are each a single
+`components/*.qml` file - no separate `...State.qml` singletons. Cross-file
+control (a keybind, or one component nudging another) goes through each
+file's `IpcHandler`:
+
+```bash
+qs ipc call notificationpanel toggle   # show / hide also work
+qs ipc call dashboard toggle           # opens on the primary screen
+qs ipc call powermenu toggle
+qs ipc call lockscreen lock            # lock only - no IPC unlock, see LockScreen.qml
+qs ipc call trayMenu hide              # no toggle/show - see Tray.qml
+```
 
 ## Install
 
@@ -79,8 +94,8 @@ binary is gitignored since it's machine-specific.
 
 ## Notes
 
-- Colors and other shell-wide settings live in `Config.js` (base of the
-  quickshell config, imported as `Config` from any component). Edit it and
-  restart `qs` to re-theme. Will also hold notification/options-menu
-  settings once those exist.
+- Colors, font family, and notification timeout live in `Config.js` (base
+  of the quickshell config, imported as `Config` from any component). Edit
+  it and restart `qs` to re-theme. Will also hold options-menu settings
+  once that exists.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.

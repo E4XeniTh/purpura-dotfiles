@@ -1,13 +1,53 @@
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
+import Quickshell.Widgets
 import Quickshell.Io
-import "../"
-import "../../Config.js" as Config
+import "../Config.js" as Config
+
+// Large icon-only button, inlined here since it's only ever used inside
+// this file's menuBox Row below.
+component PowerMenuButton: Item {
+    id: btnRoot
+
+    signal activated()
+
+    property string icon: ""
+
+    width: 150
+    height: 150
+
+    Rectangle {
+        anchors.fill: parent
+
+        radius: 0
+        color: mouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+        border.width: 2
+        border.color: Config.fgcolor
+
+        IconImage {
+            anchors.centerIn: parent
+            implicitSize: 88
+            source: Quickshell.iconPath(btnRoot.icon)
+        }
+    }
+
+    MouseArea {
+        id: mouseArea
+
+        anchors.fill: parent
+        hoverEnabled: true
+
+        onClicked: btnRoot.activated()
+    }
+}
 
 PanelWindow {
 
     id: root
+
+    property bool open: false
 
     WlrLayershell.namespace: "powermenu"
 
@@ -17,7 +57,7 @@ PanelWindow {
 
     WlrLayershell.exclusiveZone: -1
 
-    visible: PowerMenuState.open
+    visible: root.open
 
     anchors {
         top: true
@@ -30,10 +70,11 @@ PanelWindow {
 
     IpcHandler {
         target: "powermenu"
-        function toggle(): void { PowerMenuState.open = !PowerMenuState.open }
-        function show(): void { PowerMenuState.open = true }
-        function hide(): void { PowerMenuState.open = false }
+        function toggle(): void { root.open = !root.open }
+        function show(): void { root.open = true }
+        function hide(): void { root.open = false }
     }
+
 
     Rectangle {
 
@@ -58,7 +99,7 @@ PanelWindow {
     // dimmed backdrop.
     MouseArea {
         anchors.fill: parent
-        onClicked: PowerMenuState.open = false
+        onClicked: root.open = false
     }
 
 
@@ -143,7 +184,7 @@ PanelWindow {
                 PowerMenuButton {
                     icon: "system-shutdown-symbolic"
                     onActivated: {
-                        PowerMenuState.open = false
+                        root.open = false
                         shutdownProcess.running = true
                     }
                 }
@@ -151,7 +192,7 @@ PanelWindow {
                 PowerMenuButton {
                     icon: "system-reboot-symbolic"
                     onActivated: {
-                        PowerMenuState.open = false
+                        root.open = false
                         rebootProcess.running = true
                     }
                 }
@@ -159,7 +200,7 @@ PanelWindow {
                 PowerMenuButton {
                     icon: "system-suspend-symbolic"
                     onActivated: {
-                        PowerMenuState.open = false
+                        root.open = false
                         suspendProcess.running = true
                     }
                 }
@@ -167,7 +208,7 @@ PanelWindow {
                 PowerMenuButton {
                     icon: "system-log-out-symbolic"
                     onActivated: {
-                        PowerMenuState.open = false
+                        root.open = false
                         logoutProcess.running = true
                     }
                 }

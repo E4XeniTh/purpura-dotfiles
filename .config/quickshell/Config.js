@@ -15,4 +15,6 @@ var fgcolordark = Qt.darker(fgcolor, 2.5)
 var fgcolorlight = Qt.lighter(fgcolor, 1.55)
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
 
+var fontfamily = "monospace"
+
 var notificationtimeout = 5000

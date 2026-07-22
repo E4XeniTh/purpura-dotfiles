@@ -112,7 +112,7 @@ Item {
                                             width: parent.width
                                             text: weatherBox.conditionText
                                             color: Config.fgcolor
-                                            font.family: "monospace"
+                                            font.family: Config.fontfamily
                                             font.pixelSize: 12
                                             horizontalAlignment: Text.AlignRight
                                             verticalAlignment: Text.AlignBottom
@@ -125,7 +125,7 @@ Item {
                                             width: parent.width
                                             text: weatherBox.tempText
                                             color: Config.fgcolor
-                                            font.family: "monospace"
+                                            font.family: Config.fontfamily
                                             font.pixelSize: 36
                                             horizontalAlignment: Text.AlignRight
                                         }

@@ -5,13 +5,12 @@ import Quickshell.Io
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
-import "../powermenu"
-import "../lockscreen"
 import "../../Config.js" as Config
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
-// same two-phase stretch-then-drop animation as TrayMenu.qml. dashBox is
-// fully opaque; each section inside sits in its own Config.fgcolor card.
+// same two-phase stretch-then-drop animation as Tray.qml's context menu.
+// dashBox is fully opaque; each section inside sits in its own
+// Config.fgcolor card.
 //
 // Sizing rule: dashWidth/columnHeight scale with the screen, and every
 // section within is a fraction of *available* space (container size minus
@@ -174,7 +173,7 @@ Scope {
 
                                 Clock {
                                     anchors.centerIn: parent
-                                    font.family: "monospace"
+                                    font.family: Config.fontfamily
                                     font.pixelSize: parent.height * 0.75
                                     color: Config.fgcolor
                                 }
@@ -254,7 +253,7 @@ Scope {
                                     text: Quickshell.env("USER") + "@" + (greetingtext.hostname.length > 0 ? greetingtext.hostname : "...")
 
                                     color: Config.fgcolor
-                                    font.family: "monospace"
+                                    font.family: Config.fontfamily
                                     font.pixelSize: 16
 
                                     horizontalAlignment: Text.AlignHCenter
@@ -326,13 +325,24 @@ Scope {
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
+                                        // PowerMenu.qml is a separate file with its own
+                                        // IpcHandler-driven state now (no PowerMenuState
+                                        // singleton to reach into directly), so this goes
+                                        // through the same IPC path as `qs ipc call
+                                        // powermenu show`.
+                                        Process {
+                                            id: openPowerMenuProcess
+                                            command: ["qs", "ipc", "call", "powermenu", "show"]
+                                        }
+
                                         MouseArea {
                                             id: mouseAreaPower
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
                                                 DashboardState.close()
-                                                PowerMenuState.open = true
+                                                openPowerMenuProcess.running = false
+                                                openPowerMenuProcess.running = true
                                             }
                                         }
                                     }
@@ -350,13 +360,22 @@ Scope {
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
+                                        // Same reasoning as openPowerMenuProcess above -
+                                        // LockScreen.qml's lock state is its own now, only
+                                        // reachable through its IpcHandler's lock().
+                                        Process {
+                                            id: lockProcess
+                                            command: ["qs", "ipc", "call", "lockscreen", "lock"]
+                                        }
+
                                         MouseArea {
                                             id: mouseAreaLock
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
                                                 DashboardState.close()
-                                                LockScreenState.locked = true
+                                                lockProcess.running = false
+                                                lockProcess.running = true
                                             }
                                         }
                                     }

@@ -5,7 +5,7 @@ import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
 
-import "../../Config.js" as Config
+import "../Config.js" as Config
 
 Scope {
     id: root
@@ -99,10 +99,11 @@ Scope {
                                 Layout.fillWidth: true
                                 text: card.modelData.summary
                                 color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
-                                font.family: "monospace"
+                                font.family: Config.fontfamily
                                 font.pixelSize: 14
                                 font.bold: true
                                 elide: Text.ElideRight
+                                horizontalAlignment: Text.AlignRight
                             }
 
                             Text {
@@ -110,9 +111,10 @@ Scope {
                                 visible: text !== ""
                                 text: card.modelData.body
                                 color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolorlight
-                                font.family: "monospace"
+                                font.family: Config.fontfamily
                                 font.pixelSize: 14 - 2
                                 wrapMode: Text.WordWrap
+                                horizontalAlignment: Text.AlignRight
                             }
                         }
                     }
@@ -174,7 +176,7 @@ Scope {
                             Layout.fillWidth: true
                             text: "Notifications"
                             color: Config.fgcolor
-                            font.family: "monospace"
+                            font.family: Config.fontfamily
                             font.pixelSize: 14
                             font.bold: true
                         }
@@ -182,7 +184,7 @@ Scope {
                         Text {
                             text: "Clear all"
                             color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolordark
-                            font.family: "monospace"
+                            font.family: Config.fontfamily
                             font.pixelSize: 12
 
                             MouseArea {
@@ -199,7 +201,7 @@ Scope {
                         visible: historyModel.count === 0
                         text: "No notifications"
                         color: Config.fgcolordark
-                        font.family: "monospace"
+                        font.family: Config.fontfamily
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -243,10 +245,11 @@ Scope {
                                         Layout.fillWidth: true
                                         text: model.summary
                                         color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
-                                        font.family: "monospace"
+                                        font.family: Config.fontfamily
                                         font.pixelSize: 14
                                         font.bold: true
                                         elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignRight
                                     }
 
                                     Text {
@@ -254,11 +257,12 @@ Scope {
                                         visible: text !== ""
                                         text: model.body
                                         color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolorlight
-                                        font.family: "monospace"
+                                        font.family: Config.fontfamily
                                         font.pixelSize: 14 - 2
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
+                                        horizontalAlignment: Text.AlignRight
                                     }
                                 }
                             }

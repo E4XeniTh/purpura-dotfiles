@@ -2,20 +2,18 @@
 // shell.qml
 import Quickshell
 import "components"
-import "components/lockscreen"
-import "components/tray"
-import "components/powermenu"
 import "components/dashboard"
-import "components/notifications"
 
 Scope {
-  property bool wrongPassword: false
-  Bar {}
+  PowerMenu { id: powerMenu }
+  LockScreen { id: lockScreen }
+
+  Bar {
+    locked: lockScreen.locked
+    powerMenuOpen: powerMenu.open
+  }
+
   VolumeOsd {}
-  LockScreen {}
-  LockScreenShortcut {}
-  TrayMenu {}
-  PowerMenu {}
   Dashboard {}
   Notification {}
 }

@@ -5,8 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
-import "../"
-import "../../Config.js" as Config
+import "../Config.js" as Config
 
 PanelWindow {
 
@@ -20,7 +19,9 @@ PanelWindow {
 
     WlrLayershell.exclusiveZone: -1
 
-    visible: LockScreenState.locked
+    property bool locked: false
+
+    visible: root.locked
 
     property bool wrongPassword: false
 
@@ -41,9 +42,32 @@ PanelWindow {
         // PAM (attemptLogin/unlock() below); exposing an IPC unlock here
         // would be a permanent, unauthenticated bypass reachable from
         // any local process, unlike the explicitly-temporary debug
-        // GlobalShortcut in LockScreenShortcut.qml.
-        function lock(): void { LockScreenState.locked = true }
+        // GlobalShortcut right below.
+        function lock(): void { root.locked = true }
     }
+
+    GlobalShortcut {
+        name: "lockscreen"
+
+        onPressed: {
+            root.locked = true
+        }
+    }
+
+    // TEMPORARY DEBUG ESCAPE HATCH - remove once PamContext auth is
+    // confirmed working. This bypasses the password check entirely: it
+    // just flips the lock state directly, so anyone with this keybind
+    // can unlock the screen with no password at all. Fine while testing
+    // lock/unlock in isolation from PAM; not something to leave bound
+    // permanently.
+    GlobalShortcut {
+        name: "lockscreen-toggle-debug"
+
+        onPressed: {
+            root.locked = !root.locked
+        }
+    }
+
 
     Rectangle {
 
@@ -338,7 +362,7 @@ PanelWindow {
 
         passwordInput.clear()
 
-        LockScreenState.locked = false
+        root.locked = false
 
     }
 
@@ -365,7 +389,7 @@ PanelWindow {
 
         passwordInput.clear()
 
-        LockScreenState.locked = true
+        root.locked = true
 
     }
 
