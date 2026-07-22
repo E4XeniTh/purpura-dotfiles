@@ -28,8 +28,6 @@ Scope {
         implicitHeight: Math.max(1, column.implicitHeight)
         color: Config.fillcolor
 
-        exclusionMode: exclusionMode.Ignore
-
         ColumnLayout {
             id: column
             width: parent.width
@@ -116,10 +114,9 @@ Scope {
     PanelWindow {
         margins { top: 10; right: 10 }
         anchors { top: true; right: true }
-        exclusionMode: exclusionMode.Ignore
         visible: root.centerOpen
         width: panelBox.width
-        height: panelBox.implicitHeight
+        height: panelBox.height
         color: "transparent"
         Rectangle {
             id: panelBox
@@ -155,18 +152,12 @@ Scope {
                             font.bold: true
                         }
 
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Clear all"
-                            visible: history.count > 0
-                            color: Config.fgcolor
-                            font.family: "monospace"
-                            font.pixelSize: 14
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: history.clear()
-                            }
-                        }
+                        // TODO: "Clear all" needs a real history list to
+                        // clear - trackedNotifications only holds the
+                        // still-active ones shown as toasts, not a
+                        // persistent history. Referenced `history` here
+                        // was never defined anywhere, so this was dead on
+                        // arrival; re-add once history tracking exists.
                     }
                 }
 
@@ -231,7 +222,7 @@ Scope {
 
                 // Must match the transition's duration above, so phase 1
                 // (width) fully finishes before phase 2 (height) starts.
-                interval: 300
+                interval: 250
                 repeat: false
 
                 onTriggered: {
