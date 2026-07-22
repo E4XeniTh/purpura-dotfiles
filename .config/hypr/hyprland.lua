@@ -42,7 +42,10 @@ end)
 
 hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
-hl.env("QT_QPA_PLATFORMTHEME", "kde")
+-- Switched from "kde" to "hyprqt6engine" so Qt6 apps pick up
+-- hyprqt6engine.conf's color_scheme instead of needing a full Plasma
+-- install. See ~/.config/hypr/hyprqt6engine.conf.
+hl.env("QT_QPA_PLATFORMTHEME", "hyprqt6engine")
 hl.env("XDG_MENU_PREFIX", "arch-")
 
 --#######################################################################################
