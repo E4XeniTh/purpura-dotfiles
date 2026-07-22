@@ -364,7 +364,13 @@ PanelWindow {
 
     Process {
         id: logoutProcess
-        command: ["hyprctl", "dispatch", "exit"]
+
+        // hyprshutdown's own internal Hyprland-exit call still uses the
+        // legacy `hyprctl dispatch exit` string dispatcher, which doesn't
+        // reach anything under Lua config mode - --post-cmd's value has
+        // to be ONE array element (no shell here to rejoin split words
+        // back into a single argument the way a shell command line would).
+        command: ["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"]
     }
 
 }
