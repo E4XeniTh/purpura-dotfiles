@@ -25,6 +25,12 @@ Scope {
     property bool open: false
     property var screen: null
 
+    // Set from shell.qml, so the power/lock buttons below can call these
+    // directly instead of round-tripping through `qs ipc call` to talk to
+    // another component in the very same process.
+    property var powerMenu: null
+    property var lockScreen: null
+
     function close() {
         open = false
         screen = null
@@ -342,24 +348,15 @@ Scope {
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
-                                        // PowerMenu.qml is a separate file with its own
-                                        // IpcHandler-driven state now (no PowerMenuState
-                                        // singleton to reach into directly), so this goes
-                                        // through the same IPC path as `qs ipc call
-                                        // powermenu show`.
-                                        Process {
-                                            id: openPowerMenuProcess
-                                            command: ["qs", "ipc", "call", "powermenu", "show"]
-                                        }
-
                                         MouseArea {
                                             id: mouseAreaPower
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
                                                 root.close()
-                                                openPowerMenuProcess.running = false
-                                                openPowerMenuProcess.running = true
+                                                if (root.powerMenu) {
+                                                    root.powerMenu.open = true
+                                                }
                                             }
                                         }
                                     }
@@ -377,22 +374,15 @@ Scope {
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
-                                        // Same reasoning as openPowerMenuProcess above -
-                                        // LockScreen.qml's lock state is its own now, only
-                                        // reachable through its IpcHandler's lock().
-                                        Process {
-                                            id: lockProcess
-                                            command: ["qs", "ipc", "call", "lockscreen", "lock"]
-                                        }
-
                                         MouseArea {
                                             id: mouseAreaLock
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             onClicked: {
                                                 root.close()
-                                                lockProcess.running = false
-                                                lockProcess.running = true
+                                                if (root.lockScreen) {
+                                                    root.lockScreen.locked = true
+                                                }
                                             }
                                         }
                                     }

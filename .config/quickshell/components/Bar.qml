@@ -1,5 +1,4 @@
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
@@ -14,6 +13,13 @@ Scope {
     // instances it creates.
     property bool locked: false
     property bool powerMenuOpen: false
+
+    // Dashboard/Notification instances, also passed down from shell.qml -
+    // clicking their buttons below calls straight into these rather than
+    // spawning a `qs ipc call` subprocess to talk to another component in
+    // this very same process.
+    property var dashboard: null
+    property var notification: null
 
     // Falls back to a sane default until hyprctl responds
     Variants {
@@ -67,25 +73,14 @@ Scope {
                         anchors.centerIn: parent
                     }
 
-                    // Dashboard.qml is a separate file/Scope with its own
-                    // open/screen state now - same IPC path as `qs ipc
-                    // call dashboard toggle`. Note this always targets
-                    // the primary screen (no click-position context over
-                    // IPC), so on multi-monitor setups this may open the
-                    // dashboard on a different monitor than the one you
-                    // clicked.
-                    Process {
-                        id: dashboardToggleProcess
-                        command: ["qs", "ipc", "call", "dashboard", "toggle"]
-                    }
-
                     MouseArea {
                         id: clockmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
                         onClicked: {
-                            dashboardToggleProcess.running = false
-                            dashboardToggleProcess.running = true
+                            if (root.dashboard) {
+                                root.dashboard.toggle(modelData)
+                            }
                         }
                     }
                 }
@@ -105,22 +100,14 @@ Scope {
                     height: 34
                     color: notifmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
-                    // Notification.qml is a separate file/Scope with its own
-                    // centerOpen - the only way in is through its
-                    // IpcHandler, same as `qs ipc call notificationpanel
-                    // toggle` from a terminal.
-                    Process {
-                        id: notifToggleProcess
-                        command: ["qs", "ipc", "call", "notificationpanel", "toggle"]
-                    }
-
                     MouseArea {
                         id: notifmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
                         onClicked: {
-                            notifToggleProcess.running = false
-                            notifToggleProcess.running = true
+                            if (root.notification) {
+                                root.notification.centerOpen = !root.notification.centerOpen
+                            }
                         }
                     }
 

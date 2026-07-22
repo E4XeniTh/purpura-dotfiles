@@ -71,7 +71,9 @@ Scope {
                     }
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 60
+                    // Grows for wrapped multi-line bodies instead of
+                    // clipping them to a fixed 60px card.
+                    Layout.preferredHeight: Math.max(60, toastContentColumn.implicitHeight + 20)
                     color: Config.fillcolor
                     border.width: 2
                     border.color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
@@ -92,6 +94,7 @@ Scope {
                         }
 
                         ColumnLayout {
+                            id: toastContentColumn
                             Layout.fillWidth: true
                             spacing: 2
 
@@ -103,7 +106,6 @@ Scope {
                                 font.pixelSize: 14
                                 font.bold: true
                                 elide: Text.ElideRight
-                                horizontalAlignment: Text.AlignRight
                             }
 
                             Text {
@@ -114,7 +116,6 @@ Scope {
                                 font.family: Config.fontfamily
                                 font.pixelSize: 14 - 2
                                 wrapMode: Text.WordWrap
-                                horizontalAlignment: Text.AlignRight
                             }
                         }
                     }
@@ -142,8 +143,18 @@ Scope {
         margins { top: 10; right: 10 }
         anchors { top: true; right: true }
         visible: root.centerOpen
-        width: panelBox.width
-        height: panelBox.height
+
+        // Fixed/content-derived size, NOT bound to panelBox's currently-
+        // animating width/height. Binding the window itself to the live
+        // animation meant every frame resized the actual Wayland surface
+        // (a real compositor round-trip, not just a repaint), which is
+        // what made the panel feel like it was lagging behind while
+        // spreading. Dashboard/PowerMenu/Tray never do this - their outer
+        // window is sized once from the full/settled content, and only
+        // an internal Rectangle (panelBox here) animates via clip.
+        implicitWidth: 400
+        implicitHeight: Math.max(centerCol.implicitHeight, 1)
+
         color: "transparent"
         Rectangle {
             id: panelBox
@@ -196,7 +207,7 @@ Scope {
                         Text {
                             visible: historyModel.count > 0
                             text: "Clear all"
-                            color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolordark
+                            color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: 12
 
@@ -213,7 +224,7 @@ Scope {
                         Layout.fillWidth: true
                         visible: historyModel.count === 0
                         text: "No notifications"
-                        color: Config.fgcolordark
+                        color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: 12
                         horizontalAlignment: Text.AlignHCenter
@@ -231,7 +242,9 @@ Scope {
 
                         delegate: Rectangle {
                             width: historyList.width
-                            height: 60
+                            // Grows for wrapped multi-line bodies instead
+                            // of clipping them to a fixed 60px card.
+                            height: Math.max(60, historyContentColumn.implicitHeight + 20)
                             color: Config.fillcolor
                             border.width: 2
                             border.color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
@@ -251,6 +264,7 @@ Scope {
                                 }
 
                                 ColumnLayout {
+                                    id: historyContentColumn
                                     Layout.fillWidth: true
                                     spacing: 2
 
@@ -262,7 +276,6 @@ Scope {
                                         font.pixelSize: 14
                                         font.bold: true
                                         elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignRight
                                     }
 
                                     Text {
@@ -273,9 +286,6 @@ Scope {
                                         font.family: Config.fontfamily
                                         font.pixelSize: 14 - 2
                                         wrapMode: Text.WordWrap
-                                        maximumLineCount: 2
-                                        elide: Text.ElideRight
-                                        horizontalAlignment: Text.AlignRight
                                     }
                                 }
                             }
@@ -285,6 +295,13 @@ Scope {
                                 onClicked: historyModel.remove(index)
                             }
                         }
+                    }
+
+                    // Small breathing room below the list - centerCol's
+                    // implicitHeight otherwise leaves content sitting
+                    // flush against mainRect's bottom border.
+                    Item {
+                        height: 8
                     }
                 }
 
