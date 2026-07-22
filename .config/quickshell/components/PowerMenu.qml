@@ -5,44 +5,6 @@ import Quickshell.Widgets
 import Quickshell.Io
 import "../Config.js" as Config
 
-// Large icon-only button, inlined here since it's only ever used inside
-// this file's menuBox Row below.
-component PowerMenuButton: Item {
-    id: btnRoot
-
-    signal activated()
-
-    property string icon: ""
-
-    width: 150
-    height: 150
-
-    Rectangle {
-        anchors.fill: parent
-
-        radius: 0
-        color: mouseArea.containsMouse ? Config.fgcolorhover : "transparent"
-
-        border.width: 2
-        border.color: Config.fgcolor
-
-        IconImage {
-            anchors.centerIn: parent
-            implicitSize: 88
-            source: Quickshell.iconPath(btnRoot.icon)
-        }
-    }
-
-    MouseArea {
-        id: mouseArea
-
-        anchors.fill: parent
-        hoverEnabled: true
-
-        onClicked: btnRoot.activated()
-    }
-}
-
 PanelWindow {
 
     id: root
@@ -181,35 +143,141 @@ PanelWindow {
 
                 spacing: 24
 
-                PowerMenuButton {
-                    icon: "system-shutdown-symbolic"
-                    onActivated: {
-                        root.open = false
-                        shutdownProcess.running = true
+                // Large icon-only buttons. Duplicated rather than pulled
+                // into a shared inline `component` - this Quickshell's
+                // QML engine doesn't support that syntax (rejected with a
+                // hard "Syntax error" at boot, taking the whole shell
+                // down with it).
+
+                Item {
+                    width: 150
+                    height: 150
+
+                    Rectangle {
+                        anchors.fill: parent
+
+                        radius: 0
+                        color: shutdownMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+                        border.width: 2
+                        border.color: Config.fgcolor
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            implicitSize: 88
+                            source: Quickshell.iconPath("system-shutdown-symbolic")
+                        }
+                    }
+
+                    MouseArea {
+                        id: shutdownMouseArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+
+                        onClicked: {
+                            root.open = false
+                            shutdownProcess.running = true
+                        }
                     }
                 }
 
-                PowerMenuButton {
-                    icon: "system-reboot-symbolic"
-                    onActivated: {
-                        root.open = false
-                        rebootProcess.running = true
+                Item {
+                    width: 150
+                    height: 150
+
+                    Rectangle {
+                        anchors.fill: parent
+
+                        radius: 0
+                        color: rebootMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+                        border.width: 2
+                        border.color: Config.fgcolor
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            implicitSize: 88
+                            source: Quickshell.iconPath("system-reboot-symbolic")
+                        }
+                    }
+
+                    MouseArea {
+                        id: rebootMouseArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+
+                        onClicked: {
+                            root.open = false
+                            rebootProcess.running = true
+                        }
                     }
                 }
 
-                PowerMenuButton {
-                    icon: "system-suspend-symbolic"
-                    onActivated: {
-                        root.open = false
-                        suspendProcess.running = true
+                Item {
+                    width: 150
+                    height: 150
+
+                    Rectangle {
+                        anchors.fill: parent
+
+                        radius: 0
+                        color: suspendMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+                        border.width: 2
+                        border.color: Config.fgcolor
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            implicitSize: 88
+                            source: Quickshell.iconPath("system-suspend-symbolic")
+                        }
+                    }
+
+                    MouseArea {
+                        id: suspendMouseArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+
+                        onClicked: {
+                            root.open = false
+                            suspendProcess.running = true
+                        }
                     }
                 }
 
-                PowerMenuButton {
-                    icon: "system-log-out-symbolic"
-                    onActivated: {
-                        root.open = false
-                        logoutProcess.running = true
+                Item {
+                    width: 150
+                    height: 150
+
+                    Rectangle {
+                        anchors.fill: parent
+
+                        radius: 0
+                        color: logoutMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+                        border.width: 2
+                        border.color: Config.fgcolor
+
+                        IconImage {
+                            anchors.centerIn: parent
+                            implicitSize: 88
+                            source: Quickshell.iconPath("system-log-out-symbolic")
+                        }
+                    }
+
+                    MouseArea {
+                        id: logoutMouseArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+
+                        onClicked: {
+                            root.open = false
+                            logoutProcess.running = true
+                        }
                     }
                 }
 
