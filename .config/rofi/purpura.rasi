@@ -40,7 +40,7 @@ window {
     alternate-active-foreground: @active-foreground;
     active-background:           rgba ( 0, 43, 55, 25 % );
     selected-active-background:  rgba ( 0, 142, 212, 25 % );
-    faya:                        url("/home/fayelia/.face", width);
+    face:                        url("~/.face", width);
 }
 configuration {
     kb-cancel: "Alt+Q,Escape,SUPER+Q";
@@ -65,7 +65,7 @@ picture {
     opacity:                 0.5;
     width:                   250;
     height:                  250;
-    background-image:        @faya;
+    background-image:        @face;
 }
 
 /* RIGHT CONTENT */
