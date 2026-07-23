@@ -259,7 +259,7 @@ Scope {
                                 // hostname doesn't change at runtime.
                                 Process {
                                     running: true
-                                    command: ["hostname"]
+                                    command: ["hostnamectl", "hostname"]
 
                                     stdout: SplitParser {
                                         onRead: (line) => {
