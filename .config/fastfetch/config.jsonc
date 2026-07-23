@@ -1,0 +1,237 @@
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
+  "logo": {
+    "type": "kitty-icat",
+    "source": "/home/fayelia/.config/fastfetch/flame.gif",
+    "color": {
+      "1": "",
+      "2": "",
+      "3": "",
+      "4": "",
+      "5": "",
+      "6": "",
+      "7": "",
+      "8": "",
+      "9": ""
+    },
+    "width": 45,
+    "height": 45,
+    "padding": {
+      "top": 0,
+      "left": 5,
+      "right": 10
+    },
+    "printRemaining": true,
+    "preserveAspectRatio": false,
+    "recache": true,
+    "position": "left",
+    "chafa": {
+      "fgOnly": true,
+      "symbols": "block+border+space-wide-inverted"
+    }
+  },
+  "display": {
+    "stat": false,
+    "pipe": false,
+    "showErrors": false,
+    "disableLinewrap": true,
+    "hideCursor": false,
+    "separator": " 󰄾    ",
+    "color": {
+      "keys": "0",
+      "title": "",
+      "output": "0",
+      "separator": "35"
+    },
+    "brightColor": false,
+    "duration": {
+      "abbreviation": false,
+      "spaceBeforeUnit": "default"
+    },
+    "size": {
+      "binaryPrefix": "jedec",
+      "maxPrefix": "YB",
+      "ndigits": 2,
+      "spaceBeforeUnit": "default"
+    },
+    "temp": {
+      "unit": "D",
+      "ndigits": 1,
+      "color": {
+        "green": "32",
+        "yellow": "93",
+        "red": "91"
+      },
+      "spaceBeforeUnit": "default"
+    },
+    "percent": {
+      "type": [
+        "num",
+        "num-color"
+      ],
+      "ndigits": 0,
+      "color": {
+        "green": "32",
+        "yellow": "93",
+        "red": "91"
+      },
+      "spaceBeforeUnit": "default",
+      "width": 0
+    },
+    "bar": {
+      "char": {
+        "elapsed": "■",
+        "total": "-"
+      },
+      "border": {
+        "left": "[ ",
+        "right": " ]",
+        "leftElapsed": "",
+        "rightElapsed": ""
+      },
+      "color": {
+        "elapsed": "auto",
+        "total": "97",
+        "border": "97"
+      },
+      "width": 10
+    },
+    "fraction": {
+      "ndigits": 2
+    },
+    "noBuffer": false,
+    "key": {
+      "width": 0,
+      "type": "string",
+      "paddingLeft": 0
+    },
+    "freq": {
+      "ndigits": 2,
+      "spaceBeforeUnit": "default"
+    },
+    "constants": []
+  },
+  "general": {
+    "thread": true,
+    "processingTimeout": 5000,
+    "detectVersion": true,
+    "playerName": "",
+    "dsForceDrm": false
+  },
+  "modules": [
+  "break",
+  "break",
+    {
+      "key": "╭─  USER     ",
+      "type": "title",
+      "format": "{user-name}",
+      "fqdn": false
+    },
+    {
+      "key": "│  󰇅 HOST     ",
+      "type": "title",
+      "format": "{host-name}"
+    },
+    {
+      "key": "╰─ 󰅐 UPTIME   ",
+      "type": "uptime"
+    },
+    "break",
+    {
+      "key": "╭─ {icon} DISTRO   ",
+      "type": "os",
+      "format": "{name}"
+    },
+    {
+      "key": "│  󰐦 BOOTMGR  ",
+      "type": "custom",
+      "format": "rEFInd"
+    },
+    {
+      "key": "│   KERNEL   ",
+      "type": "kernel",
+      "format": "Arch Linux"
+    },
+    {
+      "key": "│  󰇄 DE       ",
+      "type": "de",
+      "format": "{pretty-name}"
+    },
+    {
+      "key": "│   WM       ",
+      "type": "wm",
+    },
+    {
+      "key": "│   TERM     ",
+      "type": "terminal",
+      "format": "{pretty-name}"
+    },
+    {
+      "key": "╰─  SHELL    ",
+      "type": "shell",
+      "format": "fish"
+    },
+    "break",
+    {
+      "key": "╭─ 󰘚 MOBO     ",
+      "type": "board",
+      "format": "{name}"
+    },
+    {
+      "key": "│   CPU      ",
+      "type": "cpu",
+      "format": "{name}"
+    },
+    {
+      "key": "│  󰢮 GPU      ",
+      "type": "gpu",
+      "format": "{name}"
+    },
+    {
+      "key": "╰─  RAM      ",
+      "type": "memory",
+      "format": "{total}",
+    },
+    "break",
+    {
+      "key": "╭─ 󰍹 MONITOR  ",
+      "type": "custom",
+      "format": "AOC 24G2W1G4",
+    },
+    {
+      "key": "│  󰌌 KBD      ",
+      "type": "custom",
+      "format": "LOGITECH G PRO X TKL ",
+    },
+    {
+      "key": "│  󰍽 MOUSE    ",
+      "type": "custom",
+      "format": "LOGITECH G703 HERO",
+    },
+    {
+      "key": "│  󰋋 HP       ",
+      "type": "custom",
+      "format": "LOGITECH G733",
+    },
+    {
+      "key": "╰─  MIC      ",
+      "type": "custom",
+      "format": "TRUST GXT 242 LANCE",
+    },
+    "break",
+    /*{
+      "type": "custom",
+      "format": "F1 - yay            |   F2 - nvidia-inst        ",
+    },
+    {
+      "type": "custom",
+      "format": "F3 - cava           |   F4 - cmatrix           ",
+    },
+    {
+      "type": "custom",
+      "format": "F5 - reload Kitty   |   F6 - edit kitty.conf    ",
+    },*/
+    "break",
+    "break",
+  ]
+}

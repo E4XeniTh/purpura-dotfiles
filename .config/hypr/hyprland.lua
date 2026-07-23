@@ -12,7 +12,7 @@
 --## LOCALS                                                                             #
 --#######################################################################################
 
-local terminal = "kitty bash -c \"fastfetch; exec fish\""
+local terminal = "kitty"
 local filemanager = "dolphin"
 local menu = "rofi -show drun"
 local browser = "flatpak run net.waterfox.waterfox"
