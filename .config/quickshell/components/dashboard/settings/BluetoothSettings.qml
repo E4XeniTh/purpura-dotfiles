@@ -54,7 +54,7 @@ SettingsPanel {
             left: parent.left
             right: parent.right
             top: parent.top
-            margins: Config.scaled(16, root.uiScale)
+            margins: Config.scaled(18, root.uiScale)
         }
         spacing: Config.scaled(12, root.uiScale)
 
@@ -105,7 +105,7 @@ SettingsPanel {
         Rectangle {
             Layout.preferredWidth: contentRow.dividerWidth
             Layout.fillHeight: true
-            color: Config.fgcolordark
+            color: Config.fgcolor
         }
 
         // ---------------- RIGHT: paired + unpaired devices, one list ----------------
@@ -127,7 +127,6 @@ SettingsPanel {
             clip: true
             spacing: Config.scaled(8, root.uiScale)
             boundsBehavior: Flickable.StopAtBounds
-
             model: root.deviceEntries
 
             delegate: Loader {
@@ -169,7 +168,7 @@ SettingsPanel {
 
             Rectangle {
                 anchors.fill: parent
-                color: Config.fgcolordark
+                color: Config.fgcolor
             }
         }
 
