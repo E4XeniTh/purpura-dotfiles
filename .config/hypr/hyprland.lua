@@ -245,21 +245,21 @@ hl.window_rule({
     workspace = "3",
 })
 
--- WORLD OF TANKS: force tearing/immediate presentation. class is
--- "steam_proton" (shared by every Proton game, hence matching on title
--- instead) and its tearingHint is 0 (it doesn't request Hyprland's
--- tearing_control protocol itself via DXVK/Proton) - `immediate`
--- overrides that and forces it anyway. This is what fixes glitchy fast
--- mouse movement (camera drag, in-game sliders): those games warp the
--- cursor and measure the delta each frame instead of using Wayland's
--- relative-pointer protocol, and that warp/measure loop races against
--- the compositor's normal (non-tearing) frame pacing - worse the faster
--- the mouse moves, barely noticeable moving slowly. Requires
+-- FULLSCREEN: force tearing/immediate presentation. Generalized from a
+-- World-of-Tanks-only rule - any fullscreen game/app can hit the same
+-- glitchy-at-speed mouse input (camera drag, in-game sliders): Wine/
+-- Proton titles under XWayland typically warp the cursor and measure
+-- the delta each frame instead of using Wayland's relative-pointer
+-- protocol, and that warp/measure loop races against the compositor's
+-- normal (non-tearing) frame pacing - worse the faster the mouse moves,
+-- barely noticeable moving slowly. `immediate` forces tearing regardless
+-- of whether the app itself requests Hyprland's tearing_control
+-- protocol (many don't - tearingHint stays 0). Requires
 -- general.allow_tearing = true above.
 hl.window_rule({
-    name = "wot-tearing",
+    name = "fullscreen-tearing",
     match = {
-        title = "^(WoT Client)$",
+        fullscreen_state_internal = 1,
     },
     immediate = true,
 })
