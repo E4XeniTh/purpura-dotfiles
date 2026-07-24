@@ -119,7 +119,10 @@ hl.config({
         },
         -- Set to true enable resizing windows by clicking and dragging on borders and gaps
         resize_on_border = false,
-        allow_tearing = false,
+        -- Global prerequisite for the per-window `immediate` rule below
+        -- (World of Tanks) - doesn't force tearing anywhere by itself,
+        -- it only permits windows that request or are ruled into it.
+        allow_tearing = true,
         layout = "dwindle",
     },
     decoration = {
@@ -240,6 +243,25 @@ hl.window_rule({
         class = "^(Aimp)$",
     },
     workspace = "3",
+})
+
+-- WORLD OF TANKS: force tearing/immediate presentation. class is
+-- "steam_proton" (shared by every Proton game, hence matching on title
+-- instead) and its tearingHint is 0 (it doesn't request Hyprland's
+-- tearing_control protocol itself via DXVK/Proton) - `immediate`
+-- overrides that and forces it anyway. This is what fixes glitchy fast
+-- mouse movement (camera drag, in-game sliders): those games warp the
+-- cursor and measure the delta each frame instead of using Wayland's
+-- relative-pointer protocol, and that warp/measure loop races against
+-- the compositor's normal (non-tearing) frame pacing - worse the faster
+-- the mouse moves, barely noticeable moving slowly. Requires
+-- general.allow_tearing = true above.
+hl.window_rule({
+    name = "wot-tearing",
+    match = {
+        title = "^(WoT Client)$",
+    },
+    immediate = true,
 })
 
 -- FULLSCREEN IS PINK
