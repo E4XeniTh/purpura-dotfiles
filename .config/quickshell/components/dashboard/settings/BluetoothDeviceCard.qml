@@ -37,16 +37,19 @@ DashCard {
             fill: parent
             margins: Config.scaled(10, root.uiScale)
         }
-        spacing: 0
+        spacing: Config.scaled(10, root.uiScale)
 
+        // Fixed-size icon instead of a width fraction of the card - a
+        // percentage split fought resizing/finding a good width, this
+        // just takes its own natural size and lets the name fill the
+        // rest.
         Item {
-            Layout.preferredWidth: parent.width * 0.25
-            Layout.fillHeight: true
+            Layout.preferredWidth: Config.scaled(24, root.uiScale)
+            Layout.preferredHeight: Config.scaled(24, root.uiScale)
 
             IconImage {
                 id: deviceIcon
-                anchors.centerIn: parent
-                implicitSize: Config.scaled(22, root.uiScale)
+                anchors.fill: parent
                 source: root.device.icon.length > 0 ? Quickshell.iconPath(root.device.icon) : Quickshell.iconPath("bluetooth-symbolic")
             }
 
@@ -57,15 +60,8 @@ DashCard {
             }
         }
 
-        Rectangle {
-            Layout.preferredWidth: Config.scaled(1, root.uiScale)
-            Layout.fillHeight: true
-            color: Config.fgcolordark
-        }
-
         Text {
             Layout.fillWidth: true
-            Layout.leftMargin: Config.scaled(10, root.uiScale)
             text: root.device.name.length > 0 ? root.device.name : root.device.deviceName
             color: Config.fgcolor
             font.family: Config.fontfamily

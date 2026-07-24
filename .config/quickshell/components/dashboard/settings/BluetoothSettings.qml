@@ -27,6 +27,22 @@ SettingsPanel {
     readonly property var pairedDevices: Bluetooth.devices.values.filter(d => d.paired)
     readonly property var unpairedDevices: Bluetooth.devices.values.filter(d => !d.paired)
 
+    // Paired and unpaired devices share a single scrollable ListView, with
+    // "header" and "separator" entries mixed into the same model instead
+    // of two side-by-side lists - kind distinguishes what each row is.
+    readonly property var deviceEntries: {
+        const list = [{ kind: "header", label: "Paired" }]
+        for (const d of root.pairedDevices) {
+            list.push({ kind: "device", device: d })
+        }
+        list.push({ kind: "separator" })
+        list.push({ kind: "header", label: "Unpaired" })
+        for (const d of root.unpairedDevices) {
+            list.push({ kind: "device", device: d })
+        }
+        return list
+    }
+
     // Scan for nearby devices only while this panel is open.
     onActiveChanged: {
         const adapters = Bluetooth.adapters.values
@@ -98,74 +114,57 @@ SettingsPanel {
             color: Config.fgcolordark
         }
 
-        // ---------------- RIGHT: paired / unpaired devices ----------------
-        ColumnLayout {
+        // ---------------- RIGHT: paired + unpaired devices, one list ----------------
+        ListView {
+            id: deviceList
+
             Layout.preferredWidth: contentRow.rightWidth
             Layout.alignment: Qt.AlignTop
+            Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+            clip: true
             spacing: Config.scaled(8, root.uiScale)
+            boundsBehavior: Flickable.StopAtBounds
 
-            Text {
-                text: "Paired"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
-                font.bold: true
-            }
+            model: root.deviceEntries
 
-            ListView {
-                id: pairedList
+            delegate: Item {
+                id: entryItem
 
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
-                clip: true
-                spacing: Config.scaled(8, root.uiScale)
-                boundsBehavior: Flickable.StopAtBounds
+                required property var modelData
 
-                model: ScriptModel { values: root.pairedDevices }
+                width: deviceList.width
+                height: modelData.kind === "device" ? contentRow.cardHeight
+                    : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
+                    : headerText.implicitHeight
 
-                delegate: BluetoothDeviceCard {
-                    required property var modelData
-
-                    width: pairedList.width
-                    height: contentRow.cardHeight
-                    uiScale: root.uiScale
-                    device: modelData
+                Text {
+                    id: headerText
+                    visible: entryItem.modelData.kind === "header"
+                    text: entryItem.modelData.kind === "header" ? entryItem.modelData.label : ""
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.bold: true
                 }
-            }
 
-            // Separator between paired and unpaired lists.
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                color: Config.fgcolordark
-            }
+                Rectangle {
+                    visible: entryItem.modelData.kind === "separator"
+                    anchors.fill: parent
+                    color: Config.fgcolordark
+                }
 
-            Text {
-                text: "Unpaired"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
-                font.bold: true
-            }
+                // Guarded by a Loader (not just visible: false) - a
+                // BluetoothDeviceCard instantiated for a header/separator
+                // row would dereference a null device the instant its
+                // bindings evaluate, regardless of visibility.
+                Loader {
+                    anchors.fill: parent
+                    active: entryItem.modelData.kind === "device"
 
-            ListView {
-                id: unpairedList
-
-                Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
-                clip: true
-                spacing: Config.scaled(8, root.uiScale)
-                boundsBehavior: Flickable.StopAtBounds
-
-                model: ScriptModel { values: root.unpairedDevices }
-
-                delegate: BluetoothDeviceCard {
-                    required property var modelData
-
-                    width: unpairedList.width
-                    height: contentRow.cardHeight
-                    uiScale: root.uiScale
-                    device: modelData
+                    BluetoothDeviceCard {
+                        uiScale: root.uiScale
+                        device: entryItem.modelData.device
+                    }
                 }
 
                 // Dialog box (PIN/password prompts) will go here once a
