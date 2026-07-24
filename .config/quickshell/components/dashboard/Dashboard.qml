@@ -9,16 +9,14 @@ import "../../Config.js" as Config
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as Tray.qml's context menu.
-// dashBox is fully opaque; each section inside sits in its own
-// Config.fgcolor card.
+// dashBox is fully opaque; each section inside sits in its own DashCard.
 //
 // Sizing rule: dashWidth/columnHeight scale with the screen, and every
 // section within is a fraction of *available* space (container size minus
 // its own padding/spacing), so fractions on the same axis always sum to
-// 1.0 with no leftover/overflow. Small fixed-purpose elements (icon sizes,
-// border widths, small button/font sizes) are kept as plain pixel values
-// on purpose - scaling those by screen size tends to look wrong long
-// before it looks "adaptive".
+// 1.0 with no leftover/overflow. Everything else (fonts, icons, borders,
+// spacing) scales with uiScale, computed against the 800px-wide reference
+// this layout was tuned at on a 1920x1080 screen - see dashWindow below.
 Scope {
     id: root
 
@@ -73,6 +71,12 @@ Scope {
             property real dashWidth: modelData.width * 0.42
             property real columnHeight: modelData.height * 0.43
 
+            // Everything sized in plain pixels below (fonts, icons,
+            // borders, spacing) is written at its 800px-reference value
+            // and multiplied by this. Clamped so a tiny or huge monitor
+            // doesn't make text illegibly small or comically large.
+            property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
+
             visible: root.open && root.screen === modelData
 
             WlrLayershell.namespace: "dashboard"
@@ -108,7 +112,7 @@ Scope {
                 height: 4
 
                 // Fully opaque - each section below sits on top of this in
-                // its own Config.fgcolor card.
+                // its own DashCard.
                 color: Config.fillcolor
 
                 states: [
@@ -166,11 +170,11 @@ Scope {
 
                         width: dashWidth
 
-                        topPadding: 16
-                        bottomPadding: 16
-                        leftPadding: 16
-                        rightPadding: 16
-                        spacing: 16
+                        topPadding: Config.scaled(16, dashWindow.uiScale)
+                        bottomPadding: Config.scaled(16, dashWindow.uiScale)
+                        leftPadding: Config.scaled(16, dashWindow.uiScale)
+                        rightPadding: Config.scaled(16, dashWindow.uiScale)
+                        spacing: Config.scaled(16, dashWindow.uiScale)
 
                         // Space actually left for the 3 columns once outer
                         // padding and the 2 inter-column gaps are removed.
@@ -184,15 +188,13 @@ Scope {
 
                             width: dashContent.availableWidth * 0.35
                             height: columnHeight
-                            spacing: 10
+                            spacing: Config.scaled(10, dashWindow.uiScale)
 
                             // top left: large numerical clock
-                            Rectangle {
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.2
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
 
                                 Clock {
                                     anchors.centerIn: parent
@@ -204,31 +206,28 @@ Scope {
 
                             // middle left: current weather (wttr.in, no API
                             // key needed - refreshes every 15 min)
-
-                            Rectangle {
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.3
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
 
                                 Weather {
                                     anchors.fill: parent
+                                    uiScale: dashWindow.uiScale
                                 }
                             }
 
                             // bottom left: calendar
-                            Rectangle {
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.5
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
 
                                 Calendar {
                                     anchors.fill: parent
-                                    anchors.margins: 8
-                                    anchors.topMargin: 20
+                                    anchors.margins: Config.scaled(8, dashWindow.uiScale)
+                                    anchors.topMargin: Config.scaled(20, dashWindow.uiScale)
+                                    uiScale: dashWindow.uiScale
                                 }
                             }
                         }
@@ -239,19 +238,16 @@ Scope {
 
                             width: dashContent.availableWidth * 0.30
                             height: columnHeight
-                            spacing: 10
+                            spacing: Config.scaled(10, dashWindow.uiScale)
                             // Square, but never taller than its share of
                             // the column's height budget.
 
-                            // top center: 5 placeholder buttons (volume,
-                            // network, bluetooth, two spares)
-                            Rectangle {
+                            // top center: hostname/user greeting
+                            DashCard {
                                 id: greetingtext
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: 32
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
+                                height: Config.scaled(32, dashWindow.uiScale)
 
                                 property string hostname: ""
 
@@ -277,7 +273,7 @@ Scope {
 
                                     color: Config.fgcolor
                                     font.family: Config.fontfamily
-                                    font.pixelSize: 16
+                                    font.pixelSize: Config.scaled(16, dashWindow.uiScale)
 
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
@@ -290,14 +286,11 @@ Scope {
                                 height: parent.width
                                 color: "transparent"
 
-                                Rectangle {
+                                DashCard {
+                                    uiScale: dashWindow.uiScale
                                     anchors.centerIn: parent
-
                                     width: parent.width
                                     height: parent.height
-                                    color: Config.fillcolor
-                                    border.width: 2
-                                    border.color: Config.fgcolor
 
                                     Image {
                                         anchors.fill: parent
@@ -310,41 +303,33 @@ Scope {
                                 }
                             }
 
-                            Rectangle {
+                            // Empty filler - absorbs whatever height the
+                            // fixed-size siblings above/below don't use.
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: {
-                                    columnHeight -
-                                    greetingtext.height -
-                                    avatarbox.height -
-                                    powerrow.height -
-                                    systemicons.height -
-                                    (parent.spacing * 4)
-                                }
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
+                                height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - systemicons.height - parent.spacing * 4
                             }
 
                             Rectangle {
                                 id: powerrow
                                 width: parent.width
-                                height: 48
+                                height: Config.scaled(48, dashWindow.uiScale)
                                 color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
                                     spacing: powerrow.width / 11
 
-                                    Rectangle {
+                                    DashCard {
+                                        uiScale: dashWindow.uiScale
                                         width: powerrow.width / 2.2
-                                        height: 48
-                                        color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                        border.width: 2
-                                        border.color: Config.fgcolor
+                                        height: powerrow.height
+                                        bgColor: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 36
+                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
@@ -361,16 +346,15 @@ Scope {
                                         }
                                     }
 
-                                    Rectangle {
+                                    DashCard {
+                                        uiScale: dashWindow.uiScale
                                         width: powerrow.width / 2.2
-                                        height: 48
-                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                        border.width: 2
-                                        border.color: Config.fgcolor
+                                        height: powerrow.height
+                                        bgColor: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
-                                            implicitSize: 36
+                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
@@ -393,28 +377,26 @@ Scope {
                             Rectangle {
                                 id: systemicons
                                 width: parent.width
-                                height: 32
+                                height: Config.scaled(32, dashWindow.uiScale)
                                 color: "transparent"
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: 6
+                                    spacing: Config.scaled(6, dashWindow.uiScale)
 
                                     Repeater {
                                         model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", "", ""]
 
-                                        delegate: Rectangle {
+                                        delegate: DashCard {
                                             required property string modelData
+                                            uiScale: dashWindow.uiScale
 
-                                            width: 32
-                                            height: 32
-                                            color: Config.fillcolor
-                                            border.width: 2
-                                            border.color: Config.fgcolor
+                                            width: systemicons.height
+                                            height: systemicons.height
 
                                             IconImage {
                                                 anchors.centerIn: parent
-                                                implicitSize: 20
+                                                implicitSize: Config.scaled(20, dashWindow.uiScale)
                                                 visible: modelData.length > 0
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
                                             }
@@ -432,35 +414,32 @@ Scope {
 
                             width: dashContent.availableWidth * 0.35
                             height: columnHeight
-                            spacing: 10
+                            spacing: Config.scaled(10, dashWindow.uiScale)
 
                             // Now playing + cava. Loaded lazily by path
                             // (not instantiated directly) so a wrong
                             // MPRIS/cava API guess only blanks this card
                             // instead of breaking the whole shell - verify
                             // this one live.
-                            Rectangle {
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (2 / 3)
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
 
                                 Loader {
                                     anchors.fill: parent
-                                    anchors.margins: 12
+                                    anchors.margins: Config.scaled(12, dashWindow.uiScale)
 
                                     source: "NowPlaying.qml"
+                                    onLoaded: item.uiScale = dashWindow.uiScale
                                 }
                             }
 
                             // Reserved for future use.
-                            Rectangle {
+                            DashCard {
+                                uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (1 / 3)
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
                             }
                         }
                     }
@@ -471,7 +450,7 @@ Scope {
 
                     color: "transparent"
 
-                    border.width: 2
+                    border.width: Config.scaled(2, dashWindow.uiScale)
                     border.color: Config.fgcolor
 
                     radius: 0

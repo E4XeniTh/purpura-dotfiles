@@ -14,6 +14,7 @@ import "../../Config.js" as Config
 Item {
     id: root
 
+    property real uiScale: 1.0
     property var player: null
 
     // Picks the first available player without indexing into the model
@@ -35,12 +36,12 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: 10
+        spacing: Config.scaled(10, root.uiScale)
 
         Rectangle {
             width: parent.width
             height: parent.width * 0.65
-            border.width: 2
+            border.width: Config.scaled(2, root.uiScale)
             border.color: Config.fgcolor
             color: "transparent"
 
@@ -57,7 +58,7 @@ Item {
                 visible: !root.player
                 text: "♪"
                 color: Config.fgcolor
-                font.pixelSize: 72
+                font.pixelSize: Config.scaled(72, root.uiScale)
                 font.bold: true
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
@@ -68,7 +69,7 @@ Item {
             width: parent.width
             text: root.player && root.player.trackTitle ? root.player.trackTitle : "No media detected"
             color: Config.fgcolor
-            font.pixelSize: 13
+            font.pixelSize: Config.scaled(13, root.uiScale)
             font.bold: true
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
@@ -78,35 +79,35 @@ Item {
             width: parent.width
             text: root.player && root.player.trackArtist ? root.player.trackArtist : ""
             color: Config.fgcolor
-            font.pixelSize: 11
+            font.pixelSize: Config.scaled(11, root.uiScale)
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter
         }
 
         Item {
             width: 1
-            height: 6   // however much space you want
+            height: Config.scaled(6, root.uiScale)   // however much space you want
         }
 
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 8
+            spacing: Config.scaled(8, root.uiScale)
 
             // Shuffle. Recolored via ColorOverlay (same technique as the
             // weather icon in Dashboard.qml) rather than the button
             // background, so the icon glyph itself reflects on/off state.
             Rectangle {
-                width: 36
-                height: 36
+                width: Config.scaled(36, root.uiScale)
+                height: Config.scaled(36, root.uiScale)
 
                 color: shuffleMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: 1
+                border.width: Config.scaled(1, root.uiScale)
                 border.color: Config.fgcolor
 
                 IconImage {
                     id: shuffleIcon
                     anchors.centerIn: parent
-                    implicitSize: 18
+                    implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-playlist-shuffle-symbolic")
                 }
 
@@ -129,16 +130,16 @@ Item {
             }
 
             Rectangle {
-                width: 36
-                height: 36
+                width: Config.scaled(36, root.uiScale)
+                height: Config.scaled(36, root.uiScale)
 
                 color: prevMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: 1
+                border.width: Config.scaled(1, root.uiScale)
                 border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
-                    implicitSize: 18
+                    implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-skip-backward-symbolic")
                 }
 
@@ -160,16 +161,16 @@ Item {
             // it can't crash the shell the way a wrong enum type name
             // would (same reasoning as the rest of this file).
             Rectangle {
-                width: 36
-                height: 36
+                width: Config.scaled(36, root.uiScale)
+                height: Config.scaled(36, root.uiScale)
 
                 color: playMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: 1
+                border.width: Config.scaled(1, root.uiScale)
                 border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
-                    implicitSize: 18
+                    implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath(root.player && root.player.isPlaying ? "media-playback-pause-symbolic" : "media-playback-start-symbolic")
                 }
 
@@ -186,16 +187,16 @@ Item {
             }
 
             Rectangle {
-                width: 36
-                height: 36
+                width: Config.scaled(36, root.uiScale)
+                height: Config.scaled(36, root.uiScale)
 
                 color: nextMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: 1
+                border.width: Config.scaled(1, root.uiScale)
                 border.color: Config.fgcolor
 
                 IconImage {
                     anchors.centerIn: parent
-                    implicitSize: 18
+                    implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-skip-forward-symbolic")
                 }
 
@@ -219,17 +220,17 @@ Item {
             // read/write. This button was previously a no-op - clicking it
             // never actually did anything.
             Rectangle {
-                width: 36
-                height: 36
+                width: Config.scaled(36, root.uiScale)
+                height: Config.scaled(36, root.uiScale)
 
                 color: repeatMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: 1
+                border.width: Config.scaled(1, root.uiScale)
                 border.color: Config.fgcolor
 
                 IconImage {
                     id: repeatIcon
                     anchors.centerIn: parent
-                    implicitSize: 18
+                    implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-playlist-repeat-symbolic")
                 }
 

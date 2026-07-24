@@ -6,6 +6,8 @@ import "../../Config.js" as Config
 Item {
     id: root
 
+    property real uiScale: 1.0
+
     property date today: new Date()
     readonly property int year: today.getFullYear()
     readonly property int month: today.getMonth()
@@ -14,9 +16,14 @@ Item {
     // Monday-first (0 = Monday ... 6 = Sunday) for the European week.
     readonly property int firstWeekday: (new Date(year, month, 1).getDay() + 6) % 7
 
+    // Width of one of the 7 weekday columns, minus a small fixed gutter
+    // (also scaled) that isn't otherwise accounted for by the Grid's own
+    // spacing.
+    readonly property real cellWidth: (root.width - Config.scaled(12, root.uiScale)) / 7
+
     Column {
         anchors.fill: parent
-        spacing: 16
+        spacing: Config.scaled(16, root.uiScale)
 
         Item {
             width: root.width
@@ -28,7 +35,7 @@ Item {
                 text: Qt.formatDate(root.today, "  MMMM")
                 color: Config.fgcolor
                 font.family: Config.fontfamily
-                font.pixelSize: 14
+                font.pixelSize: Config.scaled(14, root.uiScale)
                 font.bold: true
             }
 
@@ -38,14 +45,14 @@ Item {
                 text: Qt.formatDate(root.today, "yyyy  ")
                 color: Config.fgcolor
                 font.family: Config.fontfamily
-                font.pixelSize: 14
+                font.pixelSize: Config.scaled(14, root.uiScale)
                 font.bold: true
             }
         }
         Grid {
             columns: 7
-            columnSpacing: 2
-            rowSpacing: 4
+            columnSpacing: Config.scaled(2, root.uiScale)
+            rowSpacing: Config.scaled(4, root.uiScale)
 
             Repeater {
                 model: ["M", "T", "W", "T", "F", "S", "S"]
@@ -53,15 +60,15 @@ Item {
                 delegate: Text {
                     required property string modelData
 
-                    width: (root.width - 12) / 7
-                    height: 24
+                    width: root.cellWidth
+                    height: Config.scaled(24, root.uiScale)
 
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignCenter
                     text: modelData
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: 12
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                     opacity: 1
                 }
@@ -71,8 +78,8 @@ Item {
                 model: root.firstWeekday
 
                 delegate: Item {
-                    width: (root.width - 12) / 7
-                    height: 20
+                    width: root.cellWidth
+                    height: Config.scaled(20, root.uiScale)
                 }
             }
 
@@ -86,8 +93,8 @@ Item {
 
                     readonly property bool isToday: (dayCell.index + 1) === root.today.getDate()
 
-                    width: (root.width - 12) / 7
-                    height: 20
+                    width: root.cellWidth
+                    height: Config.scaled(20, root.uiScale)
                     radius: 0
 
                     color: isToday ? Config.fgcolordark : "transparent"
@@ -97,7 +104,7 @@ Item {
                         text: dayCell.index + 1
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 12
+                        font.pixelSize: Config.scaled(12, root.uiScale)
                         font.bold: dayCell.isToday
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
