@@ -206,15 +206,25 @@ Scope {
                             }
 
                             // middle left: current weather (wttr.in, no API
-                            // key needed - refreshes every 15 min)
+                            // key needed - refreshes every 15 min). Click
+                            // opens a multi-day forecast below the
+                            // dashboard, same as the audio icon's panel.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.3
+                                color: weatherMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                 Weather {
                                     anchors.fill: parent
                                     uiScale: dashWindow.uiScale
+                                }
+
+                                MouseArea {
+                                    id: weatherMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: weatherForecast.toggle()
                                 }
                             }
 
@@ -498,6 +508,7 @@ Scope {
                     dashOpenTimer.start()
                 } else {
                     audioSettings.close()
+                    weatherForecast.close()
                 }
             }
 
@@ -520,6 +531,17 @@ Scope {
             // than an unrelated popup.
             AudioSettings {
                 id: audioSettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+            }
+
+            // Weather forecast, opened from the weather card above.
+            // Anchored the same way as AudioSettings.
+            WeatherForecast {
+                id: weatherForecast
 
                 screen: dashWindow.screen
                 panelWidth: dashWidth
