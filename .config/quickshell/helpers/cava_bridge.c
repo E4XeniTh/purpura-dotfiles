@@ -2,11 +2,18 @@
 // analysis engine the `cava` CLI itself is built on, split out as its own
 // library - see karlstav/cava's CAVACORE.md) and prints one frame per
 // line as semicolon-separated 0-100 integers, same shape Cava.qml already
-// expects from the plain `cava` CLI's raw/ascii output mode. Written
-// against paraphrased API docs, not the actual header (this sandbox has
-// no network access to fetch it and no cavacore/libpulse dev headers
-// installed to check against) - flag any build error back verbatim, this
-// is the part most likely to need a signature correction.
+// expects from the plain `cava` CLI's raw/ascii output mode.
+//
+// The regular Arch `extra/cava` package (just the CLI/TUI binary) does
+// NOT ship cavacore.h or a pkg-config file - that lives in a separate
+// dev package, e.g. AUR's `libcava-git`, which installs the header at
+// <prefix>/include/cava/cavacore.h (hence the `cava/` in the include
+// below, not a bare `cavacore.h`) and the library as libcavacore.
+//
+// Written against paraphrased API docs, not the actual header (this
+// sandbox has no network access to fetch it and no cavacore/libpulse dev
+// headers installed to check against) - flag any build error back
+// verbatim, this is the part most likely to need a signature correction.
 //
 // Device selection is deliberately simple rather than using PulseAudio's
 // full async/context API: shells out to `pactl get-default-sink` once at
@@ -14,7 +21,7 @@
 // own default-sink introspection.
 #include <pulse/simple.h>
 #include <pulse/error.h>
-#include <cavacore.h>
+#include <cava/cavacore.h>
 
 #include <stdio.h>
 #include <stdint.h>

@@ -70,9 +70,10 @@ default sink's monitor audio through it. `dashboard/Cava.qml` runs the
 compiled binary directly, so no separate cava config file is needed.
 
 > Went this route after the `cava` CLI's own raw/ascii output mode kept
-> producing frozen bars in this exact setup. Needs `cava`'s dev package
-> (for `cavacore.h`/`libcavacore`, e.g. Arch's `cava` package) and
-> `libpulse` installed to build.
+> producing frozen bars in this exact setup. Arch's regular `cava`
+> package (`extra/cava`) is just the CLI binary and doesn't include
+> `cavacore.h`/`libcavacore` - that needs a separate dev package, e.g.
+> AUR's `libcava-git`, plus `libpulse`.
 
 ## Dependencies
 
@@ -85,8 +86,9 @@ compiled binary directly, so no separate cava config file is needed.
   icons (weather icon, shuffle/repeat) to the theme color
 - `gcc`/`make` (`base-devel`) — to build the lock screen's PAM helper
   and the cava bridge helper
-- `cava` (for `libcavacore`/`cavacore.h`) and `libpulse` — dev headers
-  needed to build `helpers/cava_bridge.c`; `pactl` (part of
+- AUR `libcava-git` (`cavacore.h`/`libcavacore` - the plain `cava`
+  package does *not* include these) and `libpulse` — dev headers needed
+  to build `helpers/cava_bridge.c`; `pactl` (part of
   `libpulse`/`pulseaudio-utils`) is also used at runtime to find the
   default sink
 
