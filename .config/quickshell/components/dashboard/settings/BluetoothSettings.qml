@@ -20,10 +20,6 @@ SettingsPanel {
 
     namespaceName: "bluetoothSettings"
 
-    // Cosmetic only - see ControllerCard.qml's own comment on why this
-    // doesn't (and can't) change which adapter BlueZ actually uses.
-    property var selectedAdapter: null
-
     readonly property var pairedDevices: Bluetooth.devices.values.filter(d => d.paired)
     readonly property var unpairedDevices: Bluetooth.devices.values.filter(d => !d.paired)
 
@@ -101,8 +97,6 @@ SettingsPanel {
                     height: contentRow.cardHeight
                     uiScale: root.uiScale
                     adapter: modelData
-                    isSelected: root.selectedAdapter === modelData
-                    onSelected: root.selectedAdapter = modelData
                 }
             }
         }
@@ -162,6 +156,7 @@ SettingsPanel {
                     active: entryItem.modelData.kind === "device"
 
                     BluetoothDeviceCard {
+                        anchors.fill: parent
                         uiScale: root.uiScale
                         device: entryItem.modelData.device
                     }

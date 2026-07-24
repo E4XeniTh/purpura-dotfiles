@@ -7,21 +7,18 @@ import "../"
 import "../../../Config.js" as Config
 
 // One bluetooth controller (adapter): a fixed usb icon + name, DashCard-
-// style. Left-click selects it - cosmetic only, since Quickshell's bluez
-// wrapper has no settable "preferred adapter" (it always uses the first
-// one it sees), so this doesn't change anything system-side. Right-click
-// toggles the adapter on/off, which is real.
+// style. Right-click toggles the adapter on/off. There's no left-click
+// "select" - Quickshell's bluez wrapper has no settable "preferred
+// adapter" (it always uses the first one it sees), so a selection
+// concept here wouldn't change anything system-side, and only made
+// every controller start out looking dim/disabled until clicked once.
 DashCard {
     id: root
 
     required property var adapter
-    property bool isSelected: false
     property real uiScale: 1.0
 
-    signal selected()
-
-    border.color: !adapter.enabled ? "red"
-        : (isSelected ? Config.fgcolor : Config.fgcolordark)
+    border.color: adapter.enabled ? Config.fgcolor : "red"
 
     RowLayout {
         anchors {
@@ -68,13 +65,7 @@ DashCard {
 
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        onClicked: (mouse) => {
-            if (mouse.button === Qt.LeftButton) {
-                root.selected()
-            } else {
-                root.adapter.enabled = !root.adapter.enabled
-            }
-        }
+        acceptedButtons: Qt.RightButton
+        onClicked: root.adapter.enabled = !root.adapter.enabled
     }
 }
