@@ -427,11 +427,22 @@ Scope {
                                 height: (columnHeight - parent.spacing) * (2 / 3)
 
                                 Loader {
+                                    id: nowPlayingLoader
                                     anchors.fill: parent
                                     anchors.margins: Config.scaled(12, dashWindow.uiScale)
 
                                     source: "NowPlaying.qml"
-                                    onLoaded: item.uiScale = dashWindow.uiScale
+                                }
+
+                                // A one-time onLoaded assignment freezes at whatever
+                                // uiScale happened to be when the Loader finished (which
+                                // can be before dashWindow.uiScale settles to its final
+                                // value) - a live Binding keeps it tracking afterwards.
+                                Binding {
+                                    target: nowPlayingLoader.item
+                                    property: "uiScale"
+                                    value: dashWindow.uiScale
+                                    when: nowPlayingLoader.item !== null
                                 }
                             }
 
