@@ -33,7 +33,7 @@ PanelWindow {
 
     visible: root.open
 
-    WlrLayershell.namespace: "soundSettings"
+    WlrLayershell.namespace: "audioSettings"
     WlrLayershell.layer: WlrLayer.Overlay
 
     exclusiveZone: 0

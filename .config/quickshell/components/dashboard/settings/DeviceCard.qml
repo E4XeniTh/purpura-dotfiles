@@ -58,7 +58,7 @@ DashCard {
             // Fixed-size box, not a direct RowLayout child with its own
             // anchors - IconImage/ColorOverlay need anchors.fill, and a
             // layout fights children that also try to set their own
-            // geometry, same reasoning as the hint icon in SoundSettings.
+            // geometry, same reasoning as the hint icon in AudioSettings.
             Item {
                 Layout.preferredWidth: Config.scaled(32, root.uiScale)
                 Layout.preferredHeight: Config.scaled(32, root.uiScale)

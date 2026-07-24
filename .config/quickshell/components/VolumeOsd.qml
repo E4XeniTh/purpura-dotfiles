@@ -81,7 +81,7 @@ Scope {
 					onExited: root.hovered = false
 				}
 
-				// Reuses the same device card the sound settings panel
+				// Reuses the same device card the audio settings panel
 				// uses, so muting/dragging volume here behaves identically
 				// - guarded by a Loader (not just visible:false) since
 				// DeviceCard dereferences .device directly and

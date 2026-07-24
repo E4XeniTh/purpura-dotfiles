@@ -415,7 +415,7 @@ Scope {
                                                 hoverEnabled: true
                                                 onClicked: {
                                                     if (index === 0) {
-                                                        soundSettings.toggle()
+                                                        audioSettings.toggle()
                                                     }
                                                 }
                                             }
@@ -497,7 +497,7 @@ Scope {
                     dashBox.state = "horizontal"
                     dashOpenTimer.start()
                 } else {
-                    soundSettings.close()
+                    audioSettings.close()
                 }
             }
 
@@ -514,12 +514,12 @@ Scope {
                 }
             }
 
-            // Sound settings, opened from the audio icon above. Anchored
+            // Audio settings, opened from the audio icon above. Anchored
             // directly below dashBox's own border (same width, same
             // screen) so it reads as an extension of the dashboard rather
             // than an unrelated popup.
-            SoundSettings {
-                id: soundSettings
+            AudioSettings {
+                id: audioSettings
 
                 screen: dashWindow.screen
                 panelWidth: dashWidth
