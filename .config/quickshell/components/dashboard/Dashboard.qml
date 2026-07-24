@@ -78,8 +78,8 @@ Scope {
             // doesn't make text illegibly small or comically large.
             property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
 
-            // Mutually-exclusive sub-panels (audio/weather/bluetooth
-            // settings): "" or the name of whichever one is active. Each
+            // Mutually-exclusive sub-panels (audio/bluetooth settings):
+            // "" or the name of whichever one is active. Each
             // panel below binds active: activeSettingsPanel === "<name>",
             // so switching names closes the current one and opens the new
             // one - but not simultaneously. Since SettingsPanel.qml only
@@ -237,25 +237,18 @@ Scope {
                             }
 
                             // middle left: current weather (wttr.in, no API
-                            // key needed - refreshes every 15 min). Click
-                            // opens a multi-day forecast below the
-                            // dashboard, same as the audio icon's panel.
+                            // key needed - refreshes every 15 min). Weather
+                            // itself handles its own click-to-toggle fade
+                            // between current conditions and a 3-day
+                            // forecast, no separate panel involved.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - 2 * parent.spacing) * 0.3
-                                color: weatherMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                 Weather {
                                     anchors.fill: parent
                                     uiScale: dashWindow.uiScale
-                                }
-
-                                MouseArea {
-                                    id: weatherMouseArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: dashWindow.toggleSettingsPanel("weather")
                                 }
                             }
 
@@ -548,7 +541,6 @@ Scope {
                     dashWindow.activeSettingsPanel = ""
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
-                    weatherForecast.forceHide()
                     bluetoothSettings.forceHide()
                 }
             }
@@ -581,27 +573,13 @@ Scope {
                 onClosed: dashWindow.onSettingsPanelClosed()
             }
 
-            // Weather forecast, opened from the weather card above.
-            // Anchored the same way as AudioSettings.
-            WeatherForecast {
-                id: weatherForecast
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "weather"
-                onClosed: dashWindow.onSettingsPanelClosed()
-            }
-
             // Bluetooth settings, opened from the bluetooth icon above.
-            // Wider than the other panels - the 30/70 controller/device
-            // split needs more horizontal room than a single-column panel.
+            // Same width as AudioSettings.
             BluetoothSettings {
                 id: bluetoothSettings
 
                 screen: dashWindow.screen
-                panelWidth: dashWidth * 1.25
+                panelWidth: dashWidth
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"

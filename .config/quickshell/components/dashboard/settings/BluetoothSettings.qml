@@ -62,7 +62,7 @@ SettingsPanel {
         readonly property real availableWidth: width - spacing * 2 - dividerWidth
         readonly property real leftWidth: availableWidth * 0.3
         readonly property real rightWidth: availableWidth * 0.7
-        readonly property real listMaxHeight: Config.scaled(160, root.uiScale)
+        readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
         readonly property real cardHeight: Config.scaled(56, root.uiScale)
 
         // ---------------- LEFT: controllers ----------------

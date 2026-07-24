@@ -6,18 +6,26 @@ import QtQuick
 import "../"
 import "../../Config.js" as Config
 
+// Current weather, or (left-click to toggle, plain fade - no stretch
+// animation) a compact 3-day forecast in the same spot. Both come from one
+// wttr.in ?format=j1 fetch instead of two separate requests.
 Item {
     id: weatherBox
 
     property real uiScale: 1.0
+    property bool showingForecast: false
 
     property string conditionText: "Loading..."
     property string tempText: ""
 
+    // One entry per day: label, icon name (Quickshell.iconPath-ready), and
+    // pre-formatted temp/humidity/precip/wind strings.
+    property var forecastDays: []
+
     // Freedesktop's weather-*-symbolic set doesn't have a one-to-one
     // entry for every wttr.in condition string, so this is a coarse
     // keyword match rather than a precise table - good enough for a
-    // small bar widget icon.
+    // small widget icon.
     function iconForCondition(condition) {
         const c = condition.toLowerCase()
         if (c.includes("thunder")) return "weather-storm-symbolic"
@@ -29,29 +37,58 @@ Item {
         return "weather-clear-symbolic"
     }
 
-    // "|" is a literal delimiter (not whitespace) since the condition
-    // text itself contains spaces ("Partly cloudy").
+    // Representative hourly slot for a future day - noon, falling back to
+    // the array's middle entry if wttr.in ever changes its time-of-day set.
+    function middayOf(day) {
+        const hourly = day.hourly || []
+        return hourly.find(h => h.time === "1200") || hourly[Math.floor(hourly.length / 2)] || {}
+    }
+
+    function formatTemp(celsius) {
+        const n = Number(celsius)
+        return (n >= 0 ? "+" : "") + n + "°C"
+    }
+
+    function applyWeatherJson(parsed) {
+        const current = (parsed.current_condition || [])[0]
+        if (current) {
+            weatherBox.conditionText = (current.weatherDesc && current.weatherDesc[0] && current.weatherDesc[0].value) || ""
+            weatherBox.tempText = weatherBox.formatTemp(current.temp_C)
+        }
+
+        const days = []
+        // weather[0] is today's own day-level summary (current_condition
+        // above already covers "today" live) - only the following days are
+        // new information here.
+        const weather = parsed.weather || []
+        for (let i = 1; i < weather.length; i++) {
+            const day = weather[i]
+            const mid = weatherBox.middayOf(day)
+            days.push({
+                label: Qt.formatDate(new Date(day.date), "ddd"),
+                iconName: weatherBox.iconForCondition((mid.weatherDesc && mid.weatherDesc[0] && mid.weatherDesc[0].value) || ""),
+                tempText: weatherBox.formatTemp(mid.tempC !== undefined ? mid.tempC : day.avgtempC),
+                humidityText: (mid.humidity !== undefined ? mid.humidity : "?") + "%",
+                precipText: (mid.precipMM !== undefined ? mid.precipMM : "?") + "mm",
+                windText: (mid.windspeedKmph !== undefined ? mid.windspeedKmph : "?") + "km/h"
+            })
+        }
+        weatherBox.forecastDays = days
+    }
+
     Process {
         id: weatherProcess
 
-        command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=%C|%t"]
+        command: ["curl", "-s", "-A", "curl", "https://wttr.in/?format=j1"]
 
-        stdout: SplitParser {
-            onRead: (line) => {
-                const trimmed = line.trim()
-                if (trimmed.length === 0) {
-                    return
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    weatherBox.applyWeatherJson(JSON.parse(text))
+                } catch (e) {
+                    weatherBox.conditionText = "Weather unavailable"
+                    weatherBox.tempText = ""
                 }
-                const parts = trimmed.split("|")
-                weatherBox.conditionText = parts[0]
-                weatherBox.tempText = parts.length > 1 ? parts[1] : ""
-            }
-        }
-
-        onExited: (exitCode) => {
-            if (exitCode !== 0) {
-                weatherBox.conditionText = "Weather unavailable"
-                weatherBox.tempText = ""
             }
         }
     }
@@ -72,9 +109,18 @@ Item {
         }
     }
 
+    // Current conditions.
     Item {
+        id: currentView
+
         anchors.fill: parent
         anchors.margins: Config.scaled(20, weatherBox.uiScale)
+
+        opacity: weatherBox.showingForecast ? 0 : 1
+        visible: opacity > 0
+        Behavior on opacity {
+            NumberAnimation { duration: 200 }
+        }
 
         IconImage {
             id: weatherIconImage
@@ -126,5 +172,103 @@ Item {
                 horizontalAlignment: Text.AlignRight
             }
         }
+    }
+
+    // 3-day forecast - compact enough to fit the same card, icon-only per
+    // day (no condition text), all text fgcolor per spec.
+    Row {
+        id: forecastRow
+
+        anchors.fill: parent
+        anchors.margins: Config.scaled(10, weatherBox.uiScale)
+        spacing: Config.scaled(6, weatherBox.uiScale)
+
+        opacity: weatherBox.showingForecast ? 1 : 0
+        visible: opacity > 0
+        Behavior on opacity {
+            NumberAnimation { duration: 200 }
+        }
+
+        Repeater {
+            model: weatherBox.forecastDays
+
+            delegate: Column {
+                id: dayColumn
+
+                required property var modelData
+
+                width: (forecastRow.width - forecastRow.spacing * 2) / 3
+                spacing: Config.scaled(2, weatherBox.uiScale)
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.label
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(11, weatherBox.uiScale)
+                    font.bold: true
+                }
+
+                Item {
+                    width: parent.width
+                    height: Config.scaled(28, weatherBox.uiScale)
+
+                    IconImage {
+                        id: dayIcon
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(24, weatherBox.uiScale)
+                        source: Quickshell.iconPath(dayColumn.modelData.iconName)
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: dayIcon
+                        source: dayIcon
+                        color: Config.fgcolor
+                    }
+                }
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.tempText
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(11, weatherBox.uiScale)
+                }
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.humidityText
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                }
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.precipText
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                }
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.windText
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                }
+            }
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        onClicked: weatherBox.showingForecast = !weatherBox.showingForecast
     }
 }
