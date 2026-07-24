@@ -109,6 +109,15 @@ SettingsPanel {
         }
 
         // ---------------- RIGHT: paired + unpaired devices, one list ----------------
+        // Each row's delegate is a Loader picking one of three dedicated
+        // Components below by kind - only the one relevant piece of
+        // content is ever instantiated per row, unlike the earlier version
+        // which always created all three (header Text, separator
+        // Rectangle, device Loader) and just toggled visible: false on the
+        // unused ones. That left a stray Config.fillcolor rectangle
+        // showing on header/separator rows even after disabling ListView's
+        // delegate reuse, so the actual bug wasn't reuse at all - this
+        // restructure removes the always-present siblings entirely.
         ListView {
             id: deviceList
 
@@ -118,62 +127,63 @@ SettingsPanel {
             clip: true
             spacing: Config.scaled(8, root.uiScale)
             boundsBehavior: Flickable.StopAtBounds
-            // Qt6 ListView reuses delegate instances by default, which is
-            // only safe when every row renders the same content. This
-            // delegate's content differs drastically by kind (header/
-            // separator/device), so a recycled item that previously held a
-            // BluetoothDeviceCard (a DashCard, background Config.fillcolor)
-            // could leave that background behind when reassigned to a
-            // header/separator row - exactly the dimmed/greyed look
-            // reported. Disable reuse for this one.
-            reuseItems: false
 
             model: root.deviceEntries
 
-            delegate: Item {
-                id: entryItem
+            delegate: Loader {
+                id: entryLoader
 
                 required property var modelData
 
                 width: deviceList.width
                 height: modelData.kind === "device" ? contentRow.cardHeight
                     : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
-                    : headerText.implicitHeight
+                    : Config.scaled(20, root.uiScale)
 
-                Text {
-                    id: headerText
-                    visible: entryItem.modelData.kind === "header"
-                    text: entryItem.modelData.kind === "header" ? entryItem.modelData.label : ""
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
-                    font.bold: true
-                }
-
-                Rectangle {
-                    visible: entryItem.modelData.kind === "separator"
-                    anchors.fill: parent
-                    color: Config.fgcolordark
-                }
-
-                // Guarded by a Loader (not just visible: false) - a
-                // BluetoothDeviceCard instantiated for a header/separator
-                // row would dereference a null device the instant its
-                // bindings evaluate, regardless of visibility.
-                Loader {
-                    anchors.fill: parent
-                    active: entryItem.modelData.kind === "device"
-
-                    BluetoothDeviceCard {
-                        anchors.fill: parent
-                        uiScale: root.uiScale
-                        device: entryItem.modelData.device
-                    }
-                }
-
-                // Dialog box (PIN/password prompts) will go here once a
-                // pairing agent exists - see the file-level note above.
+                sourceComponent: modelData.kind === "device" ? deviceRowComponent
+                    : modelData.kind === "separator" ? separatorRowComponent
+                    : headerRowComponent
             }
         }
+
+        // These reference `parent` (the Loader that instantiated them, per
+        // Loader's own reparenting behavior) rather than `entryLoader` by
+        // id - a shared Component declared outside a per-row delegate
+        // doesn't get that delegate's own isolated id scope, so
+        // `entryLoader.modelData` here would either fail to resolve or
+        // resolve to the wrong row's Loader entirely.
+        Component {
+            id: headerRowComponent
+
+            Text {
+                text: parent.modelData.label
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(14, root.uiScale)
+                font.bold: true
+            }
+        }
+
+        Component {
+            id: separatorRowComponent
+
+            Rectangle {
+                anchors.fill: parent
+                color: Config.fgcolordark
+            }
+        }
+
+        Component {
+            id: deviceRowComponent
+
+            BluetoothDeviceCard {
+                anchors.fill: parent
+                uiScale: root.uiScale
+                device: parent.modelData.device
+            }
+        }
+
+        // Dialog box (PIN/password prompts) will go here once a pairing
+        // agent exists - see the file-level note above.
     }
 }
