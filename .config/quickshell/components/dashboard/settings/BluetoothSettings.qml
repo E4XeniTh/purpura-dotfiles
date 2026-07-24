@@ -118,6 +118,15 @@ SettingsPanel {
             clip: true
             spacing: Config.scaled(8, root.uiScale)
             boundsBehavior: Flickable.StopAtBounds
+            // Qt6 ListView reuses delegate instances by default, which is
+            // only safe when every row renders the same content. This
+            // delegate's content differs drastically by kind (header/
+            // separator/device), so a recycled item that previously held a
+            // BluetoothDeviceCard (a DashCard, background Config.fillcolor)
+            // could leave that background behind when reassigned to a
+            // header/separator row - exactly the dimmed/greyed look
+            // reported. Disable reuse for this one.
+            reuseItems: false
 
             model: root.deviceEntries
 
