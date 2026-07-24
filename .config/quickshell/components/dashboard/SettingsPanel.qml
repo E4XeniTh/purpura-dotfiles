@@ -20,6 +20,11 @@ PanelWindow {
     property real anchorTop: 0
     property real uiScale: 1.0
     property string namespaceName: "dashboard-panel"
+    // Layer-shell surfaces default to no keyboard input at all - only
+    // panels that actually need to type something (e.g. bluetooth's PIN/
+    // password DialogCard) should opt into this, since OnDemand focus can
+    // otherwise steal focus from other windows unexpectedly.
+    property bool wantsKeyboardFocus: false
 
     // Callers nest their own content directly inside a SettingsPanel {}
     // block, same as any other Item - it's routed into contentHolder so
@@ -48,6 +53,7 @@ PanelWindow {
 
     WlrLayershell.namespace: root.namespaceName
     WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: root.wantsKeyboardFocus ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     exclusiveZone: 0
 
