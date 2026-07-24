@@ -1,7 +1,4 @@
 import QtQuick
-import Quickshell
-import Quickshell.Widgets
-import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
@@ -52,38 +49,6 @@ DashCard {
                     root.device.audio.volume = v
                 }
             }
-        }
-    }
-
-    // Small hint that right-click (anywhere on this card) is what changes
-    // the selected device, since that's not otherwise discoverable.
-    Row {
-        anchors {
-            top: parent.top
-            right: parent.right
-            margins: Config.scaled(6, root.uiScale)
-        }
-        spacing: Config.scaled(4, root.uiScale)
-
-        IconImage {
-            id: selectHintIcon
-            anchors.verticalCenter: parent.verticalCenter
-            implicitSize: Config.scaled(12, root.uiScale)
-            source: Quickshell.iconPath("input-mouse-click-right-symbolic")
-        }
-
-        ColorOverlay {
-            anchors.fill: selectHintIcon
-            source: selectHintIcon
-            color: Config.fgcolordark
-        }
-
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Select"
-            color: Config.fgcolordark
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(10, root.uiScale)
         }
     }
 
