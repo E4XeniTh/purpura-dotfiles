@@ -65,7 +65,8 @@ DashCard {
             text: root.device.name.length > 0 ? root.device.name : root.device.deviceName
             color: Config.fgcolor
             font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(13, root.uiScale)
+            font.pixelSize: Config.scaled(16, root.uiScale)
+            font.bold: true
             elide: Text.ElideRight
         }
     }
