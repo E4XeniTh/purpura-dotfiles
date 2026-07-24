@@ -61,9 +61,20 @@ int main(void) {
     spec.rate = RATE;
     spec.channels = CHANNELS;
 
+    // Leaving buffer_attr NULL lets the server pick its own default
+    // buffering, which for a plain recording stream is tuned for low
+    // CPU usage rather than latency - fragsize can end up targeting
+    // something like a full second, so pa_simple_read only returns
+    // about once a second instead of once per BUFFER_SAMPLES chunk
+    // (~11.6ms/86fps at 44100Hz). Setting fragsize explicitly to one
+    // chunk's worth of bytes is the standard fix.
+    pa_buffer_attr attr;
+    attr.maxlength = (uint32_t)-1;
+    attr.fragsize = BUFFER_SAMPLES * CHANNELS * sizeof(int16_t);
+
     int pa_err = 0;
     pa_simple *pa = pa_simple_new(NULL, "quickshell-cava", PA_STREAM_RECORD, device,
-                                   "cava capture", &spec, NULL, NULL, &pa_err);
+                                   "cava capture", &spec, NULL, &attr, &pa_err);
     free(device);
 
     if (!pa) {
