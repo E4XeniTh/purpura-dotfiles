@@ -16,8 +16,8 @@ Item {
 
     implicitHeight: Config.scaled(18, uiScale)
 
-    readonly property real trackHeight: Config.scaled(8, uiScale)
-    readonly property real headSize: Config.scaled(14, uiScale)
+    readonly property real trackHeight: Config.scaled(12, uiScale)
+    readonly property real headSize: Config.scaled(18, uiScale)
     readonly property real clampedValue: Math.max(0, Math.min(1, value))
 
     Rectangle {

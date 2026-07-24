@@ -33,7 +33,7 @@ Scope {
 
 	Timer {
 		id: hideTimer
-		interval: 1000
+		interval: 2500
 
 		// Single-shot, so while hovered this just keeps re-arming itself
 		// instead of actually hiding - it'll hide ~1s after hover ends.
@@ -60,7 +60,7 @@ Scope {
 			margins.bottom: screen.height / 8
 			exclusiveZone: 0
 
-			implicitWidth: 400
+			implicitWidth: 500
 			implicitHeight: 84
 			color: "transparent"
 
@@ -89,7 +89,7 @@ Scope {
 				Loader {
 					anchors {
 						fill: parent
-						margins: 10
+						margins: 0
 					}
 					active: Pipewire.defaultAudioSink !== null
 

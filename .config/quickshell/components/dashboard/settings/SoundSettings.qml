@@ -122,7 +122,7 @@ PanelWindow {
 
                 readonly property real contentWidth: width - leftPadding - rightPadding
                 readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
-                readonly property real cardHeight: Config.scaled(64, root.uiScale)
+                readonly property real cardHeight: Config.scaled(76, root.uiScale)
 
                 // Hint that right-click (anywhere on a device card below)
                 // is what selects it as the primary device - not otherwise

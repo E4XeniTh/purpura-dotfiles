@@ -31,7 +31,7 @@ DashCard {
     Column {
         anchors {
             fill: parent
-            margins: Config.scaled(10, root.uiScale)
+            margins: Config.scaled(12, root.uiScale)
         }
         spacing: Config.scaled(8, root.uiScale)
 
@@ -44,8 +44,9 @@ DashCard {
                 : root.device.description.length > 0 ? root.device.description
                 : root.device.name
             color: Config.fgcolor
+            font.bold: true
             font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(13, root.uiScale)
+            font.pixelSize: Config.scaled(16, root.uiScale)
             elide: Text.ElideRight
             horizontalAlignment: root.centered ? Text.AlignHCenter : Text.AlignLeft
         }
@@ -59,8 +60,8 @@ DashCard {
             // layout fights children that also try to set their own
             // geometry, same reasoning as the hint icon in SoundSettings.
             Item {
-                Layout.preferredWidth: Config.scaled(18, root.uiScale)
-                Layout.preferredHeight: Config.scaled(18, root.uiScale)
+                Layout.preferredWidth: Config.scaled(32, root.uiScale)
+                Layout.preferredHeight: Config.scaled(32, root.uiScale)
 
                 IconImage {
                     id: muteIcon
