@@ -94,6 +94,7 @@ Scope {
 					active: Pipewire.defaultAudioSink !== null
 
 					DeviceCard {
+						anchors.fill: parent
 						color: "transparent"
 						border.width: 0
 						device: Pipewire.defaultAudioSink
