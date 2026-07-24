@@ -45,42 +45,6 @@ SettingsPanel {
         // A plain Item, not a Row/Column, since the icon+overlay pair
         // inside needs its own anchors and positioners fight children
         // that set their own anchors.
-        Item {
-            width: soundContent.contentWidth
-            height: Config.scaled(14, root.uiScale)
-
-            Item {
-                id: selectHintIconBox
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                width: Config.scaled(18, root.uiScale)
-                height: Config.scaled(18, root.uiScale)
-
-                IconImage {
-                    id: selectHintIcon
-                    anchors.fill: parent
-                    source: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                }
-
-                ColorOverlay {
-                    anchors.fill: selectHintIcon
-                    source: selectHintIcon
-                    color: Config.fgcolor
-                }
-            }
-
-            Text {
-                anchors {
-                    right: selectHintIconBox.right
-                    rightMargin: Config.scaled(24, root.uiScale)
-                    verticalCenter: parent.verticalCenter
-                }
-                text: "Select"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
-            }
-        }
 
         Row {
             id: columnsRow
@@ -141,6 +105,43 @@ SettingsPanel {
                         onSelected: Pipewire.preferredDefaultAudioSource = modelData
                     }
                 }
+            }
+        }
+
+        Item {
+            width: soundContent.contentWidth
+            height: Config.scaled(14, root.uiScale)
+
+            Item {
+                id: selectHintIconBox
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                width: Config.scaled(18, root.uiScale)
+                height: Config.scaled(18, root.uiScale)
+
+                IconImage {
+                    id: selectHintIcon
+                    anchors.fill: parent
+                    source: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: selectHintIcon
+                    source: selectHintIcon
+                    color: Config.fgcolor
+                }
+            }
+
+            Text {
+                anchors {
+                    right: selectHintIconBox.right
+                    rightMargin: Config.scaled(24, root.uiScale)
+                    verticalCenter: parent.verticalCenter
+                }
+                text: "Select"
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(14, root.uiScale)
             }
         }
     }

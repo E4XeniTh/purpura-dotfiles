@@ -61,7 +61,7 @@ Item {
         // above already covers "today" live) - only the following days are
         // new information here.
         const weather = parsed.weather || []
-        for (let i = 1; i < weather.length; i++) {
+        for (let i = 0; i < weather.length; i++) {
             const day = weather[i]
             const mid = weatherBox.middayOf(day)
             days.push({
@@ -206,7 +206,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, weatherBox.uiScale)
+                    font.pixelSize: Config.scaled(14, weatherBox.uiScale)
                     font.bold: true
                 }
 
@@ -234,16 +234,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, weatherBox.uiScale)
-                }
-
-                Text {
-                    width: parent.width
-                    text: dayColumn.modelData.humidityText
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                    font.pixelSize: Config.scaled(14, weatherBox.uiScale)
                 }
 
                 Text {
@@ -252,8 +243,18 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                    font.pixelSize: Config.scaled(12, weatherBox.uiScale)
                 }
+
+                Text {
+                    width: parent.width
+                    text: dayColumn.modelData.humidityText
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, weatherBox.uiScale)
+                }
+
 
                 Text {
                     width: parent.width
@@ -261,7 +262,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, weatherBox.uiScale)
+                    font.pixelSize: Config.scaled(12, weatherBox.uiScale)
                 }
             }
         }
