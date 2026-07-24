@@ -1,0 +1,194 @@
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import "../../Config.js" as Config
+
+// Shared shell for dashboard sub-panels (audio/weather/bluetooth settings):
+// same two-phase stretch-then-drop open animation used everywhere else in
+// this dashboard, anchored below it. Driven by `active` instead of a plain
+// open/close pair, so a coordinator (Dashboard.qml) can sequence switching
+// between panels: closing one plays its height-collapse animation first,
+// only opening the next once `closed()` fires - see Dashboard.qml's
+// toggleSettingsPanel().
+PanelWindow {
+    id: root
+
+    // Set by the coordinator - only one sub-panel's `active` should ever
+    // be true at a time.
+    property bool active: false
+    property real panelWidth: 800
+    property real anchorTop: 0
+    property real uiScale: 1.0
+    property string namespaceName: "dashboard-panel"
+
+    // Callers nest their own content directly inside a SettingsPanel {}
+    // block, same as any other Item - it's routed into contentHolder so
+    // its childrenRect can drive the box's "open" height.
+    default property alias content: contentHolder.data
+
+    signal closed()
+
+    // Actual window visibility - stays true through the close animation
+    // (box shrinking back to the horizontal line) and only drops once
+    // that finishes, unlike `active` which flips the instant the
+    // coordinator picks a different panel.
+    property bool reallyVisible: false
+    visible: reallyVisible
+
+    // Bypasses the close animation entirely - used when the dashboard
+    // itself is closing, since dashWindow has no closing animation of its
+    // own and a lingering 300ms sub-panel animation would look like a
+    // orphaned floating box once the dashboard above it has already
+    // vanished.
+    function forceHide() {
+        closeTimer.stop()
+        openTimer.stop()
+        reallyVisible = false
+    }
+
+    WlrLayershell.namespace: root.namespaceName
+    WlrLayershell.layer: WlrLayer.Overlay
+
+    exclusiveZone: 0
+
+    anchors {
+        top: true
+    }
+
+    margins {
+        top: root.anchorTop
+    }
+
+    implicitWidth: root.panelWidth
+    implicitHeight: Math.max(contentHolder.height, 1)
+
+    color: "transparent"
+
+    Rectangle {
+        id: box
+
+        anchors.horizontalCenter: parent.horizontalCenter
+
+        width: 0
+        height: 4
+
+        color: Config.fillcolor
+
+        states: [
+
+            State {
+                name: "horizontal"
+
+                PropertyChanges {
+                    target: box
+
+                    width: root.panelWidth
+                    height: 2
+                }
+            },
+
+            State {
+                name: "open"
+
+                PropertyChanges {
+                    target: box
+
+                    width: root.panelWidth
+                    height: Math.max(contentHolder.height, 1)
+                }
+            }
+
+        ]
+
+        transitions: [
+
+            Transition {
+
+                NumberAnimation {
+
+                    properties: "width,height"
+
+                    duration: 300
+
+                    easing.type: Easing.OutCubic
+
+                }
+
+            }
+
+        ]
+
+        Item {
+            anchors.fill: parent
+            clip: true
+
+            Item {
+                id: contentHolder
+
+                width: root.panelWidth
+                height: childrenRect.height
+            }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+
+            color: "transparent"
+
+            border.width: Config.scaled(2, root.uiScale)
+            border.color: Config.fgcolor
+
+            radius: 0
+
+            z: 10
+        }
+    }
+
+    onActiveChanged: {
+        if (active) {
+            // Cancel a close in progress - re-activating before it
+            // finished hiding just restarts the open sequence.
+            closeTimer.stop()
+            reallyVisible = true
+
+            box.width = 0
+            box.height = 4
+
+            box.state = "horizontal"
+            openTimer.restart()
+        } else if (reallyVisible) {
+            // Cancel an open in progress, otherwise it could still fire
+            // box.state = "open" after we've already decided to close,
+            // briefly flashing the panel back open mid-collapse.
+            openTimer.stop()
+            box.state = "horizontal"
+            closeTimer.restart()
+        }
+    }
+
+    Timer {
+        id: openTimer
+
+        // Must match the transition's duration above, so phase 1 (width)
+        // fully finishes before phase 2 (height) starts.
+        interval: 300
+        repeat: false
+
+        onTriggered: {
+            box.state = "open"
+        }
+    }
+
+    Timer {
+        id: closeTimer
+
+        // Matches the height-collapse transition's duration.
+        interval: 300
+        repeat: false
+
+        onTriggered: {
+            root.reallyVisible = false
+            root.closed()
+        }
+    }
+}

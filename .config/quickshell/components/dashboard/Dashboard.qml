@@ -78,6 +78,37 @@ Scope {
             // doesn't make text illegibly small or comically large.
             property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
 
+            // Mutually-exclusive sub-panels (audio/weather/bluetooth
+            // settings): "" or the name of whichever one is active. Each
+            // panel below binds active: activeSettingsPanel === "<name>",
+            // so switching names closes the current one and opens the new
+            // one - but not simultaneously. Since SettingsPanel.qml only
+            // flips reallyVisible/hides once its own close animation
+            // finishes (see its closed() signal), toggleSettingsPanel()
+            // holds the requested target in pendingSettingsPanel until
+            // then instead of assigning activeSettingsPanel directly.
+            property string activeSettingsPanel: ""
+            property string pendingSettingsPanel: ""
+
+            function toggleSettingsPanel(name) {
+                if (activeSettingsPanel === name) {
+                    activeSettingsPanel = ""
+                    pendingSettingsPanel = ""
+                } else if (activeSettingsPanel === "") {
+                    activeSettingsPanel = name
+                } else {
+                    pendingSettingsPanel = name
+                    activeSettingsPanel = ""
+                }
+            }
+
+            function onSettingsPanelClosed() {
+                if (pendingSettingsPanel !== "") {
+                    activeSettingsPanel = pendingSettingsPanel
+                    pendingSettingsPanel = ""
+                }
+            }
+
             visible: root.open && root.screen === modelData
 
             WlrLayershell.namespace: "dashboard"
@@ -224,7 +255,7 @@ Scope {
                                     id: weatherMouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: weatherForecast.toggle()
+                                    onClicked: dashWindow.toggleSettingsPanel("weather")
                                 }
                             }
 
@@ -425,7 +456,7 @@ Scope {
                                                 hoverEnabled: true
                                                 onClicked: {
                                                     if (index === 0) {
-                                                        audioSettings.toggle()
+                                                        dashWindow.toggleSettingsPanel("audio")
                                                     }
                                                 }
                                             }
@@ -507,8 +538,15 @@ Scope {
                     dashBox.state = "horizontal"
                     dashOpenTimer.start()
                 } else {
-                    audioSettings.close()
-                    weatherForecast.close()
+                    // Snap-hide rather than let each panel play its own
+                    // close animation - dashWindow itself has no closing
+                    // animation, so a lingering sub-panel would look like
+                    // an orphaned floating box once the dashboard above it
+                    // has already vanished.
+                    dashWindow.activeSettingsPanel = ""
+                    dashWindow.pendingSettingsPanel = ""
+                    audioSettings.forceHide()
+                    weatherForecast.forceHide()
                 }
             }
 
@@ -536,6 +574,8 @@ Scope {
                 panelWidth: dashWidth
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "audio"
+                onClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Weather forecast, opened from the weather card above.
@@ -547,6 +587,8 @@ Scope {
                 panelWidth: dashWidth
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "weather"
+                onClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Invisible, full-screen click catcher that closes the

@@ -1,25 +1,19 @@
 import QtQuick
 import Quickshell
-import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Services.Pipewire
 import Qt5Compat.GraphicalEffects
+import "../"
 import "../../../Config.js" as Config
 
 // Playback/recording device list + volume sliders, opened from Dashboard's
-// audio icon. Instantiated inside dashWindow (see Dashboard.qml) so it can
-// anchor directly below it on the same screen, using the same two-phase
-// stretch-then-drop animation as Dashboard.qml/Tray.qml's context menu.
-PanelWindow {
+// audio icon. Instantiated inside dashWindow (see Dashboard.qml), which
+// also drives `active` through its settings-panel coordinator so this
+// closes seamlessly if another panel (weather, bluetooth, ...) opens.
+SettingsPanel {
     id: root
 
-    property bool open: false
-    property real panelWidth: 800
-    property real anchorTop: 0
-    property real uiScale: 1.0
-
-    function close() { root.open = false }
-    function toggle() { root.open = !root.open }
+    namespaceName: "audioSettings"
 
     // All hardware (non-stream) audio nodes, split by direction. Bound via
     // PwObjectTracker below so .audio.volume/.muted are valid to use - see
@@ -31,239 +25,123 @@ PanelWindow {
         objects: root.playbackNodes.concat(root.recordingNodes)
     }
 
-    visible: root.open
+    Column {
+        id: soundContent
 
-    WlrLayershell.namespace: "audioSettings"
-    WlrLayershell.layer: WlrLayer.Overlay
+        width: root.panelWidth
 
-    exclusiveZone: 0
+        topPadding: Config.scaled(16, root.uiScale)
+        bottomPadding: Config.scaled(16, root.uiScale)
+        leftPadding: Config.scaled(16, root.uiScale)
+        rightPadding: Config.scaled(16, root.uiScale)
+        spacing: Config.scaled(10, root.uiScale)
 
-    anchors {
-        top: true
-    }
+        readonly property real contentWidth: width - leftPadding - rightPadding
+        readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
+        readonly property real cardHeight: Config.scaled(76, root.uiScale)
 
-    margins {
-        top: root.anchorTop
-    }
-
-    implicitWidth: root.panelWidth
-    implicitHeight: Math.max(soundContent.height, 1)
-
-    color: "transparent"
-
-    Rectangle {
-        id: soundBox
-
-        anchors.horizontalCenter: parent.horizontalCenter
-
-        width: 0
-        height: 4
-
-        color: Config.fillcolor
-
-        states: [
-
-            State {
-                name: "horizontal"
-
-                PropertyChanges {
-                    target: soundBox
-
-                    width: root.panelWidth
-                    height: 2
-                }
-            },
-
-            State {
-                name: "open"
-
-                PropertyChanges {
-                    target: soundBox
-
-                    width: root.panelWidth
-                    height: Math.max(soundContent.height, 1)
-                }
-            }
-
-        ]
-
-        transitions: [
-
-            Transition {
-
-                NumberAnimation {
-
-                    properties: "width,height"
-
-                    duration: 300
-
-                    easing.type: Easing.OutCubic
-
-                }
-
-            }
-
-        ]
-
+        // Hint that right-click (anywhere on a device card below) is what
+        // selects it as the primary device - not otherwise discoverable.
+        // A plain Item, not a Row/Column, since the icon+overlay pair
+        // inside needs its own anchors and positioners fight children
+        // that set their own anchors.
         Item {
-            anchors.fill: parent
-            clip: true
+            width: soundContent.contentWidth
+            height: Config.scaled(14, root.uiScale)
+
+            Item {
+                id: selectHintIconBox
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                width: Config.scaled(18, root.uiScale)
+                height: Config.scaled(18, root.uiScale)
+
+                IconImage {
+                    id: selectHintIcon
+                    anchors.fill: parent
+                    source: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: selectHintIcon
+                    source: selectHintIcon
+                    color: Config.fgcolor
+                }
+            }
+
+            Text {
+                anchors {
+                    right: selectHintIconBox.right
+                    rightMargin: Config.scaled(24, root.uiScale)
+                    verticalCenter: parent.verticalCenter
+                }
+                text: "Select"
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(14, root.uiScale)
+            }
+        }
+
+        Row {
+            id: columnsRow
+            width: soundContent.contentWidth
+            spacing: Config.scaled(16, root.uiScale)
 
             Column {
-                id: soundContent
-
-                width: root.panelWidth
-
-                topPadding: Config.scaled(16, root.uiScale)
-                bottomPadding: Config.scaled(16, root.uiScale)
-                leftPadding: Config.scaled(16, root.uiScale)
-                rightPadding: Config.scaled(16, root.uiScale)
+                width: soundContent.columnWidth
                 spacing: Config.scaled(10, root.uiScale)
 
-                readonly property real contentWidth: width - leftPadding - rightPadding
-                readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
-                readonly property real cardHeight: Config.scaled(76, root.uiScale)
-
-                // Hint that right-click (anywhere on a device card below)
-                // is what selects it as the primary device - not otherwise
-                // discoverable. A plain Item, not a Row/Column, since the
-                // icon+overlay pair inside needs its own anchors and
-                // positioners fight children that set their own anchors.
-                Item {
-                    width: soundContent.contentWidth
-                    height: Config.scaled(14, root.uiScale)
-
-                    Item {
-                        id: selectHintIconBox
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.right: parent.right
-                        width: Config.scaled(18, root.uiScale)
-                        height: Config.scaled(18, root.uiScale)
-
-                        IconImage {
-                            id: selectHintIcon
-                            anchors.fill: parent
-                            source: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: selectHintIcon
-                            source: selectHintIcon
-                            color: Config.fgcolor
-                        }
-                    }
-
-                    Text {
-                        anchors {
-                            right: selectHintIconBox.right
-                            rightMargin: Config.scaled(24, root.uiScale)
-                            verticalCenter: parent.verticalCenter
-                        }
-                        text: "Select"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(14, root.uiScale)
-                    }
+                Text {
+                    text: "Playback"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.bold: true
                 }
 
-                Row {
-                    id: columnsRow
-                    width: soundContent.contentWidth
-                    spacing: Config.scaled(16, root.uiScale)
+                Repeater {
+                    model: ScriptModel { values: root.playbackNodes }
 
-                    Column {
+                    delegate: DeviceCard {
+                        required property var modelData
+
                         width: soundContent.columnWidth
-                        spacing: Config.scaled(10, root.uiScale)
-
-                        Text {
-                            text: "Playback"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(14, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Repeater {
-                            model: ScriptModel { values: root.playbackNodes }
-
-                            delegate: DeviceCard {
-                                required property var modelData
-
-                                width: soundContent.columnWidth
-                                height: soundContent.cardHeight
-                                uiScale: root.uiScale
-                                device: modelData
-                                isPrimary: Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
-                                onSelected: Pipewire.preferredDefaultAudioSink = modelData
-                            }
-                        }
-                    }
-
-                    Column {
-                        width: soundContent.columnWidth
-                        spacing: Config.scaled(10, root.uiScale)
-
-                        Text {
-                            text: "Recording"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(14, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Repeater {
-                            model: ScriptModel { values: root.recordingNodes }
-
-                            delegate: DeviceCard {
-                                required property var modelData
-
-                                width: soundContent.columnWidth
-                                height: soundContent.cardHeight
-                                uiScale: root.uiScale
-                                device: modelData
-                                isPrimary: Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
-                                onSelected: Pipewire.preferredDefaultAudioSource = modelData
-                            }
-                        }
+                        height: soundContent.cardHeight
+                        uiScale: root.uiScale
+                        device: modelData
+                        isPrimary: Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
+                        onSelected: Pipewire.preferredDefaultAudioSink = modelData
                     }
                 }
             }
-        }
 
-        Rectangle {
-            anchors.fill: parent
+            Column {
+                width: soundContent.columnWidth
+                spacing: Config.scaled(10, root.uiScale)
 
-            color: "transparent"
+                Text {
+                    text: "Recording"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.bold: true
+                }
 
-            border.width: Config.scaled(2, root.uiScale)
-            border.color: Config.fgcolor
+                Repeater {
+                    model: ScriptModel { values: root.recordingNodes }
 
-            radius: 0
+                    delegate: DeviceCard {
+                        required property var modelData
 
-            z: 10
-        }
-    }
-
-    onVisibleChanged: {
-        if (visible) {
-            soundBox.width = 0
-            soundBox.height = 4
-
-            soundBox.state = "horizontal"
-            soundOpenTimer.start()
-        }
-    }
-
-    Timer {
-        id: soundOpenTimer
-
-        // Must match the transition's duration above, so phase 1 (width)
-        // fully finishes before phase 2 (height) starts.
-        interval: 300
-        repeat: false
-
-        onTriggered: {
-            soundBox.state = "open"
+                        width: soundContent.columnWidth
+                        height: soundContent.cardHeight
+                        uiScale: root.uiScale
+                        device: modelData
+                        isPrimary: Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
+                        onSelected: Pipewire.preferredDefaultAudioSource = modelData
+                    }
+                }
+            }
         }
     }
 }
