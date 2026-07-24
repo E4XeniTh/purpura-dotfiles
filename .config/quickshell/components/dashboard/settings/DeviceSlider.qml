@@ -10,6 +10,7 @@ Item {
 
     property real uiScale: 1.0
     property real value: 0.0 // 0.0 - 1.0
+    property bool muted: false
 
     signal moved(real newValue)
 
@@ -24,7 +25,8 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width
         height: root.trackHeight
-        color: Config.fgcolordark
+        // Same muted red/darkred swap as VolumeOsd.qml's slider.
+        color: root.muted ? "darkred" : Config.fgcolordark
 
         Rectangle {
             anchors {
@@ -33,7 +35,7 @@ Item {
                 bottom: parent.bottom
             }
             width: parent.width * root.clampedValue
-            color: Config.fgcolor
+            color: root.muted ? "red" : Config.fgcolor
         }
     }
 
@@ -42,9 +44,9 @@ Item {
         height: root.headSize
         anchors.verticalCenter: track.verticalCenter
         x: Math.max(0, Math.min(root.width - width, root.width * root.clampedValue - width / 2))
-        color: Config.fgcolor
+        color: root.muted ? "red" : Config.fgcolor
         border.width: Config.scaled(1, root.uiScale)
-        border.color: Config.fgcolordark
+        border.color: root.muted ? "darkred" : Config.fgcolordark
     }
 
     MouseArea {
