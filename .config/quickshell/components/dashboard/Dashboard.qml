@@ -526,17 +526,23 @@ Scope {
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
             }
 
-            // Invisible, full-screen click catcher that closes the
-            // dashboard on an outside click. Sits on WlrLayer.Bottom - below
-            // Bar.qml (default WlrLayer.Top) so bar clicks still reach the
-            // bar, and below this window's own WlrLayer.Overlay so clicks on
-            // the dashboard itself still reach the dashboard.
+            // Invisible, full-screen catcher that closes the dashboard the
+            // moment the mouse touches anything outside it - a click, or
+            // just hovering onto another window. Per the wlr-layer-shell
+            // spec, Background/Bottom render below regular windows while
+            // Top/Overlay render above them, so this has to sit on
+            // WlrLayer.Top (same as Bar.qml's default) to actually see
+            // input over a normal window - Bottom would only ever catch
+            // clicks on bare desktop. It still sits below this window's own
+            // WlrLayer.Overlay, so the dashboard itself is unaffected.
             PanelWindow {
+                id: outsideCatcher
+
                 screen: modelData
                 visible: root.open && root.screen === modelData
 
                 WlrLayershell.namespace: "dashboard-catcher"
-                WlrLayershell.layer: WlrLayer.Bottom
+                WlrLayershell.layer: WlrLayer.Top
 
                 exclusiveZone: -1
 
@@ -549,9 +555,31 @@ Scope {
 
                 color: "transparent"
 
+                // Guards against self-closing the instant the dashboard is
+                // opened via keybind/IPC with the mouse already resting
+                // somewhere outside its box - the catcher only starts
+                // reacting a moment after it becomes visible.
+                property bool armed: false
+
+                onVisibleChanged: {
+                    armed = false
+                    if (visible) {
+                        armTimer.restart()
+                    }
+                }
+
+                Timer {
+                    id: armTimer
+                    interval: 150
+                    repeat: false
+                    onTriggered: outsideCatcher.armed = true
+                }
+
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: root.close()
+                    hoverEnabled: true
+                    onClicked: if (outsideCatcher.armed) root.close()
+                    onEntered: if (outsideCatcher.armed) root.close()
                 }
             }
         }
