@@ -76,7 +76,7 @@ Item {
                 id: monthtext
                 anchors {
                     left: parent.left
-                    leftMargin: Config.scaled(4, root.uiScale)
+                    leftMargin: Config.scaled(24, root.uiScale)
                 }
                 visible: root.mode !== "months"
                 text: root.monthNames[root.viewMonth]
@@ -103,8 +103,8 @@ Item {
             Item {
                 anchors.centerIn: parent
                 visible: root.awayFromToday
-                width: Config.scaled(14, root.uiScale)
-                height: Config.scaled(14, root.uiScale)
+                width: Config.scaled(18, root.uiScale)
+                height: Config.scaled(18, root.uiScale)
 
                 IconImage {
                     id: resetIcon
@@ -130,7 +130,7 @@ Item {
                 id: yeartext
                 anchors {
                     right: parent.right
-                    rightMargin: Config.scaled(4, root.uiScale)
+                    rightMargin: Config.scaled(24, root.uiScale)
                 }
                 visible: root.mode !== "years"
                 text: root.viewYear
@@ -198,7 +198,7 @@ Item {
                         && root.viewYear === root.today.getFullYear()
 
                     width: root.cellWidth
-                    height: Config.scaled(18, root.uiScale)
+                    height: Config.scaled(22, root.uiScale)
                     radius: 0
 
                     color: isToday ? Config.fgcolordark : "transparent"
@@ -206,10 +206,10 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: dayCell.index + 1
-                        color: Config.fgcolor
+                        color: isToday ? Config.fgcolorlight : Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(11, root.uiScale)
-                        font.bold: dayCell.isToday
+                        font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }
