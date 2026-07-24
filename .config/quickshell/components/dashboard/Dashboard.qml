@@ -229,6 +229,7 @@ Scope {
                                     anchors.margins: Config.scaled(8, dashWindow.uiScale)
                                     anchors.topMargin: Config.scaled(20, dashWindow.uiScale)
                                     uiScale: dashWindow.uiScale
+                                    dashboardOpen: root.open
                                 }
                             }
                         }
