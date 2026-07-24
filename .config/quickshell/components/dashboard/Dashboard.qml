@@ -5,6 +5,7 @@ import Quickshell.Io
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
+import "settings"
 import "../../Config.js" as Config
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
@@ -389,6 +390,7 @@ Scope {
 
                                         delegate: DashCard {
                                             required property string modelData
+                                            required property int index
                                             uiScale: dashWindow.uiScale
 
                                             width: systemicons.height
@@ -399,6 +401,15 @@ Scope {
                                                 implicitSize: Config.scaled(20, dashWindow.uiScale)
                                                 visible: modelData.length > 0
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
+                                            }
+
+                                            // Only the audio icon (index 0) opens anything so far -
+                                            // the rest are reserved for the same settings-button
+                                            // treatment later.
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: index === 0
+                                                onClicked: soundSettings.toggle()
                                             }
                                         }
                                     }
@@ -477,6 +488,8 @@ Scope {
 
                     dashBox.state = "horizontal"
                     dashOpenTimer.start()
+                } else {
+                    soundSettings.close()
                 }
             }
 
@@ -491,6 +504,19 @@ Scope {
                 onTriggered: {
                     dashBox.state = "open"
                 }
+            }
+
+            // Sound settings, opened from the audio icon above. Anchored
+            // directly below dashBox's own border (same width, same
+            // screen) so it reads as an extension of the dashboard rather
+            // than an unrelated popup.
+            SoundSettings {
+                id: soundSettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
             }
         }
     }
