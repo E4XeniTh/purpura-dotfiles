@@ -1,8 +1,7 @@
 import QtQuick
-import QtQuick.Layouts
 import Quickshell
 import Quickshell.Services.Pipewire
-import Quickshell.Widgets
+import "dashboard/settings"
 import "../Config.js" as Config
 
 Scope {
@@ -28,11 +27,23 @@ Scope {
 	}
 
 	property bool shouldShowOsd: false
+	// Set from the hover MouseArea below, so the OSD doesn't disappear out
+	// from under the mouse while its mute button/slider are being used.
+	property bool hovered: false
 
 	Timer {
 		id: hideTimer
 		interval: 1000
-		onTriggered: root.shouldShowOsd = false
+
+		// Single-shot, so while hovered this just keeps re-arming itself
+		// instead of actually hiding - it'll hide ~1s after hover ends.
+		onTriggered: {
+			if (root.hovered) {
+				hideTimer.restart()
+			} else {
+				root.shouldShowOsd = false
+			}
+		}
 	}
 
 	// The OSD window will be created and destroyed based on shouldShowOsd.
@@ -50,11 +61,11 @@ Scope {
 			exclusiveZone: 0
 
 			implicitWidth: 400
-			implicitHeight: 48
+			implicitHeight: 84
 			color: "transparent"
 
-			// An empty click mask prevents the window from blocking mouse events.
-			mask: Region {}
+			// No click mask (unlike before) - the mute button and slider
+			// below need real mouse input to reach them.
 
 			Rectangle {
 				anchors.fill: parent
@@ -63,37 +74,31 @@ Scope {
 				border.width: 2
 				border.color: Config.fgcolor
 
-				RowLayout {
+				MouseArea {
+					anchors.fill: parent
+					hoverEnabled: true
+					onEntered: root.hovered = true
+					onExited: root.hovered = false
+				}
+
+				// Reuses the same device card the sound settings panel
+				// uses, so muting/dragging volume here behaves identically
+				// - guarded by a Loader (not just visible:false) since
+				// DeviceCard dereferences .device directly and
+				// defaultAudioSink can briefly be null.
+				Loader {
 					anchors {
 						fill: parent
-						leftMargin: 10
-						rightMargin: 15
+						margins: 10
 					}
+					active: Pipewire.defaultAudioSink !== null
 
-					IconImage {
-						implicitSize: 36
-						source: Pipewire.defaultAudioSink?.audio.muted ? Quickshell.iconPath("audio-volume-muted-symbolic") : Quickshell.iconPath("audio-volume-high-symbolic")
-					}
-
-					Rectangle {
-						// Stretches to fill all left-over space
-						Layout.fillWidth: true
-
-						implicitHeight: 12
-						radius: 0
-						color: Pipewire.defaultAudioSink?.audio.muted ? "darkred" : Config.fgcolordark
-
-						Rectangle {
-							anchors {
-								left: parent.left
-								top: parent.top
-								bottom: parent.bottom
-							}
-							color: Pipewire.defaultAudioSink?.audio.muted ? "red" : Config.fgcolor
-							// implicitWidth: Pipewire.defaultAudioSink?.audio.muted ? parent.width : parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
-							implicitWidth: parent.width * (Pipewire.defaultAudioSink?.audio.volume ?? 0)
-							radius: parent.radius
-						}
+					DeviceCard {
+						color: "transparent"
+						border.width: 0
+						device: Pipewire.defaultAudioSink
+						isPrimary: true
+						centered: true
 					}
 				}
 			}

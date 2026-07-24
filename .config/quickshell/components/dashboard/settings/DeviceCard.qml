@@ -18,6 +18,9 @@ DashCard {
     required property var device
     property bool isPrimary: false
     property real uiScale: 1.0
+    // VolumeOsd.qml reuses this card for the single default device and
+    // wants its name centered instead of left-aligned.
+    property bool centered: false
 
     signal selected()
 
@@ -44,6 +47,7 @@ DashCard {
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(13, root.uiScale)
             elide: Text.ElideRight
+            horizontalAlignment: root.centered ? Text.AlignHCenter : Text.AlignLeft
         }
 
         RowLayout {
