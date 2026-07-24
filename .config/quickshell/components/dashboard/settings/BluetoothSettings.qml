@@ -39,45 +39,11 @@ SettingsPanel {
         return list
     }
 
-    // Auto-trust the instant a device becomes paired, so it can
-    // reconnect later without prompting. Lives here (keyed on the
-    // device objects themselves via Bluetooth.devices.values, which
-    // doesn't change identity when a device's paired state flips)
-    // rather than inside each row's BluetoothDeviceCard - that card
-    // gets destroyed and recreated the moment a device moves between
-    // the "Paired"/"Unpaired" sections of deviceEntries above, which is
-    // the exact same paired-state change this needs to react to, so a
-    // Connections binding living there could get torn down before (or
-    // race) its own handler running.
-    Repeater {
-        model: ScriptModel { values: Bluetooth.devices.values }
-
-        delegate: Item {
-            required property var modelData
-
-            Connections {
-                target: modelData
-
-                function onPairedChanged() {
-                    if (modelData.paired) {
-                        modelData.trusted = true
-                    }
-                }
-            }
-        }
-    }
-
-    // Scan for nearby devices only while this panel is open. Skips any
-    // adapter blocked by rfkill entirely - StartDiscovery on a blocked
-    // adapter is rejected by BlueZ ("Resource Not Ready"), so trying it
-    // there was pure noise (a critical log line every time the panel
-    // opened, for an adapter that can never discover until unblocked).
+    // Scan for nearby devices only while this panel is open.
     onActiveChanged: {
         const adapters = Bluetooth.adapters.values
         for (let i = 0; i < adapters.length; i++) {
-            if (adapters[i].state !== BluetoothAdapterState.Blocked) {
-                adapters[i].discovering = root.active
-            }
+            adapters[i].discovering = root.active
         }
     }
 
@@ -197,12 +163,12 @@ SettingsPanel {
 
                     width: deviceList.width
                     height: modelData.kind === "device" ? contentRow.cardHeight
-                        : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
-                        : Config.scaled(20, root.uiScale)
+                    : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
+                    : Config.scaled(20, root.uiScale)
 
                     sourceComponent: modelData.kind === "device" ? deviceRowComponent
-                        : modelData.kind === "separator" ? separatorRowComponent
-                        : headerRowComponent
+                    : modelData.kind === "separator" ? separatorRowComponent
+                    : headerRowComponent
                 }
             }
 

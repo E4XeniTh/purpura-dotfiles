@@ -18,17 +18,19 @@ DashCard {
     property real uiScale: 1.0
 
     border.color: !device.paired ? Config.fgcolordark
-        : (device.connected ? Config.fgcolorlight : Config.fgcolor)
+    : (device.connected ? Config.fgcolorlight : Config.fgcolor)
 
-    // Auto-trust used to live here, but this card gets destroyed and
-    // recreated the instant a device moves between the "Paired" and
-    // "Unpaired" sections of BluetoothSettings' single list (its model
-    // is rebuilt from scratch on any relevant device change) - that's
-    // the exact same paired-state change this was trying to react to,
-    // so the Connections binding could easily be torn down before (or
-    // racing) its own handler ran. Moved to a card-independent Repeater
-    // in BluetoothSettings.qml keyed on the device objects themselves,
-    // which don't get recreated when their section changes.
+    // Auto-trust the instant a device becomes paired, so it can
+    // reconnect later without prompting.
+    Connections {
+        target: root.device
+
+        function onPairedChanged() {
+            if (root.device.paired) {
+                root.device.trusted = true
+            }
+        }
+    }
 
     RowLayout {
         anchors {
