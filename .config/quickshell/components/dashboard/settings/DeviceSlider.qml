@@ -49,6 +49,7 @@ Item {
 
     MouseArea {
         anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
 
         function updateFromMouse(mx) {
             root.moved(Math.max(0, Math.min(1, mx / root.width)))

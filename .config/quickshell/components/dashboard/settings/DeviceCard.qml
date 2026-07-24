@@ -1,12 +1,16 @@
 import QtQuick
+import Quickshell
+import Quickshell.Widgets
+import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
 // One playback/recording device: name + volume slider inside a DashCard.
-// Clicking anywhere on the card except the slider itself selects it as the
-// primary device - the slider's own MouseArea sits above this card's and
-// consumes clicks in its own bounds first, so dragging volume never also
-// re-selects the device.
+// Right-clicking anywhere on the card - including over the name or the
+// slider - selects it as the primary device. Left click is reserved for
+// the slider: this card's own MouseArea only accepts the right button, so
+// left-button presses it doesn't accept fall through to the slider's own
+// MouseArea underneath instead of being consumed here.
 DashCard {
     id: root
 
@@ -17,11 +21,6 @@ DashCard {
     signal selected()
 
     border.color: isPrimary ? Config.fgcolor : Config.fgcolordark
-
-    MouseArea {
-        anchors.fill: parent
-        onClicked: root.selected()
-    }
 
     Column {
         anchors {
@@ -54,5 +53,43 @@ DashCard {
                 }
             }
         }
+    }
+
+    // Small hint that right-click (anywhere on this card) is what changes
+    // the selected device, since that's not otherwise discoverable.
+    Row {
+        anchors {
+            top: parent.top
+            right: parent.right
+            margins: Config.scaled(6, root.uiScale)
+        }
+        spacing: Config.scaled(4, root.uiScale)
+
+        IconImage {
+            id: selectHintIcon
+            anchors.verticalCenter: parent.verticalCenter
+            implicitSize: Config.scaled(12, root.uiScale)
+            source: Quickshell.iconPath("input-mouse-click-right-symbolic")
+        }
+
+        ColorOverlay {
+            anchors.fill: selectHintIcon
+            source: selectHintIcon
+            color: Config.fgcolordark
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: "Select"
+            color: Config.fgcolordark
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(10, root.uiScale)
+        }
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: root.selected()
     }
 }

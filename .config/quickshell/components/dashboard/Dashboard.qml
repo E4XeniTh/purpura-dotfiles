@@ -395,6 +395,7 @@ Scope {
 
                                             width: systemicons.height
                                             height: systemicons.height
+                                            color: iconMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                             IconImage {
                                                 anchors.centerIn: parent
@@ -405,11 +406,17 @@ Scope {
 
                                             // Only the audio icon (index 0) opens anything so far -
                                             // the rest are reserved for the same settings-button
-                                            // treatment later.
+                                            // treatment later, but all of them hover-highlight
+                                            // already.
                                             MouseArea {
+                                                id: iconMouseArea
                                                 anchors.fill: parent
-                                                enabled: index === 0
-                                                onClicked: soundSettings.toggle()
+                                                hoverEnabled: true
+                                                onClicked: {
+                                                    if (index === 0) {
+                                                        soundSettings.toggle()
+                                                    }
+                                                }
                                             }
                                         }
                                     }
