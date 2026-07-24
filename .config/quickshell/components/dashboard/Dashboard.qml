@@ -525,6 +525,35 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
             }
+
+            // Invisible, full-screen click catcher that closes the
+            // dashboard on an outside click. Sits on WlrLayer.Bottom - below
+            // Bar.qml (default WlrLayer.Top) so bar clicks still reach the
+            // bar, and below this window's own WlrLayer.Overlay so clicks on
+            // the dashboard itself still reach the dashboard.
+            PanelWindow {
+                screen: modelData
+                visible: root.open && root.screen === modelData
+
+                WlrLayershell.namespace: "dashboard-catcher"
+                WlrLayershell.layer: WlrLayer.Bottom
+
+                exclusiveZone: -1
+
+                anchors {
+                    top: true
+                    bottom: true
+                    left: true
+                    right: true
+                }
+
+                color: "transparent"
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: root.close()
+                }
+            }
         }
     }
 }
