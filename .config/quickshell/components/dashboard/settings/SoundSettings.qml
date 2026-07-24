@@ -136,8 +136,9 @@ PanelWindow {
                     Item {
                         id: selectHintIconBox
                         anchors.verticalCenter: parent.verticalCenter
-                        width: Config.scaled(12, root.uiScale)
-                        height: Config.scaled(12, root.uiScale)
+                        anchors.right: parent.right
+                        width: Config.scaled(18, root.uiScale)
+                        height: Config.scaled(18, root.uiScale)
 
                         IconImage {
                             id: selectHintIcon
@@ -148,20 +149,20 @@ PanelWindow {
                         ColorOverlay {
                             anchors.fill: selectHintIcon
                             source: selectHintIcon
-                            color: Config.fgcolordark
+                            color: Config.fgcolor
                         }
                     }
 
                     Text {
                         anchors {
-                            left: selectHintIconBox.right
-                            leftMargin: Config.scaled(4, root.uiScale)
+                            right: selectHintIconBox.right
+                            rightMargin: Config.scaled(24, root.uiScale)
                             verticalCenter: parent.verticalCenter
                         }
                         text: "Select"
-                        color: Config.fgcolordark
+                        color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(10, root.uiScale)
+                        font.pixelSize: Config.scaled(14, root.uiScale)
                     }
                 }
 
