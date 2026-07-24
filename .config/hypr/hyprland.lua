@@ -256,10 +256,16 @@ hl.window_rule({
 -- of whether the app itself requests Hyprland's tearing_control
 -- protocol (many don't - tearingHint stays 0). Requires
 -- general.allow_tearing = true above.
+--
+-- fullscreen_state_internal is a bitmask, not a boolean: 1 = maximized
+-- (META+S), 2 = fullscreen (META+F11), 3 = both at once. This needs 2 -
+-- confirmed live that the lag only reproduces under real fullscreen
+-- (META+F11), not maximized (META+S), which the first value (1) never
+-- actually matched.
 hl.window_rule({
     name = "fullscreen-tearing",
     match = {
-        fullscreen_state_internal = 1,
+        fullscreen_state_internal = 2,
     },
     immediate = true,
 })
