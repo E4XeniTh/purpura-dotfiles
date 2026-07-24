@@ -1,4 +1,7 @@
 import QtQuick
+import Quickshell
+import Quickshell.Widgets
+import Qt5Compat.GraphicalEffects
 import "../"
 import "../../Config.js" as Config
 
@@ -21,6 +24,12 @@ Item {
     // "days" (default), "months" (picking a month) or "years" (picking a
     // year) - mutually exclusive, see monthtext/yeartext below.
     property string mode: "days"
+
+    // Whether the header's reset button should show - either mid-pick, or
+    // parked on a month/year other than today's.
+    readonly property bool awayFromToday: mode !== "days"
+        || viewYear !== today.getFullYear()
+        || viewMonth !== today.getMonth()
 
     readonly property var monthNames: [
         "January", "February", "March", "April", "May", "June",
@@ -54,7 +63,10 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: Config.scaled(16, root.uiScale)
+        // Tighter than before - a 6-row month (up to 42 day cells) needs
+        // every bit of vertical room it can get, see the day grid's own
+        // sizing below.
+        spacing: Config.scaled(10, root.uiScale)
 
         Item {
             width: root.width
@@ -62,9 +74,12 @@ Item {
 
             Text {
                 id: monthtext
-                anchors.left: parent.left
+                anchors {
+                    left: parent.left
+                    leftMargin: Config.scaled(4, root.uiScale)
+                }
                 visible: root.mode !== "months"
-                text: "  " + root.monthNames[root.viewMonth]
+                text: root.monthNames[root.viewMonth]
                 // Dimmed and unclickable while picking a year, same
                 // treatment yeartext gets while picking a month.
                 color: root.mode === "years" ? Config.fgcolordark
@@ -82,11 +97,43 @@ Item {
                 }
             }
 
+            // Reset-to-today button, shown between the two labels whenever
+            // browsing away from today (mid-pick, or already landed on a
+            // different month/year).
+            Item {
+                anchors.centerIn: parent
+                visible: root.awayFromToday
+                width: Config.scaled(14, root.uiScale)
+                height: Config.scaled(14, root.uiScale)
+
+                IconImage {
+                    id: resetIcon
+                    anchors.fill: parent
+                    source: Quickshell.iconPath("edit-reset-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: resetIcon
+                    source: resetIcon
+                    color: resetMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
+                }
+
+                MouseArea {
+                    id: resetMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.resetToToday()
+                }
+            }
+
             Text {
                 id: yeartext
-                anchors.right: parent.right
+                anchors {
+                    right: parent.right
+                    rightMargin: Config.scaled(4, root.uiScale)
+                }
                 visible: root.mode !== "years"
-                text: root.viewYear + "  "
+                text: root.viewYear
                 color: root.mode === "months" ? Config.fgcolordark
                     : (yearMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor)
                 font.family: Config.fontfamily
@@ -107,7 +154,7 @@ Item {
             visible: root.mode === "days"
             columns: 7
             columnSpacing: Config.scaled(2, root.uiScale)
-            rowSpacing: Config.scaled(4, root.uiScale)
+            rowSpacing: Config.scaled(3, root.uiScale)
 
             Repeater {
                 model: ["M", "T", "W", "T", "F", "S", "S"]
@@ -116,14 +163,14 @@ Item {
                     required property string modelData
 
                     width: root.cellWidth
-                    height: Config.scaled(24, root.uiScale)
+                    height: Config.scaled(20, root.uiScale)
 
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignCenter
                     text: modelData
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                     opacity: 1
                 }
@@ -134,7 +181,7 @@ Item {
 
                 delegate: Item {
                     width: root.cellWidth
-                    height: Config.scaled(20, root.uiScale)
+                    height: Config.scaled(18, root.uiScale)
                 }
             }
 
@@ -151,7 +198,7 @@ Item {
                         && root.viewYear === root.today.getFullYear()
 
                     width: root.cellWidth
-                    height: Config.scaled(20, root.uiScale)
+                    height: Config.scaled(18, root.uiScale)
                     radius: 0
 
                     color: isToday ? Config.fgcolordark : "transparent"
@@ -161,7 +208,7 @@ Item {
                         text: dayCell.index + 1
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(12, root.uiScale)
+                        font.pixelSize: Config.scaled(11, root.uiScale)
                         font.bold: dayCell.isToday
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
