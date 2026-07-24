@@ -447,7 +447,7 @@ Scope {
                                             }
 
                                             // Only the audio icon (index 0) opens anything so far -
-                                            // the rest are reserved for the same settings-button
+                                            // The rest are reserved for the same settings-button
                                             // treatment later, but all of them hover-highlight
                                             // already.
                                             MouseArea {
@@ -457,6 +457,8 @@ Scope {
                                                 onClicked: {
                                                     if (index === 0) {
                                                         dashWindow.toggleSettingsPanel("audio")
+                                                    } else if (index === 2) {
+                                                        dashWindow.toggleSettingsPanel("bluetooth")
                                                     }
                                                 }
                                             }
@@ -547,6 +549,7 @@ Scope {
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
                     weatherForecast.forceHide()
+                    bluetoothSettings.forceHide()
                 }
             }
 
@@ -588,6 +591,19 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "weather"
+                onClosed: dashWindow.onSettingsPanelClosed()
+            }
+
+            // Bluetooth settings, opened from the bluetooth icon above.
+            // About 20% narrower than the other panels, per spec.
+            BluetoothSettings {
+                id: bluetoothSettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth * 0.8
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "bluetooth"
                 onClosed: dashWindow.onSettingsPanelClosed()
             }
 
