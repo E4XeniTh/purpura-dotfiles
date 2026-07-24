@@ -29,7 +29,19 @@ hl.on("hyprland.start", function()
 hl.exec_cmd("/usr/lib/polkit-kde-authentication-agent-1")
 hl.exec_cmd("solaar --window hide")
 hl.exec_cmd("hyprpaper")
-hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP")
+-- HYPRLAND_INSTANCE_SIGNATURE is what xdg-desktop-portal-hyprland needs
+-- to find this specific Hyprland instance's IPC socket - without it in
+-- the activation environment, screen sharing/picker (Discord, OBS, etc.)
+-- silently doesn't work until the portal is restarted by hand.
+hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
+-- xdg-desktop-portal-hyprland is D-Bus-activated on demand, which races
+-- the export above - if something requests a portal interface before
+-- this point, it starts with the wrong (or no) HYPRLAND_INSTANCE_SIGNATURE
+-- and stays broken for the rest of the session. Restarting both portal
+-- services here, right after the env is exported, is exactly the manual
+-- `systemctl --user restart xdg-desktop-portal-hyprland` fix - just done
+-- automatically every session instead of by hand after the fact.
+hl.exec_cmd("systemctl --user restart xdg-desktop-portal-hyprland.service xdg-desktop-portal.service")
 hl.exec_cmd("XDG_MENU_PREFIX=arch- kbuildsycoca6")
 hl.exec_cmd("qs")
 end)
