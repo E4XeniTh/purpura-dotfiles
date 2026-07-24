@@ -157,6 +157,12 @@ PanelWindow {
             closeTimer.stop()
             reallyVisible = true
 
+            // Force a real state change even if the box was left sitting
+            // in "horizontal" from a previous close (see closeTimer below)
+            // - State/Transition only replay on an actual value change, so
+            // going straight from "horizontal" to "horizontal" again would
+            // silently no-op and skip the width-grow animation entirely.
+            box.state = ""
             box.width = 0
             box.height = 4
 
@@ -193,6 +199,13 @@ PanelWindow {
         repeat: false
 
         onTriggered: {
+            // Reset all the way back to the box's base (unstated) values,
+            // not just left at "horizontal" - otherwise the next open's
+            // box.state = "horizontal" is a same-value no-op (see above).
+            box.state = ""
+            box.width = 0
+            box.height = 4
+
             root.reallyVisible = false
             root.closed()
         }

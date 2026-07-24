@@ -595,12 +595,13 @@ Scope {
             }
 
             // Bluetooth settings, opened from the bluetooth icon above.
-            // About 20% narrower than the other panels, per spec.
+            // Wider than the other panels - the 30/70 controller/device
+            // split needs more horizontal room than a single-column panel.
             BluetoothSettings {
                 id: bluetoothSettings
 
                 screen: dashWindow.screen
-                panelWidth: dashWidth * 0.8
+                panelWidth: dashWidth * 1.25
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"

@@ -36,7 +36,7 @@ SettingsPanel {
     }
 
     RowLayout {
-        id: content
+        id: contentRow
 
         anchors {
             left: parent.left
@@ -50,12 +50,12 @@ SettingsPanel {
         readonly property real availableWidth: width - spacing * 2 - dividerWidth
         readonly property real leftWidth: availableWidth * 0.3
         readonly property real rightWidth: availableWidth * 0.7
-        readonly property real listMaxHeight: Config.scaled(280, root.uiScale)
+        readonly property real listMaxHeight: Config.scaled(160, root.uiScale)
         readonly property real cardHeight: Config.scaled(56, root.uiScale)
 
         // ---------------- LEFT: controllers ----------------
         ColumnLayout {
-            Layout.preferredWidth: content.leftWidth
+            Layout.preferredWidth: contentRow.leftWidth
             Layout.alignment: Qt.AlignTop
             spacing: Config.scaled(8, root.uiScale)
 
@@ -71,7 +71,7 @@ SettingsPanel {
                 id: controllerList
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, content.listMaxHeight)
+                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
                 clip: true
                 spacing: Config.scaled(8, root.uiScale)
                 boundsBehavior: Flickable.StopAtBounds
@@ -82,7 +82,7 @@ SettingsPanel {
                     required property var modelData
 
                     width: controllerList.width
-                    height: content.cardHeight
+                    height: contentRow.cardHeight
                     uiScale: root.uiScale
                     adapter: modelData
                     isSelected: root.selectedAdapter === modelData
@@ -93,14 +93,14 @@ SettingsPanel {
 
         // ---------------- divider ----------------
         Rectangle {
-            Layout.preferredWidth: content.dividerWidth
+            Layout.preferredWidth: contentRow.dividerWidth
             Layout.fillHeight: true
             color: Config.fgcolordark
         }
 
         // ---------------- RIGHT: paired / unpaired devices ----------------
         ColumnLayout {
-            Layout.preferredWidth: content.rightWidth
+            Layout.preferredWidth: contentRow.rightWidth
             Layout.alignment: Qt.AlignTop
             spacing: Config.scaled(8, root.uiScale)
 
@@ -116,7 +116,7 @@ SettingsPanel {
                 id: pairedList
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, content.listMaxHeight)
+                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
                 clip: true
                 spacing: Config.scaled(8, root.uiScale)
                 boundsBehavior: Flickable.StopAtBounds
@@ -127,7 +127,7 @@ SettingsPanel {
                     required property var modelData
 
                     width: pairedList.width
-                    height: content.cardHeight
+                    height: contentRow.cardHeight
                     uiScale: root.uiScale
                     device: modelData
                 }
@@ -152,7 +152,7 @@ SettingsPanel {
                 id: unpairedList
 
                 Layout.fillWidth: true
-                Layout.preferredHeight: Math.min(contentHeight, content.listMaxHeight)
+                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
                 clip: true
                 spacing: Config.scaled(8, root.uiScale)
                 boundsBehavior: Flickable.StopAtBounds
@@ -163,7 +163,7 @@ SettingsPanel {
                     required property var modelData
 
                     width: unpairedList.width
-                    height: content.cardHeight
+                    height: contentRow.cardHeight
                     uiScale: root.uiScale
                     device: modelData
                 }
