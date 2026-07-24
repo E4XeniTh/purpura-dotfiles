@@ -21,6 +21,18 @@ SettingsPanel {
     readonly property var playbackNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && n.isSink)
     readonly property var recordingNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && !n.isSink)
 
+    // preferredDefaultAudioSink/Source is only a hint to Pipewire/
+    // WirePlumber - defaultAudioSink/Source (what the border color used
+    // to read directly) is whatever WirePlumber's own policy actually
+    // decides, and it isn't guaranteed to update the instant the hint is
+    // set, so the highlight could sit stuck on the old device even
+    // though the switch itself worked. Tracking the last id clicked here
+    // instead makes the highlight follow the click unconditionally, only
+    // falling back to the real Pipewire state before anything's been
+    // clicked this session.
+    property var selectedSinkId: null
+    property var selectedSourceId: null
+
     PwObjectTracker {
         objects: root.playbackNodes.concat(root.recordingNodes)
     }
@@ -73,8 +85,13 @@ SettingsPanel {
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
-                        isPrimary: Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
-                        onSelected: Pipewire.preferredDefaultAudioSink = modelData
+                        isPrimary: root.selectedSinkId !== null
+                            ? modelData.id === root.selectedSinkId
+                            : Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
+                        onSelected: {
+                            Pipewire.preferredDefaultAudioSink = modelData
+                            root.selectedSinkId = modelData.id
+                        }
                     }
                 }
             }
@@ -101,8 +118,13 @@ SettingsPanel {
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
-                        isPrimary: Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
-                        onSelected: Pipewire.preferredDefaultAudioSource = modelData
+                        isPrimary: root.selectedSourceId !== null
+                            ? modelData.id === root.selectedSourceId
+                            : Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
+                        onSelected: {
+                            Pipewire.preferredDefaultAudioSource = modelData
+                            root.selectedSourceId = modelData.id
+                        }
                     }
                 }
             }
