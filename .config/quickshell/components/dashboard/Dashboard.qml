@@ -316,44 +316,28 @@ Scope {
                                 }
                             }
 
-                            Rectangle {
-                                id: avatarbox
-                                width: parent.width
-                                height: parent.width
-                                color: "transparent"
-
-                                DashCard {
-                                    uiScale: dashWindow.uiScale
-                                    anchors.centerIn: parent
-                                    width: parent.width
-                                    height: parent.height
-
-                                    Image {
-                                        anchors.fill: parent
-                                        anchors.margins: 2
-
-                                        source: "file://" + Quickshell.env("HOME") + "/.face"
-                                        fillMode: Image.PreserveAspectCrop
-                                        clip: true
-                                    }
-
-                                    // Opens the fastfetch "garage door"
-                                    // panel below the dashboard - same
-                                    // coordinator as the audio/bluetooth
-                                    // icons underneath.
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        onClicked: dashWindow.toggleSettingsPanel("fastfetch")
-                                    }
-                                }
+                            // Avatar image that opens like a garage door
+                            // in place (see AvatarPanel.qml) - grows
+                            // straight down into whatever space the
+                            // filler DashCard below isn't using, rather
+                            // than a separate popup panel.
+                            AvatarPanel {
+                                id: avatarPanel
+                                uiScale: dashWindow.uiScale
+                                squareSize: parent.width
+                                maxRevealExtra: Math.max(0, columnHeight - greetingtext.height - parent.width - powerrow.height - systemicons.height - parent.spacing * 4)
                             }
 
                             // Empty filler - absorbs whatever height the
                             // fixed-size siblings above/below don't use.
+                            // Shrinks in exact lockstep as avatarPanel
+                            // grows (both derive from the same maxRevealExtra
+                            // budget), so the column's total height never
+                            // changes as the avatar opens/closes.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - systemicons.height - parent.spacing * 4
+                                height: columnHeight - greetingtext.height - avatarPanel.height - powerrow.height - systemicons.height - parent.spacing * 4
                             }
 
                             Rectangle {
@@ -569,7 +553,7 @@ Scope {
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
                     bluetoothSettings.forceHide()
-                    fastfetchPanel.forceHide()
+                    avatarPanel.open = false
                 }
             }
 
@@ -611,19 +595,6 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"
-                onClosed: dashWindow.onSettingsPanelClosed()
-            }
-
-            // Fastfetch system-info panel, opened by clicking the avatar.
-            // Same width/anchoring treatment as Audio/Bluetooth settings.
-            FastfetchPanel {
-                id: fastfetchPanel
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "fastfetch"
                 onClosed: dashWindow.onSettingsPanelClosed()
             }
 

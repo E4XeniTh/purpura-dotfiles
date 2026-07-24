@@ -30,9 +30,16 @@ Item {
 
         stdout: SplitParser {
             onRead: (line) => {
+                // Read whatever count actually comes in rather than
+                // requiring an exact match to barCount - a mismatch
+                // (wrong config picked up, stereo vs mono, etc.) used to
+                // mean every single frame got silently dropped and the
+                // bars froze at their initial levels forever. levels[i]
+                // falling back to 0 below handles a short/long read fine.
                 const parts = line.split(";").filter(p => p.length > 0)
-                if (parts.length === root.barCount) {
-                    root.levels = parts.map(p => Math.max(0, Math.min(100, parseInt(p, 10))) / 100)
+                    .map(p => Math.max(0, Math.min(100, parseInt(p, 10) || 0)) / 100)
+                if (parts.length > 0) {
+                    root.levels = parts
                 }
             }
         }
