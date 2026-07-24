@@ -61,6 +61,20 @@ binary is gitignored since it's machine-specific.
 > Quickshell's own implementation rather than anything in this repo. Worth
 > retrying against a future Quickshell release.
 
+### Cava visualizer
+
+`make` (same directory/command as above) also builds `cava_bridge`, a
+small helper linked against `libcava` and `libpulse-simple`, feeding the
+default sink's monitor audio through it. `dashboard/Cava.qml` runs the
+compiled binary directly.
+
+> Went this route after the `cava` CLI's own raw/ascii output mode kept
+> producing frozen bars in this exact setup. `libcava` here is
+> [LukashonakV/cava](https://github.com/LukashonakV/cava), a fork of
+> karlstav/cava built as a shared library (`meson setup build && meson
+> compile -C build && meson install -C build` per its README) - the
+> plain Arch `cava` package is just the CLI and doesn't include this.
+
 ## Dependencies
 
 **Core**
@@ -71,6 +85,12 @@ binary is gitignored since it's machine-specific.
 - `qt6-5compat` — `Qt5Compat.GraphicalEffects`, used to recolor symbolic
   icons (weather icon, shuffle/repeat) to the theme color
 - `gcc`/`make` (`base-devel`) — to build the lock screen's PAM helper
+  and the cava bridge helper
+- [`libcava`](https://github.com/LukashonakV/cava) (built/installed via
+  its own `meson` setup - provides `cava/cavacore.h` + the `libcava`
+  pkg-config module) and `libpulse` — needed to build
+  `helpers/cava_bridge.c`; `pactl` (part of `libpulse`/
+  `pulseaudio-utils`) is also used at runtime to find the default sink
 
 **CLI tools** (invoked directly, not linked against)
 - `curl` — weather (`dashboard/Weather.qml`)

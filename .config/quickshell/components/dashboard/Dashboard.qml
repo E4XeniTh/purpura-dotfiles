@@ -501,11 +501,29 @@ Scope {
                                 }
                             }
 
-                            // Reserved for future use.
+                            // Audio visualizer (cava), same lazy-Loader
+                            // treatment as NowPlaying above - a wrong
+                            // cava/pipewire assumption only blanks this
+                            // card instead of the whole shell.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (1 / 3)
+
+                                Loader {
+                                    id: cavaLoader
+                                    anchors.fill: parent
+                                    anchors.margins: Config.scaled(10, dashWindow.uiScale)
+
+                                    source: "Cava.qml"
+                                }
+
+                                Binding {
+                                    target: cavaLoader.item
+                                    property: "uiScale"
+                                    value: dashWindow.uiScale
+                                    when: cavaLoader.item !== null
+                                }
                             }
                         }
                     }
