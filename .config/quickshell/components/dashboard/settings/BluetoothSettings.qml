@@ -47,142 +47,170 @@ SettingsPanel {
         }
     }
 
-    RowLayout {
-        id: contentRow
+    // SettingsPanel sizes itself off this outer Item's height via
+    // childrenRect, which only reliably tracks plain Column/Row
+    // positioners - contentRow below is a RowLayout, and Layout types'
+    // settled size lives in their own implicitHeight, not in a generic
+    // childrenRect measurement of their children. Binding this wrapper's
+    // height explicitly to the tallest side (plus real top+bottom
+    // padding, which contentRow never had before) is what the panel
+    // actually measures now.
+    Item {
+        id: contentWrapper
 
         anchors {
             left: parent.left
             right: parent.right
             top: parent.top
-            margins: Config.scaled(18, root.uiScale)
         }
-        spacing: Config.scaled(12, root.uiScale)
+        height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height)
 
-        readonly property real dividerWidth: Config.scaled(2, root.uiScale)
-        readonly property real availableWidth: width - spacing * 2 - dividerWidth
-        readonly property real leftWidth: availableWidth * 0.325
-        readonly property real rightWidth: availableWidth * 0.675
-        readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
-        readonly property real cardHeight: Config.scaled(56, root.uiScale)
+        RowLayout {
+            id: contentRow
 
-        // ---------------- LEFT: controllers ----------------
-        ColumnLayout {
-            Layout.preferredWidth: contentRow.leftWidth
-            Layout.alignment: Qt.AlignTop
-            spacing: Config.scaled(8, root.uiScale)
+            readonly property real margins: Config.scaled(18, root.uiScale)
 
-            Text {
-                text: "Controllers"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
-                font.bold: true
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                margins: contentRow.margins
+            }
+            spacing: Config.scaled(12, root.uiScale)
+
+            readonly property real dividerWidth: Config.scaled(2, root.uiScale)
+            readonly property real availableWidth: width - spacing * 2 - dividerWidth
+            readonly property real leftWidth: availableWidth * 0.325
+            readonly property real rightWidth: availableWidth * 0.675
+            readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
+            readonly property real cardHeight: Config.scaled(56, root.uiScale)
+
+            // ---------------- LEFT: controllers ----------------
+            ColumnLayout {
+                id: leftColumn
+
+                Layout.preferredWidth: contentRow.leftWidth
+                Layout.alignment: Qt.AlignTop
+                spacing: Config.scaled(8, root.uiScale)
+
+                Text {
+                    text: "Controllers"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.bold: true
+                }
+
+                ListView {
+                    id: controllerList
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+                    clip: true
+                    spacing: Config.scaled(8, root.uiScale)
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    model: ScriptModel { values: Bluetooth.adapters.values }
+
+                    delegate: ControllerCard {
+                        required property var modelData
+
+                        width: controllerList.width
+                        height: contentRow.cardHeight
+                        uiScale: root.uiScale
+                        adapter: modelData
+                    }
+                }
             }
 
-            ListView {
-                id: controllerList
+            // ---------------- divider ----------------
+            // Layout.fillHeight here used to depend on the RowLayout's own
+            // (unreliably-tracked, see contentWrapper above) implicit height -
+            // bound directly to the same explicit tallest-side expression
+            // instead, so the divider always reaches exactly as far as the
+            // taller of the two columns actually does.
+            Rectangle {
+                Layout.preferredWidth: contentRow.dividerWidth
+                Layout.preferredHeight: Math.max(leftColumn.implicitHeight, deviceList.height)
+                color: Config.fgcolor
+            }
 
-                Layout.fillWidth: true
+            // ---------------- RIGHT: paired + unpaired devices, one list ----------------
+            // Each row's delegate is a Loader picking one of three dedicated
+            // Components below by kind - only the one relevant piece of
+            // content is ever instantiated per row, unlike the earlier version
+            // which always created all three (header Text, separator
+            // Rectangle, device Loader) and just toggled visible: false on the
+            // unused ones. That left a stray Config.fillcolor rectangle
+            // showing on header/separator rows even after disabling ListView's
+            // delegate reuse, so the actual bug wasn't reuse at all - this
+            // restructure removes the always-present siblings entirely.
+            ListView {
+                id: deviceList
+
+                Layout.preferredWidth: contentRow.rightWidth
+                Layout.alignment: Qt.AlignTop
                 Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
                 clip: true
                 spacing: Config.scaled(8, root.uiScale)
                 boundsBehavior: Flickable.StopAtBounds
+                model: root.deviceEntries
 
-                model: ScriptModel { values: Bluetooth.adapters.values }
+                delegate: Loader {
+                    id: entryLoader
 
-                delegate: ControllerCard {
                     required property var modelData
 
-                    width: controllerList.width
-                    height: contentRow.cardHeight
-                    uiScale: root.uiScale
-                    adapter: modelData
+                    width: deviceList.width
+                    height: modelData.kind === "device" ? contentRow.cardHeight
+                        : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
+                        : Config.scaled(20, root.uiScale)
+
+                    sourceComponent: modelData.kind === "device" ? deviceRowComponent
+                        : modelData.kind === "separator" ? separatorRowComponent
+                        : headerRowComponent
                 }
             }
-        }
 
-        // ---------------- divider ----------------
-        Rectangle {
-            Layout.preferredWidth: contentRow.dividerWidth
-            Layout.fillHeight: true
-            color: Config.fgcolor
-        }
+            // These reference `parent` (the Loader that instantiated them, per
+            // Loader's own reparenting behavior) rather than `entryLoader` by
+            // id - a shared Component declared outside a per-row delegate
+            // doesn't get that delegate's own isolated id scope, so
+            // `entryLoader.modelData` here would either fail to resolve or
+            // resolve to the wrong row's Loader entirely.
+            Component {
+                id: headerRowComponent
 
-        // ---------------- RIGHT: paired + unpaired devices, one list ----------------
-        // Each row's delegate is a Loader picking one of three dedicated
-        // Components below by kind - only the one relevant piece of
-        // content is ever instantiated per row, unlike the earlier version
-        // which always created all three (header Text, separator
-        // Rectangle, device Loader) and just toggled visible: false on the
-        // unused ones. That left a stray Config.fillcolor rectangle
-        // showing on header/separator rows even after disabling ListView's
-        // delegate reuse, so the actual bug wasn't reuse at all - this
-        // restructure removes the always-present siblings entirely.
-        ListView {
-            id: deviceList
-
-            Layout.preferredWidth: contentRow.rightWidth
-            Layout.alignment: Qt.AlignTop
-            Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
-            clip: true
-            spacing: Config.scaled(8, root.uiScale)
-            boundsBehavior: Flickable.StopAtBounds
-            model: root.deviceEntries
-
-            delegate: Loader {
-                id: entryLoader
-
-                required property var modelData
-
-                width: deviceList.width
-                height: modelData.kind === "device" ? contentRow.cardHeight
-                    : modelData.kind === "separator" ? Config.scaled(2, root.uiScale)
-                    : Config.scaled(20, root.uiScale)
-
-                sourceComponent: modelData.kind === "device" ? deviceRowComponent
-                    : modelData.kind === "separator" ? separatorRowComponent
-                    : headerRowComponent
+                Text {
+                    text: parent.modelData.label
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.bold: true
+                }
             }
-        }
 
-        // These reference `parent` (the Loader that instantiated them, per
-        // Loader's own reparenting behavior) rather than `entryLoader` by
-        // id - a shared Component declared outside a per-row delegate
-        // doesn't get that delegate's own isolated id scope, so
-        // `entryLoader.modelData` here would either fail to resolve or
-        // resolve to the wrong row's Loader entirely.
-        Component {
-            id: headerRowComponent
+            Component {
+                id: separatorRowComponent
 
-            Text {
-                text: parent.modelData.label
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
-                font.bold: true
+                Rectangle {
+                    anchors.fill: parent
+                    color: Config.fgcolor
+                }
             }
-        }
 
-        Component {
-            id: separatorRowComponent
+            Component {
+                id: deviceRowComponent
 
-            Rectangle {
-                anchors.fill: parent
-                color: Config.fgcolor
+                BluetoothDeviceCard {
+                    anchors.fill: parent
+                    uiScale: root.uiScale
+                    device: parent.modelData.device
+                }
             }
+
+            // Dialog box (PIN/password prompts) will go here once a pairing
+            // agent exists - see the file-level note above.
         }
-
-        Component {
-            id: deviceRowComponent
-
-            BluetoothDeviceCard {
-                anchors.fill: parent
-                uiScale: root.uiScale
-                device: parent.modelData.device
-            }
-        }
-
-        // Dialog box (PIN/password prompts) will go here once a pairing
-        // agent exists - see the file-level note above.
     }
 }
