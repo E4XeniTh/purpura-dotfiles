@@ -2,7 +2,7 @@
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/master/doc/json_schema.json",
   "logo": {
     "type": "kitty-icat",
-    "source": "/home/fayelia/.config/fastfetch/flame.gif",
+    "source": "~/.config/fastfetch/flame.gif",
     "color": {
       "1": "",
       "2": "",
@@ -169,7 +169,7 @@
     {
       "key": "╰─  SHELL    ",
       "type": "shell",
-      "format": "fish"
+      "format": "{pretty-name}"
     },
     "break",
     {
