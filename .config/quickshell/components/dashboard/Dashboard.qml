@@ -325,7 +325,7 @@ Scope {
                                         uiScale: dashWindow.uiScale
                                         width: powerrow.width / 2.2
                                         height: powerrow.height
-                                        bgColor: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                        color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
@@ -350,7 +350,7 @@ Scope {
                                         uiScale: dashWindow.uiScale
                                         width: powerrow.width / 2.2
                                         height: powerrow.height
-                                        bgColor: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             anchors.centerIn: parent
