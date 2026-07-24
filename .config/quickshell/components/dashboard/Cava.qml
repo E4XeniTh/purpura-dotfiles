@@ -3,12 +3,15 @@ import Quickshell
 import Quickshell.Io
 import "../../Config.js" as Config
 
-// Audio visualizer: cava in raw/ascii output mode, using the dedicated
-// config at .config/quickshell/cava/config (bars=25, method=raw/ascii) -
-// passed explicitly via -p rather than relying on cava's default
-// ~/.config/cava/config, so this doesn't fight whatever the user has set
-// up for cava in an actual terminal. Parsed into a fixed set of bar
-// levels and drawn as flat fgcolor bars growing up from the bottom.
+// Audio visualizer. The `cava` CLI's own raw/ascii output mode kept
+// producing frozen bars (see git history), so this now runs
+// helpers/cava_bridge - a small compiled helper (same pattern as
+// helpers/auth.c) that links directly against libcavacore, the analysis
+// engine cava itself is built on, and prints the same semicolon-separated
+// per-frame format the old CLI-based approach did. Build it the same way
+// as the lock screen's auth helper - see helpers/Makefile.
+// Parsed into a fixed set of bar levels and drawn as flat fgcolor bars
+// growing up from the bottom.
 Item {
     id: root
 
@@ -26,7 +29,7 @@ Item {
 
     Process {
         running: true
-        command: ["cava", "-p", Quickshell.env("HOME") + "/.config/quickshell/cava/config"]
+        command: [Quickshell.env("HOME") + "/.config/quickshell/helpers/cava_bridge"]
 
         stdout: SplitParser {
             onRead: (line) => {

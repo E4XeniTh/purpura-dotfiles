@@ -61,6 +61,19 @@ binary is gitignored since it's machine-specific.
 > Quickshell's own implementation rather than anything in this repo. Worth
 > retrying against a future Quickshell release.
 
+### Cava visualizer
+
+`make` (same directory/command as above) also builds `cava_bridge`, a
+small helper linked directly against `libcavacore` (the analysis engine
+the `cava` CLI itself is built on) and `libpulse-simple`, feeding the
+default sink's monitor audio through it. `dashboard/Cava.qml` runs the
+compiled binary directly, so no separate cava config file is needed.
+
+> Went this route after the `cava` CLI's own raw/ascii output mode kept
+> producing frozen bars in this exact setup. Needs `cava`'s dev package
+> (for `cavacore.h`/`libcavacore`, e.g. Arch's `cava` package) and
+> `libpulse` installed to build.
+
 ## Dependencies
 
 **Core**
@@ -71,6 +84,11 @@ binary is gitignored since it's machine-specific.
 - `qt6-5compat` — `Qt5Compat.GraphicalEffects`, used to recolor symbolic
   icons (weather icon, shuffle/repeat) to the theme color
 - `gcc`/`make` (`base-devel`) — to build the lock screen's PAM helper
+  and the cava bridge helper
+- `cava` (for `libcavacore`/`cavacore.h`) and `libpulse` — dev headers
+  needed to build `helpers/cava_bridge.c`; `pactl` (part of
+  `libpulse`/`pulseaudio-utils`) is also used at runtime to find the
+  default sink
 
 **CLI tools** (invoked directly, not linked against)
 - `curl` — weather (`dashboard/Weather.qml`)
