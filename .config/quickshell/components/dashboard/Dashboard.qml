@@ -471,11 +471,11 @@ Scope {
                             height: columnHeight
                             spacing: Config.scaled(10, dashWindow.uiScale)
 
-                            // Now playing + cava. Loaded lazily by path
-                            // (not instantiated directly) so a wrong
-                            // MPRIS/cava API guess only blanks this card
-                            // instead of breaking the whole shell - verify
-                            // this one live.
+                            // Now playing. Loaded lazily by path (not
+                            // instantiated directly) so a wrong MPRIS API
+                            // guess only blanks this card instead of
+                            // breaking the whole shell - verify this one
+                            // live.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
@@ -501,29 +501,11 @@ Scope {
                                 }
                             }
 
-                            // Audio visualizer (cava), same lazy-Loader
-                            // treatment as NowPlaying above - a wrong
-                            // cava/pipewire assumption only blanks this
-                            // card instead of the whole shell.
+                            // Reserved for future use.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (1 / 3)
-
-                                Loader {
-                                    id: cavaLoader
-                                    anchors.fill: parent
-                                    anchors.margins: Config.scaled(10, dashWindow.uiScale)
-
-                                    source: "Cava.qml"
-                                }
-
-                                Binding {
-                                    target: cavaLoader.item
-                                    property: "uiScale"
-                                    value: dashWindow.uiScale
-                                    when: cavaLoader.item !== null
-                                }
                             }
                         }
                     }

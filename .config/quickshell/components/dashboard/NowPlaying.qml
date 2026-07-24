@@ -7,10 +7,10 @@ import Qt5Compat.GraphicalEffects
 import "../"
 import "../../Config.js" as Config
 
-// Media controls + album art, with a cava audio visualizer running behind
-// it. Loaded lazily via Loader from Dashboard.qml so a wrong MPRIS/cava API
-// guess only blanks this panel instead of breaking the whole shell - this
-// is the least-verified part of the dashboard, check it live.
+// Media controls + album art. Loaded lazily via Loader from Dashboard.qml
+// so a wrong MPRIS API guess only blanks this panel instead of breaking
+// the whole shell - this is the least-verified part of the dashboard,
+// check it live.
 Item {
     id: root
 
