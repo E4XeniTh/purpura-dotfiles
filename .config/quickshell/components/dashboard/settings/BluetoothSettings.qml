@@ -39,11 +39,17 @@ SettingsPanel {
         return list
     }
 
-    // Scan for nearby devices only while this panel is open.
+    // Scan for nearby devices only while this panel is open. Skips any
+    // adapter blocked by rfkill entirely - StartDiscovery on a blocked
+    // adapter is rejected by BlueZ ("Resource Not Ready"), so trying it
+    // there was pure noise (a critical log line every time the panel
+    // opened, for an adapter that can never discover until unblocked).
     onActiveChanged: {
         const adapters = Bluetooth.adapters.values
         for (let i = 0; i < adapters.length; i++) {
-            adapters[i].discovering = root.active
+            if (adapters[i].state !== BluetoothAdapterState.Blocked) {
+                adapters[i].discovering = root.active
+            }
         }
     }
 

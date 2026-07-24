@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
+import Quickshell.Bluetooth
 import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
@@ -18,7 +19,12 @@ DashCard {
     required property var adapter
     property real uiScale: 1.0
 
-    border.color: adapter.enabled ? Config.fgcolor : "red"
+    readonly property bool blocked: adapter.state === BluetoothAdapterState.Blocked
+
+    // Blocked (rfkill) is visually distinct from merely off (red) - it
+    // can't be toggled on from here at all, so it needs its own color
+    // rather than looking like any other disabled controller.
+    border.color: root.blocked ? Config.fgcolordark : (adapter.enabled ? Config.fgcolor : "red")
 
     RowLayout {
         anchors {
@@ -67,6 +73,13 @@ DashCard {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
-        onClicked: root.adapter.enabled = !root.adapter.enabled
+        // Enabling a blocked adapter is rejected outright (see
+        // BluetoothAdapter::setEnabled) - skip the doomed attempt
+        // instead of just logging a critical error every click.
+        onClicked: {
+            if (!root.blocked) {
+                root.adapter.enabled = !root.adapter.enabled
+            }
+        }
     }
 }
