@@ -336,6 +336,15 @@ Scope {
                                         fillMode: Image.PreserveAspectCrop
                                         clip: true
                                     }
+
+                                    // Opens the fastfetch "garage door"
+                                    // panel below the dashboard - same
+                                    // coordinator as the audio/bluetooth
+                                    // icons underneath.
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        onClicked: dashWindow.toggleSettingsPanel("fastfetch")
+                                    }
                                 }
                             }
 
@@ -501,11 +510,29 @@ Scope {
                                 }
                             }
 
-                            // Reserved for future use.
+                            // Audio visualizer (cava), same lazy-Loader
+                            // treatment as NowPlaying above - a wrong
+                            // cava/pipewire assumption only blanks this
+                            // card instead of the whole shell.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: (columnHeight - parent.spacing) * (1 / 3)
+
+                                Loader {
+                                    id: cavaLoader
+                                    anchors.fill: parent
+                                    anchors.margins: Config.scaled(10, dashWindow.uiScale)
+
+                                    source: "Cava.qml"
+                                }
+
+                                Binding {
+                                    target: cavaLoader.item
+                                    property: "uiScale"
+                                    value: dashWindow.uiScale
+                                    when: cavaLoader.item !== null
+                                }
                             }
                         }
                     }
@@ -542,6 +569,7 @@ Scope {
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
                     bluetoothSettings.forceHide()
+                    fastfetchPanel.forceHide()
                 }
             }
 
@@ -583,6 +611,19 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"
+                onClosed: dashWindow.onSettingsPanelClosed()
+            }
+
+            // Fastfetch system-info panel, opened by clicking the avatar.
+            // Same width/anchoring treatment as Audio/Bluetooth settings.
+            FastfetchPanel {
+                id: fastfetchPanel
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "fastfetch"
                 onClosed: dashWindow.onSettingsPanelClosed()
             }
 

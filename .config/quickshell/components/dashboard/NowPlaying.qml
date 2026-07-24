@@ -15,22 +15,19 @@ Item {
     id: root
 
     property real uiScale: 1.0
-    property var player: null
 
-    // Picks the first available player without indexing into the model
-    // directly (Mpris.players is an ObjectModel; going through a Repeater
-    // is the one access pattern already proven safe elsewhere in this repo).
-    Repeater {
-        model: Mpris.players
+    // Right-click anywhere on this card cycles which player is shown, for
+    // when more than one app is playing something at once (e.g. a browser
+    // tab and a dedicated player). playerIndex is clamped by modulo below,
+    // so a player disappearing (closed app, etc.) can't leave this stuck
+    // on an out-of-range index.
+    property int playerIndex: 0
+    readonly property var players: Mpris.players.values
+    readonly property var player: root.players.length > 0 ? root.players[root.playerIndex % root.players.length] : null
 
-        delegate: Item {
-            required property var modelData
-
-            Component.onCompleted: {
-                if (!root.player) {
-                    root.player = modelData
-                }
-            }
+    function swapPlayer() {
+        if (root.players.length > 1) {
+            root.playerIndex = (root.playerIndex + 1) % root.players.length
         }
     }
 
@@ -255,5 +252,15 @@ Item {
                 }
             }
         }
+    }
+
+    // Right-click swaps the active player (see swapPlayer() above). Right
+    // button only, and declared last (on top in stacking order) so it
+    // doesn't block the left-button transport buttons above - same
+    // fall-through technique DeviceCard.qml uses for its own select click.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: root.swapPlayer()
     }
 }
