@@ -421,7 +421,7 @@ Scope {
                                     spacing: Config.scaled(6, dashWindow.uiScale)
 
                                     Repeater {
-                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", "", ""]
+                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", "tvdisconnected", ""]
 
                                         delegate: DashCard {
                                             required property string modelData
@@ -439,9 +439,10 @@ Scope {
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
                                             }
 
-                                            // Only the audio icon (index 0) opens anything so far -
-                                            // The rest are reserved for the same settings-button
-                                            // treatment later, but all of them hover-highlight
+                                            // Only the audio/bluetooth/screen icons open
+                                            // anything so far - the last one is reserved
+                                            // for the same settings-button treatment
+                                            // later, but all of them hover-highlight
                                             // already.
                                             MouseArea {
                                                 id: iconMouseArea
@@ -452,6 +453,8 @@ Scope {
                                                         dashWindow.toggleSettingsPanel("audio")
                                                     } else if (index === 2) {
                                                         dashWindow.toggleSettingsPanel("bluetooth")
+                                                    } else if (index === 4) {
+                                                        dashWindow.toggleSettingsPanel("screen")
                                                     }
                                                 }
                                             }
@@ -560,6 +563,7 @@ Scope {
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
                     bluetoothSettings.forceHide()
+                    screenSettings.forceHide()
                 }
             }
 
@@ -602,6 +606,52 @@ Scope {
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"
                 onClosed: dashWindow.onSettingsPanelClosed()
+            }
+
+            // Screen settings, opened from the screen icon above. Same
+            // width as Audio/Bluetooth.
+            ScreenSettings {
+                id: screenSettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "screen"
+                onClosed: dashWindow.onSettingsPanelClosed()
+            }
+
+            // Identify overlay for ScreenSettings' Identify button - a
+            // big name label on this screen only, for 3 seconds. Can
+            // only show on a screen this compositor is actually driving,
+            // so a monitor currently deactivated in Screen settings has
+            // nothing to show this on.
+            PanelWindow {
+                screen: dashWindow.screen
+                visible: screenSettings.identifying
+
+                WlrLayershell.namespace: "screen-identify"
+                WlrLayershell.layer: WlrLayer.Overlay
+
+                exclusiveZone: 0
+
+                anchors {
+                    top: true
+                    bottom: true
+                    left: true
+                    right: true
+                }
+
+                color: "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: dashWindow.screen ? dashWindow.screen.name : ""
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(120, dashWindow.uiScale)
+                    font.bold: true
+                }
             }
 
             // Invisible, full-screen click catcher that closes the

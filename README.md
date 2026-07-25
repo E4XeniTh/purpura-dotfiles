@@ -95,8 +95,10 @@ compiled binary directly.
 **CLI tools** (invoked directly, not linked against)
 - `curl` — weather (`dashboard/Weather.qml`)
 - `hostname` — dashboard greeting text
-- `systemctl`, `hyprctl` — power menu actions (systemd and Hyprland are
-  already required, not extra installs)
+- `systemctl`, `hyprctl` — power menu actions and screen settings
+  (`dashboard/settings/ScreenSettings.qml` reads/writes monitor config
+  through `hyprctl`) - systemd and Hyprland are already required, not
+  extra installs
 
 **Services**
 - `pipewire` (+ a session manager, e.g. `wireplumber`) — volume OSD
@@ -120,3 +122,9 @@ compiled binary directly.
   it and restart `qs` to re-theme. Will also hold options-menu settings
   once that exists.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
+- Monitor layout (resolution, position, scale, on/off) is set from the
+  dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
+  that file only defines the primary display. Changes are saved to
+  `~/.config/hypr/monitors.conf` and replayed via `hyprctl keyword
+  monitor` by `scripts/apply-monitors.sh` on every login (see
+  `hyprland.lua`'s autostart block) so they survive a restart.
