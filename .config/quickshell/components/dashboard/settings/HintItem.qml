@@ -26,17 +26,26 @@ RowLayout {
     property bool iconFirst: true
 
     spacing: Config.scaled(4, root.uiScale)
+    // Pinned explicitly rather than relying on RowLayout's own default
+    // cross-axis stretch/alignment for these children - left unset, the
+    // icons/text ended up sitting low, offset toward the bottom of
+    // whatever height an outer row gave this whole fragment instead of
+    // centered within it.
+    Layout.alignment: Qt.AlignVCenter
 
     Text {
         visible: root.prefix.length > 0
+        Layout.alignment: Qt.AlignVCenter
         text: root.prefix
         color: root.tint
         font.family: Config.fontfamily
         font.pixelSize: Config.scaled(14, root.uiScale)
+        verticalAlignment: Text.AlignVCenter
     }
 
     Item {
         visible: root.iconFirst
+        Layout.alignment: Qt.AlignVCenter
         Layout.preferredWidth: Config.scaled(18, root.uiScale)
         Layout.preferredHeight: Config.scaled(18, root.uiScale)
 
@@ -54,14 +63,17 @@ RowLayout {
     }
 
     Text {
+        Layout.alignment: Qt.AlignVCenter
         text: root.label
         color: root.tint
         font.family: Config.fontfamily
         font.pixelSize: Config.scaled(14, root.uiScale)
+        verticalAlignment: Text.AlignVCenter
     }
 
     Item {
         visible: !root.iconFirst
+        Layout.alignment: Qt.AlignVCenter
         Layout.preferredWidth: Config.scaled(18, root.uiScale)
         Layout.preferredHeight: Config.scaled(18, root.uiScale)
 
