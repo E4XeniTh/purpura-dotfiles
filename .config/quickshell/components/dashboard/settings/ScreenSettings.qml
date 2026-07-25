@@ -103,6 +103,29 @@ SettingsPanel {
         root.pending = updated
     }
 
+    // Snapshot of the selected monitor's values actually shown in the
+    // input boxes. Deliberately NOT a reactive binding onto
+    // effectiveFor(selectedName) - it's only ever reassigned here, from
+    // onSelectedNameChanged below and once after the panel (re)opens.
+    // That means a post-Apply monitors refresh (which changes
+    // root.monitors but not root.selectedName) can no longer touch
+    // whatever's currently sitting in the boxes, no matter how that
+    // refresh's timing lines up with typing/focus - fixes an
+    // intermittent bug where an edit would occasionally get silently
+    // reverted by the refresh that follows Apply.
+    property var displayFor: ({})
+
+    function syncDisplay() {
+        root.displayFor = root.effectiveFor(root.selectedName) || {}
+    }
+
+    onSelectedNameChanged: root.syncDisplay()
+
+    // Set whenever the panel opens so the next monitors fetch re-syncs
+    // the display even if selectedName happens to still be valid (and
+    // therefore wouldn't otherwise trigger onSelectedNameChanged).
+    property bool needsDisplaySync: false
+
     function refreshMonitors() {
         monitorsProcess.running = false
         monitorsProcess.running = true
@@ -174,6 +197,7 @@ SettingsPanel {
     onActiveChanged: {
         if (root.active) {
             root.pending = ({})
+            root.needsDisplaySync = true
             root.refreshMonitors()
         } else {
             root.identifying = false
@@ -190,8 +214,13 @@ SettingsPanel {
                     const parsed = JSON.parse(text)
                     root.monitors = parsed
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
+                        // Triggers onSelectedNameChanged, which syncs
+                        // the display itself.
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
+                    } else if (root.needsDisplaySync) {
+                        root.syncDisplay()
                     }
+                    root.needsDisplaySync = false
                 } catch (e) {
                     root.monitors = []
                 }
@@ -347,7 +376,6 @@ SettingsPanel {
             ColumnLayout {
                 id: rightColumn
 
-                readonly property var selected: root.effectiveFor(root.selectedName)
                 readonly property bool modePreferred: !!root.preferredModes[root.selectedName]
 
                 Layout.preferredWidth: contentRow.rightWidth
@@ -421,7 +449,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Width"
-                        value: rightColumn.selected ? String(rightColumn.selected.width) : ""
+                        value: root.displayFor.width !== undefined ? String(root.displayFor.width) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "width", parseInt(text, 10) || 0)
                     }
 
@@ -439,7 +467,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Height"
-                        value: rightColumn.selected ? String(rightColumn.selected.height) : ""
+                        value: root.displayFor.height !== undefined ? String(root.displayFor.height) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "height", parseInt(text, 10) || 0)
                     }
 
@@ -457,7 +485,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Refresh Rate"
-                        value: rightColumn.selected ? String(rightColumn.selected.refresh) : ""
+                        value: root.displayFor.refresh !== undefined ? String(root.displayFor.refresh) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "refresh", parseFloat(text) || 60)
                     }
                 }
@@ -470,7 +498,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "X Pos"
-                        value: rightColumn.selected ? String(rightColumn.selected.x) : ""
+                        value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "x", parseInt(text, 10) || 0)
                     }
 
@@ -488,7 +516,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Y Pos"
-                        value: rightColumn.selected ? String(rightColumn.selected.y) : ""
+                        value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "y", parseInt(text, 10) || 0)
                     }
 
@@ -506,7 +534,7 @@ SettingsPanel {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Scale"
-                        value: rightColumn.selected ? String(rightColumn.selected.scale) : ""
+                        value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
                         onEdited: (text) => root.setPending(root.selectedName, "scale", parseFloat(text) || 1)
                     }
                 }
