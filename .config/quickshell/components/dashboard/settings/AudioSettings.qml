@@ -24,14 +24,25 @@ SettingsPanel {
     // preferredDefaultAudioSink/Source is only a hint to Pipewire/
     // WirePlumber - defaultAudioSink/Source (what the border color used
     // to read directly) is whatever WirePlumber's own policy actually
-    // decides, and it isn't guaranteed to update the instant the hint is
-    // set, so the highlight could sit stuck on the old device even
-    // though the switch itself worked. Tracking the last id clicked here
-    // instead makes the highlight follow the click unconditionally, only
-    // falling back to the real Pipewire state before anything's been
-    // clicked this session.
+    // decides, and in practice it doesn't reliably emit a change at all
+    // once quickshell's already running (confirmed live: VolumeOsd.qml,
+    // the only other place that reads defaultAudioSink, kept following
+    // the old device until quickshell was restarted). Tracking the last
+    // id clicked instead makes the highlight follow the click
+    // unconditionally, only falling back to the real Pipewire state
+    // before anything's been clicked this session.
+    //
+    // Fed in from Dashboard.qml (root.audioSelectedSinkId/-SourceId
+    // there) rather than owned here - this instance is local to one
+    // screen's dashWindow, but VolumeOsd.qml (instantiated separately in
+    // shell.qml) needs the same "last explicitly selected" value too, so
+    // it has to be a single value shared outside any one screen's
+    // instance - see Dashboard.qml for the same reasoning already
+    // applied to identifying/primaryMonitor.
     property var selectedSinkId: null
     property var selectedSourceId: null
+    signal sinkSelected(var id)
+    signal sourceSelected(var id)
 
     PwObjectTracker {
         objects: root.playbackNodes.concat(root.recordingNodes)
@@ -90,7 +101,7 @@ SettingsPanel {
                             : Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
                         onSelected: {
                             Pipewire.preferredDefaultAudioSink = modelData
-                            root.selectedSinkId = modelData.id
+                            root.sinkSelected(modelData.id)
                         }
                     }
                 }
@@ -123,7 +134,7 @@ SettingsPanel {
                             : Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
                         onSelected: {
                             Pipewire.preferredDefaultAudioSource = modelData
-                            root.selectedSourceId = modelData.id
+                            root.sourceSelected(modelData.id)
                         }
                     }
                 }

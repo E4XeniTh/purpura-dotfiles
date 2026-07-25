@@ -7,13 +7,29 @@ import "../Config.js" as Config
 Scope {
 	id: root
 
+	// Fed in from shell.qml (dashboard.audioSelectedSinkId there) -
+	// whichever sink was last explicitly picked in Audio settings takes
+	// priority over Quickshell.Services.Pipewire's own
+	// Pipewire.defaultAudioSink, which doesn't reliably emit a change
+	// once quickshell is already running (confirmed live: this OSD kept
+	// tracking the old device - requiring a full quickshell restart to
+	// pick up the new one - while Audio settings' own device list
+	// correctly followed the switch immediately, because it never
+	// actually relied on defaultAudioSink for that either; see
+	// AudioSettings.qml).
+	property var selectedSinkId: null
+
+	readonly property var activeSink: root.selectedSinkId !== null
+		? (Pipewire.nodes.values.find(n => n.audio && !n.isStream && n.isSink && n.id === root.selectedSinkId) ?? Pipewire.defaultAudioSink)
+		: Pipewire.defaultAudioSink
+
 	// Bind the pipewire node so its volume will be tracked
 	PwObjectTracker {
-		objects: [ Pipewire.defaultAudioSink ]
+		objects: [ root.activeSink ]
 	}
 
 	Connections {
-		target: Pipewire.defaultAudioSink?.audio
+		target: root.activeSink?.audio
 
 		function onVolumeChanged() {
 			root.shouldShowOsd = true;
@@ -85,19 +101,19 @@ Scope {
 				// uses, so muting/dragging volume here behaves identically
 				// - guarded by a Loader (not just visible:false) since
 				// DeviceCard dereferences .device directly and
-				// defaultAudioSink can briefly be null.
+				// activeSink can briefly be null.
 				Loader {
 					anchors {
 						fill: parent
 						margins: 0
 					}
-					active: Pipewire.defaultAudioSink !== null
+					active: root.activeSink !== null
 
 					DeviceCard {
 						anchors.fill: parent
 						color: "transparent"
 						border.width: 0
-						device: Pipewire.defaultAudioSink
+						device: root.activeSink
 						isPrimary: true
 						centered: true
 					}

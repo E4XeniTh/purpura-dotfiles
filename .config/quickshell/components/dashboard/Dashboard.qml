@@ -41,6 +41,14 @@ Scope {
     property bool identifying: false
     property string primaryMonitor: "DP-1"
 
+    // Same reasoning, for the currently-selected audio sink/source (see
+    // AudioSettings.qml) - VolumeOsd.qml (instantiated separately in
+    // shell.qml) needs to know which device was last explicitly picked
+    // too, since Quickshell.Services.Pipewire's own defaultAudioSink
+    // doesn't reliably update live after switching.
+    property var audioSelectedSinkId: null
+    property var audioSelectedSourceId: null
+
     function close() {
         open = false
         screen = null
@@ -604,6 +612,10 @@ Scope {
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "audio"
                 onClosed: dashWindow.onSettingsPanelClosed()
+                selectedSinkId: root.audioSelectedSinkId
+                selectedSourceId: root.audioSelectedSourceId
+                onSinkSelected: (id) => root.audioSelectedSinkId = id
+                onSourceSelected: (id) => root.audioSelectedSourceId = id
             }
 
             // Bluetooth settings, opened from the bluetooth icon above.

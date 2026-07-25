@@ -21,5 +21,7 @@ Scope {
     notification: notification
   }
 
-  VolumeOsd {}
+  VolumeOsd {
+    selectedSinkId: dashboard.audioSelectedSinkId
+  }
 }
