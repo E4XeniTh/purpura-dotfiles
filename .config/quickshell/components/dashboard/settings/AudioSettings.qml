@@ -63,11 +63,6 @@ SettingsPanel {
         readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
         readonly property real cardHeight: Config.scaled(76, root.uiScale)
 
-        // Hint that right-click (anywhere on a device card below) is what
-        // selects it as the primary device - not otherwise discoverable.
-        // A plain Item, not a Row/Column, since the icon+overlay pair
-        // inside needs its own anchors and positioners fight children
-        // that set their own anchors.
 
         Row {
             id: columnsRow
@@ -143,51 +138,27 @@ SettingsPanel {
 
         Rectangle {
             id: hintseparator
-            anchors {
-                left: parent.left
-                right: parent.right
-                rightMargin: Config.scaled(12, root.uiScale)
-                leftMargin: Config.scaled(12, root.uiScale)
-            }
+            width: soundContent.contentWidth
             border.width: 2
             border.color: Config.fgcolor
             height: 2
         }
 
-        Item {
+        // ---------------- hint row: right-click to set default, scroll to adjust volume ----------------
+        Row {
             width: soundContent.contentWidth
-            height: Config.scaled(14, root.uiScale)
+            spacing: Config.scaled(16, root.uiScale)
 
-            Item {
-                id: selectHintIconBox
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.right: parent.right
-                width: Config.scaled(18, root.uiScale)
-                height: Config.scaled(18, root.uiScale)
-
-                IconImage {
-                    id: selectHintIcon
-                    anchors.fill: parent
-                    source: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                }
-
-                ColorOverlay {
-                    anchors.fill: selectHintIcon
-                    source: selectHintIcon
-                    color: Config.fgcolor
-                }
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                label: "Set as Default"
             }
 
-            Text {
-                anchors {
-                    right: selectHintIconBox.right
-                    rightMargin: Config.scaled(24, root.uiScale)
-                    verticalCenter: parent.verticalCenter
-                }
-                text: "Select"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(14, root.uiScale)
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic")
+                label: "Quick change volume"
             }
         }
     }

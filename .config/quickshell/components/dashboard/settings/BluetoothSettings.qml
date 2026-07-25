@@ -65,8 +65,10 @@ SettingsPanel {
             right: parent.right
             top: parent.top
         }
-        height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height) + hintbox.height
+        height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height)
+            + mainColumn.spacing + hintSeparator.height + mainColumn.spacing + hintRow.height
         ColumnLayout {
+            id: mainColumn
             anchors.fill: parent
             spacing: 20
             RowLayout {
@@ -217,132 +219,48 @@ SettingsPanel {
                 // agent exists - see the file-level note above.
             }
 
+            // ---------------- separator ----------------
+            // Stops at the same margins as contentRow above, not its own
+            // separate fixed inset.
             Rectangle {
-                id: hintseparator
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    rightMargin: Config.scaled(12, root.uiScale)
-                    leftMargin: Config.scaled(12, root.uiScale)
-                }
-                border.width: 2
-                border.color: Config.fgcolor
-                height: 2
+                id: hintSeparator
+                Layout.fillWidth: true
+                Layout.leftMargin: contentRow.margins
+                Layout.rightMargin: contentRow.margins
+                Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                color: Config.fgcolor
             }
 
-            Row {
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    bottom: parent.bottom
-                    margins: Config.scaled(8, root.uiScale)
-                    leftMargin: Config.scaled(12, root.uiScale)
-                }
-                id: hintbox
+            // ---------------- hint row: left = enable/disable, right = forget/link ----------------
+            RowLayout {
+                id: hintRow
+
                 Layout.fillWidth: true
-                height: Config.scaled(24, root.uiScale)
-                spacing: 6
+                Layout.leftMargin: contentRow.margins
+                Layout.rightMargin: contentRow.margins
+                spacing: Config.scaled(16, root.uiScale)
 
-               Item {
-                    id: selectHintIconBox
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Config.scaled(18, root.uiScale)
-                    height: Config.scaled(18, root.uiScale)
-
-                    IconImage {
-                        id: selectHintIcon
-                        anchors.fill: parent
-                        source: Quickshell.iconPath("input-mouse-click-left-symbolic")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: selectHintIcon
-                        source: selectHintIcon
-                        color: Config.fgcolor
-                    }
+                HintItem {
+                    uiScale: root.uiScale
+                    iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                    label: "Enable/Disable"
                 }
 
-                Text {
-                    id: connectionHintText
-                    anchors {
-                        leftMargin: Config.scaled(4, root.uiScale)
-                        verticalCenter: parent.verticalCenter
-                        left: selectHintIconBox.right
-                    }
-                    text: "Enable/Disable"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                Item { Layout.fillWidth: true }
+
+                HintItem {
+                    uiScale: root.uiScale
+                    iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                    label: "Forget/Hide"
+                    tint: "red"
+                    iconFirst: false
                 }
 
-                Item {
-                    id: connectionHintIconBox
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.right: parent.right
-                    anchors.rightMargin: Config.scaled(4, root.uiScale)
-                    width: Config.scaled(18, root.uiScale)
-                    height: Config.scaled(18, root.uiScale)
-
-                    IconImage {
-                        id: connectionHintIcon
-                        anchors.fill: parent
-                        source: Quickshell.iconPath("input-mouse-click-left-symbolic")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: connectionHintIcon
-                        source: connectionHintIcon
-                        color: Config.fgcolor
-                    }
-                }
-
-                Text {
-                    id: forgetHintText
-                    anchors {
-                        verticalCenter: parent.verticalCenter
-                        right: forgetHintIconBox.left
-                        rightMargin: Config.scaled(4, root.uiScale)
-                    }
-                    text: "Forget/Hide"
-                    color: "red"
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
-                }
-
-                Item {
-                    id: forgetHintIconBox
-                    anchors {
-                        right: parent.right
-                        rightMargin: linktext.width + connectionHintIconBox.width + Config.scaled(16, root.uiScale)
-                        verticalCenter: parent.verticalCenter
-                    }
-                    width: Config.scaled(18, root.uiScale)
-                    height: Config.scaled(18, root.uiScale)
-
-                    IconImage {
-                        id: forgetHintIcon
-                        anchors.fill: parent
-                        source: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: forgetHintIcon
-                        source: forgetHintIcon
-                        color: "red"
-                    }
-                }
-
-                Text {
-                    id: linktext
-                    anchors {
-                        right: connectionHintIconBox.left
-                        rightMargin: Config.scaled(4, root.uiScale)
-                        verticalCenter: parent.verticalCenter
-                    }
-                    text: "Link/Connect/Disconnect"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                HintItem {
+                    uiScale: root.uiScale
+                    iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
+                    label: "Link/Connect/Disconnect"
+                    iconFirst: false
                 }
             }
         }

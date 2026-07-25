@@ -682,7 +682,8 @@ SettingsPanel {
             top: parent.top
         }
         height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, rightColumn.implicitHeight)
-            + bottomButtonsRow.anchors.topMargin + bottomButtonsRow.implicitHeight
+            + hintSeparator.anchors.topMargin + hintSeparator.height
+            + hintRow.anchors.topMargin + hintRow.height
 
         RowLayout {
             id: contentRow
@@ -945,15 +946,84 @@ SettingsPanel {
                         onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
                     }
                 }
+
+                // ---------------- bottom of right pane: identify + apply ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(14, root.uiScale)
+
+                    // ---------------- bottom left: identify ----------------
+                    DashCard {
+                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                        uiScale: root.uiScale
+                        color: identifyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Identify"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+
+                        MouseArea {
+                            id: identifyMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                root.identifying = true
+                                identifyTimer.restart()
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // ---------------- bottom right: apply ----------------
+                    DashCard {
+                        id: applyButton
+
+                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                        uiScale: root.uiScale
+
+                        property color blinkColor: Config.fgcolor
+                        border.color: root.dirty ? applyButton.blinkColor : Config.fgcolordark
+
+                        SequentialAnimation {
+                            running: root.dirty
+                            loops: Animation.Infinite
+                            ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
+                            ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Apply"
+                            color: root.dirty ? Config.fgcolor : Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: root.dirty
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.applyChanges()
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        // ---------------- bottom: identify + apply ----------------
-        // Spans the full panel width, below both columns, rather than
-        // being tucked under just the right-hand form.
-        RowLayout {
-            id: bottomButtonsRow
-
+        // ---------------- separator ----------------
+        // Stops at the same margins as contentRow above, not its own
+        // separate fixed inset.
+        Rectangle {
+            id: hintSeparator
             anchors {
                 left: parent.left
                 right: parent.right
@@ -961,70 +1031,37 @@ SettingsPanel {
                 topMargin: Config.scaled(14, root.uiScale)
                 margins: contentRow.margins
             }
+            height: Config.scaled(2, root.uiScale)
+            color: Config.fgcolor
+        }
 
-            // ---------------- bottom left: identify ----------------
-            DashCard {
-                Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                Layout.preferredHeight: Config.scaled(32, root.uiScale)
+        // ---------------- hint row ----------------
+        RowLayout {
+            id: hintRow
+
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: hintSeparator.bottom
+                topMargin: Config.scaled(10, root.uiScale)
+                margins: contentRow.margins
+            }
+            spacing: Config.scaled(16, root.uiScale)
+
+            HintItem {
                 uiScale: root.uiScale
-                color: identifyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                label: "Enable/Disable"
+            }
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "Identify"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(13, root.uiScale)
-                }
-
-                MouseArea {
-                    id: identifyMouseArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        root.identifying = true
-                        identifyTimer.restart()
-                    }
-                }
+            HintItem {
+                uiScale: root.uiScale
+                prefix: "Dbl"
+                iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
+                label: "Set as Primary"
             }
 
             Item { Layout.fillWidth: true }
-
-            // ---------------- bottom right: apply ----------------
-            DashCard {
-                id: applyButton
-
-                Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                Layout.preferredHeight: Config.scaled(32, root.uiScale)
-                uiScale: root.uiScale
-
-                property color blinkColor: Config.fgcolor
-                border.color: root.dirty ? applyButton.blinkColor : Config.fgcolordark
-
-                SequentialAnimation {
-                    running: root.dirty
-                    loops: Animation.Infinite
-                    ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
-                    ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
-                }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "Apply"
-                    color: root.dirty ? Config.fgcolor : Config.fgcolordark
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(13, root.uiScale)
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    enabled: root.dirty
-                    onClicked: {
-                        contentWrapper.forceActiveFocus()
-                        root.applyChanges()
-                    }
-                }
-            }
         }
     }
 
