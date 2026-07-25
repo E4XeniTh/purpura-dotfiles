@@ -20,12 +20,14 @@ import "../../../Config.js" as Config
 // doesn't appear to include disabled monitors either, so shelling out to
 // the real binary covers both needs with one consistent data source.
 //
-// Nothing is applied live as you edit - right-clicking a monitor
-// (activate/deactivate) and editing any field are both staged in
-// `pending` and only actually run on Apply, which also rewrites
-// monitors.conf (see hyprland.lua's autostart block) so the layout
-// survives a restart instead of reverting to hyprland.lua's own static
-// primary-display definition.
+// One monitor at a time by design: selecting a display always re-reads
+// its live hyprctl state right then (never a cached copy) and any
+// unsaved width/height/position/scale/mode edit is discarded the moment
+// you select a *different* one - this panel is for changing one
+// display, hitting Apply, then moving to the next, not staging edits
+// across several simultaneously. The one exception is right-click
+// enable/disable, which stays staged across monitors (see
+// pendingEnabled below) so you can flip several on/off and Apply once.
 SettingsPanel {
     id: root
 
@@ -37,7 +39,8 @@ SettingsPanel {
     // matter what QML-level focus() they had.
     wantsKeyboardFocus: true
 
-    // Raw hyprctl monitors, refreshed on open and after Apply.
+    // Raw hyprctl monitors, refreshed on open, on selecting a monitor,
+    // and after Apply.
     property var monitors: []
     property string selectedName: ""
     property bool identifying: false
@@ -50,27 +53,6 @@ SettingsPanel {
     property string primaryMonitor: ""
     signal primarySelected(string name)
 
-    // Staged edits, keyed by monitor name: { [name]: { enabled, width,
-    // height, refresh, x, y, scale, mode } }. A monitor only appears
-    // here once touched - values omitted from the object fall back to
-    // `monitors`. Cleared on every Apply.
-    property var pending: ({})
-    readonly property bool dirty: Object.keys(root.pending).length > 0
-
-    // Whether each monitor's mode toggle is set to "Preferred", keyed by
-    // name. Kept separate from `pending` (which Apply clears) because
-    // hyprctl's own monitor JSON has no way to report "this is running
-    // in preferred mode" after the fact - once applied there's nothing
-    // to read back, so the toggle has to remember its own state itself
-    // to stay showing "Preferred" instead of reverting to "Manual".
-    property var preferredModes: ({})
-
-    function setPreferredMode(name, value) {
-        const updated = Object.assign({}, root.preferredModes)
-        updated[name] = value
-        root.preferredModes = updated
-    }
-
     function baseFor(name) {
         for (const m of root.monitors) {
             if (m.name === name) return m
@@ -78,91 +60,63 @@ SettingsPanel {
         return null
     }
 
-    // Merges the live hyprctl state with any staged edit for `name` -
-    // what the UI should actually display/edit.
-    function effectiveFor(name) {
+    // Right-click enable/disable toggles, keyed by monitor name - the
+    // one thing this panel still lets you stage across *multiple*
+    // monitors before a single Apply. Cleared on Apply and on reopening
+    // the panel.
+    property var pendingEnabled: ({})
+
+    function setPendingEnabled(name, value) {
+        const updated = Object.assign({}, root.pendingEnabled)
+        updated[name] = value
+        root.pendingEnabled = updated
+    }
+
+    function enabledFor(name) {
+        if (root.pendingEnabled[name] !== undefined) return root.pendingEnabled[name]
         const base = root.baseFor(name)
-        if (!base) return null
-        const p = root.pending[name] || {}
-        return {
-            name: base.name,
-            enabled: p.enabled !== undefined ? p.enabled : !base.disabled,
-            width: p.width !== undefined ? p.width : base.width,
-            height: p.height !== undefined ? p.height : base.height,
-            refresh: p.refresh !== undefined ? p.refresh : base.refreshRate,
-            x: p.x !== undefined ? p.x : base.x,
-            y: p.y !== undefined ? p.y : base.y,
-            scale: p.scale !== undefined ? p.scale : base.scale
-        }
+        return base ? !base.disabled : false
     }
 
-    function setPending(name, key, value) {
-        const updated = Object.assign({}, root.pending)
-        updated[name] = Object.assign({}, updated[name] || {})
-        updated[name][key] = value
-        root.pending = updated
+    // Width/height/refresh/x/y/scale edits, always for whichever
+    // monitor is currently selected - discarded (not merged, not
+    // persisted) the instant a different monitor is selected or Apply
+    // runs, rather than staged per-monitor across the whole session.
+    property var edited: ({})
+    property bool selectedDirty: false
+    property bool preferredMode: false
+
+    readonly property bool dirty: root.selectedDirty || Object.keys(root.pendingEnabled).length > 0
+
+    function setEdited(key, value) {
+        const updated = Object.assign({}, root.edited)
+        updated[key] = value
+        root.edited = updated
+        root.selectedDirty = true
     }
 
-    // Snapshot of the selected monitor's values actually shown in the
-    // input boxes. Deliberately NOT a reactive binding onto
-    // effectiveFor(selectedName) - a post-Apply monitors refresh (which
-    // changes root.monitors but not root.selectedName) must never touch
-    // whatever's currently sitting in the boxes. Only ever reassigned
-    // from syncDisplay(), which is only ever called once a dedicated,
-    // freshly-requested `hyprctl -j monitors all` actually lands - never
-    // from whatever root.monitors happens to already hold, since that
-    // can be stale (mid-flight from a just-applied change on a
-    // *different* monitor, confirmed live: switching to an untouched
-    // monitor right after applying another one's position showed the
-    // untouched monitor's own position wrong too).
+    function togglePreferredMode() {
+        root.preferredMode = !root.preferredMode
+        root.selectedDirty = true
+    }
+
+    // What the input boxes actually show - a live hyprctl snapshot for
+    // whichever monitor is currently selected. Cleared immediately on
+    // selection (so a brief fetch-in-flight window never shows a
+    // stale/wrong monitor's numbers) and repopulated once the fresh
+    // fetch lands, in monitorsProcess below.
     property var displayFor: ({})
 
-    // Set true immediately before a fetch that should update the
-    // display once it lands - checked (and cleared) in
-    // monitorsProcess.onStreamFinished below. A refetch that isn't
-    // explicitly flagged (e.g. the settle refetch after Apply) leaves
-    // the boxes alone.
-    property bool syncDisplayOnNextFetch: false
-
-    // True from the moment Apply is clicked until hyprctl has actually
-    // confirmed every touched monitor settled into the values we asked
-    // for (see expectedState/monitorsMatchExpected below). A selection
-    // made while this is true was still racing hyprctl's in-flight
-    // writes - even a fresh `hyprctl -j monitors all` fired right then
-    // could read a mid-transition state, and confirmed live, so could an
-    // *untouched* monitor's own reported position (repositioning one
-    // output can transiently perturb how Hyprland reports others during
-    // its layout reflow). Selections made during this window are
-    // deferred - queued via selectedName/syncDisplayOnNextFetch - until
-    // the pending apply's own verification fetch confirms settlement,
-    // instead of racing it with a second, independent fetch.
-    property bool applyPending: false
-
-    // What we expect each touched monitor to report once Apply's
-    // hl.monitor() calls have actually landed, keyed by name - compared
-    // against fresh hyprctl reads in monitorsMatchExpected() below. Only
-    // fields we sent an explicit value for are checked; "preferred"
-    // mode/"auto" position can't be predicted in advance so they're
-    // skipped rather than compared.
-    property var expectedState: ({})
-    property int verifyAttempts: 0
-    readonly property int maxVerifyAttempts: 12
-
-    function syncDisplay() {
-        root.displayFor = root.effectiveFor(root.selectedName) || {}
-    }
-
-    // Selecting a display always re-queries hyprctl right then and only
-    // populates the boxes from that fresh answer - never from whatever
-    // root.monitors already happens to hold - unless an apply is still
-    // in flight, in which case its own settle refetch will pick up this
-    // selection once it lands instead.
+    // Always re-queries hyprctl fresh right then and discards whatever
+    // was being edited for the previously selected monitor - never
+    // trusts a cached copy or remembers unsaved edits across monitors.
     function selectMonitor(name) {
         root.selectedName = name
-        root.syncDisplayOnNextFetch = true
-        if (!root.applyPending) {
-            root.refreshMonitors()
-        }
+        root.edited = ({})
+        root.selectedDirty = false
+        root.preferredMode = false
+        root.displayFor = ({})
+        root.refreshMonitors()
     }
 
     function refreshMonitors() {
@@ -170,42 +124,47 @@ SettingsPanel {
         monitorsProcess.running = true
     }
 
-    // Builds one hl.monitor({...}) Lua call, exactly the form hyprland.lua
-    // itself uses for DP-1 - this config is parsed by hyprlang's Lua
-    // frontend, which rejects `hyprctl keyword` outright ("keyword can't
-    // work with non-legacy parsers. Use eval.") - confirmed live: the
-    // real write path is `hyprctl eval '<this string>'`. Shared by
-    // applyChanges() below and mirrored by apply-monitors.sh at startup.
-    // Alongside the line itself, returns what we expect hyprctl to
-    // report back for this monitor once it's actually landed, so
-    // applyChanges() can verify it rather than guess how long to wait.
+    // Builds one hl.monitor({...}) Lua call, exactly the form
+    // hyprland.lua itself uses for DP-1 - this config is parsed by
+    // hyprlang's Lua frontend, which rejects `hyprctl keyword` outright
+    // ("keyword can't work with non-legacy parsers. Use eval.") -
+    // confirmed live: the real write path is `hyprctl eval '<this
+    // string>'`. Used both for the actively-edited monitor and for any
+    // monitor with a pending enable/disable toggle.
     //
     // A monitor hyprctl reported as disabled may have stale/placeholder
-    // geometry (0x0, etc.) since nothing was actually driving it - if
-    // the user is enabling one without having typed real values in
-    // themselves, trusting those numbers outright can hand hyprctl an
-    // invalid mode/position. Falls back to Hyprland's own
-    // "preferred"/"auto" tokens instead whenever a field wasn't both (a)
-    // already active before this Apply and (b) not something the user
-    // actually edited.
-    function buildMonitorPlan(name) {
+    // geometry (0x0, etc.) since nothing was actually driving it -
+    // trusting those numbers outright can hand hyprctl an invalid
+    // mode/position. Falls back to Hyprland's own "preferred"/"auto"
+    // tokens whenever a field wasn't both (a) already active and (b)
+    // actually known (edited, for the selected monitor).
+    function buildMonitorLine(name) {
         const base = root.baseFor(name)
-        const eff = root.effectiveFor(name)
-        if (!eff.enabled) {
-            return {
-                line: `hl.monitor({ output = "${eff.name}", disabled = true })`,
-                expected: { disabled: true }
-            }
+        if (!base) return null
+
+        if (!root.enabledFor(name)) {
+            return `hl.monitor({ output = "${name}", disabled = true })`
         }
 
-        const p = root.pending[name] || {}
-        const wasActive = base && !base.disabled
+        const isSelected = name === root.selectedName
+        const e = isSelected ? root.edited : {}
+        const wasActive = !base.disabled
 
-        const usesExplicitMode = !root.preferredModes[name] && (wasActive || p.width !== undefined || p.height !== undefined)
-        const mode = usesExplicitMode ? `${eff.width}x${eff.height}@${eff.refresh}` : "preferred"
-        const usesExplicitPosition = wasActive || p.x !== undefined || p.y !== undefined
-        const position = usesExplicitPosition ? `${eff.x}x${eff.y}` : "auto"
-        const scale = eff.scale > 0 ? eff.scale : 1
+        const width = e.width !== undefined ? e.width : base.width
+        const height = e.height !== undefined ? e.height : base.height
+        const refresh = e.refresh !== undefined ? e.refresh : base.refreshRate
+        const x = e.x !== undefined ? e.x : base.x
+        const y = e.y !== undefined ? e.y : base.y
+        const rawScale = e.scale !== undefined ? e.scale : base.scale
+        const scale = rawScale > 0 ? rawScale : 1
+
+        const usesExplicitMode = isSelected
+            ? (!root.preferredMode && (wasActive || e.width !== undefined || e.height !== undefined))
+            : wasActive
+        const mode = usesExplicitMode ? `${width}x${height}@${refresh}` : "preferred"
+
+        const usesExplicitPosition = wasActive || e.x !== undefined || e.y !== undefined
+        const position = usesExplicitPosition ? `${x}x${y}` : "auto"
 
         // disabled = false has to be explicit - hl.monitor() only
         // touches the fields you pass, so a monitor that was previously
@@ -213,73 +172,59 @@ SettingsPanel {
         // mode/position/scale given (confirmed live: applying without
         // this left a re-enabled monitor off despite hyprctl replying
         // "ok" to every call).
-        return {
-            line: `hl.monitor({ output = "${eff.name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`,
-            expected: {
-                disabled: false,
-                usesExplicitMode,
-                usesExplicitPosition,
-                width: eff.width,
-                height: eff.height,
-                x: eff.x,
-                y: eff.y,
-                scale: scale
-            }
-        }
-    }
-
-    // True once every touched monitor's live hyprctl state matches what
-    // we asked for in expectedState - checked after every post-apply
-    // refetch instead of assuming a fixed delay is always enough (it
-    // isn't: repositioning one output can take Hyprland a variable
-    // amount of time to settle, and can transiently perturb how it
-    // reports *other*, untouched monitors too).
-    function monitorsMatchExpected() {
-        for (const name in root.expectedState) {
-            const exp = root.expectedState[name]
-            const base = root.baseFor(name)
-            if (!base) return false
-            if (exp.disabled) {
-                if (!base.disabled) return false
-                continue
-            }
-            if (base.disabled) return false
-            if (exp.usesExplicitPosition && (base.x !== exp.x || base.y !== exp.y)) return false
-            if (exp.usesExplicitMode && (base.width !== exp.width || base.height !== exp.height)) return false
-            if (Math.abs(base.scale - exp.scale) > 0.001) return false
-        }
-        return true
+        return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`
     }
 
     function applyChanges() {
         if (!root.dirty) return
 
-        const lines = []
-        const expected = {}
-        for (const m of root.monitors) {
-            const plan = root.buildMonitorPlan(m.name)
-            lines.push(plan.line)
-            expected[m.name] = plan.expected
+        // Only touched monitors are actually sent live - the selected
+        // one (if edited) plus any right-clicked enable/disable
+        // toggles - not every monitor every time, which used to
+        // trigger Hyprland's layout reflow for displays nobody asked to
+        // change.
+        const touched = new Set(Object.keys(root.pendingEnabled))
+        if (root.selectedDirty && root.selectedName) {
+            touched.add(root.selectedName)
         }
-        root.expectedState = expected
-        root.verifyAttempts = 0
 
-        const script = lines.map(l => `hyprctl eval '${l}'`).join(" ; ")
-        console.log("ScreenSettings: applying:\n" + script)
-        root.applyPending = true
-        applyProcess.command = ["sh", "-c", script]
-        applyProcess.running = false
-        applyProcess.running = true
+        const sendLines = []
+        for (const name of touched) {
+            const line = root.buildMonitorLine(name)
+            if (line) sendLines.push(line)
+        }
 
-        monitorsFile.setText(lines.join("\n") + "\n")
+        // monitors.conf persists the *whole* layout, not just what
+        // changed this time, since apply-monitors.sh replays every line
+        // in it from scratch at login (hyprland.lua only defines DP-1).
+        const allLines = []
+        for (const m of root.monitors) {
+            const line = root.buildMonitorLine(m.name)
+            if (line) allLines.push(line)
+        }
+        monitorsFile.setText(allLines.join("\n") + "\n")
 
-        root.pending = ({})
+        if (sendLines.length > 0) {
+            const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
+            console.log("ScreenSettings: applying:\n" + script)
+            applyProcess.command = ["sh", "-c", script]
+            applyProcess.running = false
+            applyProcess.running = true
+        }
+
+        root.pendingEnabled = ({})
+        root.edited = ({})
+        root.selectedDirty = false
+        // preferredMode intentionally left as-is - Apply shouldn't flip
+        // the toggle back to "Manual" for the monitor you just applied.
     }
 
     onActiveChanged: {
         if (root.active) {
-            root.pending = ({})
-            root.syncDisplayOnNextFetch = true
+            root.pendingEnabled = ({})
+            root.edited = ({})
+            root.selectedDirty = false
+            root.preferredMode = false
             root.refreshMonitors()
         } else {
             root.identifying = false
@@ -297,25 +242,11 @@ SettingsPanel {
                     root.monitors = parsed
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
-                        root.syncDisplay()
-                        root.syncDisplayOnNextFetch = false
                     }
-
-                    if (root.applyPending) {
-                        root.verifyAttempts++
-                        if (root.monitorsMatchExpected() || root.verifyAttempts >= root.maxVerifyAttempts) {
-                            root.applyPending = false
-                            if (root.syncDisplayOnNextFetch) {
-                                root.syncDisplay()
-                                root.syncDisplayOnNextFetch = false
-                            }
-                        } else {
-                            verifyRetryTimer.restart()
-                        }
-                    } else if (root.syncDisplayOnNextFetch) {
-                        root.syncDisplay()
-                        root.syncDisplayOnNextFetch = false
-                    }
+                    const base = root.baseFor(root.selectedName)
+                    root.displayFor = base
+                        ? { width: base.width, height: base.height, refresh: base.refreshRate, x: base.x, y: base.y, scale: base.scale }
+                        : {}
                 } catch (e) {
                     root.monitors = []
                 }
@@ -337,15 +268,14 @@ SettingsPanel {
                     console.log("ScreenSettings: hyprctl eval reply:\n" + text)
                 }
                 // hyprctl replying "ok" only means Hyprland accepted the
-                // request, not that the output's new geometry has
-                // actually landed yet (repositioning/resizing a monitor
-                // is an async DRM/Wayland commit) - refetching
-                // immediately can catch a monitor (or even an untouched
-                // one!) mid-transition. Kicks the first verification
-                // check rather than assuming any fixed delay is enough -
-                // see monitorsProcess above, which keeps retrying via
-                // verifyRetryTimer until monitorsMatchExpected().
-                verifyRetryTimer.restart()
+                // request, not that the output's geometry has actually
+                // landed yet (an async DRM/Wayland commit) - one short
+                // settle delay before the follow-up refetch, rather than
+                // the multi-attempt verification loop this used to run.
+                // If it's ever still stale, reselecting the monitor
+                // (which always pulls a fresh read, see selectMonitor())
+                // is the reliable fallback.
+                applySettleTimer.restart()
             }
         }
 
@@ -362,19 +292,15 @@ SettingsPanel {
         }
     }
 
-    // Repeatedly restarted (from applyProcess and from monitorsProcess
-    // itself, see above) until monitorsMatchExpected() finally passes or
-    // maxVerifyAttempts is hit - each firing is just one more attempt,
-    // not a fixed "this must be long enough" delay.
     Timer {
-        id: verifyRetryTimer
-        interval: 150
+        id: applySettleTimer
+        interval: 300
         repeat: false
         onTriggered: root.refreshMonitors()
     }
 
     // Persisted alongside hyprland.lua - see that file's autostart block,
-    // which replays these lines via hyprctl keyword on every login so
+    // which replays these lines via hyprctl eval on every login so
     // Apply here survives a restart.
     FileView {
         id: monitorsFile
@@ -449,14 +375,14 @@ SettingsPanel {
                         uiScale: root.uiScale
                         name: modelData.name
                         selected: root.selectedName === modelData.name
-                        pendingEnabled: root.effectiveFor(modelData.name) ? root.effectiveFor(modelData.name).enabled : !modelData.disabled
+                        pendingEnabled: root.enabledFor(modelData.name)
                         isPrimary: root.primaryMonitor === modelData.name
 
                         // Steals keyboard focus away from any TextInput
                         // in the right-hand form before switching, and
-                        // always re-queries hyprctl fresh rather than
-                        // trusting whatever root.monitors already holds
-                        // (see selectMonitor()).
+                        // always re-queries hyprctl fresh (see
+                        // selectMonitor()) rather than trusting a cached
+                        // copy.
                         onClicked: {
                             contentWrapper.forceActiveFocus()
                             root.selectMonitor(modelData.name)
@@ -467,11 +393,10 @@ SettingsPanel {
                         // made primary in the first place.
                         onToggleEnabled: {
                             if (modelData.name === root.primaryMonitor) return
-                            root.setPending(modelData.name, "enabled", !root.effectiveFor(modelData.name).enabled)
+                            root.setPendingEnabled(modelData.name, !root.enabledFor(modelData.name))
                         }
                         onMakePrimary: {
-                            const eff = root.effectiveFor(modelData.name)
-                            if (eff && eff.enabled) {
+                            if (root.enabledFor(modelData.name)) {
                                 root.primarySelected(modelData.name)
                             }
                         }
@@ -489,8 +414,6 @@ SettingsPanel {
             // ---------------- RIGHT: selected monitor's config ----------------
             ColumnLayout {
                 id: rightColumn
-
-                readonly property bool modePreferred: !!root.preferredModes[root.selectedName]
 
                 Layout.preferredWidth: contentRow.rightWidth
                 Layout.alignment: Qt.AlignTop
@@ -517,7 +440,7 @@ SettingsPanel {
 
                         Text {
                             anchors.centerIn: parent
-                            text: rightColumn.modePreferred ? "Preferred" : "Manual"
+                            text: root.preferredMode ? "Preferred" : "Manual"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(14, root.uiScale)
@@ -530,15 +453,7 @@ SettingsPanel {
                             hoverEnabled: true
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
-                                const next = !rightColumn.modePreferred
-                                root.setPreferredMode(root.selectedName, next)
-                                // Also staged in `pending` purely so
-                                // `dirty` picks up the change and Apply
-                                // starts blinking - preferredModes above
-                                // is the actual source of truth read by
-                                // buildMonitorPlan() and survives Apply's
-                                // pending clear.
-                                root.setPending(root.selectedName, "mode", next)
+                                root.togglePreferredMode()
                             }
                         }
                     }
@@ -556,15 +471,15 @@ SettingsPanel {
                     // rightColumn's layout entirely and make the whole
                     // settings screen change height when the mode
                     // toggle is flipped.
-                    opacity: rightColumn.modePreferred ? 0 : 1
-                    enabled: !rightColumn.modePreferred
+                    opacity: root.preferredMode ? 0 : 1
+                    enabled: !root.preferredMode
 
                     LabeledField {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
                         label: "Width"
                         value: root.displayFor.width !== undefined ? String(root.displayFor.width) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "width", parseInt(text, 10) || 0)
+                        onEdited: (text) => root.setEdited("width", parseInt(text, 10) || 0)
                     }
 
                     Text {
@@ -582,7 +497,7 @@ SettingsPanel {
                         uiScale: root.uiScale
                         label: "Height"
                         value: root.displayFor.height !== undefined ? String(root.displayFor.height) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "height", parseInt(text, 10) || 0)
+                        onEdited: (text) => root.setEdited("height", parseInt(text, 10) || 0)
                     }
 
                     Text {
@@ -600,7 +515,7 @@ SettingsPanel {
                         uiScale: root.uiScale
                         label: "Refresh Rate"
                         value: root.displayFor.refresh !== undefined ? String(root.displayFor.refresh) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "refresh", parseFloat(text) || 60)
+                        onEdited: (text) => root.setEdited("refresh", parseFloat(text) || 60)
                     }
                 }
 
@@ -613,7 +528,7 @@ SettingsPanel {
                         uiScale: root.uiScale
                         label: "X Pos"
                         value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "x", parseInt(text, 10) || 0)
+                        onEdited: (text) => root.setEdited("x", parseInt(text, 10) || 0)
                     }
 
                     Text {
@@ -631,7 +546,7 @@ SettingsPanel {
                         uiScale: root.uiScale
                         label: "Y Pos"
                         value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "y", parseInt(text, 10) || 0)
+                        onEdited: (text) => root.setEdited("y", parseInt(text, 10) || 0)
                     }
 
                     Text {
@@ -649,7 +564,7 @@ SettingsPanel {
                         uiScale: root.uiScale
                         label: "Scale"
                         value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
-                        onEdited: (text) => root.setPending(root.selectedName, "scale", parseFloat(text) || 1)
+                        onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
                     }
                 }
 
