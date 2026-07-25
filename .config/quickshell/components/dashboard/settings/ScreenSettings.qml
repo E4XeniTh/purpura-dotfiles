@@ -126,7 +126,13 @@ SettingsPanel {
             : "auto"
         const scale = eff.scale > 0 ? eff.scale : 1
 
-        return `hl.monitor({ output = "${eff.name}", mode = "${mode}", position = "${position}", scale = "${scale}" })`
+        // disabled = false has to be explicit - hl.monitor() only
+        // touches the fields you pass, so a monitor that was previously
+        // disabled would otherwise stay disabled even with a full
+        // mode/position/scale given (confirmed live: applying without
+        // this left a re-enabled monitor off despite hyprctl replying
+        // "ok" to every call).
+        return `hl.monitor({ output = "${eff.name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`
     }
 
     function applyChanges() {
