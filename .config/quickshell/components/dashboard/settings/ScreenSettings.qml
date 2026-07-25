@@ -51,10 +51,25 @@ SettingsPanel {
     signal primarySelected(string name)
 
     // Staged edits, keyed by monitor name: { [name]: { enabled, width,
-    // height, refresh, x, y, scale } }. A monitor only appears here once
-    // touched - values omitted from the object fall back to `monitors`.
+    // height, refresh, x, y, scale, mode } }. A monitor only appears
+    // here once touched - values omitted from the object fall back to
+    // `monitors`. Cleared on every Apply.
     property var pending: ({})
     readonly property bool dirty: Object.keys(root.pending).length > 0
+
+    // Whether each monitor's mode toggle is set to "Preferred", keyed by
+    // name. Kept separate from `pending` (which Apply clears) because
+    // hyprctl's own monitor JSON has no way to report "this is running
+    // in preferred mode" after the fact - once applied there's nothing
+    // to read back, so the toggle has to remember its own state itself
+    // to stay showing "Preferred" instead of reverting to "Manual".
+    property var preferredModes: ({})
+
+    function setPreferredMode(name, value) {
+        const updated = Object.assign({}, root.preferredModes)
+        updated[name] = value
+        root.preferredModes = updated
+    }
 
     function baseFor(name) {
         for (const m of root.monitors) {
@@ -118,7 +133,7 @@ SettingsPanel {
         const p = root.pending[name] || {}
         const wasActive = base && !base.disabled
 
-        const mode = (p.mode === "preferred")
+        const mode = root.preferredModes[name]
             ? "preferred"
             : (wasActive || p.width !== undefined || p.height !== undefined)
                 ? `${eff.width}x${eff.height}@${eff.refresh}`
@@ -333,10 +348,7 @@ SettingsPanel {
                 id: rightColumn
 
                 readonly property var selected: root.effectiveFor(root.selectedName)
-                readonly property bool modePreferred: {
-                    const p = root.pending[root.selectedName]
-                    return p ? p.mode === "preferred" : false
-                }
+                readonly property bool modePreferred: !!root.preferredModes[root.selectedName]
 
                 Layout.preferredWidth: contentRow.rightWidth
                 Layout.alignment: Qt.AlignTop
@@ -376,7 +388,15 @@ SettingsPanel {
                             hoverEnabled: true
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
-                                root.setPending(root.selectedName, "mode", rightColumn.modePreferred ? "manual" : "preferred")
+                                const next = !rightColumn.modePreferred
+                                root.setPreferredMode(root.selectedName, next)
+                                // Also staged in `pending` purely so
+                                // `dirty` picks up the change and Apply
+                                // starts blinking - preferredModes above
+                                // is the actual source of truth read by
+                                // monitorLine() and survives Apply's
+                                // pending clear.
+                                root.setPending(root.selectedName, "mode", next)
                             }
                         }
                     }
@@ -389,9 +409,13 @@ SettingsPanel {
                     spacing: Config.scaled(6, root.uiScale)
                     // Width/height/refresh are meaningless once the
                     // monitor is set to hyprland's own "preferred" mode
-                    // token - hidden rather than disabled so there's no
-                    // stale/misleading numbers left on screen.
-                    visible: !rightColumn.modePreferred
+                    // token - faded out and disabled rather than
+                    // `visible: false`, which would drop the row from
+                    // rightColumn's layout entirely and make the whole
+                    // settings screen change height when the mode
+                    // toggle is flipped.
+                    opacity: rightColumn.modePreferred ? 0 : 1
+                    enabled: !rightColumn.modePreferred
 
                     LabeledField {
                         Layout.fillWidth: true
