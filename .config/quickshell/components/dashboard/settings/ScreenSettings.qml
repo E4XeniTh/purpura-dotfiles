@@ -118,9 +118,11 @@ SettingsPanel {
         const p = root.pending[name] || {}
         const wasActive = base && !base.disabled
 
-        const mode = (wasActive || p.width !== undefined || p.height !== undefined)
-            ? `${eff.width}x${eff.height}@${eff.refresh}`
-            : "preferred"
+        const mode = (p.mode === "preferred")
+            ? "preferred"
+            : (wasActive || p.width !== undefined || p.height !== undefined)
+                ? `${eff.width}x${eff.height}@${eff.refresh}`
+                : "preferred"
         const position = (wasActive || p.x !== undefined || p.y !== undefined)
             ? `${eff.x}x${eff.y}`
             : "auto"
@@ -331,14 +333,65 @@ SettingsPanel {
                 id: rightColumn
 
                 readonly property var selected: root.effectiveFor(root.selectedName)
+                readonly property bool modePreferred: {
+                    const p = root.pending[root.selectedName]
+                    return p ? p.mode === "preferred" : false
+                }
 
                 Layout.preferredWidth: contentRow.rightWidth
                 Layout.alignment: Qt.AlignTop
                 spacing: Config.scaled(12, root.uiScale)
 
+                // ---------------- mode toggle ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.scaled(8, root.uiScale)
+
+                    Text {
+                        text: "Mode:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(16, root.uiScale)
+                        font.bold: true
+                    }
+
+                    DashCard {
+                        Layout.preferredWidth: Config.scaled(110, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(34, root.uiScale)
+                        uiScale: root.uiScale
+                        color: modeToggleMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: rightColumn.modePreferred ? "Preferred" : "Manual"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(14, root.uiScale)
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: modeToggleMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.setPending(root.selectedName, "mode", rightColumn.modePreferred ? "manual" : "preferred")
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Config.scaled(6, root.uiScale)
+                    // Width/height/refresh are meaningless once the
+                    // monitor is set to hyprland's own "preferred" mode
+                    // token - hidden rather than disabled so there's no
+                    // stale/misleading numbers left on screen.
+                    visible: !rightColumn.modePreferred
 
                     LabeledField {
                         Layout.fillWidth: true
