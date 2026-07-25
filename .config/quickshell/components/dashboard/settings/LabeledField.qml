@@ -49,7 +49,7 @@ Column {
             clip: true
 
             // Digits and a single decimal point only.
-            validator: RegularExpressionValidator { regularExpression: /^[0-9]*\.?[0-9]*$/ }
+            validator: RegularExpressionValidator { regularExpression: /^-?[0-9]*\.?[0-9]*$/ }
 
             // Guards the programmatic resync below from being mistaken
             // for a user edit by onTextChanged (which would otherwise
