@@ -111,7 +111,7 @@ DashCard {
         // fires independently of the right-click-to-select handling above.
         onWheel: (wheel) => {
             if (root.device.audio) {
-                const step = 0.05
+                const step = 0.02
                 const delta = wheel.angleDelta.y > 0 ? step : -step
                 root.device.audio.volume = Math.max(0, Math.min(1, root.device.audio.volume + delta))
             }
