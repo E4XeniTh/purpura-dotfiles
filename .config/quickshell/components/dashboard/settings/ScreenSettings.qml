@@ -124,17 +124,34 @@ SettingsPanel {
     // the boxes alone.
     property bool syncDisplayOnNextFetch: false
 
+    // True from the moment Apply is clicked until its own settle-delayed
+    // refetch (see refreshSettleTimer) actually lands. A selection made
+    // while this is true was still racing hyprctl's in-flight writes -
+    // even a fresh `hyprctl -j monitors all` fired right then could read
+    // a mid-transition state (confirmed live: switching to an untouched
+    // monitor immediately after applying a different one's position
+    // showed the untouched monitor's own position wrong too, but worked
+    // once enough time had passed first). Selections made during this
+    // window are deferred - queued via selectedName/syncDisplayOnNextFetch
+    // - until the pending apply's own settle refetch fires instead of
+    // racing it with a second, independent fetch.
+    property bool applyPending: false
+
     function syncDisplay() {
         root.displayFor = root.effectiveFor(root.selectedName) || {}
     }
 
     // Selecting a display always re-queries hyprctl right then and only
     // populates the boxes from that fresh answer - never from whatever
-    // root.monitors already happens to hold.
+    // root.monitors already happens to hold - unless an apply is still
+    // in flight, in which case its own settle refetch will pick up this
+    // selection once it lands instead.
     function selectMonitor(name) {
         root.selectedName = name
         root.syncDisplayOnNextFetch = true
-        root.refreshMonitors()
+        if (!root.applyPending) {
+            root.refreshMonitors()
+        }
     }
 
     function refreshMonitors() {
@@ -196,6 +213,7 @@ SettingsPanel {
 
         const script = lines.map(l => `hyprctl eval '${l}'`).join(" ; ")
         console.log("ScreenSettings: applying:\n" + script)
+        root.applyPending = true
         applyProcess.command = ["sh", "-c", script]
         applyProcess.running = false
         applyProcess.running = true
@@ -282,7 +300,13 @@ SettingsPanel {
         id: refreshSettleTimer
         interval: 200
         repeat: false
-        onTriggered: root.refreshMonitors()
+        onTriggered: {
+            // Clear before refreshing so any selection made while the
+            // apply was in flight (deferred by selectMonitor() above) is
+            // now free to be picked up by this very fetch.
+            root.applyPending = false
+            root.refreshMonitors()
+        }
     }
 
     // Persisted alongside hyprland.lua - see that file's autostart block,
