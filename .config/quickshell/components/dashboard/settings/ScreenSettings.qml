@@ -456,11 +456,11 @@ SettingsPanel {
 
     // Best-effort mapping from Hyprland's monitor name (e.g. "HDMI-A-1")
     // to ddcutil's own display number, built from `ddcutil detect`'s
-    // "DRM connector: cardN-<name>" line (ddcutil 1.2+ only). Not
-    // verified against a live ddcutil install - if brightness sliders
-    // never pick up a monitor, run `qs` from a terminal and check for
-    // the "ddcutil detect" warning below, since ddcutil's exact output
-    // can vary by version/distro packaging.
+    // "DRM connector:"/"DRM_connector:" line (ddcutil 1.2+ only; the
+    // field name's separator - space or underscore - varies by version,
+    // confirmed live). A monitor that doesn't support DDC/CI at all
+    // (e.g. a TV) shows up as "Invalid display" instead of "Display N"
+    // and is correctly never mapped.
     property var ddcDisplayNumbers: ({})
 
     // 0-100, queried live per monitor once ddcDisplayNumbers is known.
@@ -542,6 +542,15 @@ SettingsPanel {
 
         stdout: StdioCollector {
             onStreamFinished: {
+                // Confirmed live: this ddcutil build prints
+                // "DRM_connector:" (underscore), not "DRM connector:"
+                // (space) as ddcutil's own docs/examples show elsewhere
+                // - matching both defensively. Also confirmed: a monitor
+                // that doesn't support DDC/CI (e.g. a TV) shows up as
+                // "Invalid display" instead of "Display N" - explicitly
+                // reset currentDisplay there too so its DRM_connector
+                // line can never be misattributed to whichever real
+                // display happened to be seen last.
                 const map = {}
                 let currentDisplay = null
                 for (const line of text.split("\n")) {
@@ -550,7 +559,11 @@ SettingsPanel {
                         currentDisplay = parseInt(displayMatch[1], 10)
                         continue
                     }
-                    const connectorMatch = line.match(/DRM connector:\s*card\d+-(.+)$/)
+                    if (/^Invalid display/.test(line)) {
+                        currentDisplay = null
+                        continue
+                    }
+                    const connectorMatch = line.match(/DRM[ _]connector:\s*card\d+-(.+)$/)
                     if (connectorMatch && currentDisplay !== null) {
                         map[connectorMatch[1].trim()] = currentDisplay
                     }
