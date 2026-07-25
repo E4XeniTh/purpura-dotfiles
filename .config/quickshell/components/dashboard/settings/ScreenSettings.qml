@@ -301,6 +301,15 @@ SettingsPanel {
 
         root.applyBrightness()
 
+        // Re-detect after every Apply, not just on panel open - a
+        // monitor just enabled here (or physically powered on) wouldn't
+        // otherwise get a ddcBusNumbers entry until the panel was closed
+        // and reopened, since DDC/CI detection depends on the display's
+        // actual physical power state, not Hyprland's enabled/disabled
+        // state. Also refreshes every brightness slider's live value
+        // (queueBrightnessQueries() runs again once this lands).
+        root.detectDdcDisplays()
+
         root.pendingEnabled = ({})
         root.edited = ({})
         root.selectedDirty = false
