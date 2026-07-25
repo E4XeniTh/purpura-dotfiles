@@ -301,15 +301,6 @@ SettingsPanel {
 
         root.applyBrightness()
 
-        // Re-detect after every Apply, not just on panel open - a
-        // monitor just enabled here (or physically powered on) wouldn't
-        // otherwise get a ddcBusNumbers entry until the panel was closed
-        // and reopened, since DDC/CI detection depends on the display's
-        // actual physical power state, not Hyprland's enabled/disabled
-        // state. Also refreshes every brightness slider's live value
-        // (queueBrightnessQueries() runs again once this lands).
-        root.detectDdcDisplays()
-
         root.pendingEnabled = ({})
         root.edited = ({})
         root.selectedDirty = false
@@ -512,25 +503,8 @@ SettingsPanel {
     // adjacent buses are a common source of ddcutil timeouts/errors.
     property var ddcQueryQueue: []
 
-    // Names to skip on the very next queueBrightnessQueries() call -
-    // set by applyBrightness() right before the post-apply redetect
-    // (see applyChanges()) so that redetect's own requery doesn't
-    // immediately re-read (and potentially stomp) a monitor whose
-    // brightness this exact Apply just set. Needed because setvcp runs
-    // with --noverify, so there's no guarantee the write has actually
-    // landed on the hardware by the time a fresh getvcp reads it back -
-    // confirmed live: without this, a second brightness change would
-    // apply correctly but the slider would immediately snap back to the
-    // stale pre-apply value once the redetect's requery landed. Cleared
-    // after one use; a later Apply (even for a different monitor) will
-    // requery this one normally again, by which point plenty of real
-    // time has passed for it to have settled.
-    property var skipNextBrightnessQuery: []
-
     function queueBrightnessQueries() {
-        const skip = root.skipNextBrightnessQuery
-        root.skipNextBrightnessQuery = []
-        root.ddcQueryQueue = Object.keys(root.ddcBusNumbers).filter(name => !skip.includes(name))
+        root.ddcQueryQueue = Object.keys(root.ddcBusNumbers)
         root.runNextBrightnessQuery()
     }
 
@@ -545,10 +519,6 @@ SettingsPanel {
 
     function applyBrightness() {
         const names = Object.keys(root.pendingBrightness)
-        // Set regardless of whether brightness was actually touched
-        // this Apply, so a cycle that didn't change any brightness
-        // correctly leaves nothing excluded from the next requery.
-        root.skipNextBrightnessQuery = names
         if (names.length === 0) return
 
         const commands = []
