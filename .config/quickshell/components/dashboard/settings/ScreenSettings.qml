@@ -241,7 +241,16 @@ SettingsPanel {
                 if (text.length > 0) {
                     console.log("ScreenSettings: hyprctl eval reply:\n" + text)
                 }
-                root.refreshMonitors()
+                // hyprctl replying "ok" only means Hyprland accepted the
+                // request, not that the output's new geometry has
+                // actually landed yet (repositioning/resizing a monitor
+                // is an async DRM/Wayland commit) - refetching
+                // immediately can catch a monitor mid-transition, with
+                // some fields updated and others not (confirmed live: a
+                // combined X/Y change came back with Y updated and X
+                // still stale). A short settle delay before re-reading
+                // avoids racing that commit.
+                refreshSettleTimer.restart()
             }
         }
 
@@ -256,6 +265,13 @@ SettingsPanel {
         onExited: (exitCode, exitStatus) => {
             console.log("ScreenSettings: apply process exited, code=" + exitCode)
         }
+    }
+
+    Timer {
+        id: refreshSettleTimer
+        interval: 200
+        repeat: false
+        onTriggered: root.refreshMonitors()
     }
 
     // Persisted alongside hyprland.lua - see that file's autostart block,
