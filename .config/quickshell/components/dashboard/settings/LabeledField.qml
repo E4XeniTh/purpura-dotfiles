@@ -19,15 +19,18 @@ Column {
     spacing: Config.scaled(4, root.uiScale)
 
     Text {
+        width: parent.width
         text: root.label
         color: Config.fgcolor
         font.family: Config.fontfamily
-        font.pixelSize: Config.scaled(11, root.uiScale)
+        font.pixelSize: Config.scaled(14, root.uiScale)
+        font.bold: true
+        horizontalAlignment: Text.AlignHCenter
     }
 
     Rectangle {
         width: parent.width
-        height: Config.scaled(28, root.uiScale)
+        height: Config.scaled(40, root.uiScale)
         color: Config.fillcolor
         border.width: Config.scaled(2, root.uiScale)
         border.color: input.activeFocus ? Config.fgcolorlight : Config.fgcolor
@@ -36,12 +39,13 @@ Column {
             id: input
             anchors {
                 fill: parent
-                margins: Config.scaled(6, root.uiScale)
+                margins: Config.scaled(8, root.uiScale)
             }
+            horizontalAlignment: TextInput.AlignHCenter
             verticalAlignment: TextInput.AlignVCenter
             color: Config.fgcolor
             font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(13, root.uiScale)
+            font.pixelSize: Config.scaled(18, root.uiScale)
             selectByMouse: true
             clip: true
 

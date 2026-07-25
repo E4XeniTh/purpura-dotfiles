@@ -50,6 +50,13 @@ Scope {
                 radius: 0
                 border.width: 2
                 border.color: Config.fgcolor
+                // Double-click a display in Screen settings to mark it
+                // primary - only that screen's bar shows the tray, so
+                // tray icons don't end up duplicated across every
+                // monitor. root.dashboard is the actual Dashboard.qml
+                // instance (passed down from shell.qml), whose
+                // primaryMonitor is itself shared across every screen's
+                // dashWindow - see that file for why it has to be.
                 Tray {
                     border.width: 2
                     border.color: Config.fgcolor
@@ -59,6 +66,7 @@ Scope {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     screen: modelData
+                    visible: root.dashboard ? modelData.name === root.dashboard.primaryMonitor : true
                 }
 
                 Rectangle {

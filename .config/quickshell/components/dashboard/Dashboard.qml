@@ -30,6 +30,17 @@ Scope {
     property var powerMenu: null
     property var lockScreen: null
 
+    // Shared across every screen's dashWindow (see below) - each one is
+    // its own instance of everything nested inside it, including its own
+    // ScreenSettings, so state that needs to affect *other* screens
+    // (identify overlays, which monitor is "primary") has to live up
+    // here instead of on whichever ScreenSettings instance the user
+    // actually clicked. Bar.qml reads primaryMonitor too (via the
+    // `dashboard` instance shell.qml passes it), to decide which
+    // screen's bar shows the tray.
+    property bool identifying: false
+    property string primaryMonitor: "DP-1"
+
     function close() {
         open = false
         screen = null
@@ -609,7 +620,10 @@ Scope {
             }
 
             // Screen settings, opened from the screen icon above. Same
-            // width as Audio/Bluetooth.
+            // width as Audio/Bluetooth. identifying/primaryMonitor are
+            // mirrored up to root (see its own property comment) since
+            // this ScreenSettings instance is local to this one screen's
+            // dashWindow, but both need to affect every screen.
             ScreenSettings {
                 id: screenSettings
 
@@ -618,40 +632,10 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "screen"
+                primaryMonitor: root.primaryMonitor
                 onClosed: dashWindow.onSettingsPanelClosed()
-            }
-
-            // Identify overlay for ScreenSettings' Identify button - a
-            // big name label on this screen only, for 3 seconds. Can
-            // only show on a screen this compositor is actually driving,
-            // so a monitor currently deactivated in Screen settings has
-            // nothing to show this on.
-            PanelWindow {
-                screen: dashWindow.screen
-                visible: screenSettings.identifying
-
-                WlrLayershell.namespace: "screen-identify"
-                WlrLayershell.layer: WlrLayer.Overlay
-
-                exclusiveZone: 0
-
-                anchors {
-                    top: true
-                    bottom: true
-                    left: true
-                    right: true
-                }
-
-                color: "transparent"
-
-                Text {
-                    anchors.centerIn: parent
-                    text: dashWindow.screen ? dashWindow.screen.name : ""
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(120, dashWindow.uiScale)
-                    font.bold: true
-                }
+                onIdentifyingChanged: root.identifying = screenSettings.identifying
+                onPrimarySelected: (name) => root.primaryMonitor = name
             }
 
             // Invisible, full-screen click catcher that closes the
@@ -685,6 +669,47 @@ Scope {
                     anchors.fill: parent
                     onClicked: root.close()
                 }
+            }
+        }
+    }
+
+    // Identify overlay for ScreenSettings' Identify button - a big name
+    // label on every screen at once, for 3 seconds. A genuinely separate
+    // per-screen Variants (not nested inside the dashWindow one above),
+    // driven by the shared root.identifying, so it isn't limited to
+    // whichever single screen's dashWindow the user actually clicked
+    // Identify from. Can only show on a screen this compositor is
+    // actually driving, so a monitor currently deactivated in Screen
+    // settings has nothing to show this on.
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            property var modelData
+            screen: modelData
+            visible: root.identifying
+
+            WlrLayershell.namespace: "screen-identify"
+            WlrLayershell.layer: WlrLayer.Overlay
+
+            exclusiveZone: 0
+
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+
+            color: "transparent"
+
+            Text {
+                anchors.centerIn: parent
+                text: modelData ? modelData.name : ""
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: 120
+                font.bold: true
             }
         }
     }

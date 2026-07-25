@@ -33,6 +33,14 @@ SettingsPanel {
     property string selectedName: ""
     property bool identifying: false
 
+    // Fed in from Dashboard.qml (root.primaryMonitor there) rather than
+    // owned here - this instance is local to one screen's dashWindow,
+    // but "primary" needs to be a single shared value every screen's
+    // Bar can read. Double-clicking a card emits primarySelected instead
+    // of setting a local property directly, for the same reason.
+    property string primaryMonitor: ""
+    signal primarySelected(string name)
+
     // Staged edits, keyed by monitor name: { [name]: { enabled, width,
     // height, refresh, x, y, scale } }. A monitor only appears here once
     // touched - values omitted from the object fall back to `monitors`.
@@ -79,10 +87,35 @@ SettingsPanel {
     // Builds the exact value that goes after "monitor=" in hyprland's own
     // config syntax - same format hyprctl keyword and monitors.conf both
     // use, so this is shared by applyChanges() below.
-    function monitorLine(eff) {
-        return eff.enabled
-            ? `${eff.name},${eff.width}x${eff.height}@${eff.refresh},${eff.x}x${eff.y},${eff.scale}`
-            : `${eff.name},disable`
+    //
+    // A monitor hyprctl reported as disabled may have stale/placeholder
+    // geometry (0x0, etc.) since nothing was actually driving it - if
+    // the user is enabling one without having typed real values in
+    // themselves, trusting those numbers outright can hand hyprctl an
+    // invalid mode/position it silently rejects, which is the leading
+    // suspect for Apply appearing to do nothing. Falls back to
+    // Hyprland's own "preferred"/"auto" tokens instead whenever a field
+    // wasn't both (a) already active before this Apply and (b) not
+    // something the user actually edited.
+    function monitorLine(name) {
+        const base = root.baseFor(name)
+        const eff = root.effectiveFor(name)
+        if (!eff.enabled) {
+            return `${eff.name},disable`
+        }
+
+        const p = root.pending[name] || {}
+        const wasActive = base && !base.disabled
+
+        const res = (wasActive || p.width !== undefined || p.height !== undefined)
+            ? `${eff.width}x${eff.height}@${eff.refresh}`
+            : "preferred"
+        const pos = (wasActive || p.x !== undefined || p.y !== undefined)
+            ? `${eff.x}x${eff.y}`
+            : "auto"
+        const scale = eff.scale > 0 ? eff.scale : 1
+
+        return `${eff.name},${res},${pos},${scale}`
     }
 
     function applyChanges() {
@@ -90,7 +123,7 @@ SettingsPanel {
 
         const lines = []
         for (const m of root.monitors) {
-            lines.push(root.monitorLine(root.effectiveFor(m.name)))
+            lines.push(root.monitorLine(m.name))
         }
 
         const script = lines.map(l => `hyprctl keyword monitor "${l}"`).join(" ; ")
@@ -137,6 +170,19 @@ SettingsPanel {
 
         stdout: StdioCollector {
             onStreamFinished: root.refreshMonitors()
+        }
+
+        // hyprctl keyword failures (a bad mode/position, etc.) go to
+        // stderr and were previously just swallowed - surfaced to
+        // Quickshell's own log now so a real failure is actually
+        // visible (run `qs` from a terminal to see it) instead of
+        // Apply just silently appearing to do nothing.
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("ScreenSettings: hyprctl keyword monitor error(s):\n" + text)
+                }
+            }
         }
     }
 
@@ -217,9 +263,11 @@ SettingsPanel {
                         name: modelData.name
                         selected: root.selectedName === modelData.name
                         pendingEnabled: root.effectiveFor(modelData.name) ? root.effectiveFor(modelData.name).enabled : !modelData.disabled
+                        isPrimary: root.primaryMonitor === modelData.name
 
                         onClicked: root.selectedName = modelData.name
                         onToggleEnabled: root.setPending(modelData.name, "enabled", !root.effectiveFor(modelData.name).enabled)
+                        onMakePrimary: root.primarySelected(modelData.name)
                     }
                 }
             }
@@ -255,11 +303,12 @@ SettingsPanel {
 
                     Text {
                         Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(6, root.uiScale)
+                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
                         text: "x"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.pixelSize: Config.scaled(16, root.uiScale)
+                        font.bold: true
                     }
 
                     LabeledField {
@@ -272,11 +321,12 @@ SettingsPanel {
 
                     Text {
                         Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(6, root.uiScale)
+                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
                         text: "@"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.pixelSize: Config.scaled(16, root.uiScale)
+                        font.bold: true
                     }
 
                     LabeledField {
@@ -302,11 +352,12 @@ SettingsPanel {
 
                     Text {
                         Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(6, root.uiScale)
+                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
                         text: "x"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.pixelSize: Config.scaled(16, root.uiScale)
+                        font.bold: true
                     }
 
                     LabeledField {
@@ -319,11 +370,12 @@ SettingsPanel {
 
                     Text {
                         Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(6, root.uiScale)
+                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
                         text: ","
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.pixelSize: Config.scaled(16, root.uiScale)
+                        font.bold: true
                     }
 
                     LabeledField {
