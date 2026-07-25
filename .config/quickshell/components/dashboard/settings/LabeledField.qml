@@ -5,8 +5,7 @@ import "../../../Config.js" as Config
 // A small labeled numeric input box, DashCard-style border, used for the
 // resolution/position/scale fields in ScreenSettings.qml. Controlled
 // component - value is driven externally (so a monitor switch can
-// repopulate it), user edits are only committed via editingFinished,
-// not on every keystroke.
+// repopulate it).
 Column {
     id: root
 
@@ -49,6 +48,16 @@ Column {
             selectByMouse: true
             clip: true
 
+            // Digits and a single decimal point only.
+            validator: RegularExpressionValidator { regularExpression: /^[0-9]*\.?[0-9]*$/ }
+
+            // Guards the programmatic resync below from being mistaken
+            // for a user edit by onTextChanged (which would otherwise
+            // re-stage the exact same value as a no-op "edit" every time
+            // a different monitor is selected or the post-apply refresh
+            // lands).
+            property bool syncing: false
+
             // Declarative binding for the initial value only - QML
             // permanently breaks a property's binding the moment
             // something assigns to it imperatively, which is exactly
@@ -62,12 +71,30 @@ Column {
                 target: root
                 function onValueChanged() {
                     if (!input.activeFocus) {
+                        input.syncing = true
                         input.text = root.value
+                        input.syncing = false
                     }
                 }
             }
 
-            onEditingFinished: root.edited(text)
+            // Committed live, on every keystroke - waiting for
+            // editingFinished meant a field you never explicitly
+            // defocused (Tab, click elsewhere, Enter) before hitting
+            // Apply was left out of ScreenSettings' `pending` entirely,
+            // so Apply would silently apply everything else while that
+            // one field's edit was dropped and reverted to its old
+            // value once the post-apply refresh landed.
+            onTextChanged: {
+                if (!input.syncing) {
+                    root.edited(input.text)
+                }
+            }
+
+            // Enter/Return gives up focus (the edit itself already
+            // committed live above) instead of leaving the field
+            // focused with a blinking cursor.
+            onAccepted: input.focus = false
         }
     }
 }
