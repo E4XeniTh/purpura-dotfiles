@@ -141,6 +141,19 @@ SettingsPanel {
             }
         }
 
+        Rectangle {
+            id: hintseparator
+            anchors {
+                left: parent.left
+                right: parent.right
+                rightMargin: Config.scaled(12, root.uiScale)
+                leftMargin: Config.scaled(12, root.uiScale)
+            }
+            border.width: 2
+            border.color: Config.fgcolor
+            height: 2
+        }
+
         Item {
             width: soundContent.contentWidth
             height: Config.scaled(14, root.uiScale)
