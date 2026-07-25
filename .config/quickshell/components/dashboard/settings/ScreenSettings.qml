@@ -105,26 +105,37 @@ SettingsPanel {
 
     // Snapshot of the selected monitor's values actually shown in the
     // input boxes. Deliberately NOT a reactive binding onto
-    // effectiveFor(selectedName) - it's only ever reassigned here, from
-    // onSelectedNameChanged below and once after the panel (re)opens.
-    // That means a post-Apply monitors refresh (which changes
-    // root.monitors but not root.selectedName) can no longer touch
-    // whatever's currently sitting in the boxes, no matter how that
-    // refresh's timing lines up with typing/focus - fixes an
-    // intermittent bug where an edit would occasionally get silently
-    // reverted by the refresh that follows Apply.
+    // effectiveFor(selectedName) - a post-Apply monitors refresh (which
+    // changes root.monitors but not root.selectedName) must never touch
+    // whatever's currently sitting in the boxes. Only ever reassigned
+    // from syncDisplay(), which is only ever called once a dedicated,
+    // freshly-requested `hyprctl -j monitors all` actually lands - never
+    // from whatever root.monitors happens to already hold, since that
+    // can be stale (mid-flight from a just-applied change on a
+    // *different* monitor, confirmed live: switching to an untouched
+    // monitor right after applying another one's position showed the
+    // untouched monitor's own position wrong too).
     property var displayFor: ({})
+
+    // Set true immediately before a fetch that should update the
+    // display once it lands - checked (and cleared) in
+    // monitorsProcess.onStreamFinished below. A refetch that isn't
+    // explicitly flagged (e.g. the settle refetch after Apply) leaves
+    // the boxes alone.
+    property bool syncDisplayOnNextFetch: false
 
     function syncDisplay() {
         root.displayFor = root.effectiveFor(root.selectedName) || {}
     }
 
-    onSelectedNameChanged: root.syncDisplay()
-
-    // Set whenever the panel opens so the next monitors fetch re-syncs
-    // the display even if selectedName happens to still be valid (and
-    // therefore wouldn't otherwise trigger onSelectedNameChanged).
-    property bool needsDisplaySync: false
+    // Selecting a display always re-queries hyprctl right then and only
+    // populates the boxes from that fresh answer - never from whatever
+    // root.monitors already happens to hold.
+    function selectMonitor(name) {
+        root.selectedName = name
+        root.syncDisplayOnNextFetch = true
+        root.refreshMonitors()
+    }
 
     function refreshMonitors() {
         monitorsProcess.running = false
@@ -197,7 +208,7 @@ SettingsPanel {
     onActiveChanged: {
         if (root.active) {
             root.pending = ({})
-            root.needsDisplaySync = true
+            root.syncDisplayOnNextFetch = true
             root.refreshMonitors()
         } else {
             root.identifying = false
@@ -214,13 +225,13 @@ SettingsPanel {
                     const parsed = JSON.parse(text)
                     root.monitors = parsed
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
-                        // Triggers onSelectedNameChanged, which syncs
-                        // the display itself.
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
-                    } else if (root.needsDisplaySync) {
                         root.syncDisplay()
+                        root.syncDisplayOnNextFetch = false
+                    } else if (root.syncDisplayOnNextFetch) {
+                        root.syncDisplay()
+                        root.syncDisplayOnNextFetch = false
                     }
-                    root.needsDisplaySync = false
                 } catch (e) {
                     root.monitors = []
                 }
@@ -354,14 +365,13 @@ SettingsPanel {
                         isPrimary: root.primaryMonitor === modelData.name
 
                         // Steals keyboard focus away from any TextInput
-                        // in the right-hand form before switching -
-                        // otherwise LabeledField's re-sync guard
-                        // (`if (!input.activeFocus)`) skips whichever
-                        // field was still focused, leaving it frozen on
-                        // the previous monitor's value.
+                        // in the right-hand form before switching, and
+                        // always re-queries hyprctl fresh rather than
+                        // trusting whatever root.monitors already holds
+                        // (see selectMonitor()).
                         onClicked: {
                             contentWrapper.forceActiveFocus()
-                            root.selectedName = modelData.name
+                            root.selectMonitor(modelData.name)
                         }
                         // Fail-safes: the primary monitor can't be
                         // disabled (it's always the one thing the bar
