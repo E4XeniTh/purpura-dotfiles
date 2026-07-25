@@ -48,6 +48,16 @@ SettingsPanel {
     // matter what QML-level focus() they had.
     wantsKeyboardFocus: true
 
+    // ddcutil detect is only worth re-running when the set of monitors
+    // ddcutil can actually see might have changed - once here at
+    // startup (this instance is created once, eagerly, when quickshell
+    // starts - see Dashboard.qml's dashWindow Variants), and again in
+    // applyChanges() below whenever an Apply actually changes a
+    // monitor's enabled/disabled state. Not on every panel open/close
+    // and not on every Apply in general - those don't change which
+    // physical displays exist.
+    Component.onCompleted: root.detectDdcDisplays()
+
     // Raw hyprctl monitors, refreshed on open, on selecting a monitor,
     // and after Apply.
     property var monitors: []
@@ -301,6 +311,16 @@ SettingsPanel {
 
         root.applyBrightness()
 
+        // Re-detect only when this Apply actually changed some
+        // monitor's enabled/disabled state - a newly enabled (or
+        // physically powered on) monitor needs a fresh ddcBusNumbers
+        // entry to be reachable at all, but nothing else applied here
+        // (position/resolution/brightness) changes which displays
+        // ddcutil can see.
+        if (Object.keys(root.pendingEnabled).length > 0) {
+            root.detectDdcDisplays()
+        }
+
         root.pendingEnabled = ({})
         root.edited = ({})
         root.selectedDirty = false
@@ -308,6 +328,9 @@ SettingsPanel {
         // the toggle back to "Manual" for the monitor you just applied.
     }
 
+    // ddcutil detection deliberately does NOT run here (i.e. not on
+    // every panel open) - see Component.onCompleted and applyChanges()
+    // below for the only two triggers.
     onActiveChanged: {
         if (root.active) {
             root.pendingEnabled = ({})
@@ -316,7 +339,6 @@ SettingsPanel {
             root.pendingBrightness = ({})
             root.refreshMonitors()
             root.loadScreensStore()
-            root.detectDdcDisplays()
         } else {
             root.identifying = false
         }
