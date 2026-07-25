@@ -84,7 +84,20 @@ SettingsPanel {
     // runs, rather than staged per-monitor across the whole session.
     property var edited: ({})
     property bool selectedDirty: false
-    property bool preferredMode: false
+
+    // Whether each monitor's mode toggle is set to "Preferred", keyed by
+    // name - unlike `edited` above, this *is* remembered across
+    // switching monitors (and across Apply): hyprctl's own monitor JSON
+    // has no way to report "this is running in preferred mode" after
+    // the fact, so there's nothing to re-derive it from on reselect -
+    // the toggle has to remember its own state itself.
+    property var preferredModes: ({})
+
+    function setPreferredMode(name, value) {
+        const updated = Object.assign({}, root.preferredModes)
+        updated[name] = value
+        root.preferredModes = updated
+    }
 
     readonly property bool dirty: root.selectedDirty || Object.keys(root.pendingEnabled).length > 0
 
@@ -96,7 +109,7 @@ SettingsPanel {
     }
 
     function togglePreferredMode() {
-        root.preferredMode = !root.preferredMode
+        root.setPreferredMode(root.selectedName, !root.preferredModes[root.selectedName])
         root.selectedDirty = true
     }
 
@@ -114,7 +127,6 @@ SettingsPanel {
         root.selectedName = name
         root.edited = ({})
         root.selectedDirty = false
-        root.preferredMode = false
         root.displayFor = ({})
         root.refreshMonitors()
     }
@@ -159,7 +171,7 @@ SettingsPanel {
         const scale = rawScale > 0 ? rawScale : 1
 
         const usesExplicitMode = isSelected
-            ? (!root.preferredMode && (wasActive || e.width !== undefined || e.height !== undefined))
+            ? (!root.preferredModes[name] && (wasActive || e.width !== undefined || e.height !== undefined))
             : wasActive
         const mode = usesExplicitMode ? `${width}x${height}@${refresh}` : "preferred"
 
@@ -224,7 +236,6 @@ SettingsPanel {
             root.pendingEnabled = ({})
             root.edited = ({})
             root.selectedDirty = false
-            root.preferredMode = false
             root.refreshMonitors()
         } else {
             root.identifying = false
@@ -440,7 +451,7 @@ SettingsPanel {
 
                         Text {
                             anchors.centerIn: parent
-                            text: root.preferredMode ? "Preferred" : "Manual"
+                            text: root.preferredModes[root.selectedName] ? "Preferred" : "Manual"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(14, root.uiScale)
@@ -471,8 +482,8 @@ SettingsPanel {
                     // rightColumn's layout entirely and make the whole
                     // settings screen change height when the mode
                     // toggle is flipped.
-                    opacity: root.preferredMode ? 0 : 1
-                    enabled: !root.preferredMode
+                    opacity: root.preferredModes[root.selectedName] ? 0 : 1
+                    enabled: !root.preferredModes[root.selectedName]
 
                     LabeledField {
                         Layout.fillWidth: true
