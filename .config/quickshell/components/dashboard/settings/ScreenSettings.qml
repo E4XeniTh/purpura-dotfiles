@@ -133,6 +133,7 @@ SettingsPanel {
         }
 
         const script = lines.map(l => `hyprctl keyword monitor "${l}"`).join(" ; ")
+        console.log("ScreenSettings: applying:\n" + script)
         applyProcess.command = ["sh", "-c", script]
         applyProcess.running = false
         applyProcess.running = true
@@ -174,21 +175,33 @@ SettingsPanel {
         id: applyProcess
         command: ["true"]
 
+        // hyprctl's reply to a "keyword" request (including error text
+        // like "invalid monitor size/refresh") is written to its own
+        // STDOUT, not stderr - a prior round only logged stderr here,
+        // which meant whatever hyprctl actually said about every failed
+        // Apply was being silently discarded instead of ever reaching
+        // the qs terminal. Logged unconditionally (not just on error)
+        // for now so the exact hyprctl response is visible on the next
+        // test.
         stdout: StdioCollector {
-            onStreamFinished: root.refreshMonitors()
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.log("ScreenSettings: hyprctl keyword monitor reply:\n" + text)
+                }
+                root.refreshMonitors()
+            }
         }
 
-        // hyprctl keyword failures (a bad mode/position, etc.) go to
-        // stderr and were previously just swallowed - surfaced to
-        // Quickshell's own log now so a real failure is actually
-        // visible (run `qs` from a terminal to see it) instead of
-        // Apply just silently appearing to do nothing.
         stderr: StdioCollector {
             onStreamFinished: {
                 if (text.length > 0) {
                     console.warn("ScreenSettings: hyprctl keyword monitor error(s):\n" + text)
                 }
             }
+        }
+
+        onExited: (exitCode, exitStatus) => {
+            console.log("ScreenSettings: apply process exited, code=" + exitCode)
         }
     }
 
@@ -271,7 +284,16 @@ SettingsPanel {
                         pendingEnabled: root.effectiveFor(modelData.name) ? root.effectiveFor(modelData.name).enabled : !modelData.disabled
                         isPrimary: root.primaryMonitor === modelData.name
 
-                        onClicked: root.selectedName = modelData.name
+                        // Steals keyboard focus away from any TextInput
+                        // in the right-hand form before switching -
+                        // otherwise LabeledField's re-sync guard
+                        // (`if (!input.activeFocus)`) skips whichever
+                        // field was still focused, leaving it frozen on
+                        // the previous monitor's value.
+                        onClicked: {
+                            contentWrapper.forceActiveFocus()
+                            root.selectedName = modelData.name
+                        }
                         // Fail-safes: the primary monitor can't be
                         // disabled (it's always the one thing the bar
                         // lives on), and a disabled monitor can't be
@@ -466,7 +488,10 @@ SettingsPanel {
                         MouseArea {
                             anchors.fill: parent
                             enabled: root.dirty
-                            onClicked: root.applyChanges()
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.applyChanges()
+                            }
                         }
                     }
                 }
