@@ -518,7 +518,12 @@ SettingsPanel {
         for (const name of names) {
             const displayNum = root.ddcDisplayNumbers[name]
             if (displayNum === undefined) continue
-            commands.push(`ddcutil --display ${displayNum} setvcp 10 ${root.pendingBrightness[name]}`)
+            // --noverify skips ddcutil's default post-write readback
+            // that confirms the value actually took - roughly halves
+            // the round-trip, and we don't need it since the UI already
+            // optimistically assumes success (liveBrightness is updated
+            // below regardless).
+            commands.push(`ddcutil --display ${displayNum} --noverify setvcp 10 ${root.pendingBrightness[name]}`)
         }
 
         if (commands.length > 0) {
