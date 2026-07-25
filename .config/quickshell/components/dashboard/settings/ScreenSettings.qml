@@ -28,6 +28,12 @@ SettingsPanel {
 
     namespaceName: "screenSettings"
 
+    // Layer-shell surfaces default to no keyboard input at all (see
+    // SettingsPanel.qml) - without this, the resolution/position/scale
+    // fields below could never actually receive typed input at all, no
+    // matter what QML-level focus() they had.
+    wantsKeyboardFocus: true
+
     // Raw hyprctl monitors, refreshed on open and after Apply.
     property var monitors: []
     property string selectedName: ""
@@ -266,8 +272,20 @@ SettingsPanel {
                         isPrimary: root.primaryMonitor === modelData.name
 
                         onClicked: root.selectedName = modelData.name
-                        onToggleEnabled: root.setPending(modelData.name, "enabled", !root.effectiveFor(modelData.name).enabled)
-                        onMakePrimary: root.primarySelected(modelData.name)
+                        // Fail-safes: the primary monitor can't be
+                        // disabled (it's always the one thing the bar
+                        // lives on), and a disabled monitor can't be
+                        // made primary in the first place.
+                        onToggleEnabled: {
+                            if (modelData.name === root.primaryMonitor) return
+                            root.setPending(modelData.name, "enabled", !root.effectiveFor(modelData.name).enabled)
+                        }
+                        onMakePrimary: {
+                            const eff = root.effectiveFor(modelData.name)
+                            if (eff && eff.enabled) {
+                                root.primarySelected(modelData.name)
+                            }
+                        }
                     }
                 }
             }

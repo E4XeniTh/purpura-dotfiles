@@ -673,7 +673,7 @@ Scope {
         }
     }
 
-    // Identify overlay for ScreenSettings' Identify button - a big name
+    // Identify overlay for ScreenSettings' Identify button - a name
     // label on every screen at once, for 3 seconds. A genuinely separate
     // per-screen Variants (not nested inside the dashWindow one above),
     // driven by the shared root.identifying, so it isn't limited to
@@ -681,6 +681,14 @@ Scope {
     // Identify from. Can only show on a screen this compositor is
     // actually driving, so a monitor currently deactivated in Screen
     // settings has nothing to show this on.
+    //
+    // A small centered DashCard-style box rather than a fullscreen
+    // window - a fullscreen layer-shell surface occupies its full input
+    // region even with nothing but a MouseArea-free Text inside, so it
+    // was blocking clicks to everything underneath it for the whole 3
+    // seconds. No anchors at all (not even one edge) so the compositor
+    // centers it on both axes, same trick Dashboard/SettingsPanel use
+    // for horizontal-only centering.
     Variants {
         model: Quickshell.screens
 
@@ -694,22 +702,22 @@ Scope {
 
             exclusiveZone: 0
 
-            anchors {
-                top: true
-                bottom: true
-                left: true
-                right: true
-            }
+            implicitWidth: 320
+            implicitHeight: 160
 
             color: "transparent"
 
-            Text {
-                anchors.centerIn: parent
-                text: modelData ? modelData.name : ""
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: 120
-                font.bold: true
+            DashCard {
+                anchors.fill: parent
+
+                Text {
+                    anchors.centerIn: parent
+                    text: modelData ? modelData.name : ""
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: 48
+                    font.bold: true
+                }
             }
         }
     }
