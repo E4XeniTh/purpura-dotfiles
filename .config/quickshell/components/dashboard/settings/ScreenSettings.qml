@@ -124,18 +124,29 @@ SettingsPanel {
     // the boxes alone.
     property bool syncDisplayOnNextFetch: false
 
-    // True from the moment Apply is clicked until its own settle-delayed
-    // refetch (see refreshSettleTimer) actually lands. A selection made
-    // while this is true was still racing hyprctl's in-flight writes -
-    // even a fresh `hyprctl -j monitors all` fired right then could read
-    // a mid-transition state (confirmed live: switching to an untouched
-    // monitor immediately after applying a different one's position
-    // showed the untouched monitor's own position wrong too, but worked
-    // once enough time had passed first). Selections made during this
-    // window are deferred - queued via selectedName/syncDisplayOnNextFetch
-    // - until the pending apply's own settle refetch fires instead of
-    // racing it with a second, independent fetch.
+    // True from the moment Apply is clicked until hyprctl has actually
+    // confirmed every touched monitor settled into the values we asked
+    // for (see expectedState/monitorsMatchExpected below). A selection
+    // made while this is true was still racing hyprctl's in-flight
+    // writes - even a fresh `hyprctl -j monitors all` fired right then
+    // could read a mid-transition state, and confirmed live, so could an
+    // *untouched* monitor's own reported position (repositioning one
+    // output can transiently perturb how Hyprland reports others during
+    // its layout reflow). Selections made during this window are
+    // deferred - queued via selectedName/syncDisplayOnNextFetch - until
+    // the pending apply's own verification fetch confirms settlement,
+    // instead of racing it with a second, independent fetch.
     property bool applyPending: false
+
+    // What we expect each touched monitor to report once Apply's
+    // hl.monitor() calls have actually landed, keyed by name - compared
+    // against fresh hyprctl reads in monitorsMatchExpected() below. Only
+    // fields we sent an explicit value for are checked; "preferred"
+    // mode/"auto" position can't be predicted in advance so they're
+    // skipped rather than compared.
+    property var expectedState: ({})
+    property int verifyAttempts: 0
+    readonly property int maxVerifyAttempts: 12
 
     function syncDisplay() {
         root.displayFor = root.effectiveFor(root.selectedName) || {}
@@ -165,6 +176,9 @@ SettingsPanel {
     // work with non-legacy parsers. Use eval.") - confirmed live: the
     // real write path is `hyprctl eval '<this string>'`. Shared by
     // applyChanges() below and mirrored by apply-monitors.sh at startup.
+    // Alongside the line itself, returns what we expect hyprctl to
+    // report back for this monitor once it's actually landed, so
+    // applyChanges() can verify it rather than guess how long to wait.
     //
     // A monitor hyprctl reported as disabled may have stale/placeholder
     // geometry (0x0, etc.) since nothing was actually driving it - if
@@ -174,24 +188,23 @@ SettingsPanel {
     // "preferred"/"auto" tokens instead whenever a field wasn't both (a)
     // already active before this Apply and (b) not something the user
     // actually edited.
-    function monitorLine(name) {
+    function buildMonitorPlan(name) {
         const base = root.baseFor(name)
         const eff = root.effectiveFor(name)
         if (!eff.enabled) {
-            return `hl.monitor({ output = "${eff.name}", disabled = true })`
+            return {
+                line: `hl.monitor({ output = "${eff.name}", disabled = true })`,
+                expected: { disabled: true }
+            }
         }
 
         const p = root.pending[name] || {}
         const wasActive = base && !base.disabled
 
-        const mode = root.preferredModes[name]
-            ? "preferred"
-            : (wasActive || p.width !== undefined || p.height !== undefined)
-                ? `${eff.width}x${eff.height}@${eff.refresh}`
-                : "preferred"
-        const position = (wasActive || p.x !== undefined || p.y !== undefined)
-            ? `${eff.x}x${eff.y}`
-            : "auto"
+        const usesExplicitMode = !root.preferredModes[name] && (wasActive || p.width !== undefined || p.height !== undefined)
+        const mode = usesExplicitMode ? `${eff.width}x${eff.height}@${eff.refresh}` : "preferred"
+        const usesExplicitPosition = wasActive || p.x !== undefined || p.y !== undefined
+        const position = usesExplicitPosition ? `${eff.x}x${eff.y}` : "auto"
         const scale = eff.scale > 0 ? eff.scale : 1
 
         // disabled = false has to be explicit - hl.monitor() only
@@ -200,16 +213,56 @@ SettingsPanel {
         // mode/position/scale given (confirmed live: applying without
         // this left a re-enabled monitor off despite hyprctl replying
         // "ok" to every call).
-        return `hl.monitor({ output = "${eff.name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`
+        return {
+            line: `hl.monitor({ output = "${eff.name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`,
+            expected: {
+                disabled: false,
+                usesExplicitMode,
+                usesExplicitPosition,
+                width: eff.width,
+                height: eff.height,
+                x: eff.x,
+                y: eff.y,
+                scale: scale
+            }
+        }
+    }
+
+    // True once every touched monitor's live hyprctl state matches what
+    // we asked for in expectedState - checked after every post-apply
+    // refetch instead of assuming a fixed delay is always enough (it
+    // isn't: repositioning one output can take Hyprland a variable
+    // amount of time to settle, and can transiently perturb how it
+    // reports *other*, untouched monitors too).
+    function monitorsMatchExpected() {
+        for (const name in root.expectedState) {
+            const exp = root.expectedState[name]
+            const base = root.baseFor(name)
+            if (!base) return false
+            if (exp.disabled) {
+                if (!base.disabled) return false
+                continue
+            }
+            if (base.disabled) return false
+            if (exp.usesExplicitPosition && (base.x !== exp.x || base.y !== exp.y)) return false
+            if (exp.usesExplicitMode && (base.width !== exp.width || base.height !== exp.height)) return false
+            if (Math.abs(base.scale - exp.scale) > 0.001) return false
+        }
+        return true
     }
 
     function applyChanges() {
         if (!root.dirty) return
 
         const lines = []
+        const expected = {}
         for (const m of root.monitors) {
-            lines.push(root.monitorLine(m.name))
+            const plan = root.buildMonitorPlan(m.name)
+            lines.push(plan.line)
+            expected[m.name] = plan.expected
         }
+        root.expectedState = expected
+        root.verifyAttempts = 0
 
         const script = lines.map(l => `hyprctl eval '${l}'`).join(" ; ")
         console.log("ScreenSettings: applying:\n" + script)
@@ -246,6 +299,19 @@ SettingsPanel {
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
                         root.syncDisplay()
                         root.syncDisplayOnNextFetch = false
+                    }
+
+                    if (root.applyPending) {
+                        root.verifyAttempts++
+                        if (root.monitorsMatchExpected() || root.verifyAttempts >= root.maxVerifyAttempts) {
+                            root.applyPending = false
+                            if (root.syncDisplayOnNextFetch) {
+                                root.syncDisplay()
+                                root.syncDisplayOnNextFetch = false
+                            }
+                        } else {
+                            verifyRetryTimer.restart()
+                        }
                     } else if (root.syncDisplayOnNextFetch) {
                         root.syncDisplay()
                         root.syncDisplayOnNextFetch = false
@@ -274,12 +340,12 @@ SettingsPanel {
                 // request, not that the output's new geometry has
                 // actually landed yet (repositioning/resizing a monitor
                 // is an async DRM/Wayland commit) - refetching
-                // immediately can catch a monitor mid-transition, with
-                // some fields updated and others not (confirmed live: a
-                // combined X/Y change came back with Y updated and X
-                // still stale). A short settle delay before re-reading
-                // avoids racing that commit.
-                refreshSettleTimer.restart()
+                // immediately can catch a monitor (or even an untouched
+                // one!) mid-transition. Kicks the first verification
+                // check rather than assuming any fixed delay is enough -
+                // see monitorsProcess above, which keeps retrying via
+                // verifyRetryTimer until monitorsMatchExpected().
+                verifyRetryTimer.restart()
             }
         }
 
@@ -296,17 +362,15 @@ SettingsPanel {
         }
     }
 
+    // Repeatedly restarted (from applyProcess and from monitorsProcess
+    // itself, see above) until monitorsMatchExpected() finally passes or
+    // maxVerifyAttempts is hit - each firing is just one more attempt,
+    // not a fixed "this must be long enough" delay.
     Timer {
-        id: refreshSettleTimer
-        interval: 200
+        id: verifyRetryTimer
+        interval: 150
         repeat: false
-        onTriggered: {
-            // Clear before refreshing so any selection made while the
-            // apply was in flight (deferred by selectMonitor() above) is
-            // now free to be picked up by this very fetch.
-            root.applyPending = false
-            root.refreshMonitors()
-        }
+        onTriggered: root.refreshMonitors()
     }
 
     // Persisted alongside hyprland.lua - see that file's autostart block,
@@ -472,7 +536,7 @@ SettingsPanel {
                                 // `dirty` picks up the change and Apply
                                 // starts blinking - preferredModes above
                                 // is the actual source of truth read by
-                                // monitorLine() and survives Apply's
+                                // buildMonitorPlan() and survives Apply's
                                 // pending clear.
                                 root.setPending(root.selectedName, "mode", next)
                             }
