@@ -125,6 +125,8 @@ compiled binary directly.
 - Monitor layout (resolution, position, scale, on/off) is set from the
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
   that file only defines the primary display. Changes are saved to
-  `~/.config/hypr/monitors.conf` and replayed via `hyprctl keyword
-  monitor` by `scripts/apply-monitors.sh` on every login (see
-  `hyprland.lua`'s autostart block) so they survive a restart.
+  `~/.config/hypr/monitors.conf` and replayed via `hyprctl eval
+  'hl.monitor({...})'` by `scripts/apply-monitors.sh` on every login (see
+  `hyprland.lua`'s autostart block) so they survive a restart -
+  `hyprctl keyword` doesn't work here since `hyprland.lua` is parsed by
+  hyprlang's Lua frontend, not the legacy config format.

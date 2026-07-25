@@ -11,11 +11,14 @@ import "../../../Config.js" as Config
 //
 // Reads via `hyprctl -j monitors all` (includes currently-disabled
 // monitors, unlike the plain `monitors` request) and writes via
-// `hyprctl keyword monitor "..."` - Quickshell's own Quickshell.Hyprland
-// module only exposes dispatch() for dispatcher-class commands, not
-// keyword, and its monitor list doesn't appear to include disabled
-// monitors either, so shelling out to the real binary covers both needs
-// with one consistent data source.
+// `hyprctl eval 'hl.monitor({...})'` - this config is parsed by
+// hyprlang's Lua frontend (see hyprland.lua), which rejects the older
+// `hyprctl keyword monitor "..."` syntax outright ("keyword can't work
+// with non-legacy parsers. Use eval."), confirmed live. Quickshell's own
+// Quickshell.Hyprland module only exposes dispatch() for dispatcher-
+// class commands (neither keyword nor eval), and its monitor list
+// doesn't appear to include disabled monitors either, so shelling out to
+// the real binary covers both needs with one consistent data source.
 //
 // Nothing is applied live as you edit - right-clicking a monitor
 // (activate/deactivate) and editing any field are both staged in
@@ -90,38 +93,40 @@ SettingsPanel {
         monitorsProcess.running = true
     }
 
-    // Builds the exact value that goes after "monitor=" in hyprland's own
-    // config syntax - same format hyprctl keyword and monitors.conf both
-    // use, so this is shared by applyChanges() below.
+    // Builds one hl.monitor({...}) Lua call, exactly the form hyprland.lua
+    // itself uses for DP-1 - this config is parsed by hyprlang's Lua
+    // frontend, which rejects `hyprctl keyword` outright ("keyword can't
+    // work with non-legacy parsers. Use eval.") - confirmed live: the
+    // real write path is `hyprctl eval '<this string>'`. Shared by
+    // applyChanges() below and mirrored by apply-monitors.sh at startup.
     //
     // A monitor hyprctl reported as disabled may have stale/placeholder
     // geometry (0x0, etc.) since nothing was actually driving it - if
     // the user is enabling one without having typed real values in
     // themselves, trusting those numbers outright can hand hyprctl an
-    // invalid mode/position it silently rejects, which is the leading
-    // suspect for Apply appearing to do nothing. Falls back to
-    // Hyprland's own "preferred"/"auto" tokens instead whenever a field
-    // wasn't both (a) already active before this Apply and (b) not
-    // something the user actually edited.
+    // invalid mode/position. Falls back to Hyprland's own
+    // "preferred"/"auto" tokens instead whenever a field wasn't both (a)
+    // already active before this Apply and (b) not something the user
+    // actually edited.
     function monitorLine(name) {
         const base = root.baseFor(name)
         const eff = root.effectiveFor(name)
         if (!eff.enabled) {
-            return `${eff.name},disable`
+            return `hl.monitor({ output = "${eff.name}", disabled = true })`
         }
 
         const p = root.pending[name] || {}
         const wasActive = base && !base.disabled
 
-        const res = (wasActive || p.width !== undefined || p.height !== undefined)
+        const mode = (wasActive || p.width !== undefined || p.height !== undefined)
             ? `${eff.width}x${eff.height}@${eff.refresh}`
             : "preferred"
-        const pos = (wasActive || p.x !== undefined || p.y !== undefined)
+        const position = (wasActive || p.x !== undefined || p.y !== undefined)
             ? `${eff.x}x${eff.y}`
             : "auto"
         const scale = eff.scale > 0 ? eff.scale : 1
 
-        return `${eff.name},${res},${pos},${scale}`
+        return `hl.monitor({ output = "${eff.name}", mode = "${mode}", position = "${position}", scale = "${scale}" })`
     }
 
     function applyChanges() {
@@ -132,7 +137,7 @@ SettingsPanel {
             lines.push(root.monitorLine(m.name))
         }
 
-        const script = lines.map(l => `hyprctl keyword monitor "${l}"`).join(" ; ")
+        const script = lines.map(l => `hyprctl eval '${l}'`).join(" ; ")
         console.log("ScreenSettings: applying:\n" + script)
         applyProcess.command = ["sh", "-c", script]
         applyProcess.running = false
@@ -175,18 +180,14 @@ SettingsPanel {
         id: applyProcess
         command: ["true"]
 
-        // hyprctl's reply to a "keyword" request (including error text
-        // like "invalid monitor size/refresh") is written to its own
-        // STDOUT, not stderr - a prior round only logged stderr here,
-        // which meant whatever hyprctl actually said about every failed
-        // Apply was being silently discarded instead of ever reaching
-        // the qs terminal. Logged unconditionally (not just on error)
-        // for now so the exact hyprctl response is visible on the next
-        // test.
+        // hyprctl's reply to an "eval" request (including error text like
+        // an invalid mode/position) is written to its own STDOUT, not
+        // stderr - logged unconditionally (not just on error) so the
+        // exact hyprctl response is visible if anything's still wrong.
         stdout: StdioCollector {
             onStreamFinished: {
                 if (text.length > 0) {
-                    console.log("ScreenSettings: hyprctl keyword monitor reply:\n" + text)
+                    console.log("ScreenSettings: hyprctl eval reply:\n" + text)
                 }
                 root.refreshMonitors()
             }
@@ -195,7 +196,7 @@ SettingsPanel {
         stderr: StdioCollector {
             onStreamFinished: {
                 if (text.length > 0) {
-                    console.warn("ScreenSettings: hyprctl keyword monitor error(s):\n" + text)
+                    console.warn("ScreenSettings: hyprctl eval error(s):\n" + text)
                 }
             }
         }
