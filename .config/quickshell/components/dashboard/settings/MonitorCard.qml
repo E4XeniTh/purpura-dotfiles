@@ -35,12 +35,30 @@ DashCard {
     color: root.selected ? Config.fgcolorhover : Config.fillcolor
     border.color: root.isPrimary ? Config.fgcolorlight : (root.pendingEnabled ? Config.fgcolor : "red")
 
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: (mouse) => {
+            if (mouse.button === Qt.LeftButton) {
+                root.clicked()
+            } else {
+                root.toggleEnabled()
+            }
+        }
+        // Qt still fires a plain clicked() for the first
+        // press/release of a double-click before this -
+        // harmless here, it just also selects the card, which
+        // makes sense alongside marking it primary anyway.
+        onDoubleClicked: root.makePrimary()
+    }
+
     ColumnLayout {
         anchors {
             fill: parent
             margins: Config.scaled(10, root.uiScale)
         }
         spacing: Config.scaled(6, root.uiScale)
+
 
         RowLayout {
             id: headerRow
@@ -77,22 +95,6 @@ DashCard {
 
             // Scoped to just this row (not the whole card) so it
             // doesn't steal drag input from the brightness slider below.
-            MouseArea {
-                anchors.fill: parent
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: (mouse) => {
-                    if (mouse.button === Qt.LeftButton) {
-                        root.clicked()
-                    } else {
-                        root.toggleEnabled()
-                    }
-                }
-                // Qt still fires a plain clicked() for the first
-                // press/release of a double-click before this -
-                // harmless here, it just also selects the card, which
-                // makes sense alongside marking it primary anyway.
-                onDoubleClicked: root.makePrimary()
-            }
         }
 
         Rectangle {
@@ -100,6 +102,7 @@ DashCard {
             Layout.preferredHeight: Config.scaled(1, root.uiScale)
             color: root.border.color
         }
+        
 
         DeviceSlider {
             Layout.fillWidth: true
@@ -109,5 +112,7 @@ DashCard {
             value: root.brightness / 100
             onMoved: (newValue) => root.brightnessEdited(Math.round(newValue * 100))
         }
+
+
     }
 }
