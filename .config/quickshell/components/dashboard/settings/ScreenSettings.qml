@@ -193,10 +193,17 @@ SettingsPanel {
         }
 
         const wasActive = !base.disabled
+        // A monitor being (re-)enabled with a screens.json entry has
+        // trustworthy remembered geometry too, same as one that was
+        // already active - without this, re-enabling a disabled
+        // monitor without editing anything fell back to
+        // "preferred"/"auto" and silently discarded exactly the
+        // remembered values the input boxes were already showing.
+        const hasRememberedGeometry = wasActive || !!stored
         const usesExplicitMode = isSelected
-            ? (!root.preferredModes[name] && (wasActive || e.width !== undefined || e.height !== undefined))
-            : wasActive
-        const usesExplicitPosition = wasActive || e.x !== undefined || e.y !== undefined
+            ? (!root.preferredModes[name] && (hasRememberedGeometry || e.width !== undefined || e.height !== undefined))
+            : hasRememberedGeometry
+        const usesExplicitPosition = hasRememberedGeometry || e.x !== undefined || e.y !== undefined
 
         return {
             disabled: false,
