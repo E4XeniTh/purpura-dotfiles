@@ -26,8 +26,17 @@ import "../../../Config.js" as Config
 // you select a *different* one - this panel is for changing one
 // display, hitting Apply, then moving to the next, not staging edits
 // across several simultaneously. The one exception is right-click
-// enable/disable, which stays staged across monitors (see
-// pendingEnabled below) so you can flip several on/off and Apply once.
+// enable/disable (and the per-card brightness sliders), which stay
+// staged across monitors (see pendingEnabled/pendingBrightness below)
+// so you can flip/adjust several and Apply once.
+//
+// A disabled monitor's own hyprctl geometry is a stale placeholder
+// (0x0, etc. - nothing's actually driving it), so selecting one instead
+// shows whatever was last remembered for it in ~/.config/hypr/
+// screens.json, written on every Apply - this is purely so re-enabling
+// a monitor doesn't force retyping its position/resolution from
+// scratch. An enabled monitor always shows its real, live hyprctl state
+// instead, screens.json or not.
 SettingsPanel {
     id: root
 
@@ -60,8 +69,8 @@ SettingsPanel {
         return null
     }
 
-    // Right-click enable/disable toggles, keyed by monitor name - the
-    // one thing this panel still lets you stage across *multiple*
+    // Right-click enable/disable toggles, keyed by monitor name - one of
+    // the two things this panel still lets you stage across *multiple*
     // monitors before a single Apply. Cleared on Apply and on reopening
     // the panel.
     property var pendingEnabled: ({})
@@ -90,7 +99,9 @@ SettingsPanel {
     // switching monitors (and across Apply): hyprctl's own monitor JSON
     // has no way to report "this is running in preferred mode" after
     // the fact, so there's nothing to re-derive it from on reselect -
-    // the toggle has to remember its own state itself.
+    // the toggle has to remember its own state itself. Also seeded from
+    // screens.json on load (see screensStoreProcess) for monitors not
+    // touched yet this session.
     property var preferredModes: ({})
 
     function setPreferredMode(name, value) {
@@ -99,7 +110,9 @@ SettingsPanel {
         root.preferredModes = updated
     }
 
-    readonly property bool dirty: root.selectedDirty || Object.keys(root.pendingEnabled).length > 0
+    readonly property bool dirty: root.selectedDirty
+        || Object.keys(root.pendingEnabled).length > 0
+        || Object.keys(root.pendingBrightness).length > 0
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -113,7 +126,8 @@ SettingsPanel {
         root.selectedDirty = true
     }
 
-    // What the input boxes actually show - a live hyprctl snapshot for
+    // What the input boxes actually show - a live hyprctl snapshot (or,
+    // for a disabled monitor, its remembered screens.json values) for
     // whichever monitor is currently selected. Cleared immediately on
     // selection (so a brief fetch-in-flight window never shows a
     // stale/wrong monitor's numbers) and repopulated once the fresh
@@ -136,6 +150,63 @@ SettingsPanel {
         monitorsProcess.running = true
     }
 
+    // Resolves what a monitor's width/height/refresh/x/y/scale/mode
+    // "should" be right now - the single source of truth used both to
+    // build the hl.monitor() line for Apply and to populate the input
+    // boxes/screens.json snapshot, so those three things can never
+    // disagree with each other.
+    //
+    // For a disabled monitor, hyprctl's own geometry may be a stale
+    // placeholder (0x0, etc.) since nothing's actually driving it -
+    // falls back to whatever screens.json remembers for it instead.
+    // usesExplicitMode/usesExplicitPosition say whether the *enabled*
+    // hl.monitor() line (were this monitor enabled) should give
+    // hyprctl real numbers or Hyprland's own "preferred"/"auto" tokens
+    // - only meaningful when the monitor is actually enabled.
+    function effectiveStateFor(name) {
+        const base = root.baseFor(name)
+        if (!base) return null
+
+        const isSelected = name === root.selectedName
+        const e = isSelected ? root.edited : {}
+        const stored = root.screensStore[name]
+        const remembered = base.disabled && stored ? stored : base
+
+        const width = e.width !== undefined ? e.width : remembered.width
+        const height = e.height !== undefined ? e.height : remembered.height
+        const refresh = e.refresh !== undefined
+            ? e.refresh
+            : (remembered.refreshRate !== undefined ? remembered.refreshRate : remembered.refresh)
+        const x = e.x !== undefined ? e.x : remembered.x
+        const y = e.y !== undefined ? e.y : remembered.y
+        const rawScale = e.scale !== undefined ? e.scale : remembered.scale
+        const scale = rawScale > 0 ? rawScale : 1
+
+        if (!root.enabledFor(name)) {
+            return {
+                disabled: true,
+                width, height, refresh, x, y, scale,
+                mode: stored ? stored.mode : "manual",
+                usesExplicitMode: false,
+                usesExplicitPosition: false
+            }
+        }
+
+        const wasActive = !base.disabled
+        const usesExplicitMode = isSelected
+            ? (!root.preferredModes[name] && (wasActive || e.width !== undefined || e.height !== undefined))
+            : wasActive
+        const usesExplicitPosition = wasActive || e.x !== undefined || e.y !== undefined
+
+        return {
+            disabled: false,
+            width, height, refresh, x, y, scale,
+            mode: root.preferredModes[name] ? "preferred" : "manual",
+            usesExplicitMode,
+            usesExplicitPosition
+        }
+    }
+
     // Builds one hl.monitor({...}) Lua call, exactly the form
     // hyprland.lua itself uses for DP-1 - this config is parsed by
     // hyprlang's Lua frontend, which rejects `hyprctl keyword` outright
@@ -143,40 +214,16 @@ SettingsPanel {
     // confirmed live: the real write path is `hyprctl eval '<this
     // string>'`. Used both for the actively-edited monitor and for any
     // monitor with a pending enable/disable toggle.
-    //
-    // A monitor hyprctl reported as disabled may have stale/placeholder
-    // geometry (0x0, etc.) since nothing was actually driving it -
-    // trusting those numbers outright can hand hyprctl an invalid
-    // mode/position. Falls back to Hyprland's own "preferred"/"auto"
-    // tokens whenever a field wasn't both (a) already active and (b)
-    // actually known (edited, for the selected monitor).
     function buildMonitorLine(name) {
-        const base = root.baseFor(name)
-        if (!base) return null
+        const state = root.effectiveStateFor(name)
+        if (!state) return null
 
-        if (!root.enabledFor(name)) {
+        if (state.disabled) {
             return `hl.monitor({ output = "${name}", disabled = true })`
         }
 
-        const isSelected = name === root.selectedName
-        const e = isSelected ? root.edited : {}
-        const wasActive = !base.disabled
-
-        const width = e.width !== undefined ? e.width : base.width
-        const height = e.height !== undefined ? e.height : base.height
-        const refresh = e.refresh !== undefined ? e.refresh : base.refreshRate
-        const x = e.x !== undefined ? e.x : base.x
-        const y = e.y !== undefined ? e.y : base.y
-        const rawScale = e.scale !== undefined ? e.scale : base.scale
-        const scale = rawScale > 0 ? rawScale : 1
-
-        const usesExplicitMode = isSelected
-            ? (!root.preferredModes[name] && (wasActive || e.width !== undefined || e.height !== undefined))
-            : wasActive
-        const mode = usesExplicitMode ? `${width}x${height}@${refresh}` : "preferred"
-
-        const usesExplicitPosition = wasActive || e.x !== undefined || e.y !== undefined
-        const position = usesExplicitPosition ? `${x}x${y}` : "auto"
+        const mode = state.usesExplicitMode ? `${state.width}x${state.height}@${state.refresh}` : "preferred"
+        const position = state.usesExplicitPosition ? `${state.x}x${state.y}` : "auto"
 
         // disabled = false has to be explicit - hl.monitor() only
         // touches the fields you pass, so a monitor that was previously
@@ -184,7 +231,7 @@ SettingsPanel {
         // mode/position/scale given (confirmed live: applying without
         // this left a re-enabled monitor off despite hyprctl replying
         // "ok" to every call).
-        return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${scale}" })`
+        return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${state.scale}" })`
     }
 
     function applyChanges() {
@@ -209,12 +256,33 @@ SettingsPanel {
         // monitors.conf persists the *whole* layout, not just what
         // changed this time, since apply-monitors.sh replays every line
         // in it from scratch at login (hyprland.lua only defines DP-1).
+        // screens.json is built from the same per-monitor state at the
+        // same time, so re-enabling a monitor later shows exactly what
+        // it was just set to (or, if untouched, whatever it already
+        // remembered).
         const allLines = []
+        const storeSnapshot = {}
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
             if (line) allLines.push(line)
+
+            const state = root.effectiveStateFor(m.name)
+            if (state) {
+                storeSnapshot[m.name] = {
+                    width: state.width,
+                    height: state.height,
+                    refresh: state.refresh,
+                    x: state.x,
+                    y: state.y,
+                    scale: state.scale,
+                    mode: state.mode
+                }
+            }
         }
         monitorsFile.setText(allLines.join("\n") + "\n")
+
+        root.screensStore = storeSnapshot
+        screensStoreFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
         if (sendLines.length > 0) {
             const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
@@ -223,6 +291,8 @@ SettingsPanel {
             applyProcess.running = false
             applyProcess.running = true
         }
+
+        root.applyBrightness()
 
         root.pendingEnabled = ({})
         root.edited = ({})
@@ -236,7 +306,10 @@ SettingsPanel {
             root.pendingEnabled = ({})
             root.edited = ({})
             root.selectedDirty = false
+            root.pendingBrightness = ({})
             root.refreshMonitors()
+            root.loadScreensStore()
+            root.detectDdcDisplays()
         } else {
             root.identifying = false
         }
@@ -254,9 +327,9 @@ SettingsPanel {
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
                     }
-                    const base = root.baseFor(root.selectedName)
-                    root.displayFor = base
-                        ? { width: base.width, height: base.height, refresh: base.refreshRate, x: base.x, y: base.y, scale: base.scale }
+                    const state = root.effectiveStateFor(root.selectedName)
+                    root.displayFor = state
+                        ? { width: state.width, height: state.height, refresh: state.refresh, x: state.x, y: state.y, scale: state.scale }
                         : {}
                 } catch (e) {
                     root.monitors = []
@@ -321,6 +394,222 @@ SettingsPanel {
         preload: false
     }
 
+    // ---------------- disabled-monitor memory (screens.json) ----------------
+
+    // Last known good width/height/refresh/x/y/scale/mode per monitor
+    // name, loaded once on open and rewritten on every Apply - see
+    // effectiveStateFor() above for how a disabled monitor falls back to
+    // this instead of hyprctl's own stale placeholder geometry.
+    property var screensStore: ({})
+
+    function loadScreensStore() {
+        screensStoreProcess.running = false
+        screensStoreProcess.running = true
+    }
+
+    Process {
+        id: screensStoreProcess
+        // Read via `cat` (like every other read in this file goes
+        // through Process/hyprctl) rather than FileView, so a missing
+        // file (first run) just yields empty stdout instead of needing
+        // to reason about FileView's own missing-file behavior.
+        command: ["cat", Quickshell.env("HOME") + "/.config/hypr/screens.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const parsed = JSON.parse(text)
+                    root.screensStore = parsed
+                    // Seed preferredModes from what was last saved, for
+                    // any monitor not already touched this session -
+                    // otherwise a disabled monitor remembered as
+                    // "preferred" would show "Manual" until reselected
+                    // once quickshell restarts.
+                    const seeded = Object.assign({}, root.preferredModes)
+                    for (const name in parsed) {
+                        if (seeded[name] === undefined) {
+                            seeded[name] = parsed[name].mode === "preferred"
+                        }
+                    }
+                    root.preferredModes = seeded
+                } catch (e) {
+                    root.screensStore = {}
+                }
+            }
+        }
+    }
+
+    FileView {
+        id: screensStoreFile
+        path: Quickshell.env("HOME") + "/.config/hypr/screens.json"
+        preload: false
+    }
+
+    // ---------------- DDC/CI brightness ----------------
+
+    // Best-effort mapping from Hyprland's monitor name (e.g. "HDMI-A-1")
+    // to ddcutil's own display number, built from `ddcutil detect`'s
+    // "DRM connector: cardN-<name>" line (ddcutil 1.2+ only). Not
+    // verified against a live ddcutil install - if brightness sliders
+    // never pick up a monitor, run `qs` from a terminal and check for
+    // the "ddcutil detect" warning below, since ddcutil's exact output
+    // can vary by version/distro packaging.
+    property var ddcDisplayNumbers: ({})
+
+    // 0-100, queried live per monitor once ddcDisplayNumbers is known.
+    // Assumes VCP feature 0x10 (brightness) is reported on a 0-100
+    // scale, which is the case for the vast majority of DDC/CI panels.
+    property var liveBrightness: ({})
+
+    // Staged like pendingEnabled above (not like `edited`) - every
+    // card's slider is visible and draggable at once, regardless of
+    // which monitor is selected, so more than one can be adjusted
+    // before a single Apply.
+    property var pendingBrightness: ({})
+
+    function setPendingBrightness(name, value) {
+        const updated = Object.assign({}, root.pendingBrightness)
+        updated[name] = value
+        root.pendingBrightness = updated
+    }
+
+    function brightnessFor(name) {
+        if (root.pendingBrightness[name] !== undefined) return root.pendingBrightness[name]
+        if (root.liveBrightness[name] !== undefined) return root.liveBrightness[name]
+        return 50
+    }
+
+    function detectDdcDisplays() {
+        ddcDetectProcess.running = false
+        ddcDetectProcess.running = true
+    }
+
+    // Queried one at a time, not all in parallel - ddcutil talks to
+    // real I2C hardware, and overlapping queries against the same/
+    // adjacent buses are a common source of ddcutil timeouts/errors.
+    property var ddcQueryQueue: []
+
+    function queueBrightnessQueries() {
+        root.ddcQueryQueue = Object.keys(root.ddcDisplayNumbers)
+        root.runNextBrightnessQuery()
+    }
+
+    function runNextBrightnessQuery() {
+        if (root.ddcQueryQueue.length === 0) return
+        const name = root.ddcQueryQueue[0]
+        ddcGetProcess.currentName = name
+        ddcGetProcess.command = ["ddcutil", "--display", String(root.ddcDisplayNumbers[name]), "getvcp", "10", "--brief"]
+        ddcGetProcess.running = false
+        ddcGetProcess.running = true
+    }
+
+    function applyBrightness() {
+        const names = Object.keys(root.pendingBrightness)
+        if (names.length === 0) return
+
+        const commands = []
+        for (const name of names) {
+            const displayNum = root.ddcDisplayNumbers[name]
+            if (displayNum === undefined) continue
+            commands.push(`ddcutil --display ${displayNum} setvcp 10 ${root.pendingBrightness[name]}`)
+        }
+
+        if (commands.length > 0) {
+            const updated = Object.assign({}, root.liveBrightness)
+            for (const name of names) {
+                updated[name] = root.pendingBrightness[name]
+            }
+            root.liveBrightness = updated
+
+            ddcApplyProcess.command = ["sh", "-c", commands.join(" ; ")]
+            ddcApplyProcess.running = false
+            ddcApplyProcess.running = true
+        }
+
+        root.pendingBrightness = ({})
+    }
+
+    Process {
+        id: ddcDetectProcess
+        command: ["ddcutil", "detect"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const map = {}
+                let currentDisplay = null
+                for (const line of text.split("\n")) {
+                    const displayMatch = line.match(/^Display (\d+)/)
+                    if (displayMatch) {
+                        currentDisplay = parseInt(displayMatch[1], 10)
+                        continue
+                    }
+                    const connectorMatch = line.match(/DRM connector:\s*card\d+-(.+)$/)
+                    if (connectorMatch && currentDisplay !== null) {
+                        map[connectorMatch[1].trim()] = currentDisplay
+                    }
+                }
+                root.ddcDisplayNumbers = map
+                root.queueBrightnessQueries()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("ScreenSettings: ddcutil detect error(s) (brightness sliders may not work):\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: ddcGetProcess
+        property string currentName: ""
+        command: ["true"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const match = text.match(/VCP\s+10\s+C\s+(\d+)/)
+                if (match) {
+                    const updated = Object.assign({}, root.liveBrightness)
+                    updated[ddcGetProcess.currentName] = Math.max(0, Math.min(100, parseInt(match[1], 10)))
+                    root.liveBrightness = updated
+                }
+                root.ddcQueryQueue = root.ddcQueryQueue.slice(1)
+                root.runNextBrightnessQuery()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("ScreenSettings: ddcutil getvcp error for " + ddcGetProcess.currentName + ":\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: ddcApplyProcess
+        command: ["true"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.log("ScreenSettings: ddcutil setvcp reply:\n" + text)
+                }
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("ScreenSettings: ddcutil setvcp error(s):\n" + text)
+                }
+            }
+        }
+    }
+
     Item {
         id: contentWrapper
 
@@ -348,8 +637,10 @@ SettingsPanel {
             readonly property real availableWidth: width - spacing * 2 - dividerWidth
             readonly property real leftWidth: availableWidth * 0.35
             readonly property real rightWidth: availableWidth * 0.65
-            readonly property real listMaxHeight: Config.scaled(300, root.uiScale)
-            readonly property real cardHeight: Config.scaled(56, root.uiScale)
+            readonly property real listMaxHeight: Config.scaled(340, root.uiScale)
+            // Taller than before to fit the brightness slider + its
+            // separator under the icon/label row.
+            readonly property real cardHeight: Config.scaled(84, root.uiScale)
 
             // ---------------- LEFT: monitor list ----------------
             ColumnLayout {
@@ -388,6 +679,7 @@ SettingsPanel {
                         selected: root.selectedName === modelData.name
                         pendingEnabled: root.enabledFor(modelData.name)
                         isPrimary: root.primaryMonitor === modelData.name
+                        brightness: root.brightnessFor(modelData.name)
 
                         // Steals keyboard focus away from any TextInput
                         // in the right-hand form before switching, and
@@ -411,6 +703,7 @@ SettingsPanel {
                                 root.primarySelected(modelData.name)
                             }
                         }
+                        onBrightnessEdited: (value) => root.setPendingBrightness(modelData.name, value)
                     }
                 }
             }
