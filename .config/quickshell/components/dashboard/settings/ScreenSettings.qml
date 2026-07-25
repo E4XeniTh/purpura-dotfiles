@@ -455,15 +455,22 @@ SettingsPanel {
     // ---------------- DDC/CI brightness ----------------
 
     // Best-effort mapping from Hyprland's monitor name (e.g. "HDMI-A-1")
-    // to ddcutil's own display number, built from `ddcutil detect`'s
-    // "DRM connector:"/"DRM_connector:" line (ddcutil 1.2+ only; the
-    // field name's separator - space or underscore - varies by version,
-    // confirmed live). A monitor that doesn't support DDC/CI at all
-    // (e.g. a TV) shows up as "Invalid display" instead of "Display N"
-    // and is correctly never mapped.
-    property var ddcDisplayNumbers: ({})
+    // to the I2C bus number ddcutil should talk to it over, built from
+    // `ddcutil detect`'s "I2C bus: /dev/i2c-N" and "DRM connector:"/
+    // "DRM_connector:" lines (both present in the same per-display block
+    // - the field name's separator on the latter, space or underscore,
+    // varies by ddcutil version, confirmed live). A monitor that doesn't
+    // support DDC/CI at all (e.g. a TV) shows up as "Invalid display"
+    // instead of "Display N" and is correctly never mapped.
+    //
+    // Targeted via `--bus N` rather than `--display N` - confirmed live,
+    // `--display N` makes ddcutil re-resolve which bus that display
+    // number currently refers to on every single invocation (effectively
+    // re-detecting), while `--bus N` talks to that I2C bus directly and
+    // skips it entirely (~0.5s vs several seconds per call).
+    property var ddcBusNumbers: ({})
 
-    // 0-100, queried live per monitor once ddcDisplayNumbers is known.
+    // 0-100, queried live per monitor once ddcBusNumbers is known.
     // Assumes VCP feature 0x10 (brightness) is reported on a 0-100
     // scale, which is the case for the vast majority of DDC/CI panels.
     property var liveBrightness: ({})
@@ -497,7 +504,7 @@ SettingsPanel {
     property var ddcQueryQueue: []
 
     function queueBrightnessQueries() {
-        root.ddcQueryQueue = Object.keys(root.ddcDisplayNumbers)
+        root.ddcQueryQueue = Object.keys(root.ddcBusNumbers)
         root.runNextBrightnessQuery()
     }
 
@@ -505,7 +512,7 @@ SettingsPanel {
         if (root.ddcQueryQueue.length === 0) return
         const name = root.ddcQueryQueue[0]
         ddcGetProcess.currentName = name
-        ddcGetProcess.command = ["ddcutil", "--display", String(root.ddcDisplayNumbers[name]), "getvcp", "10", "--brief"]
+        ddcGetProcess.command = ["ddcutil", "--bus", String(root.ddcBusNumbers[name]), "getvcp", "10", "--brief"]
         ddcGetProcess.running = false
         ddcGetProcess.running = true
     }
@@ -516,14 +523,14 @@ SettingsPanel {
 
         const commands = []
         for (const name of names) {
-            const displayNum = root.ddcDisplayNumbers[name]
-            if (displayNum === undefined) continue
+            const busNum = root.ddcBusNumbers[name]
+            if (busNum === undefined) continue
             // --noverify skips ddcutil's default post-write readback
             // that confirms the value actually took - roughly halves
             // the round-trip, and we don't need it since the UI already
             // optimistically assumes success (liveBrightness is updated
             // below regardless).
-            commands.push(`ddcutil --display ${displayNum} --noverify setvcp 10 ${root.pendingBrightness[name]}`)
+            commands.push(`ddcutil --bus ${busNum} --noverify setvcp 10 ${root.pendingBrightness[name]}`)
         }
 
         if (commands.length > 0) {
@@ -547,33 +554,42 @@ SettingsPanel {
 
         stdout: StdioCollector {
             onStreamFinished: {
-                // Confirmed live: this ddcutil build prints
-                // "DRM_connector:" (underscore), not "DRM connector:"
-                // (space) as ddcutil's own docs/examples show elsewhere
-                // - matching both defensively. Also confirmed: a monitor
-                // that doesn't support DDC/CI (e.g. a TV) shows up as
-                // "Invalid display" instead of "Display N" - explicitly
-                // reset currentDisplay there too so its DRM_connector
-                // line can never be misattributed to whichever real
-                // display happened to be seen last.
+                // Each block (one per detected display) contains both an
+                // "I2C bus: /dev/i2c-N" line and a "DRM connector:"/
+                // "DRM_connector:" line (separator varies by ddcutil
+                // version, confirmed live) - captures the bus number
+                // when seen, then attaches it to the connector name once
+                // that line follows. "Invalid display" blocks (a monitor
+                // that doesn't support DDC/CI at all, e.g. a TV) are
+                // skipped entirely rather than mapped, since ddcutil can
+                // never actually talk to them anyway.
                 const map = {}
-                let currentDisplay = null
+                let currentBus = null
+                let skipBlock = false
                 for (const line of text.split("\n")) {
-                    const displayMatch = line.match(/^Display (\d+)/)
-                    if (displayMatch) {
-                        currentDisplay = parseInt(displayMatch[1], 10)
+                    if (/^Invalid display/.test(line)) {
+                        currentBus = null
+                        skipBlock = true
                         continue
                     }
-                    if (/^Invalid display/.test(line)) {
-                        currentDisplay = null
+                    if (/^Display \d+/.test(line)) {
+                        currentBus = null
+                        skipBlock = false
+                        continue
+                    }
+                    if (skipBlock) continue
+
+                    const busMatch = line.match(/I2C bus:\s*\/dev\/i2c-(\d+)/)
+                    if (busMatch) {
+                        currentBus = parseInt(busMatch[1], 10)
                         continue
                     }
                     const connectorMatch = line.match(/DRM[ _]connector:\s*card\d+-(.+)$/)
-                    if (connectorMatch && currentDisplay !== null) {
-                        map[connectorMatch[1].trim()] = currentDisplay
+                    if (connectorMatch && currentBus !== null) {
+                        map[connectorMatch[1].trim()] = currentBus
                     }
                 }
-                root.ddcDisplayNumbers = map
+                root.ddcBusNumbers = map
                 root.queueBrightnessQueries()
             }
         }
