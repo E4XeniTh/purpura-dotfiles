@@ -62,19 +62,29 @@ Column {
             // permanently breaks a property's binding the moment
             // something assigns to it imperatively, which is exactly
             // what typing into a TextInput does. Re-established
-            // explicitly below whenever root.value changes externally
-            // (a different monitor gets selected), but not while the
-            // user is actively typing in this field.
+            // explicitly below whenever root.value changes externally.
+            //
+            // Unconditional - ScreenSettings' displayFor (what feeds
+            // root.value) is a frozen snapshot that only ever changes at
+            // deliberate moments (selecting a different monitor,
+            // reopening the panel), never as a side effect of typing
+            // into this field itself, so there's no live feedback loop
+            // to guard against here. An earlier version gated this on
+            // `!input.activeFocus`, on the theory that a monitor switch
+            // always steals focus first (see ScreenSettings' explicit
+            // forceActiveFocus() calls) - but that made a correct resync
+            // depend on focus having actually already been stolen by the
+            // time this fires, and confirmed live, it could still lose
+            // that race and leave the field showing a stale value typed
+            // for the *previous* monitor.
             text: root.value
 
             Connections {
                 target: root
                 function onValueChanged() {
-                    if (!input.activeFocus) {
-                        input.syncing = true
-                        input.text = root.value
-                        input.syncing = false
-                    }
+                    input.syncing = true
+                    input.text = root.value
+                    input.syncing = false
                 }
             }
 
