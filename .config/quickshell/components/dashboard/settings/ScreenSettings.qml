@@ -682,6 +682,7 @@ SettingsPanel {
             top: parent.top
         }
         height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, rightColumn.implicitHeight)
+            + bottomButtonsRow.anchors.topMargin + bottomButtonsRow.implicitHeight
 
         RowLayout {
             id: contentRow
@@ -792,7 +793,7 @@ SettingsPanel {
                     spacing: Config.scaled(8, root.uiScale)
 
                     Text {
-                        text: "Mode:"
+                        text: (root.selectedName.length > 0 ? root.selectedName : "Display") + " mode:"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(16, root.uiScale)
@@ -828,8 +829,18 @@ SettingsPanel {
                     Item { Layout.fillWidth: true }
                 }
 
+                // ---------------- separator ----------------
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                    color: Config.fgcolor
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
+                    // Extra breathing room below the separator, on top
+                    // of rightColumn's own uniform spacing.
+                    Layout.topMargin: Config.scaled(8, root.uiScale)
                     spacing: Config.scaled(6, root.uiScale)
                     // Width/height/refresh are meaningless once the
                     // monitor is set to hyprland's own "preferred" mode
@@ -934,73 +945,83 @@ SettingsPanel {
                         onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
                     }
                 }
+            }
+        }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(4, root.uiScale)
+        // ---------------- bottom: identify + apply ----------------
+        // Spans the full panel width, below both columns, rather than
+        // being tucked under just the right-hand form.
+        RowLayout {
+            id: bottomButtonsRow
 
-                    // ---------------- bottom left: identify ----------------
-                    DashCard {
-                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
-                        uiScale: root.uiScale
-                        color: identifyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: contentRow.bottom
+                topMargin: Config.scaled(14, root.uiScale)
+                margins: contentRow.margins
+            }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Identify"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                        }
+            // ---------------- bottom left: identify ----------------
+            DashCard {
+                Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                uiScale: root.uiScale
+                color: identifyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
-                        MouseArea {
-                            id: identifyMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                root.identifying = true
-                                identifyTimer.restart()
-                            }
-                        }
+                Text {
+                    anchors.centerIn: parent
+                    text: "Identify"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(13, root.uiScale)
+                }
+
+                MouseArea {
+                    id: identifyMouseArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        root.identifying = true
+                        identifyTimer.restart()
                     }
+                }
+            }
 
-                    Item { Layout.fillWidth: true }
+            Item { Layout.fillWidth: true }
 
-                    // ---------------- bottom right: apply ----------------
-                    DashCard {
-                        id: applyButton
+            // ---------------- bottom right: apply ----------------
+            DashCard {
+                id: applyButton
 
-                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
-                        uiScale: root.uiScale
+                Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                uiScale: root.uiScale
 
-                        property color blinkColor: Config.fgcolor
-                        border.color: root.dirty ? applyButton.blinkColor : Config.fgcolordark
+                property color blinkColor: Config.fgcolor
+                border.color: root.dirty ? applyButton.blinkColor : Config.fgcolordark
 
-                        SequentialAnimation {
-                            running: root.dirty
-                            loops: Animation.Infinite
-                            ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
-                            ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
-                        }
+                SequentialAnimation {
+                    running: root.dirty
+                    loops: Animation.Infinite
+                    ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
+                    ColorAnimation { target: applyButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
+                }
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Apply"
-                            color: root.dirty ? Config.fgcolor : Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                        }
+                Text {
+                    anchors.centerIn: parent
+                    text: "Apply"
+                    color: root.dirty ? Config.fgcolor : Config.fgcolordark
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(13, root.uiScale)
+                }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.dirty
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.applyChanges()
-                            }
-                        }
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: root.dirty
+                    onClicked: {
+                        contentWrapper.forceActiveFocus()
+                        root.applyChanges()
                     }
                 }
             }
