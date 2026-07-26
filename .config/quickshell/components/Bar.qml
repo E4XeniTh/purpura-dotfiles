@@ -22,6 +22,16 @@ Scope {
     property var dashboard: null
     property var notification: null
 
+    // dashboard.primaryMonitor defaults to a hardcoded output name
+    // ("DP-1") and isn't persisted to disk, so it can point at a screen
+    // that doesn't exist at all on this machine/session (e.g. the same
+    // config used on a laptop with only eDP-1) - without this, the bar
+    // would then be invisible on every single screen. Falls back to
+    // whatever screen shows up first instead of disappearing entirely.
+    readonly property bool primaryMonitorConnected: root.dashboard
+        ? Quickshell.screens.some(s => s.name === root.dashboard.primaryMonitor)
+        : true
+
     // Falls back to a sane default until hyprctl responds
     Variants {
         model: Quickshell.screens
@@ -33,7 +43,9 @@ Scope {
             // shell.qml), whose primaryMonitor is itself shared across
             // every screen's dashWindow - see that file for why it has
             // to be.
-            visible: !root.locked && !root.powerMenuOpen && (root.dashboard ? modelData.name === root.dashboard.primaryMonitor : true)
+            visible: !root.locked && !root.powerMenuOpen && (root.dashboard
+                ? (root.primaryMonitorConnected ? modelData.name === root.dashboard.primaryMonitor : modelData === Quickshell.screens[0])
+                : true)
             id: bar
             property var modelData
             screen: modelData
