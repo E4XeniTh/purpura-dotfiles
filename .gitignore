@@ -1,3 +1,8 @@
 .config/quickshell/helpers/auth
 .config/quickshell/helpers/cava_bridge
 .config/quickshell/helpers/*.o
+
+# Runtime monitor layout, written by ScreenSettings.qml on every Apply -
+# machine-specific (output names/resolutions differ per box), same
+# reasoning the old ~/.config/hypr/screens.json was never tracked either.
+.config/quickshell/monitors.json
