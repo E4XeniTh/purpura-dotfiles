@@ -83,10 +83,7 @@ hl.env("XDG_MENU_PREFIX", "arch-")
 -- that file for the currently-saved layout (DP-1 on, DP-2/HDMI-A-1 off,
 -- matching what used to be hardcoded here).
 hl.monitor({
-    output = "DP-1",
-    mode = "1920x1080@144",
-    position = "0x0",
-    scale = "1",
+    output = "auto"
 })
 
 --#######################################################################################
