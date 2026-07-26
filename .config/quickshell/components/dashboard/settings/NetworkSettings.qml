@@ -134,11 +134,11 @@ SettingsPanel {
                 // Definitive width - about a fifth of the panel's content
                 // width - locked to min == preferred == max so it can
                 // never be squeezed by the list column's own content.
-                readonly property real fixedWidth: Math.round(contentRow.width * 0.2)
+                readonly property real fixedWidth: Math.round(contentRow.width * 0.1)
 
-                Layout.preferredWidth: tabColumn.fixedWidth
-                Layout.minimumWidth: tabColumn.fixedWidth
-                Layout.maximumWidth: tabColumn.fixedWidth
+                Layout.preferredWidth: tabColumn.contentWidth
+                Layout.minimumWidth: tabColumn.contentWidth
+                Layout.maximumWidth: tabColumn.contentWidth
                 Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
