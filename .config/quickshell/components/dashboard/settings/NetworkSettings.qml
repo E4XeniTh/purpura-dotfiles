@@ -55,10 +55,14 @@ SettingsPanel {
     // ---------------- Devices tab ----------------
     readonly property var deviceEntries: Networking.devices.values.map(d => ({ kind: "device", device: d }))
 
-    // ---------------- Connections tab: connected, disconnected (no separator) ----------------
+    // ---------------- Connections tab: wired only, connected/disconnected (no separator) ----------------
+    // Wireless networks have their own dedicated WiFi tab, so they're
+    // excluded here rather than duplicated in both places.
+    readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
+
     readonly property var connectionEntries: {
-        const connected = root.allNetworks.filter(n => n.connected)
-        const disconnected = root.allNetworks.filter(n => !n.connected)
+        const connected = root.wiredNetworks.filter(n => n.connected)
+        const disconnected = root.wiredNetworks.filter(n => !n.connected)
         const list = connected.map(n => ({ kind: "network", network: n }))
         for (const n of disconnected) list.push({ kind: "network", network: n })
         return list
@@ -131,10 +135,10 @@ SettingsPanel {
             ColumnLayout {
                 id: tabColumn
 
-                // Definitive width - about a fifth of the panel's content
-                // width - locked to min == preferred == max so it can
-                // never be squeezed by the list column's own content.
-                readonly property real fixedWidth: Math.round(contentRow.width * 0.1)
+                // Definitive width - locked to min == preferred == max so
+                // it can never be squeezed by the list column's own
+                // content.
+                readonly property real contentWidth: Math.round(contentRow.width * 0.1)
 
                 Layout.preferredWidth: tabColumn.contentWidth
                 Layout.minimumWidth: tabColumn.contentWidth
@@ -306,6 +310,7 @@ SettingsPanel {
                         anchors.fill: parent
                         uiScale: root.uiScale
                         network: parent.modelData.network
+                        allowForget: root.currentTab === 2
                     }
                 }
 
@@ -349,6 +354,14 @@ SettingsPanel {
                         visible: root.currentTab !== 0
                         iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
                         label: "Connect/Disconnect"
+                    }
+
+                    HintItem {
+                        uiScale: root.uiScale
+                        visible: root.currentTab === 2
+                        iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                        label: "Forget"
+                        tint: "red"
                     }
 
                     Item { Layout.fillWidth: true }

@@ -9,19 +9,30 @@ import "../../../Config.js" as Config
 
 // One network (a wifi SSID or wired connection) in NetworkSettings'
 // Connections and WiFi tabs. Left-click connects (if not connected) or
-// disconnects (if connected). Connecting to a secured wifi network that
-// needs a password surfaces NetworkManager's own polkit agent prompt
-// (a separate system dialog, not drawn by this shell), so there's no
-// in-panel password UI here.
+// disconnects (if connected). Right-click forgets it, but only where
+// allowForget is set (the WiFi tab). Connecting to a secured wifi
+// network that needs a password surfaces NetworkManager's own polkit
+// agent prompt (a separate system dialog, not drawn by this shell), so
+// there's no in-panel password UI here.
+//
+// `network` can go null out from under an already-instantiated card:
+// NetworkManager can remove an access point/connection profile (wifi
+// out of range, a saved connection deleted) while this card's delegate
+// is still alive - confirmed from a live crash log showing exactly
+// that ("Cannot read property of null" here, moments before a
+// segfault) even while the panel wasn't visible, since ListView
+// delegates aren't torn down just because the window is hidden. Every
+// access below guards for that.
 DashCard {
     id: root
 
     required property var network
     property real uiScale: 1.0
+    property bool allowForget: false
 
-    readonly property bool isWifi: root.network.device && root.network.device.type === DeviceType.Wifi
+    readonly property bool isWifi: !!(root.network && root.network.device && root.network.device.type === DeviceType.Wifi)
 
-    border.color: root.network.connected ? Config.fgcolorlight : Config.fgcolor
+    border.color: (root.network && root.network.connected) ? Config.fgcolorlight : Config.fgcolor
 
     RowLayout {
         anchors {
@@ -49,7 +60,7 @@ DashCard {
 
         Text {
             Layout.fillWidth: true
-            text: root.network.name
+            text: root.network ? root.network.name : ""
             color: Config.fgcolor
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(15, root.uiScale)
@@ -60,9 +71,13 @@ DashCard {
 
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton
-        onClicked: {
-            if (root.network.connected) {
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: (mouse) => {
+            if (!root.network) return
+
+            if (mouse.button === Qt.RightButton) {
+                if (root.allowForget) root.network.forget()
+            } else if (root.network.connected) {
                 root.network.disconnect()
             } else {
                 root.network.connect()

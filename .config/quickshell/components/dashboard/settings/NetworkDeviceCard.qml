@@ -11,13 +11,18 @@ import "../../../Config.js" as Config
 // click toggles nmManaged - NetworkDevice has no separate on/off switch
 // of its own, so "enable/disable" here means whether NetworkManager
 // manages the interface at all.
+//
+// `device` can go null out from under an already-instantiated card if
+// NetworkManager removes the interface (e.g. a USB wifi dongle
+// unplugged) while this card's delegate is still alive - same failure
+// mode confirmed live for NetworkCard.qml's `network`, guarded here too.
 DashCard {
     id: root
 
     required property var device
     property real uiScale: 1.0
 
-    border.color: root.device.nmManaged ? Config.fgcolor : "red"
+    border.color: root.device ? (root.device.nmManaged ? Config.fgcolor : "red") : Config.fgcolordark
 
     RowLayout {
         anchors {
@@ -34,7 +39,7 @@ DashCard {
                 id: deviceIcon
                 anchors.fill: parent
                 source: Quickshell.iconPath(
-                    root.device.type === DeviceType.Wifi ? "network-wireless-symbolic" : "network-wired-symbolic"
+                    (root.device && root.device.type === DeviceType.Wifi) ? "network-wireless-symbolic" : "network-wired-symbolic"
                 )
             }
 
@@ -51,7 +56,7 @@ DashCard {
 
             Text {
                 Layout.fillWidth: true
-                text: root.device.name
+                text: root.device ? root.device.name : ""
                 color: Config.fgcolor
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(15, root.uiScale)
@@ -61,7 +66,7 @@ DashCard {
 
             Text {
                 Layout.fillWidth: true
-                text: DeviceType.toString(root.device.type)
+                text: root.device ? DeviceType.toString(root.device.type) : ""
                 color: Config.fgcolordark
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(12, root.uiScale)
@@ -73,6 +78,8 @@ DashCard {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
-        onClicked: root.device.nmManaged = !root.device.nmManaged
+        onClicked: {
+            if (root.device) root.device.nmManaged = !root.device.nmManaged
+        }
     }
 }
