@@ -62,6 +62,10 @@ SettingsPanel {
         readonly property real contentWidth: width - leftPadding - rightPadding
         readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
         readonly property real cardHeight: Config.scaled(76, root.uiScale)
+        // Same cap as BluetoothSettings/ScreenSettings/NetworkSettings'
+        // own lists - keeps this panel from growing without bound if
+        // there are a lot of playback/recording devices.
+        readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
 
 
         Row {
@@ -81,7 +85,12 @@ SettingsPanel {
                     font.bold: true
                 }
 
-                Repeater {
+                ListView {
+                    width: soundContent.columnWidth
+                    height: Math.min(contentHeight, soundContent.listMaxHeight)
+                    clip: true
+                    spacing: Config.scaled(10, root.uiScale)
+                    boundsBehavior: Flickable.StopAtBounds
                     model: ScriptModel { values: root.playbackNodes }
 
                     delegate: DeviceCard {
@@ -114,7 +123,12 @@ SettingsPanel {
                     font.bold: true
                 }
 
-                Repeater {
+                ListView {
+                    width: soundContent.columnWidth
+                    height: Math.min(contentHeight, soundContent.listMaxHeight)
+                    clip: true
+                    spacing: Config.scaled(10, root.uiScale)
+                    boundsBehavior: Flickable.StopAtBounds
                     model: ScriptModel { values: root.recordingNodes }
 
                     delegate: DeviceCard {

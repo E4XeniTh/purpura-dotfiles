@@ -68,15 +68,19 @@ SettingsPanel {
         return list
     }
 
-    // ---------------- WiFi tab: connected network on top, separator, rest by signal strength ----------------
+    // ---------------- WiFi tab: connected + remembered on top, separator, then found networks ----------------
     readonly property var wifiEntries: {
         const connected = root.wifiNetworks.filter(n => n.connected)
-        const rest = root.wifiNetworks.filter(n => !n.connected)
+        const remembered = root.wifiNetworks.filter(n => !n.connected && n.known)
+            .slice()
+            .sort((a, b) => b.signalStrength - a.signalStrength)
+        const found = root.wifiNetworks.filter(n => !n.connected && !n.known)
             .slice()
             .sort((a, b) => b.signalStrength - a.signalStrength)
         const list = connected.map(n => ({ kind: "network", network: n }))
-        if (connected.length > 0 && rest.length > 0) list.push({ kind: "separator" })
-        for (const n of rest) list.push({ kind: "network", network: n })
+        for (const n of remembered) list.push({ kind: "network", network: n })
+        if ((connected.length > 0 || remembered.length > 0) && found.length > 0) list.push({ kind: "separator" })
+        for (const n of found) list.push({ kind: "network", network: n })
         return list
     }
 
@@ -135,10 +139,10 @@ SettingsPanel {
             ColumnLayout {
                 id: tabColumn
 
-                // Definitive width - locked to min == preferred == max so
-                // it can never be squeezed by the list column's own
-                // content.
-                readonly property real contentWidth: Math.round(contentRow.width * 0.1)
+                // Snug to the tab buttons themselves, locked to
+                // min == preferred == max so it can never be squeezed (or
+                // stretched) by the list column's own content.
+                readonly property real contentWidth: Config.scaled(40, root.uiScale)
 
                 Layout.preferredWidth: tabColumn.contentWidth
                 Layout.minimumWidth: tabColumn.contentWidth
