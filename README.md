@@ -99,6 +99,8 @@ compiled binary directly.
   (`dashboard/settings/ScreenSettings.qml` reads/writes monitor config
   through `hyprctl`) - systemd and Hyprland are already required, not
   extra installs
+- `jq` — `scripts/apply-monitors.sh` reads the saved monitor layout
+  (`~/.config/quickshell/monitors.json`) with it at login
 
 **Services**
 - `pipewire` (+ a session manager, e.g. `wireplumber`) — volume OSD
@@ -125,8 +127,9 @@ compiled binary directly.
 - Monitor layout (resolution, position, scale, on/off) is set from the
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
   that file only defines the primary display. Changes are saved to
-  `~/.config/hypr/monitors.conf` and replayed via `hyprctl eval
-  'hl.monitor({...})'` by `scripts/apply-monitors.sh` on every login (see
-  `hyprland.lua`'s autostart block) so they survive a restart -
-  `hyprctl keyword` doesn't work here since `hyprland.lua` is parsed by
-  hyprlang's Lua frontend, not the legacy config format.
+  `~/.config/quickshell/monitors.json` (one JSON entry per monitor,
+  including a precomputed `hl.monitor({...})` eval line) and replayed by
+  `scripts/apply-monitors.sh` on every login (see `hyprland.lua`'s
+  autostart block) so they survive a restart - `hyprctl keyword` doesn't
+  work here since `hyprland.lua` is parsed by hyprlang's Lua frontend,
+  not the legacy config format.

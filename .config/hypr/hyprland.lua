@@ -26,9 +26,9 @@ local mainMod = "SUPER" -- "META" key is main modifier
 --#######################################################################################
 
 hl.on("hyprland.start", function()
--- Replays ~/.config/hypr/monitors.conf (DP-2/HDMI-A-1, saved by the
--- Screen settings panel) on top of the static DP-1 definition above -
--- run first so hyprpaper/everything after sees the final monitor
+-- Replays ~/.config/quickshell/monitors.json (DP-2/HDMI-A-1, saved by
+-- the Screen settings panel) on top of the static DP-1 definition above
+-- - run first so hyprpaper/everything after sees the final monitor
 -- layout, not just the primary display.
 hl.exec_cmd("~/.config/hypr/scripts/apply-monitors.sh")
 hl.exec_cmd("/usr/lib/polkit-kde-authentication-agent-1")
@@ -78,9 +78,9 @@ hl.env("XDG_MENU_PREFIX", "arch-")
 -- Just the primary display here - DP-2/HDMI-A-1 (and any future change
 -- to DP-1 itself) are managed by the quickshell Screen settings panel
 -- (components/dashboard/settings/ScreenSettings.qml) instead, which
--- writes ~/.config/hypr/monitors.conf and gets replayed on top of this
--- by scripts/apply-monitors.sh in the autostart block below - see that
--- file for the currently-saved layout (DP-1 on, DP-2/HDMI-A-1 off,
+-- writes ~/.config/quickshell/monitors.json and gets replayed on top of
+-- this by scripts/apply-monitors.sh in the autostart block below - see
+-- that file for the currently-saved layout (DP-1 on, DP-2/HDMI-A-1 off,
 -- matching what used to be hardcoded here).
 hl.monitor({
     output = "DP-1",

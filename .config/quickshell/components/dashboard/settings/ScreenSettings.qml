@@ -32,11 +32,15 @@ import "../../../Config.js" as Config
 //
 // A disabled monitor's own hyprctl geometry is a stale placeholder
 // (0x0, etc. - nothing's actually driving it), so selecting one instead
-// shows whatever was last remembered for it in ~/.config/hypr/
-// screens.json, written on every Apply - this is purely so re-enabling
+// shows whatever was last remembered for it in ~/.config/quickshell/
+// monitors.json, written on every Apply - this is purely so re-enabling
 // a monitor doesn't force retyping its position/resolution from
 // scratch. An enabled monitor always shows its real, live hyprctl state
-// instead, screens.json or not.
+// instead, monitors.json or not. That same file also carries a
+// precomputed hl.monitor({...}) "line" per monitor, which is all
+// scripts/apply-monitors.sh needs to replay the whole layout at login -
+// one combined file instead of the previous monitors.conf/screens.json
+// split, since this panel was the only thing reading or writing either.
 SettingsPanel {
     id: root
 
@@ -110,7 +114,7 @@ SettingsPanel {
     // has no way to report "this is running in preferred mode" after
     // the fact, so there's nothing to re-derive it from on reselect -
     // the toggle has to remember its own state itself. Also seeded from
-    // screens.json on load (see screensStoreProcess) for monitors not
+    // monitors.json on load (see screensStoreProcess) for monitors not
     // touched yet this session.
     property var preferredModes: ({})
 
@@ -137,7 +141,7 @@ SettingsPanel {
     }
 
     // What the input boxes actually show - a live hyprctl snapshot (or,
-    // for a disabled monitor, its remembered screens.json values) for
+    // for a disabled monitor, its remembered monitors.json values) for
     // whichever monitor is currently selected. Cleared immediately on
     // selection (so a brief fetch-in-flight window never shows a
     // stale/wrong monitor's numbers) and repopulated once the fresh
@@ -163,12 +167,12 @@ SettingsPanel {
     // Resolves what a monitor's width/height/refresh/x/y/scale/mode
     // "should" be right now - the single source of truth used both to
     // build the hl.monitor() line for Apply and to populate the input
-    // boxes/screens.json snapshot, so those three things can never
+    // boxes/monitors.json snapshot, so those three things can never
     // disagree with each other.
     //
     // For a disabled monitor, hyprctl's own geometry may be a stale
     // placeholder (0x0, etc.) since nothing's actually driving it -
-    // falls back to whatever screens.json remembers for it instead.
+    // falls back to whatever monitors.json remembers for it instead.
     // usesExplicitMode/usesExplicitPosition say whether the *enabled*
     // hl.monitor() line (were this monitor enabled) should give
     // hyprctl real numbers or Hyprland's own "preferred"/"auto" tokens
@@ -203,7 +207,7 @@ SettingsPanel {
         }
 
         const wasActive = !base.disabled
-        // A monitor being (re-)enabled with a screens.json entry has
+        // A monitor being (re-)enabled with a monitors.json entry has
         // trustworthy remembered geometry too, same as one that was
         // already active - without this, re-enabling a disabled
         // monitor without editing anything fell back to
@@ -270,36 +274,34 @@ SettingsPanel {
             if (line) sendLines.push(line)
         }
 
-        // monitors.conf persists the *whole* layout, not just what
-        // changed this time, since apply-monitors.sh replays every line
-        // in it from scratch at login (hyprland.lua only defines DP-1).
-        // screens.json is built from the same per-monitor state at the
-        // same time, so re-enabling a monitor later shows exactly what
-        // it was just set to (or, if untouched, whatever it already
+        // monitors.json persists the *whole* layout, not just what
+        // changed this time, since apply-monitors.sh replays every
+        // entry's "line" from scratch at login (hyprland.lua only
+        // defines DP-1) - and doubles as the remembered per-monitor
+        // state, so re-enabling a monitor later shows exactly what it
+        // was just set to (or, if untouched, whatever it already
         // remembered).
-        const allLines = []
         const storeSnapshot = {}
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
-            if (line) allLines.push(line)
-
             const state = root.effectiveStateFor(m.name)
-            if (state) {
+            if (state && line) {
                 storeSnapshot[m.name] = {
+                    disabled: state.disabled,
                     width: state.width,
                     height: state.height,
                     refresh: state.refresh,
                     x: state.x,
                     y: state.y,
                     scale: state.scale,
-                    mode: state.mode
+                    mode: state.mode,
+                    line
                 }
             }
         }
-        monitorsFile.setText(allLines.join("\n") + "\n")
 
         root.screensStore = storeSnapshot
-        screensStoreFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
         if (sendLines.length > 0) {
             const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
@@ -412,23 +414,16 @@ SettingsPanel {
         onTriggered: root.refreshMonitors()
     }
 
-    // Persisted alongside hyprland.lua - see that file's autostart block,
-    // which replays these lines via hyprctl eval on every login so
-    // Apply here survives a restart.
-    FileView {
-        id: monitorsFile
-        path: Quickshell.env("HOME") + "/.config/hypr/monitors.conf"
-        // Write-only from here (the startup script is what reads it) -
-        // no need to preload/read it back.
-        preload: false
-    }
-
-    // ---------------- disabled-monitor memory (screens.json) ----------------
-
-    // Last known good width/height/refresh/x/y/scale/mode per monitor
-    // name, loaded once on open and rewritten on every Apply - see
-    // effectiveStateFor() above for how a disabled monitor falls back to
-    // this instead of hyprctl's own stale placeholder geometry.
+    // ---------------- combined monitor state (monitors.json) ----------------
+    // One file now covers both of what used to be two: the hl.monitor()
+    // eval lines scripts/apply-monitors.sh replays at login, and the
+    // remembered width/height/refresh/x/y/scale/mode geometry
+    // effectiveStateFor() above falls back to for a disabled monitor
+    // (whose own hyprctl geometry is a stale placeholder). Lives under
+    // the quickshell config dir rather than hypr's, since this panel is
+    // the only thing that ever reads or writes it - hyprland.lua's
+    // autostart block only shells out to apply-monitors.sh, which reads
+    // this file itself.
     property var screensStore: ({})
 
     function loadScreensStore() {
@@ -442,7 +437,7 @@ SettingsPanel {
         // through Process/hyprctl) rather than FileView, so a missing
         // file (first run) just yields empty stdout instead of needing
         // to reason about FileView's own missing-file behavior.
-        command: ["cat", Quickshell.env("HOME") + "/.config/hypr/screens.json"]
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
 
         stdout: StdioCollector {
             onStreamFinished: {
@@ -469,8 +464,11 @@ SettingsPanel {
     }
 
     FileView {
-        id: screensStoreFile
-        path: Quickshell.env("HOME") + "/.config/hypr/screens.json"
+        id: monitorsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
+        // Write-only from here (screensStoreProcess above is what reads
+        // it back, and apply-monitors.sh is what replays it at login) -
+        // no need to preload/read it back through this FileView too.
         preload: false
     }
 
