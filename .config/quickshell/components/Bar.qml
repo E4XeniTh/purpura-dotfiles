@@ -28,9 +28,21 @@ Scope {
     // config used on a laptop with only eDP-1) - without this, the bar
     // would then be invisible on every single screen. Falls back to
     // whatever screen shows up first instead of disappearing entirely.
+    //
+    // Compared by name, not object identity. A previous version of this
+    // fallback compared modelData against Quickshell.screens[0] by
+    // reference, and the bar started disappearing on every monitor
+    // change instead of just when the real primary was missing - most
+    // likely Quickshell.screens handing out fresh QtObjects whenever the
+    // monitor set changes, making any previously-captured reference go
+    // stale. `.name` is the only thing that's safe to compare here.
     readonly property bool primaryMonitorConnected: root.dashboard
         ? Quickshell.screens.some(s => s.name === root.dashboard.primaryMonitor)
         : true
+
+    readonly property string effectivePrimaryName: root.primaryMonitorConnected
+        ? (root.dashboard ? root.dashboard.primaryMonitor : "")
+        : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
 
     // Falls back to a sane default until hyprctl responds
     Variants {
@@ -43,9 +55,7 @@ Scope {
             // shell.qml), whose primaryMonitor is itself shared across
             // every screen's dashWindow - see that file for why it has
             // to be.
-            visible: !root.locked && !root.powerMenuOpen && (root.dashboard
-                ? (root.primaryMonitorConnected ? modelData.name === root.dashboard.primaryMonitor : modelData === Quickshell.screens[0])
-                : true)
+            visible: !root.locked && !root.powerMenuOpen && (root.dashboard ? modelData.name === root.effectivePrimaryName : true)
             id: bar
             property var modelData
             screen: modelData
