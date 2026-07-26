@@ -59,12 +59,11 @@ SettingsPanel {
     // ---------------- Devices tab ----------------
     readonly property var deviceEntries: Networking.devices.values.map(d => ({ kind: "device", device: d }))
 
-    // ---------------- Connections tab: connected, separator, disconnected ----------------
+    // ---------------- Connections tab: connected, disconnected (no separator) ----------------
     readonly property var connectionEntries: {
         const connected = root.allNetworks.filter(n => n.connected)
         const disconnected = root.allNetworks.filter(n => !n.connected)
         const list = connected.map(n => ({ kind: "network", network: n }))
-        list.push({ kind: "separator" })
         for (const n of disconnected) list.push({ kind: "network", network: n })
         return list
     }
@@ -98,6 +97,18 @@ SettingsPanel {
     onActiveChanged: root.updateWifiScanning()
     onCurrentTabChanged: root.updateWifiScanning()
 
+    // Single shared PSK prompt for the whole panel - previously each
+    // NetworkCard row instantiated its own DialogCard (ShaderEffectSource
+    // + FastBlur), which is suspected to have caused a segfault when
+    // reopening this panel after switching tabs. One instance here avoids
+    // that churn entirely.
+    property var pskTargetNetwork: null
+
+    function showPskDialog(network) {
+        root.pskTargetNetwork = network
+        pskDialog.show("PASSWORD FOR " + network.name)
+    }
+
     // SettingsPanel sizes itself off this outer Item's height via
     // childrenRect, which only reliably tracks plain Column/Row
     // positioners, not Layout types - see BluetoothSettings.qml for the
@@ -111,9 +122,11 @@ SettingsPanel {
             right: parent.right
             top: parent.top
         }
-        height: contentRow.margins * 2 + Math.max(tabColumn.implicitHeight, listColumn.implicitHeight)
-            + hintSeparator.anchors.topMargin + hintSeparator.height
-            + hintRow.anchors.topMargin + hintRow.height
+        height: Math.max(
+            Config.scaled(300, root.uiScale),
+            contentRow.margins * 2 + Math.max(tabColumn.implicitHeight, listColumn.implicitHeight)
+                + hintSeparator.anchors.topMargin + hintSeparator.height
+                + hintRow.anchors.topMargin + hintRow.height)
 
         RowLayout {
             id: contentRow
@@ -129,33 +142,53 @@ SettingsPanel {
 
             readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
             readonly property real cardHeight: Config.scaled(56, root.uiScale)
+            readonly property real dividerWidth: Config.scaled(2, root.uiScale)
 
             // ---------------- LEFT: icon tabs ----------------
             ColumnLayout {
                 id: tabColumn
 
-                Layout.preferredWidth: Config.scaled(44, root.uiScale)
+                Layout.preferredWidth: Config.scaled(120, root.uiScale)
                 Layout.alignment: Qt.AlignTop
                 spacing: Config.scaled(8, root.uiScale)
 
                 DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
+                    Layout.fillWidth: true
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
                     uiScale: root.uiScale
                     color: devicesTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.color: root.currentTab === 0 ? Config.fgcolorlight : Config.fgcolor
 
-                    IconImage {
-                        id: devicesTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-workgroup-symbolic")
-                    }
+                    RowLayout {
+                        anchors {
+                            fill: parent
+                            leftMargin: Config.scaled(10, root.uiScale)
+                            rightMargin: Config.scaled(10, root.uiScale)
+                        }
+                        spacing: Config.scaled(8, root.uiScale)
 
-                    ColorOverlay {
-                        anchors.fill: devicesTabIcon
-                        source: devicesTabIcon
-                        color: parent.border.color
+                        IconImage {
+                            id: devicesTabIcon
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            source: Quickshell.iconPath("network-workgroup-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: devicesTabIcon
+                            source: devicesTabIcon
+                            color: parent.parent.border.color
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Devices"
+                            color: parent.parent.border.color
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
                     }
 
                     MouseArea {
@@ -167,23 +200,42 @@ SettingsPanel {
                 }
 
                 DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
+                    Layout.fillWidth: true
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
                     uiScale: root.uiScale
                     color: connectionsTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.color: root.currentTab === 1 ? Config.fgcolorlight : Config.fgcolor
 
-                    IconImage {
-                        id: connectionsTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-transmit-receive-symbolic")
-                    }
+                    RowLayout {
+                        anchors {
+                            fill: parent
+                            leftMargin: Config.scaled(10, root.uiScale)
+                            rightMargin: Config.scaled(10, root.uiScale)
+                        }
+                        spacing: Config.scaled(8, root.uiScale)
 
-                    ColorOverlay {
-                        anchors.fill: connectionsTabIcon
-                        source: connectionsTabIcon
-                        color: parent.border.color
+                        IconImage {
+                            id: connectionsTabIcon
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            source: Quickshell.iconPath("network-transmit-receive-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: connectionsTabIcon
+                            source: connectionsTabIcon
+                            color: parent.parent.border.color
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Connections"
+                            color: parent.parent.border.color
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
                     }
 
                     MouseArea {
@@ -195,7 +247,7 @@ SettingsPanel {
                 }
 
                 DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
+                    Layout.fillWidth: true
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
                     uiScale: root.uiScale
                     // Grayed out and unclickable when there's no enabled
@@ -206,17 +258,36 @@ SettingsPanel {
                     border.color: !root.wifiUsable ? Config.fgcolordark
                         : (root.currentTab === 2 ? Config.fgcolorlight : Config.fgcolor)
 
-                    IconImage {
-                        id: wifiTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-wireless-symbolic")
-                    }
+                    RowLayout {
+                        anchors {
+                            fill: parent
+                            leftMargin: Config.scaled(10, root.uiScale)
+                            rightMargin: Config.scaled(10, root.uiScale)
+                        }
+                        spacing: Config.scaled(8, root.uiScale)
 
-                    ColorOverlay {
-                        anchors.fill: wifiTabIcon
-                        source: wifiTabIcon
-                        color: parent.border.color
+                        IconImage {
+                            id: wifiTabIcon
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            source: Quickshell.iconPath("network-wireless-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: wifiTabIcon
+                            source: wifiTabIcon
+                            color: parent.parent.border.color
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "WiFi"
+                            color: parent.parent.border.color
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
                     }
 
                     MouseArea {
@@ -229,6 +300,14 @@ SettingsPanel {
                 }
 
                 Item { Layout.fillHeight: true }
+            }
+
+            // ---------------- divider between tabs and list ----------------
+            Rectangle {
+                Layout.preferredWidth: contentRow.dividerWidth
+                Layout.preferredHeight: Math.max(tabColumn.implicitHeight, listColumn.implicitHeight)
+                Layout.alignment: Qt.AlignTop
+                color: Config.fgcolor
             }
 
             // ---------------- RIGHT: current tab's list ----------------
@@ -292,6 +371,7 @@ SettingsPanel {
                         anchors.fill: parent
                         uiScale: root.uiScale
                         network: parent.modelData.network
+                        onPskRequested: (network) => root.showPskDialog(network)
                     }
                 }
 
@@ -348,6 +428,17 @@ SettingsPanel {
             }
 
             Item { Layout.fillWidth: true }
+        }
+
+        // Single shared PSK prompt for the whole panel - see
+        // showPskDialog() above for why this replaced one-DialogCard-
+        // per-row.
+        DialogCard {
+            id: pskDialog
+            uiScale: root.uiScale
+            onConfirmed: (text) => {
+                if (root.pskTargetNetwork) root.pskTargetNetwork.connectWithPsk(text)
+            }
         }
     }
 }

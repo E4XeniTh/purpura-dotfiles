@@ -10,16 +10,17 @@ import "../../../Config.js" as Config
 // One network (a wifi SSID or wired connection) in NetworkSettings'
 // Connections and WiFi tabs. Left-click connects (if not connected) or
 // disconnects (if connected). If connecting to a wifi network fails
-// because it needs a password, a DialogCard prompt opens right here
-// asking for one - connectWithPsk() only exists on WifiNetwork, but
-// QML dispatches off the actual underlying object regardless of how
-// it's typed where this card got it from, so calling it unconditionally
-// on a wifi-only code path is safe.
+// because it needs a password, this emits pskRequested rather than
+// showing its own dialog - the panel hosts a single shared DialogCard
+// (see NetworkSettings.qml) instead of one per row, since one-per-row
+// caused ShaderEffectSource/blur churn implicated in a reopen crash.
 DashCard {
     id: root
 
     required property var network
     property real uiScale: 1.0
+
+    signal pskRequested(var network)
 
     readonly property bool isWifi: root.network.device && root.network.device.type === DeviceType.Wifi
 
@@ -32,7 +33,7 @@ DashCard {
         target: root.network
         function onConnectionFailed(reason) {
             if (root.isWifi && reason === ConnectionFailReason.NoSecrets) {
-                pskDialog.show("PASSWORD FOR " + root.network.name)
+                root.pskRequested(root.network)
             }
         }
     }
@@ -75,9 +76,6 @@ DashCard {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
-        // The dialog (if it opens) covers this card and has its own
-        // input - avoid also toggling connect/disconnect underneath it.
-        enabled: !pskDialog.open
         onClicked: {
             if (root.network.connected) {
                 root.network.disconnect()
@@ -85,11 +83,5 @@ DashCard {
                 root.network.connect()
             }
         }
-    }
-
-    DialogCard {
-        id: pskDialog
-        uiScale: root.uiScale
-        onConfirmed: (text) => root.network.connectWithPsk(text)
     }
 }

@@ -440,7 +440,7 @@ Scope {
                                     spacing: Config.scaled(6, dashWindow.uiScale)
 
                                     Repeater {
-                                        model: ["audio-volume-high-symbolic", "network-wireless-symbolic", "network-bluetooth", "battery-100-symbolic", "tvdisconnected", ""]
+                                        model: ["audio-volume-high-symbolic", "network-wired-symbolic", "network-bluetooth", "battery-100-symbolic", "tvdisconnected", ""]
 
                                         delegate: DashCard {
                                             required property string modelData
