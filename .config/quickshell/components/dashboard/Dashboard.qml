@@ -458,11 +458,9 @@ Scope {
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
                                             }
 
-                                            // Only the audio/bluetooth/screen icons open
-                                            // anything so far - the last one is reserved
-                                            // for the same settings-button treatment
-                                            // later, but all of them hover-highlight
-                                            // already.
+                                            // The last icon is reserved for the same
+                                            // settings-button treatment later, but it
+                                            // hover-highlights already like the rest.
                                             MouseArea {
                                                 id: iconMouseArea
                                                 anchors.fill: parent
@@ -470,6 +468,8 @@ Scope {
                                                 onClicked: {
                                                     if (index === 0) {
                                                         dashWindow.toggleSettingsPanel("audio")
+                                                    } else if (index === 1) {
+                                                        dashWindow.toggleSettingsPanel("network")
                                                     } else if (index === 2) {
                                                         dashWindow.toggleSettingsPanel("bluetooth")
                                                     } else if (index === 4) {
@@ -581,6 +581,7 @@ Scope {
                     dashWindow.activeSettingsPanel = ""
                     dashWindow.pendingSettingsPanel = ""
                     audioSettings.forceHide()
+                    networkSettings.forceHide()
                     bluetoothSettings.forceHide()
                     screenSettings.forceHide()
                 }
@@ -616,6 +617,19 @@ Scope {
                 selectedSourceId: root.audioSelectedSourceId
                 onSinkSelected: (id) => root.audioSelectedSinkId = id
                 onSourceSelected: (id) => root.audioSelectedSourceId = id
+            }
+
+            // Network settings, opened from the network icon above. Same
+            // width as AudioSettings.
+            NetworkSettings {
+                id: networkSettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "network"
+                onClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Bluetooth settings, opened from the bluetooth icon above.
