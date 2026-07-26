@@ -24,10 +24,6 @@ SettingsPanel {
 
     namespaceName: "networkSettings"
 
-    // Needed for the WiFi tab's password prompt (DialogCard) to actually
-    // receive keystrokes - see DialogCard.qml's own note.
-    wantsKeyboardFocus: true
-
     // 0 = Devices, 1 = Connections, 2 = WiFi.
     property int currentTab: 0
 
@@ -97,18 +93,6 @@ SettingsPanel {
     onActiveChanged: root.updateWifiScanning()
     onCurrentTabChanged: root.updateWifiScanning()
 
-    // Single shared PSK prompt for the whole panel - previously each
-    // NetworkCard row instantiated its own DialogCard (ShaderEffectSource
-    // + FastBlur), which is suspected to have caused a segfault when
-    // reopening this panel after switching tabs. One instance here avoids
-    // that churn entirely.
-    property var pskTargetNetwork: null
-
-    function showPskDialog(network) {
-        root.pskTargetNetwork = network
-        pskDialog.show("PASSWORD FOR " + network.name)
-    }
-
     // SettingsPanel sizes itself off this outer Item's height via
     // childrenRect, which only reliably tracks plain Column/Row
     // positioners, not Layout types - see BluetoothSettings.qml for the
@@ -124,9 +108,7 @@ SettingsPanel {
         }
         height: Math.max(
             Config.scaled(300, root.uiScale),
-            contentRow.margins * 2 + Math.max(tabColumn.implicitHeight, listColumn.implicitHeight)
-                + hintSeparator.anchors.topMargin + hintSeparator.height
-                + hintRow.anchors.topMargin + hintRow.height)
+            contentRow.margins * 2 + Math.max(tabColumn.implicitHeight, listColumn.implicitHeight))
 
         RowLayout {
             id: contentRow
@@ -148,7 +130,10 @@ SettingsPanel {
             ColumnLayout {
                 id: tabColumn
 
-                Layout.preferredWidth: Config.scaled(120, root.uiScale)
+                // Definitive width - about a fifth of the panel's content
+                // width - rather than sizing off the icon+label content,
+                // so the list column on the right always gets the rest.
+                Layout.preferredWidth: Math.round(contentRow.width * 0.2)
                 Layout.alignment: Qt.AlignTop
                 spacing: Config.scaled(8, root.uiScale)
 
@@ -371,7 +356,6 @@ SettingsPanel {
                         anchors.fill: parent
                         uiScale: root.uiScale
                         network: parent.modelData.network
-                        onPskRequested: (network) => root.showPskDialog(network)
                     }
                 }
 
@@ -383,61 +367,40 @@ SettingsPanel {
                         color: Config.fgcolor
                     }
                 }
-            }
-        }
 
-        // ---------------- separator ----------------
-        Rectangle {
-            id: hintSeparator
-            anchors {
-                left: parent.left
-                right: parent.right
-                top: contentRow.bottom
-                topMargin: Config.scaled(14, root.uiScale)
-                margins: contentRow.margins
-            }
-            height: Config.scaled(2, root.uiScale)
-            color: Config.fgcolor
-        }
+                // ---------------- separator ----------------
+                Rectangle {
+                    id: hintSeparator
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(14, root.uiScale)
+                    Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                    color: Config.fgcolor
+                }
 
-        // ---------------- hint row ----------------
-        RowLayout {
-            id: hintRow
+                // ---------------- hint row ----------------
+                RowLayout {
+                    id: hintRow
 
-            anchors {
-                left: parent.left
-                right: parent.right
-                top: hintSeparator.bottom
-                topMargin: Config.scaled(10, root.uiScale)
-                margins: contentRow.margins
-            }
-            spacing: Config.scaled(16, root.uiScale)
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(10, root.uiScale)
+                    spacing: Config.scaled(16, root.uiScale)
 
-            HintItem {
-                uiScale: root.uiScale
-                visible: root.currentTab === 0
-                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                label: "Enable/Disable"
-            }
+                    HintItem {
+                        uiScale: root.uiScale
+                        visible: root.currentTab === 0
+                        iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                        label: "Enable/Disable"
+                    }
 
-            HintItem {
-                uiScale: root.uiScale
-                visible: root.currentTab !== 0
-                iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
-                label: "Connect/Disconnect"
-            }
+                    HintItem {
+                        uiScale: root.uiScale
+                        visible: root.currentTab !== 0
+                        iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
+                        label: "Connect/Disconnect"
+                    }
 
-            Item { Layout.fillWidth: true }
-        }
-
-        // Single shared PSK prompt for the whole panel - see
-        // showPskDialog() above for why this replaced one-DialogCard-
-        // per-row.
-        DialogCard {
-            id: pskDialog
-            uiScale: root.uiScale
-            onConfirmed: (text) => {
-                if (root.pskTargetNetwork) root.pskTargetNetwork.connectWithPsk(text)
+                    Item { Layout.fillWidth: true }
+                }
             }
         }
     }

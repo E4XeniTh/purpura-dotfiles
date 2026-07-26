@@ -9,34 +9,19 @@ import "../../../Config.js" as Config
 
 // One network (a wifi SSID or wired connection) in NetworkSettings'
 // Connections and WiFi tabs. Left-click connects (if not connected) or
-// disconnects (if connected). If connecting to a wifi network fails
-// because it needs a password, this emits pskRequested rather than
-// showing its own dialog - the panel hosts a single shared DialogCard
-// (see NetworkSettings.qml) instead of one per row, since one-per-row
-// caused ShaderEffectSource/blur churn implicated in a reopen crash.
+// disconnects (if connected). Connecting to a secured wifi network that
+// needs a password surfaces NetworkManager's own polkit agent prompt
+// (a separate system dialog, not drawn by this shell), so there's no
+// in-panel password UI here.
 DashCard {
     id: root
 
     required property var network
     property real uiScale: 1.0
 
-    signal pskRequested(var network)
-
     readonly property bool isWifi: root.network.device && root.network.device.type === DeviceType.Wifi
 
     border.color: root.network.connected ? Config.fgcolorlight : Config.fgcolor
-
-    // A wired network never fails for lack of a password, so this is
-    // effectively wifi-only in practice even though it's wired up
-    // unconditionally.
-    Connections {
-        target: root.network
-        function onConnectionFailed(reason) {
-            if (root.isWifi && reason === ConnectionFailReason.NoSecrets) {
-                root.pskRequested(root.network)
-            }
-        }
-    }
 
     RowLayout {
         anchors {
