@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
 import QtQuick
+import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
 
 Scope {
@@ -119,9 +120,16 @@ Scope {
                     }
 
                     IconImage {
+                        id: notifIcon
 
                         implicitSize: 32
                         source: Quickshell.iconPath("notifications-symbolic")
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: notifIcon
+                        source: notifIcon
+                        color: Config.fgcolor
                     }
                 }
             }

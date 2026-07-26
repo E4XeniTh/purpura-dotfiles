@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Hyprland
 import Quickshell.Io
+import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
 
 PanelWindow {
@@ -171,9 +172,16 @@ PanelWindow {
                         border.color: Config.fgcolor
 
                         IconImage {
+                            id: shutdownIcon
                             anchors.centerIn: parent
                             implicitSize: 88
                             source: Quickshell.iconPath("system-shutdown-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: shutdownIcon
+                            source: shutdownIcon
+                            color: Config.fgcolor
                         }
                     }
 
@@ -204,9 +212,16 @@ PanelWindow {
                         border.color: Config.fgcolor
 
                         IconImage {
+                            id: rebootIcon
                             anchors.centerIn: parent
                             implicitSize: 88
                             source: Quickshell.iconPath("system-reboot-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: rebootIcon
+                            source: rebootIcon
+                            color: Config.fgcolor
                         }
                     }
 
@@ -237,9 +252,16 @@ PanelWindow {
                         border.color: Config.fgcolor
 
                         IconImage {
+                            id: suspendIcon
                             anchors.centerIn: parent
                             implicitSize: 88
                             source: Quickshell.iconPath("system-suspend-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: suspendIcon
+                            source: suspendIcon
+                            color: Config.fgcolor
                         }
                     }
 
@@ -270,9 +292,16 @@ PanelWindow {
                         border.color: Config.fgcolor
 
                         IconImage {
+                            id: logoutIcon
                             anchors.centerIn: parent
                             implicitSize: 88
                             source: Quickshell.iconPath("system-log-out-symbolic")
+                        }
+
+                        ColorOverlay {
+                            anchors.fill: logoutIcon
+                            source: logoutIcon
+                            color: Config.fgcolor
                         }
                     }
 

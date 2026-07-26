@@ -135,9 +135,16 @@ Item {
                 border.color: Config.fgcolor
 
                 IconImage {
+                    id: prevIcon
                     anchors.centerIn: parent
                     implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-skip-backward-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: prevIcon
+                    source: prevIcon
+                    color: Config.fgcolor
                 }
 
                 MouseArea {
@@ -166,9 +173,16 @@ Item {
                 border.color: Config.fgcolor
 
                 IconImage {
+                    id: playIcon
                     anchors.centerIn: parent
                     implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath(root.player && root.player.isPlaying ? "media-playback-pause-symbolic" : "media-playback-start-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: playIcon
+                    source: playIcon
+                    color: Config.fgcolor
                 }
 
                 MouseArea {
@@ -192,9 +206,16 @@ Item {
                 border.color: Config.fgcolor
 
                 IconImage {
+                    id: nextIcon
                     anchors.centerIn: parent
                     implicitSize: Config.scaled(18, root.uiScale)
                     source: Quickshell.iconPath("media-skip-forward-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: nextIcon
+                    source: nextIcon
+                    color: Config.fgcolor
                 }
 
                 MouseArea {

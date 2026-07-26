@@ -383,9 +383,16 @@ Scope {
                                         color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
+                                            id: powerIcon
                                             anchors.centerIn: parent
                                             implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
+                                        }
+
+                                        ColorOverlay {
+                                            anchors.fill: powerIcon
+                                            source: powerIcon
+                                            color: Config.fgcolor
                                         }
 
                                         MouseArea {
@@ -408,9 +415,16 @@ Scope {
                                         color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
+                                            id: lockIcon
                                             anchors.centerIn: parent
                                             implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
+                                        }
+
+                                        ColorOverlay {
+                                            anchors.fill: lockIcon
+                                            source: lockIcon
+                                            color: Config.fgcolor
                                         }
 
                                         MouseArea {
@@ -452,10 +466,18 @@ Scope {
                                             color: iconMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                             IconImage {
+                                                id: systemIcon
                                                 anchors.centerIn: parent
                                                 implicitSize: Config.scaled(20, dashWindow.uiScale)
                                                 visible: modelData.length > 0
                                                 source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
+                                            }
+
+                                            ColorOverlay {
+                                                anchors.fill: systemIcon
+                                                source: systemIcon
+                                                visible: systemIcon.visible
+                                                color: Config.fgcolor
                                             }
 
                                             // The last icon is reserved for the same
