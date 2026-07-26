@@ -118,6 +118,7 @@ SettingsPanel {
                 left: parent.left
                 right: parent.right
                 top: parent.top
+                bottom: parent.bottom
                 margins: contentRow.margins
             }
             spacing: Config.scaled(12, root.uiScale)
@@ -131,49 +132,35 @@ SettingsPanel {
                 id: tabColumn
 
                 // Definitive width - about a fifth of the panel's content
-                // width - rather than sizing off the icon+label content,
-                // so the list column on the right always gets the rest.
-                Layout.preferredWidth: Math.round(contentRow.width * 0.2)
-                Layout.alignment: Qt.AlignTop
+                // width - locked to min == preferred == max so it can
+                // never be squeezed by the list column's own content.
+                readonly property real fixedWidth: Math.round(contentRow.width * 0.2)
+
+                Layout.preferredWidth: tabColumn.fixedWidth
+                Layout.minimumWidth: tabColumn.fixedWidth
+                Layout.maximumWidth: tabColumn.fixedWidth
+                Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
                 DashCard {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    Layout.alignment: Qt.AlignHCenter
                     uiScale: root.uiScale
                     color: devicesTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.color: root.currentTab === 0 ? Config.fgcolorlight : Config.fgcolor
 
-                    RowLayout {
-                        anchors {
-                            fill: parent
-                            leftMargin: Config.scaled(10, root.uiScale)
-                            rightMargin: Config.scaled(10, root.uiScale)
-                        }
-                        spacing: Config.scaled(8, root.uiScale)
+                    IconImage {
+                        id: devicesTabIcon
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(20, root.uiScale)
+                        source: Quickshell.iconPath("network-workgroup-symbolic")
+                    }
 
-                        IconImage {
-                            id: devicesTabIcon
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            source: Quickshell.iconPath("network-workgroup-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: devicesTabIcon
-                            source: devicesTabIcon
-                            color: parent.parent.border.color
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Devices"
-                            color: parent.parent.border.color
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
+                    ColorOverlay {
+                        anchors.fill: devicesTabIcon
+                        source: devicesTabIcon
+                        color: parent.border.color
                     }
 
                     MouseArea {
@@ -185,42 +172,24 @@ SettingsPanel {
                 }
 
                 DashCard {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    Layout.alignment: Qt.AlignHCenter
                     uiScale: root.uiScale
                     color: connectionsTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.color: root.currentTab === 1 ? Config.fgcolorlight : Config.fgcolor
 
-                    RowLayout {
-                        anchors {
-                            fill: parent
-                            leftMargin: Config.scaled(10, root.uiScale)
-                            rightMargin: Config.scaled(10, root.uiScale)
-                        }
-                        spacing: Config.scaled(8, root.uiScale)
+                    IconImage {
+                        id: connectionsTabIcon
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(20, root.uiScale)
+                        source: Quickshell.iconPath("network-transmit-receive-symbolic")
+                    }
 
-                        IconImage {
-                            id: connectionsTabIcon
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            source: Quickshell.iconPath("network-transmit-receive-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: connectionsTabIcon
-                            source: connectionsTabIcon
-                            color: parent.parent.border.color
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "Connections"
-                            color: parent.parent.border.color
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
+                    ColorOverlay {
+                        anchors.fill: connectionsTabIcon
+                        source: connectionsTabIcon
+                        color: parent.border.color
                     }
 
                     MouseArea {
@@ -232,8 +201,9 @@ SettingsPanel {
                 }
 
                 DashCard {
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    Layout.alignment: Qt.AlignHCenter
                     uiScale: root.uiScale
                     // Grayed out and unclickable when there's no enabled
                     // wifi device to show anything for - matches the
@@ -243,36 +213,17 @@ SettingsPanel {
                     border.color: !root.wifiUsable ? Config.fgcolordark
                         : (root.currentTab === 2 ? Config.fgcolorlight : Config.fgcolor)
 
-                    RowLayout {
-                        anchors {
-                            fill: parent
-                            leftMargin: Config.scaled(10, root.uiScale)
-                            rightMargin: Config.scaled(10, root.uiScale)
-                        }
-                        spacing: Config.scaled(8, root.uiScale)
+                    IconImage {
+                        id: wifiTabIcon
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(20, root.uiScale)
+                        source: Quickshell.iconPath("network-wireless-symbolic")
+                    }
 
-                        IconImage {
-                            id: wifiTabIcon
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            source: Quickshell.iconPath("network-wireless-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: wifiTabIcon
-                            source: wifiTabIcon
-                            color: parent.parent.border.color
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            text: "WiFi"
-                            color: parent.parent.border.color
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                            elide: Text.ElideRight
-                        }
+                    ColorOverlay {
+                        anchors.fill: wifiTabIcon
+                        source: wifiTabIcon
+                        color: parent.border.color
                     }
 
                     MouseArea {
@@ -290,8 +241,7 @@ SettingsPanel {
             // ---------------- divider between tabs and list ----------------
             Rectangle {
                 Layout.preferredWidth: contentRow.dividerWidth
-                Layout.preferredHeight: Math.max(tabColumn.implicitHeight, listColumn.implicitHeight)
-                Layout.alignment: Qt.AlignTop
+                Layout.fillHeight: true
                 color: Config.fgcolor
             }
 
@@ -300,7 +250,7 @@ SettingsPanel {
                 id: listColumn
 
                 Layout.fillWidth: true
-                Layout.alignment: Qt.AlignTop
+                Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
                 Text {
@@ -367,6 +317,8 @@ SettingsPanel {
                         color: Config.fgcolor
                     }
                 }
+
+                Item { Layout.fillHeight: true }
 
                 // ---------------- separator ----------------
                 Rectangle {
