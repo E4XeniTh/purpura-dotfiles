@@ -124,6 +124,17 @@ Row {
             id: entryLoader
             required property var modelData
 
+            // Loader auto-sizes to whatever it loads by default - the
+            // separator's own Rectangle is deliberately shorter than
+            // the row (60%), so leaving the Loader at that same
+            // shrunk height made "center within my own parent" a
+            // no-op, and the whole thing just sat at Row's default
+            // top-aligned position instead of actually centering in
+            // the bar. Forcing every Loader (workspace or separator)
+            // to the row's full height first is what makes that
+            // centering below mean something.
+            height: root.height
+
             sourceComponent: entryLoader.modelData.kind === "separator" ? separatorComponent : workspaceComponent
         }
     }
@@ -153,6 +164,18 @@ Row {
             readonly property var modelData: wsBox.parent.modelData.ws
 
             readonly property var mon: wsBox.modelData.monitor
+
+            // HyprlandMonitor.width/height are the raw/physical output
+            // resolution (straight from hyprctl's own JSON), but a
+            // window's at/size (and monitor.x/y) are in logical,
+            // already-scale-divided coordinates - dividing a logical
+            // window size by the unscaled monitor width/height made
+            // every window rectangle too small by exactly a factor of
+            // scale (e.g. half size at 200%/2x). These are the
+            // logical/effective dimensions to actually match against.
+            readonly property real monWidth: (wsBox.mon && wsBox.mon.scale > 0) ? wsBox.mon.width / wsBox.mon.scale : 0
+            readonly property real monHeight: (wsBox.mon && wsBox.mon.scale > 0) ? wsBox.mon.height / wsBox.mon.scale : 0
+
             readonly property real aspect: (wsBox.mon && wsBox.mon.height > 0)
                 ? (wsBox.mon.width / wsBox.mon.height)
                 : (16 / 9)
@@ -206,13 +229,13 @@ Row {
                         ? winBox.desktopEntry.icon
                         : winBox.winClass
 
-                    x: wsBox.mon ? (winBox.atArr[0] - wsBox.mon.x) / wsBox.mon.width * wsBox.width : 0
-                    y: wsBox.mon ? (winBox.atArr[1] - wsBox.mon.y) / wsBox.mon.height * wsBox.height : 0
-                    width: (wsBox.mon && wsBox.mon.width > 0)
-                        ? Math.max(1, winBox.sizeArr[0] / wsBox.mon.width * wsBox.width)
+                    x: wsBox.mon ? (winBox.atArr[0] - wsBox.mon.x) / wsBox.monWidth * wsBox.width : 0
+                    y: wsBox.mon ? (winBox.atArr[1] - wsBox.mon.y) / wsBox.monHeight * wsBox.height : 0
+                    width: (wsBox.mon && wsBox.monWidth > 0)
+                        ? Math.max(1, winBox.sizeArr[0] / wsBox.monWidth * wsBox.width)
                         : 1
-                    height: (wsBox.mon && wsBox.mon.height > 0)
-                        ? Math.max(1, winBox.sizeArr[1] / wsBox.mon.height * wsBox.height)
+                    height: (wsBox.mon && wsBox.monHeight > 0)
+                        ? Math.max(1, winBox.sizeArr[1] / wsBox.monHeight * wsBox.height)
                         : 1
 
                     color: "transparent"

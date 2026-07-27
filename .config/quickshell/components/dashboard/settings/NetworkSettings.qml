@@ -444,7 +444,13 @@ SettingsPanel {
 
                             Text {
                                 Layout.fillWidth: true
-                                text: "ZeroTier: " + ztCard.rowData.name
+                                // No "ZeroTier: " prefix - just the
+                                // interface/network name itself, same
+                                // as every other row in this list.
+                                // Renaming these (they currently show
+                                // nmcli's raw interface id) is a later
+                                // task.
+                                text: ztCard.rowData.name
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(15, root.uiScale)
