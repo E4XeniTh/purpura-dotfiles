@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
+import Quickshell.Hyprland
 import QtQuick
 import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
@@ -47,12 +48,39 @@ Scope {
     // Every connected screen, left-to-right by x - ties (side-by-side
     // monitors stacked vertically instead) broken by whichever is
     // closest to y = 0, so a monitor placed above the reference point
-    // sorts before one placed further below it. Feeds the little
-    // per-monitor rectangle row between the tray and the clock.
+    // sorts before one placed further below it. Used below to rank
+    // which monitor each workspace belongs to (see sortedWorkspaces).
     readonly property var sortedMonitors: Quickshell.screens.slice().sort((a, b) => {
         if (a.x !== b.x) return a.x - b.x
         return Math.abs(a.y) - Math.abs(b.y)
     })
+
+    // Every current Hyprland workspace, sorted by its owning monitor's
+    // position in sortedMonitors first and by workspace number second -
+    // feeds the little per-workspace rectangle row to the left of the
+    // clock (the dashboard-open button).
+    readonly property var sortedWorkspaces: {
+        const monitorRank = {}
+        root.sortedMonitors.forEach((s, i) => { monitorRank[s.name] = i })
+        return Hyprland.workspaces.values.slice().sort((a, b) => {
+            const rankA = (a.monitor && monitorRank[a.monitor.name] !== undefined) ? monitorRank[a.monitor.name] : 999
+            const rankB = (b.monitor && monitorRank[b.monitor.name] !== undefined) ? monitorRank[b.monitor.name] : 999
+            if (rankA !== rankB) return rankA - rankB
+            return a.id - b.id
+        })
+    }
+
+    // A toplevel's lastIpcObject (the only place its at/size/class live -
+    // see WindowBox below) is only ever as fresh as the last
+    // refreshToplevels() call, unlike title/activated/workspace which
+    // update live - re-requested on every Hyprland event so the little
+    // per-window rectangles track real opens/closes/moves/resizes
+    // instead of a one-off snapshot from whenever quickshell started.
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) { Hyprland.refreshToplevels() }
+    }
+    Component.onCompleted: Hyprland.refreshToplevels()
 
     // Falls back to a sane default until hyprctl responds
     Variants {
@@ -102,38 +130,83 @@ Scope {
                     screen: modelData
                 }
 
-                // One rectangle per connected monitor, sitting centered
-                // in the gap between the tray and the clock (the
-                // dashboard-open button) - width-only aspect-ratio
-                // scaled to each screen's own width/height ratio like
-                // WorkspaceOsd's boxes, height pinned to the bar's own
-                // content height so every box lines up with the rest of
-                // the bar regardless of how wide a given monitor is.
-                Item {
-                    id: monitorRowArea
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    anchors.topMargin: 2
-                    anchors.bottomMargin: 2
-                    anchors.left: trayItem.right
+                // One rectangle per current Hyprland workspace, sitting
+                // directly to the left of the clock (the dashboard-open
+                // button) - width-only aspect-ratio scaled to that
+                // workspace's own monitor (HyprlandMonitor.width/height,
+                // not the QuickshellScreenInfo one - see
+                // root.sortedWorkspaces), height matched to the clock
+                // card's own height rather than the bar's full content
+                // height. Each box also draws a tiny live grid of that
+                // workspace's actual windows - see the nested Repeater
+                // below - positioned/sized from the same at/size/monitor
+                // geometry `hyprctl -j clients` reports (surfaced here
+                // via each toplevel's lastIpcObject), normalized into
+                // this box's own pixel space.
+                Row {
+                    id: workspaceRow
+                    height: clockCard.height
+                    anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
+                    anchors.rightMargin: 10
+                    spacing: 6
 
-                    Row {
-                        anchors.centerIn: parent
-                        spacing: 6
+                    Repeater {
+                        model: root.sortedWorkspaces
 
-                        Repeater {
-                            model: root.sortedMonitors
+                        Rectangle {
+                            id: wsBox
+                            required property var modelData
 
-                            Rectangle {
-                                required property var modelData
+                            readonly property var mon: wsBox.modelData.monitor
+                            readonly property real aspect: (wsBox.mon && wsBox.mon.height > 0)
+                                ? (wsBox.mon.width / wsBox.mon.height)
+                                : (16 / 9)
 
-                                height: monitorRowArea.height
-                                width: monitorRowArea.height * (modelData.width / modelData.height)
-                                color: Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
-                                radius: 0
+                            height: workspaceRow.height
+                            width: wsBox.height * wsBox.aspect
+                            color: Config.fillcolor
+                            border.width: 2
+                            border.color: wsBox.modelData.active ? Config.fgcolorlight : Config.fgcolor
+                            radius: 0
+
+                            // One rectangle per window actually open on
+                            // this workspace, positioned/sized as a
+                            // fraction of the owning monitor's geometry
+                            // (at/size are absolute layout coordinates,
+                            // same space as monitor.x/y/width/height) so
+                            // it lands in the same relative spot inside
+                            // this miniature box.
+                            Repeater {
+                                model: wsBox.modelData.toplevels.values
+
+                                Rectangle {
+                                    id: winBox
+                                    required property var modelData
+
+                                    readonly property var ipcData: winBox.modelData.lastIpcObject
+                                    readonly property var atArr: winBox.ipcData.at ?? [0, 0]
+                                    readonly property var sizeArr: winBox.ipcData.size ?? [0, 0]
+
+                                    x: wsBox.mon ? (winBox.atArr[0] - wsBox.mon.x) / wsBox.mon.width * wsBox.width : 0
+                                    y: wsBox.mon ? (winBox.atArr[1] - wsBox.mon.y) / wsBox.mon.height * wsBox.height : 0
+                                    width: (wsBox.mon && wsBox.mon.width > 0)
+                                        ? Math.max(1, winBox.sizeArr[0] / wsBox.mon.width * wsBox.width)
+                                        : 1
+                                    height: (wsBox.mon && wsBox.mon.height > 0)
+                                        ? Math.max(1, winBox.sizeArr[1] / wsBox.mon.height * wsBox.height)
+                                        : 1
+
+                                    color: "transparent"
+                                    border.width: 1
+                                    border.color: Config.fgcolor
+
+                                    IconImage {
+                                        anchors.centerIn: parent
+                                        implicitSize: Math.max(4, Math.min(winBox.width, winBox.height) * 0.6)
+                                        source: winBox.ipcData.class ? Quickshell.iconPath(winBox.ipcData.class) : ""
+                                    }
+                                }
                             }
                         }
                     }
