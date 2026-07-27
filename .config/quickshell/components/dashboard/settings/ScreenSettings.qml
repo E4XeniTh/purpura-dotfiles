@@ -497,12 +497,17 @@ SettingsPanel {
         // was just set to (or, if untouched, whatever it already
         // remembered).
         //
-        // __strictWorkspaceWidget (see below) lives in this same file
-        // under a non-monitor-name key - carried over explicitly here
-        // since this rebuild only otherwise iterates root.monitors, and
-        // would silently drop it on every Apply for anything else
-        // (a resolution change, enabling a display, etc.) otherwise.
-        const storeSnapshot = { __strictWorkspaceWidget: root.strictWorkspaceWidget }
+        // The "__"-prefixed global flags (see setGlobalFlag above) live
+        // in this same file under non-monitor-name keys - carried over
+        // explicitly here since this rebuild only otherwise iterates
+        // root.monitors, and would silently drop them on every Apply
+        // for anything else (a resolution change, enabling a display,
+        // etc.) otherwise.
+        const storeSnapshot = {
+            __strictWorkspaceWidget: root.strictWorkspaceWidget,
+            __showEmptyWidget: root.showEmptyWidget,
+            __showEmptyOsd: root.showEmptyOsd
+        }
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
             const state = root.effectiveStateFor(m.name)
@@ -657,24 +662,51 @@ SettingsPanel {
         screensStoreProcess.running = true
     }
 
-    // Global (not per-monitor) toggle for whether WorkspaceRow.qml's bar
-    // widget shows workspaces past id 5 - the "unmanaged" spare numbers
-    // Hyprland hands a monitor with nothing explicitly pinned to it
-    // (see resolveEmptyWorkspaceFailsafe above). Stored in this same
-    // monitors.json under a "__"-prefixed key so it isn't mistaken for
-    // a monitor name by anything that iterates the file's other keys.
-    // Takes effect immediately on click - it's a display preference for
-    // another component, not a live Hyprland/hardware change, so it
-    // doesn't need to go through the staged edit + Apply flow the rest
-    // of this panel uses.
+    // Global (not per-monitor) toggles, all stored in this same
+    // monitors.json under "__"-prefixed keys so none are mistaken for a
+    // monitor name by anything that iterates the file's other keys, and
+    // all take effect immediately on click - they're display
+    // preferences for other components (WorkspaceRow.qml/WorkspaceOsd.qml),
+    // not live Hyprland/hardware changes, so none need the staged
+    // edit + Apply flow the rest of this panel uses.
+    //
+    // strictWorkspaceWidget: whether WorkspaceRow.qml's bar widget shows
+    // workspaces past id 5 at all - the "unmanaged" spare numbers
+    // Hyprland hands a monitor with nothing explicitly pinned to it (see
+    // resolveEmptyWorkspaceFailsafe above).
+    //
+    // showEmptyWidget/showEmptyOsd: whether workspaces 1-5 pinned to a
+    // monitor but not currently existing in Hyprland (nobody's switched
+    // to them yet this session, so Hyprland hasn't created them) still
+    // show as an empty placeholder box in WorkspaceRow.qml/WorkspaceOsd.qml,
+    // instead of only appearing once they're actually visited.
     property bool strictWorkspaceWidget: false
+    property bool showEmptyWidget: false
+    property bool showEmptyOsd: false
+
+    // Single write-through used by all three toggle*() functions below -
+    // merges one flag into whatever's already stored rather than each
+    // toggle needing its own copy of the same read-modify-write.
+    function setGlobalFlag(key, value) {
+        const snapshot = Object.assign({}, root.screensStore)
+        snapshot[key] = value
+        root.screensStore = snapshot
+        monitorsFile.setText(JSON.stringify(snapshot, null, 2) + "\n")
+    }
 
     function toggleStrictWorkspaceWidget() {
         root.strictWorkspaceWidget = !root.strictWorkspaceWidget
-        const snapshot = Object.assign({}, root.screensStore)
-        snapshot.__strictWorkspaceWidget = root.strictWorkspaceWidget
-        root.screensStore = snapshot
-        monitorsFile.setText(JSON.stringify(snapshot, null, 2) + "\n")
+        root.setGlobalFlag("__strictWorkspaceWidget", root.strictWorkspaceWidget)
+    }
+
+    function toggleShowEmptyWidget() {
+        root.showEmptyWidget = !root.showEmptyWidget
+        root.setGlobalFlag("__showEmptyWidget", root.showEmptyWidget)
+    }
+
+    function toggleShowEmptyOsd() {
+        root.showEmptyOsd = !root.showEmptyOsd
+        root.setGlobalFlag("__showEmptyOsd", root.showEmptyOsd)
     }
 
     Process {
@@ -691,6 +723,8 @@ SettingsPanel {
                     const parsed = JSON.parse(text)
                     root.screensStore = parsed
                     root.strictWorkspaceWidget = !!parsed.__strictWorkspaceWidget
+                    root.showEmptyWidget = !!parsed.__showEmptyWidget
+                    root.showEmptyOsd = !!parsed.__showEmptyOsd
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
@@ -1077,13 +1111,19 @@ SettingsPanel {
                     }
 
                     Item { Layout.fillWidth: true }
+                }
 
-                    // ---------------- workspace pins (1-5) ----------------
-                    // Binds the selected monitor to any of workspaces
-                    // 1-5 (hl.workspace_rule({ workspace, monitor })) -
-                    // several can be lit at once, since Hyprland allows
-                    // more than one workspace defaulting to the same
-                    // monitor.
+                // ---------------- workspace pins (1-5) ----------------
+                // Binds the selected monitor to any of workspaces 1-5
+                // (hl.workspace_rule({ workspace, monitor })) - several
+                // can be lit at once, since Hyprland allows more than
+                // one workspace defaulting to the same monitor. Its own
+                // row now, split out from the mode toggle above.
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(8, root.uiScale)
+                    spacing: Config.scaled(8, root.uiScale)
+
                     Repeater {
                         model: [1, 2, 3, 4, 5]
 
@@ -1130,20 +1170,13 @@ SettingsPanel {
                             }
                         }
                     }
-                }
 
-                // ---------------- separator ----------------
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                    color: Config.fgcolor
+                    Item { Layout.fillWidth: true }
                 }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    // Extra breathing room below the separator, on top
-                    // of rightColumn's own uniform spacing.
-                    Layout.topMargin: Config.scaled(8, root.uiScale)
+                    Layout.topMargin: Config.scaled(14, root.uiScale)
                     spacing: Config.scaled(6, root.uiScale)
                     // Width/height/refresh are meaningless once the
                     // monitor is set to hyprland's own "preferred" mode
@@ -1256,8 +1289,25 @@ SettingsPanel {
                 // needed (see toggleStrictWorkspaceWidget() above).
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(10, root.uiScale)
+                    Layout.topMargin: Config.scaled(24, root.uiScale)
                     spacing: Config.scaled(8, root.uiScale)
+
+                    Text {
+                        text: "Strict widget:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleStrictWorkspaceWidget()
+                            }
+                        }
+                    }
 
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
@@ -1277,8 +1327,51 @@ SettingsPanel {
                         }
                     }
 
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---------------- show empty toggle (widget + osd) ----------------
+                // Also global - whether a workspace 1-5 pinned to a
+                // monitor but not yet existing in Hyprland (nobody's
+                // switched to it this session, so Hyprland hasn't
+                // created it) still shows as an empty placeholder box in
+                // WorkspaceRow.qml/WorkspaceOsd.qml, rather than only
+                // appearing once actually visited. Two independent
+                // checkboxes since the bar widget and the OSD are
+                // separate pieces of UI someone may only want one of.
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(8, root.uiScale)
+                    spacing: Config.scaled(8, root.uiScale)
+
                     Text {
-                        text: "Strict Workspace Widget"
+                        text: "Show Empty:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showEmptyWidget ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleShowEmptyWidget()
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: "Widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1289,7 +1382,44 @@ SettingsPanel {
                             hoverEnabled: true
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
-                                root.toggleStrictWorkspaceWidget()
+                                root.toggleShowEmptyWidget()
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredWidth: Config.scaled(16, root.uiScale) }
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showEmptyOsd ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleShowEmptyOsd()
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: "OSD"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleShowEmptyOsd()
                             }
                         }
                     }

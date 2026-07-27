@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import Quickshell.Io
 import "../Config.js" as Config
 
 // Small "you just switched workspace" indicator, one per screen, shown
@@ -21,6 +22,45 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Read once here (rather than per-screen inside osdWindow below) and
+    // shared by every screen's own instance - same monitors.json
+    // ScreenSettings.qml writes, holding both per-monitor pinned
+    // workspaces and the "__showEmptyOsd" global toggle (see
+    // ScreenSettings.qml's toggleShowEmptyOsd()).
+    property var screensStore: ({})
+
+    function loadScreensStore() {
+        screensStoreProcess.running = false
+        screensStoreProcess.running = true
+    }
+
+    Process {
+        id: screensStoreProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.screensStore = JSON.parse(text)
+                } catch (e) {
+                    root.screensStore = {}
+                }
+            }
+        }
+    }
+
+    Component.onCompleted: root.loadScreensStore()
+
+    // Nothing pushes a change notification when monitors.json is
+    // rewritten (only ScreenSettings.qml's own Apply/toggle calls touch
+    // it) - polls instead, same interval used elsewhere for this file.
+    Timer {
+        interval: 4000
+        repeat: true
+        running: true
+        onTriggered: root.loadScreensStore()
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -37,6 +77,8 @@ Scope {
 
             readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
 
+            readonly property bool showEmptyOsd: !!root.screensStore.__showEmptyOsd
+
             // Every workspace currently assigned to *this* monitor, sorted
             // by id - re-evaluates live off Hyprland.workspaces (an
             // ObjectModel, same reactive-list pattern as
@@ -46,12 +88,30 @@ Scope {
             // with nothing explicitly pinned gets the next free number
             // from Hyprland instead (e.g. 6 on a third monitor once 1-3
             // and 4-5 are taken), which isn't meant to show up here.
+            //
+            // When showEmptyOsd is on, any workspace 1-5 pinned to this
+            // monitor (monitors.json) but not existing in Hyprland yet
+            // (nobody's switched to it this session) is added as a bare
+            // placeholder ({ id }) - the delegate below only ever reads
+            // .id off each entry, so nothing more is needed. It'll never
+            // match activeId (a real workspace has to be switched to for
+            // that), so the sliding highlight simply never lands on one.
             readonly property var monitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
-                return Hyprland.workspaces.values
+                let list = Hyprland.workspaces.values
                     .filter(w => w.monitor === osdWindow.hyprMonitor && w.id <= 5)
-                    .slice()
-                    .sort((a, b) => a.id - b.id)
+
+                if (osdWindow.showEmptyOsd) {
+                    const existing = new Set(list.map(w => w.id))
+                    const stored = root.screensStore[osdWindow.hyprMonitor.name]
+                    const pinned = (stored && stored.workspaces) ? stored.workspaces : []
+                    for (const num of pinned) {
+                        if (existing.has(num)) continue
+                        list = list.concat([{ id: num }])
+                    }
+                }
+
+                return list.slice().sort((a, b) => a.id - b.id)
             }
 
             readonly property int activeId: (osdWindow.hyprMonitor && osdWindow.hyprMonitor.activeWorkspace)

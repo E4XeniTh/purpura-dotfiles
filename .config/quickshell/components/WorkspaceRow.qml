@@ -28,6 +28,55 @@ Row {
         return Math.abs(a.y) - Math.abs(b.y)
     })
 
+    // showEmptyWidget (Screen Settings' "Show Empty: Widget" toggle) -
+    // any workspace 1-5 pinned to a monitor (monitors.json) but not
+    // existing in Hyprland yet (nobody's switched to it this session,
+    // so Hyprland hasn't created it) gets synthesized as a placeholder
+    // here, matching just enough of a real HyprlandWorkspace's shape
+    // for wsBox/winBox below to render an empty box for it: .monitor
+    // (a real HyprlandMonitor, for aspect ratio/geometry), .active
+    // (always false - it can't be the active workspace if it doesn't
+    // exist), .hasFullscreen (always false), .toplevels.values (empty -
+    // nothing to draw in the window grid), and .activate() (dispatches
+    // straight to Hyprland, same as a real workspace's own method,
+    // since clicking one of these should actually create/switch to it).
+    readonly property bool showEmptyWidget: !!root.screensStore.__showEmptyWidget
+
+    function placeholderWorkspaces() {
+        if (!root.showEmptyWidget) return []
+
+        const existingByMonitor = {}
+        for (const ws of Hyprland.workspaces.values) {
+            const monName = ws.monitor ? ws.monitor.name : ""
+            if (!existingByMonitor[monName]) existingByMonitor[monName] = new Set()
+            existingByMonitor[monName].add(ws.id)
+        }
+
+        const placeholders = []
+        for (const monName in root.screensStore) {
+            if (monName.startsWith("__")) continue
+            const stored = root.screensStore[monName]
+            if (!stored || !stored.workspaces) continue
+
+            const mon = Hyprland.monitors.values.find(m => m.name === monName)
+            if (!mon) continue
+
+            const existing = existingByMonitor[monName] || new Set()
+            for (const num of stored.workspaces) {
+                if (existing.has(num)) continue
+                placeholders.push({
+                    id: num,
+                    monitor: mon,
+                    active: false,
+                    hasFullscreen: false,
+                    toplevels: { values: [] },
+                    activate: () => Hyprland.dispatch("workspace " + num)
+                })
+            }
+        }
+        return placeholders
+    }
+
     readonly property var sortedWorkspaces: {
         const monitorRank = {}
         root.sortedMonitors.forEach((s, i) => { monitorRank[s.name] = i })
@@ -39,6 +88,7 @@ Row {
         if (root.strictWorkspaceWidget) {
             workspaces = workspaces.filter(w => w.id <= 5)
         }
+        workspaces = workspaces.concat(root.placeholderWorkspaces())
         return workspaces.sort((a, b) => {
             const rankA = (a.monitor && monitorRank[a.monitor.name] !== undefined) ? monitorRank[a.monitor.name] : 999
             const rankB = (b.monitor && monitorRank[b.monitor.name] !== undefined) ? monitorRank[b.monitor.name] : 999
