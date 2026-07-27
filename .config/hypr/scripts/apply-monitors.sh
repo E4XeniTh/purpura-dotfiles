@@ -8,6 +8,13 @@
 # outright ("keyword can't work with non-legacy parsers. Use eval."), so
 # `eval` is the only working write path here.
 #
+# Also replays each monitor's "workspaces" array (workspace numbers
+# pinned to it via the numbered buttons next to the mode toggle) as
+# hl.workspace_rule({ workspace = "N", monitor = "Name" }) calls - same
+# eval-only reasoning, and same file, since a monitor's workspace
+# bindings are just as much "this monitor's saved layout" as its
+# resolution/position are.
+#
 # Lives under quickshell's own config dir (not hypr's) since that panel
 # is the only thing that reads or writes it - one JSON file combining
 # what used to be a separate monitors.conf (this script's input) and
@@ -21,6 +28,10 @@ CONF="$HOME/.config/quickshell/monitors.json"
 
 [ -f "$CONF" ] || exit 0
 
-jq -r '.[].line // empty' "$CONF" | while IFS= read -r line; do
+jq -r '
+    to_entries[] as $e
+    | $e.value.line // empty,
+      ( $e.value.workspaces // [] | .[] | "hl.workspace_rule({ workspace = \"" + (tostring) + "\", monitor = \"" + $e.key + "\" })" )
+' "$CONF" | while IFS= read -r line; do
     [ -n "$line" ] && hyprctl eval "$line"
 done

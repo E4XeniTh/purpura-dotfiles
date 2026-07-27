@@ -124,9 +124,37 @@ SettingsPanel {
         root.preferredModes = updated
     }
 
+    // Workspace numbers (1-5) pinned to each monitor, keyed by name -
+    // staged across multiple monitors like pendingEnabled (not discarded
+    // when a different monitor is selected), applied and persisted into
+    // monitors.json's per-monitor "workspaces" array on Apply. Toggling
+    // one off here only stops it from being reasserted on future logins
+    // - Hyprland has no "unbind" for an already-running session, so an
+    // open workspace may need a manual move (or a restart) to actually
+    // leave its old monitor immediately.
+    property var pendingWorkspaces: ({})
+
+    function workspacesFor(name) {
+        if (root.pendingWorkspaces[name] !== undefined) return root.pendingWorkspaces[name]
+        const stored = root.screensStore[name]
+        return (stored && stored.workspaces) ? stored.workspaces : []
+    }
+
+    function toggleWorkspace(name, num) {
+        if (!name) return
+        const current = root.workspacesFor(name).slice()
+        const idx = current.indexOf(num)
+        if (idx >= 0) current.splice(idx, 1)
+        else current.push(num)
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        updated[name] = current
+        root.pendingWorkspaces = updated
+    }
+
     readonly property bool dirty: root.selectedDirty
         || Object.keys(root.pendingEnabled).length > 0
         || Object.keys(root.pendingBrightness).length > 0
+        || Object.keys(root.pendingWorkspaces).length > 0
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -274,6 +302,16 @@ SettingsPanel {
             if (line) sendLines.push(line)
         }
 
+        // Workspace-button toggles resend that monitor's whole current
+        // workspace list (not just the number just clicked) - same
+        // "touched monitor gets its full effective state resent"
+        // approach buildMonitorLine already uses.
+        for (const name of Object.keys(root.pendingWorkspaces)) {
+            for (const num of root.workspacesFor(name)) {
+                sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
+            }
+        }
+
         // monitors.json persists the *whole* layout, not just what
         // changed this time, since apply-monitors.sh replays every
         // entry's "line" from scratch at login (hyprland.lua only
@@ -295,6 +333,7 @@ SettingsPanel {
                     y: state.y,
                     scale: state.scale,
                     mode: state.mode,
+                    workspaces: root.workspacesFor(m.name),
                     line
                 }
             }
@@ -324,6 +363,7 @@ SettingsPanel {
         }
 
         root.pendingEnabled = ({})
+        root.pendingWorkspaces = ({})
         root.edited = ({})
         root.selectedDirty = false
         // preferredMode intentionally left as-is - Apply shouldn't flip
@@ -336,6 +376,7 @@ SettingsPanel {
     onActiveChanged: {
         if (root.active) {
             root.pendingEnabled = ({})
+            root.pendingWorkspaces = ({})
             root.edited = ({})
             root.selectedDirty = false
             root.pendingBrightness = ({})
@@ -821,6 +862,48 @@ SettingsPanel {
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
                                 root.togglePreferredMode()
+                            }
+                        }
+                    }
+
+                    // ---------------- workspace pins (1-5) ----------------
+                    // Binds the selected monitor to any of workspaces
+                    // 1-5 (hl.workspace_rule({ workspace, monitor })) -
+                    // several can be lit at once, since Hyprland allows
+                    // more than one workspace defaulting to the same
+                    // monitor.
+                    Repeater {
+                        model: [1, 2, 3, 4, 5]
+
+                        DashCard {
+                            id: wsButton
+                            required property int modelData
+
+                            readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
+
+                            Layout.preferredWidth: Config.scaled(28, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                            uiScale: root.uiScale
+                            color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                            border.color: wsButton.bound ? Config.fgcolor : Config.fillcolor
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: String(wsButton.modelData)
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: wsMouseArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    contentWrapper.forceActiveFocus()
+                                    root.toggleWorkspace(root.selectedName, wsButton.modelData)
+                                }
                             }
                         }
                     }
