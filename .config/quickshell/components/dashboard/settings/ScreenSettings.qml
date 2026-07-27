@@ -166,6 +166,103 @@ SettingsPanel {
         return ""
     }
 
+    // Fail-safe run at the top of every applyChanges(): the workspace
+    // buttons' own click handler already refuses to pin a workspace
+    // that's bound elsewhere (see ownerOf()/boundElsewhere above), but
+    // that only guards clicks made through this session - a
+    // monitors.json left over from before that guard existed, or edited
+    // by hand, could still have the same workspace number pinned to two
+    // monitors. If so, keep it only on whichever of those monitors sits
+    // closest to (0, 0) and drop it from the rest, rather than sending
+    // Hyprland a workspace_rule for the same workspace pointed at
+    // several outputs.
+    function resolveWorkspaceCollisions() {
+        const owners = {}
+        for (const m of root.monitors) {
+            for (const num of root.workspacesFor(m.name)) {
+                if (!owners[num]) owners[num] = []
+                owners[num].push(m.name)
+            }
+        }
+
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        let changed = false
+
+        for (const numStr in owners) {
+            const names = owners[numStr]
+            if (names.length <= 1) continue
+            const num = parseInt(numStr, 10)
+
+            let keepName = names[0]
+            let keepDist = Infinity
+            for (const name of names) {
+                const state = root.effectiveStateFor(name)
+                const dist = state ? Math.hypot(state.x || 0, state.y || 0) : Infinity
+                if (dist < keepDist) {
+                    keepDist = dist
+                    keepName = name
+                }
+            }
+
+            for (const name of names) {
+                if (name === keepName) continue
+                const list = (updated[name] !== undefined ? updated[name] : root.workspacesFor(name)).slice()
+                const idx = list.indexOf(num)
+                if (idx >= 0) {
+                    list.splice(idx, 1)
+                    updated[name] = list
+                    changed = true
+                }
+            }
+        }
+
+        if (changed) root.pendingWorkspaces = updated
+    }
+
+    // One-shot x/y override applied only during applyChanges() (see
+    // resolveOriginFailsafe below), never persisted as staged UI state
+    // the way pendingEnabled/edited are - cleared again the moment
+    // Apply finishes building its output.
+    property var positionOverrides: ({})
+
+    // Fail-safe for the exact bug reported live: resetting
+    // hyprland.lua's monitor config and then disabling every display
+    // except one that's been moved away from (0, 0) leaves nothing
+    // anchored at the origin - the bar/wallpaper/dashboard (all of
+    // which live on primaryMonitor, see Bar.qml/effectivePrimaryName)
+    // then vanish until something else forces a relayout (e.g. opening
+    // rofi). If no enabled monitor already sits at (0, 0) after this
+    // Apply, force the primary monitor there - it's guaranteed enabled
+    // (MonitorCard's own onToggleEnabled refuses to disable it), so
+    // it's always a safe thing to anchor at the origin. Falls back to
+    // whichever monitor is enabled if primaryMonitor itself is stale/
+    // missing.
+    function resolveOriginFailsafe(touched) {
+        const anyAtOrigin = root.monitors.some(m => {
+            const state = root.effectiveStateFor(m.name)
+            return state && !state.disabled && state.x === 0 && state.y === 0
+        })
+        if (anyAtOrigin) return
+
+        // Has to actually be enabled - overriding a disabled monitor's
+        // position would do nothing (effectiveStateFor never reports an
+        // explicit position for a disabled monitor, and buildMonitorLine
+        // sends a plain disabled=true line for it regardless).
+        let fallbackName = (root.baseFor(root.primaryMonitor) && root.enabledFor(root.primaryMonitor))
+            ? root.primaryMonitor
+            : ""
+        if (!fallbackName) {
+            const firstEnabled = root.monitors.find(m => root.enabledFor(m.name))
+            fallbackName = firstEnabled ? firstEnabled.name : ""
+        }
+        if (!fallbackName) return
+
+        const overrides = Object.assign({}, root.positionOverrides)
+        overrides[fallbackName] = { x: 0, y: 0 }
+        root.positionOverrides = overrides
+        touched.add(fallbackName)
+    }
+
     readonly property bool dirty: root.selectedDirty
         || Object.keys(root.pendingEnabled).length > 0
         || Object.keys(root.pendingBrightness).length > 0
@@ -228,14 +325,15 @@ SettingsPanel {
         const e = isSelected ? root.edited : {}
         const stored = root.screensStore[name]
         const remembered = base.disabled && stored ? stored : base
+        const override = root.positionOverrides[name]
 
         const width = e.width !== undefined ? e.width : remembered.width
         const height = e.height !== undefined ? e.height : remembered.height
         const refresh = e.refresh !== undefined
             ? e.refresh
             : (remembered.refreshRate !== undefined ? remembered.refreshRate : remembered.refresh)
-        const x = e.x !== undefined ? e.x : remembered.x
-        const y = e.y !== undefined ? e.y : remembered.y
+        const x = override ? override.x : (e.x !== undefined ? e.x : remembered.x)
+        const y = override ? override.y : (e.y !== undefined ? e.y : remembered.y)
         const rawScale = e.scale !== undefined ? e.scale : remembered.scale
         const scale = rawScale > 0 ? rawScale : 1
 
@@ -260,7 +358,7 @@ SettingsPanel {
         const usesExplicitMode = isSelected
             ? (!root.preferredModes[name] && (hasRememberedGeometry || e.width !== undefined || e.height !== undefined))
             : hasRememberedGeometry
-        const usesExplicitPosition = hasRememberedGeometry || e.x !== undefined || e.y !== undefined
+        const usesExplicitPosition = !!override || hasRememberedGeometry || e.x !== undefined || e.y !== undefined
 
         return {
             disabled: false,
@@ -301,6 +399,10 @@ SettingsPanel {
     function applyChanges() {
         if (!root.dirty) return
 
+        // Resolve any workspace pinned to more than one monitor before
+        // anything else below reads pendingWorkspaces/workspacesFor().
+        root.resolveWorkspaceCollisions()
+
         // Only touched monitors are actually sent live - the selected
         // one (if edited) plus any right-clicked enable/disable
         // toggles - not every monitor every time, which used to
@@ -310,6 +412,11 @@ SettingsPanel {
         if (root.selectedDirty && root.selectedName) {
             touched.add(root.selectedName)
         }
+
+        // Make sure this Apply doesn't leave every enabled monitor away
+        // from the origin - may add the primary monitor to `touched`
+        // and stage an x/y override for it.
+        root.resolveOriginFailsafe(touched)
 
         const sendLines = []
         for (const name of touched) {
@@ -379,6 +486,7 @@ SettingsPanel {
 
         root.pendingEnabled = ({})
         root.pendingWorkspaces = ({})
+        root.positionOverrides = ({})
         root.edited = ({})
         root.selectedDirty = false
         // preferredMode intentionally left as-is - Apply shouldn't flip
@@ -392,6 +500,7 @@ SettingsPanel {
         if (root.active) {
             root.pendingEnabled = ({})
             root.pendingWorkspaces = ({})
+            root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
             root.pendingBrightness = ({})
