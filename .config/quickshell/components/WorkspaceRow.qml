@@ -66,7 +66,7 @@ Row {
             width: wsBox.height * wsBox.aspect
             color: Config.fillcolor
             border.width: 2
-            border.color: wsBox.modelData.active ? Config.fgcolorlight : Config.fgcolor
+            border.color: wsBox.modelData.active ? Config.fgcolor : Config.fgcolordark
             radius: 0
 
             // One rectangle per window actually open on this
@@ -117,7 +117,10 @@ Row {
 
                     color: "transparent"
                     border.width: 1
-                    border.color: Config.fgcolor
+                    // Same selected/non-selected convention as wsBox's
+                    // own border above - "activated" is Hyprland's own
+                    // name for "this is the focused window."
+                    border.color: winBox.modelData.activated ? Config.fgcolor : Config.fgcolordark
 
                     IconImage {
                         anchors.centerIn: parent

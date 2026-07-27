@@ -191,7 +191,13 @@ SettingsPanel {
                         id: connectionsTabIcon
                         anchors.centerIn: parent
                         implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-transmit-receive-symbolic")
+                        // Same icon NetworkCard uses for every row this
+                        // tab ever lists (root.wiredNetworks excludes
+                        // Wifi devices entirely) - "network-transmit-
+                        // receive-symbolic" isn't in every icon theme
+                        // and was rendering as a missing-texture image
+                        // instead of a blank/wrong one.
+                        source: Quickshell.iconPath("network-wired-symbolic")
                     }
 
                     ColorOverlay {

@@ -131,13 +131,15 @@ Scope {
 
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
-                            color: Config.fgcolor
+                            color: Config.fgfillcolor
+                            border.width: 2
+                            border.color: Config.fgcolor
                             radius: 0
 
                             Text {
                                 anchors.centerIn: parent
                                 text: String(parent.modelData.id)
-                                color: "black"
+                                color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(22, osdWindow.uiScale)
                                 font.bold: true
@@ -149,10 +151,13 @@ Scope {
                 // Sliding highlight around whichever box is the active
                 // workspace - a sibling overlay rather than something
                 // drawn per-box, so it can animate its position instead
-                // of just snapping between boxes.
+                // of just snapping between boxes. z above the per-box
+                // Repeater so this border draws over each box's own
+                // border rather than under/behind it.
                 Rectangle {
                     id: activeHighlight
 
+                    z: 1
                     y: contentRow.y
                     width: osdWindow.boxWidth
                     height: osdWindow.boxHeight
