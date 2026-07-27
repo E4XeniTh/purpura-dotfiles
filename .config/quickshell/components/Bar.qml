@@ -44,6 +44,16 @@ Scope {
         ? (root.dashboard ? root.dashboard.primaryMonitor : "")
         : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
 
+    // Every connected screen, left-to-right by x - ties (side-by-side
+    // monitors stacked vertically instead) broken by whichever is
+    // closest to y = 0, so a monitor placed above the reference point
+    // sorts before one placed further below it. Feeds the little
+    // per-monitor rectangle row between the tray and the clock.
+    readonly property var sortedMonitors: Quickshell.screens.slice().sort((a, b) => {
+        if (a.x !== b.x) return a.x - b.x
+        return Math.abs(a.y) - Math.abs(b.y)
+    })
+
     // Falls back to a sane default until hyprctl responds
     Variants {
         model: Quickshell.screens
@@ -81,6 +91,7 @@ Scope {
                 border.width: 2
                 border.color: Config.fgcolor
                 Tray {
+                    id: trayItem
                     border.width: 2
                     border.color: Config.fgcolor
                     width: trayWidth < 16 ? 0 : trayWidth + 16
@@ -91,7 +102,45 @@ Scope {
                     screen: modelData
                 }
 
+                // One rectangle per connected monitor, sitting centered
+                // in the gap between the tray and the clock (the
+                // dashboard-open button) - width-only aspect-ratio
+                // scaled to each screen's own width/height ratio like
+                // WorkspaceOsd's boxes, height pinned to the bar's own
+                // content height so every box lines up with the rest of
+                // the bar regardless of how wide a given monitor is.
+                Item {
+                    id: monitorRowArea
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.topMargin: 2
+                    anchors.bottomMargin: 2
+                    anchors.left: trayItem.right
+                    anchors.right: clockCard.left
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        Repeater {
+                            model: root.sortedMonitors
+
+                            Rectangle {
+                                required property var modelData
+
+                                height: monitorRowArea.height
+                                width: monitorRowArea.height * (modelData.width / modelData.height)
+                                color: Config.fillcolor
+                                border.width: 2
+                                border.color: Config.fgcolor
+                                radius: 0
+                            }
+                        }
+                    }
+                }
+
                 Rectangle {
+                    id: clockCard
                     anchors.centerIn: parent
                     width: clock.implicitWidth + 16
                     height: clock.implicitHeight + 4
