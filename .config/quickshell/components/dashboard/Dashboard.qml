@@ -736,7 +736,10 @@ Scope {
     // was blocking clicks to everything underneath it for the whole 3
     // seconds. No anchors at all (not even one edge) so the compositor
     // centers it on both axes, same trick Dashboard/SettingsPanel use
-    // for horizontal-only centering.
+    // for horizontal-only centering. Click-through on top of that
+    // (mask: Region {}) - even this small a window still ate clicks
+    // landing inside its own bounds otherwise, same fix as
+    // WorkspaceOsd.qml/VolumeOsd.qml.
     Variants {
         model: Quickshell.screens
 
@@ -749,6 +752,7 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
 
             exclusiveZone: 0
+            mask: Region {}
 
             implicitWidth: 320
             implicitHeight: 160
