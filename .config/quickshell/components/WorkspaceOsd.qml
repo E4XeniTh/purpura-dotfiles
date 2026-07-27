@@ -83,9 +83,13 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
-            // No anchors at all - wlr-layer-shell centers a surface with
-            // no anchor edges set, which is what puts this in the middle
-            // of the screen rather than pinned to some edge.
+            // No top/left/right anchors - only bottom is anchored, with a
+            // margin smaller than VolumeOsd's (screen.height / 8, implicitHeight
+            // 84) so this sits just above it instead of the two overlapping
+            // in the middle of the screen. Horizontally this still centers
+            // itself the same way VolumeOsd does (no left/right anchors set).
+            anchors.bottom: true
+            margins.bottom: modelData.height / 8 + 84 + osdWindow.boxPadding
             exclusiveZone: 0
             color: "transparent"
 
@@ -93,12 +97,19 @@ Scope {
             // mouse input, unlike VolumeOsd's slider/mute button.
             mask: Region {}
 
-            readonly property real boxPadding: Config.scaled(14, osdWindow.uiScale)
-            readonly property real boxSize: Config.scaled(44, osdWindow.uiScale)
-            readonly property real boxSpacing: Config.scaled(8, osdWindow.uiScale)
+            // Larger than the original pass, and each box's width now
+            // tracks this screen's own aspect ratio (modelData.width /
+            // modelData.height) instead of being a fixed square - a
+            // 16:9 monitor gets wide boxes, a 16:10 or portrait one gets
+            // narrower ones, so the OSD visually reads as "a row of tiny
+            // monitors" rather than arbitrary numbered tiles.
+            readonly property real boxPadding: Config.scaled(20, osdWindow.uiScale)
+            readonly property real boxHeight: Config.scaled(64, osdWindow.uiScale)
+            readonly property real boxWidth: osdWindow.boxHeight * (modelData.width / modelData.height)
+            readonly property real boxSpacing: Config.scaled(12, osdWindow.uiScale)
 
             implicitWidth: contentRow.implicitWidth + osdWindow.boxPadding * 2
-            implicitHeight: osdWindow.boxSize + osdWindow.boxPadding * 2
+            implicitHeight: osdWindow.boxHeight + osdWindow.boxPadding * 2
 
             Rectangle {
                 anchors.fill: parent
@@ -118,8 +129,8 @@ Scope {
                         Rectangle {
                             required property var modelData
 
-                            width: osdWindow.boxSize
-                            height: osdWindow.boxSize
+                            width: osdWindow.boxWidth
+                            height: osdWindow.boxHeight
                             color: Config.fgcolor
                             radius: 0
 
@@ -128,7 +139,7 @@ Scope {
                                 text: String(parent.modelData.id)
                                 color: "black"
                                 font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(18, osdWindow.uiScale)
+                                font.pixelSize: Config.scaled(22, osdWindow.uiScale)
                                 font.bold: true
                             }
                         }
@@ -143,8 +154,8 @@ Scope {
                     id: activeHighlight
 
                     y: contentRow.y
-                    width: osdWindow.boxSize
-                    height: osdWindow.boxSize
+                    width: osdWindow.boxWidth
+                    height: osdWindow.boxHeight
                     color: "transparent"
                     border.width: Config.scaled(3, osdWindow.uiScale)
                     border.color: Config.fgcolorlight
@@ -152,7 +163,7 @@ Scope {
                     visible: osdWindow.activeIndex >= 0
 
                     x: contentRow.x + (osdWindow.activeIndex >= 0
-                        ? osdWindow.activeIndex * (osdWindow.boxSize + osdWindow.boxSpacing)
+                        ? osdWindow.activeIndex * (osdWindow.boxWidth + osdWindow.boxSpacing)
                         : 0)
 
                     Behavior on x {
