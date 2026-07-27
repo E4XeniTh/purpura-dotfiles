@@ -153,6 +153,19 @@ SettingsPanel {
         root.pendingWorkspaces = updated
     }
 
+    // Which monitor other than `exceptName` currently has workspace
+    // `num` pinned, if any - used so the workspace-pin buttons can flag
+    // a workspace that's already claimed elsewhere (and refuse clicks
+    // for it) instead of letting the same workspace get bound to two
+    // monitors by accident.
+    function ownerOf(num, exceptName) {
+        for (const m of root.monitors) {
+            if (m.name === exceptName) continue
+            if (root.workspacesFor(m.name).includes(num)) return m.name
+        }
+        return ""
+    }
+
     readonly property bool dirty: root.selectedDirty
         || Object.keys(root.pendingEnabled).length > 0
         || Object.keys(root.pendingBrightness).length > 0
@@ -882,12 +895,21 @@ SettingsPanel {
                             required property int modelData
 
                             readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
+                            // Non-empty when some *other* monitor already
+                            // claims this workspace number - that button
+                            // is shown red and can't be toggled from here,
+                            // since only the owning monitor's own card
+                            // should be able to unpin it.
+                            readonly property string ownerElsewhere: root.ownerOf(modelData, root.selectedName)
+                            readonly property bool boundElsewhere: wsButton.ownerElsewhere !== ""
 
                             Layout.preferredWidth: Config.scaled(28, root.uiScale)
                             Layout.preferredHeight: Config.scaled(28, root.uiScale)
                             uiScale: root.uiScale
                             color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                            border.color: wsButton.bound ? Config.fgcolor : Config.fillcolor
+                            border.color: wsButton.boundElsewhere
+                                ? Config.fgcolorred
+                                : (wsButton.bound ? Config.fgcolor : Config.fgcolordark)
 
                             Text {
                                 anchors.centerIn: parent
@@ -902,6 +924,7 @@ SettingsPanel {
                                 id: wsMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
+                                enabled: !wsButton.boundElsewhere
                                 onClicked: {
                                     contentWrapper.forceActiveFocus()
                                     root.toggleWorkspace(root.selectedName, wsButton.modelData)
