@@ -65,8 +65,22 @@ PanelWindow {
         top: root.anchorTop
     }
 
+    // A panel's real content height (contentHolder.height, driven by
+    // whatever's nested inside - Bluetooth/Network/Screen settings all
+    // vary a lot depending on how many devices/networks/monitors exist)
+    // was never checked against how much screen is actually left below
+    // where it opens - tall enough content could push the window's own
+    // height past the bottom of the monitor. Same gap below as
+    // anchorTop leaves above (Dashboard.qml's own Config.scaled(8, ...)
+    // between the dashboard and this panel), so it's evenly framed
+    // rather than flush with the edge.
+    readonly property real maxAvailableHeight: root.screen
+        ? Math.max(1, root.screen.height - root.anchorTop - Config.scaled(8, root.uiScale))
+        : Number.MAX_VALUE
+    readonly property real clampedContentHeight: Math.min(contentHolder.height, root.maxAvailableHeight)
+
     implicitWidth: root.panelWidth
-    implicitHeight: Math.max(contentHolder.height, 1)
+    implicitHeight: Math.max(root.clampedContentHeight, 1)
 
     color: "transparent"
 
@@ -100,7 +114,7 @@ PanelWindow {
                     target: box
 
                     width: root.panelWidth
-                    height: Math.max(contentHolder.height, 1)
+                    height: Math.max(root.clampedContentHeight, 1)
                 }
             }
 

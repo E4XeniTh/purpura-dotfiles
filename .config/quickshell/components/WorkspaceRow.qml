@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Hyprland
+import Quickshell.Io
 import "../Config.js" as Config
 
 // One rectangle per current Hyprland workspace, sorted by owning
@@ -48,7 +49,55 @@ Row {
         target: Hyprland
         function onRawEvent(event) { Hyprland.refreshToplevels() }
     }
-    Component.onCompleted: Hyprland.refreshToplevels()
+    Component.onCompleted: {
+        Hyprland.refreshToplevels()
+        root.loadScreensStore()
+    }
+
+    // Which workspace numbers (1-5) are actually pinned to each
+    // monitor via Screen Settings - read straight from the same
+    // monitors.json ScreenSettings.qml writes, rather than depending on
+    // that panel being open/instantiated, so the number label below can
+    // tell "a real pin" apart from whatever spare workspace number
+    // Hyprland happened to assign a monitor with nothing pinned to it.
+    property var screensStore: ({})
+
+    function loadScreensStore() {
+        screensStoreProcess.running = false
+        screensStoreProcess.running = true
+    }
+
+    function isPinned(workspace) {
+        if (!workspace.monitor) return false
+        const stored = root.screensStore[workspace.monitor.name]
+        return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
+    }
+
+    Process {
+        id: screensStoreProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.screensStore = JSON.parse(text)
+                } catch (e) {
+                    root.screensStore = {}
+                }
+            }
+        }
+    }
+
+    // Nothing pushes a change notification when monitors.json is
+    // rewritten (only ScreenSettings.qml's own Apply button touches
+    // it), so this just polls - same interval Network Settings uses
+    // for its own zerotier-cli refresh.
+    Timer {
+        interval: 4000
+        repeat: true
+        running: true
+        onTriggered: root.loadScreensStore()
+    }
 
     Repeater {
         model: root.sortedWorkspaces
@@ -148,12 +197,20 @@ Row {
             // Faint workspace number, drawn above the window grid (z
             // higher than the Repeater's default stacking) so it stays
             // legible regardless of how many window/icon rectangles are
-            // packed underneath it.
+            // packed underneath it. Hidden entirely - not just dimmed -
+            // for a workspace number past 5 or one that was never
+            // actually pinned to this monitor through Screen Settings
+            // (see isPinned()/screensStore above), e.g. the spare
+            // number 6+ Hyprland assigns a monitor with nothing pinned
+            // to it once 1-5 are already claimed elsewhere - the box
+            // and its window grid still show either way, just without
+            // a number that would otherwise look like a deliberate pin.
             Text {
                 anchors.centerIn: parent
                 z: 10
+                visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
-                color: Config.fgcolorlight
+                color: Config.fgcolor
                 opacity: 0.4
                 // Outline so the number stays legible over whatever's
                 // underneath it (light window rectangles/icons, not

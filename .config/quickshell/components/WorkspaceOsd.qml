@@ -41,10 +41,15 @@ Scope {
             // by id - re-evaluates live off Hyprland.workspaces (an
             // ObjectModel, same reactive-list pattern as
             // Networking.devices/Pipewire.nodes elsewhere in this shell).
+            // Excludes anything past 5 - workspaces 1-5 are the pinned
+            // range (see Screen Settings' workspace buttons); a monitor
+            // with nothing explicitly pinned gets the next free number
+            // from Hyprland instead (e.g. 6 on a third monitor once 1-3
+            // and 4-5 are taken), which isn't meant to show up here.
             readonly property var monitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
                 return Hyprland.workspaces.values
-                    .filter(w => w.monitor === osdWindow.hyprMonitor)
+                    .filter(w => w.monitor === osdWindow.hyprMonitor && w.id <= 5)
                     .slice()
                     .sort((a, b) => a.id - b.id)
             }
@@ -131,7 +136,7 @@ Scope {
 
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
-                            color: Config.fgfillcolor
+                            color: Config.fillcolor
                             border.width: 2
                             border.color: Config.fgcolor
                             radius: 0
@@ -141,7 +146,7 @@ Scope {
                                 text: String(parent.modelData.id)
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(22, osdWindow.uiScale)
+                                font.pixelSize: Config.scaled(32, osdWindow.uiScale)
                                 font.bold: true
                             }
                         }

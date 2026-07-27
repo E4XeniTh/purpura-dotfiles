@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Networking
+import Quickshell.Io
 import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
@@ -60,11 +61,65 @@ SettingsPanel {
     // excluded here rather than duplicated in both places.
     readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
 
+    // ---------------- ZeroTier (simple presence check) ----------------
+    // Quickshell.Networking will never see a zt* interface (see the
+    // file-level note above), so this is queried directly through
+    // zerotier-cli - ZeroTier's own CLI - rather than nmcli. Kept
+    // deliberately minimal: no icon/relabeling logic, just "is a
+    // network joined, and is it connected." Refreshed only while this
+    // panel is open, same reasoning as the WiFi scan toggle below.
+    property var zerotierNetworks: []
+
+    function refreshZerotier() {
+        zerotierProcess.running = false
+        zerotierProcess.running = true
+    }
+
+    Process {
+        id: zerotierProcess
+        command: ["zerotier-cli", "listnetworks"]
+
+        // Output is one "200 listnetworks <nwid> <name> <mac> <status>
+        // <type> <dev>" line per joined network - name is "-" if the
+        // network has none, so nwid is used instead in that case.
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const nets = []
+                for (const line of text.split("\n")) {
+                    const fields = line.trim().split(/\s+/)
+                    if (fields[0] !== "200" || fields[1] !== "listnetworks") continue
+                    nets.push({
+                        name: (fields[3] && fields[3] !== "-") ? fields[3] : fields[2],
+                        connected: fields[5] === "OK"
+                    })
+                }
+                root.zerotierNetworks = nets
+            }
+        }
+
+        // Not installed, no permission, or the zerotier-one service
+        // isn't running - all silently mean "nothing to show" here,
+        // same as any other optional tool this shell touches.
+        stderr: StdioCollector {
+            onStreamFinished: {}
+        }
+    }
+
+    Timer {
+        id: zerotierRefreshTimer
+        interval: 4000
+        repeat: true
+        onTriggered: root.refreshZerotier()
+    }
+
     readonly property var connectionEntries: {
         const connected = root.wiredNetworks.filter(n => n.connected)
         const disconnected = root.wiredNetworks.filter(n => !n.connected)
         const list = connected.map(n => ({ kind: "network", network: n }))
         for (const n of disconnected) list.push({ kind: "network", network: n })
+        for (const zt of root.zerotierNetworks) {
+            list.push({ kind: "zerotier", name: zt.name, connected: zt.connected })
+        }
         return list
     }
 
@@ -98,7 +153,15 @@ SettingsPanel {
         }
     }
 
-    onActiveChanged: root.updateWifiScanning()
+    onActiveChanged: {
+        root.updateWifiScanning()
+        if (root.active) {
+            root.refreshZerotier()
+            zerotierRefreshTimer.restart()
+        } else {
+            zerotierRefreshTimer.stop()
+        }
+    }
     onCurrentTabChanged: root.updateWifiScanning()
 
     // SettingsPanel sizes itself off this outer Item's height via
@@ -295,6 +358,7 @@ SettingsPanel {
 
                         sourceComponent: modelData.kind === "device" ? deviceRowComponent
                             : modelData.kind === "network" ? networkRowComponent
+                            : modelData.kind === "zerotier" ? zerotierRowComponent
                             : separatorRowComponent
                     }
                 }
@@ -321,6 +385,58 @@ SettingsPanel {
                         uiScale: root.uiScale
                         network: parent.modelData.network
                         allowForget: root.currentTab === 2
+                    }
+                }
+
+                // Connections tab only - see zerotierNetworks above.
+                // rowData is captured once here (rather than each
+                // nested child reaching back through parent.parent...)
+                // since only this root item's own `parent` is actually
+                // the Loader that instantiated it.
+                Component {
+                    id: zerotierRowComponent
+
+                    DashCard {
+                        id: ztCard
+                        anchors.fill: parent
+                        uiScale: root.uiScale
+                        readonly property var rowData: ztCard.parent.modelData
+                        border.color: ztCard.rowData.connected ? Config.fgcolorlight : Config.fgcolor
+
+                        RowLayout {
+                            anchors {
+                                fill: parent
+                                margins: Config.scaled(10, root.uiScale)
+                            }
+                            spacing: Config.scaled(10, root.uiScale)
+
+                            Item {
+                                Layout.preferredWidth: Config.scaled(24, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(24, root.uiScale)
+
+                                IconImage {
+                                    id: zerotierIcon
+                                    anchors.fill: parent
+                                    source: Quickshell.iconPath("network-vpn-symbolic", "network-wired-symbolic")
+                                }
+
+                                ColorOverlay {
+                                    anchors.fill: zerotierIcon
+                                    source: zerotierIcon
+                                    color: ztCard.border.color
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: "ZeroTier: " + ztCard.rowData.name
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(15, root.uiScale)
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+                        }
                     }
                 }
 
