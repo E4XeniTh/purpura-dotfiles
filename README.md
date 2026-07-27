@@ -44,6 +44,21 @@ cp -r .config/hypr .config/quickshell ~/.config/
 Copy the rest (`fish`, `kitty`, `rofi`, `fastfetch`, `gtk-3.0`,
 `gtk-4.0`, `ZapZap`) too if you want those as well.
 
+`hyprland.lua`, `hypr/hyprpaper.conf`, and `ZapZap/ZapZap.conf` are
+gitignored - personal/machine-specific enough (keyboard layout, output
+names, wallpaper paths, an account-tied WhatsApp session) that editing
+them shouldn't turn into a pending diff, and pulling repo updates
+shouldn't ever clobber them back to some default. Each has a tracked
+`.example` twin instead - seed your real config from it once, on first
+install only (`cp -n` no-ops if the real file already exists, so this
+is safe to re-run):
+
+```bash
+cp -n .config/hypr/hyprland.lua.example ~/.config/hypr/hyprland.lua
+cp -n .config/hypr/hyprpaper.conf.example ~/.config/hypr/hyprpaper.conf
+cp -n .config/ZapZap/ZapZap.conf.example ~/.config/ZapZap/ZapZap.conf
+```
+
 ## Build the helper binaries
 
 Two small C helpers need compiling locally - they're gitignored since
