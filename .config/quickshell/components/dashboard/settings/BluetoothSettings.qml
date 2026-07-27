@@ -22,6 +22,12 @@ SettingsPanel {
 
     namespaceName: "bluetoothSettings"
 
+    // No controller at all (no onboard/USB Bluetooth radio, or BlueZ
+    // isn't running) - the whole two-column layout below assumes at
+    // least one adapter exists, so it's swapped for a plain message
+    // instead rather than rendering two mostly-empty columns.
+    readonly property bool noAdapter: Bluetooth.adapters.values.length === 0
+
     readonly property var pairedDevices: Bluetooth.devices.values.filter(d => d.paired)
     readonly property var unpairedDevices: Bluetooth.devices.values.filter(d => !d.paired)
 
@@ -65,12 +71,25 @@ SettingsPanel {
             right: parent.right
             top: parent.top
         }
-        height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height)
-            + hintSeparator.anchors.topMargin + hintSeparator.height
-            + hintRow.anchors.topMargin + hintRow.height
+        height: root.noAdapter
+            ? Config.scaled(200, root.uiScale)
+            : contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height)
+                + hintSeparator.anchors.topMargin + hintSeparator.height
+                + hintRow.anchors.topMargin + hintRow.height
+
+        Text {
+            anchors.centerIn: parent
+            visible: root.noAdapter
+            text: "No Bluetooth receiver detected."
+            color: Config.fgcolor
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(16, root.uiScale)
+            font.bold: true
+        }
 
         RowLayout {
             id: contentRow
+            visible: !root.noAdapter
             readonly property real margins: Config.scaled(18, root.uiScale)
 
             anchors {
@@ -222,6 +241,7 @@ SettingsPanel {
         // separate fixed inset.
         Rectangle {
             id: hintSeparator
+            visible: !root.noAdapter
             anchors {
                 left: parent.left
                 right: parent.right
@@ -236,6 +256,7 @@ SettingsPanel {
         // ---------------- hint row: left = enable/disable, right = forget/link ----------------
         RowLayout {
             id: hintRow
+            visible: !root.noAdapter
 
             anchors {
                 left: parent.left
