@@ -59,17 +59,23 @@ Scope {
             id: bar
             property var modelData
             screen: modelData
+
+            // Same reference-resolution scaling formula as Dashboard.qml/
+            // WorkspaceOsd.qml, so every element below tracks this
+            // screen's own resolution instead of assuming a fixed one.
+            readonly property real uiScale: Math.max(0.6, Math.min(1.8, modelData.width * 0.42 / 800))
+
             anchors {
                 top: true
                 left: true
                 right: true
             }
             margins {
-                top: 10
-                left: 10
-                right: 10
+                top: Config.scaled(10, bar.uiScale)
+                left: Config.scaled(10, bar.uiScale)
+                right: Config.scaled(10, bar.uiScale)
             }
-            implicitHeight: 48
+            implicitHeight: Config.scaled(Config.barheight, bar.uiScale)
             // Transparent window; the visible bar is the Rectangle below.
             // This lets us draw a border without fighting the window's
             // own background compositing.
@@ -78,39 +84,41 @@ Scope {
                 anchors.fill: parent
                 color: Config.fillcolor
                 radius: 0
-                border.width: 2
+                border.width: Config.scaled(2, bar.uiScale)
                 border.color: Config.fgcolor
                 Tray {
                     id: trayItem
-                    border.width: 2
+                    border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
-                    width: trayWidth < 16 ? 0 : trayWidth + 16
-                    implicitHeight: 26+8
-                    anchors.margins: 10
+                    width: trayWidth < 16 ? 0 : trayWidth + Config.scaled(16, bar.uiScale)
+                    implicitHeight: Config.scaled(26 + 8, bar.uiScale)
+                    anchors.margins: Config.scaled(10, bar.uiScale)
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     screen: modelData
                     isPrimary: root.dashboard ? modelData.name === root.effectivePrimaryName : true
                 }
 
-                // See WorkspaceRow.qml - sits directly to the left of
-                // the clock (the dashboard-open button), which sets its
-                // height here since layer-shell/anchors info all lives
-                // in this file.
+                // See WorkspaceRow.qml - sits to the left of the clock
+                // (the dashboard-open button), which sets its height
+                // here since layer-shell/anchors info all lives in this
+                // file. rightMargin is the usual 10px inset plus 32px of
+                // deliberate extra breathing room before the dashboard
+                // button specifically.
                 WorkspaceRow {
                     id: workspaceRow
                     height: clockCard.height
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
-                    anchors.rightMargin: 10
+                    anchors.rightMargin: Config.scaled(10 + 32, bar.uiScale)
                 }
 
                 Rectangle {
                     id: clockCard
                     anchors.centerIn: parent
-                    width: clock.implicitWidth + 16
-                    height: clock.implicitHeight + 4
-                    border.width: 2
+                    width: clock.implicitWidth + Config.scaled(16, bar.uiScale)
+                    height: clock.implicitHeight + Config.scaled(4, bar.uiScale)
+                    border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
                     color: clockmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                     Clock {
@@ -136,13 +144,13 @@ Scope {
                     anchors {
                         right: parent.right
                         verticalCenter: parent.verticalCenter
-                        margins: 10
+                        margins: Config.scaled(10, bar.uiScale)
                     }
 
-                    border.width: 2
+                    border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
-                    width: 34
-                    height: 34
+                    width: Config.scaled(34, bar.uiScale)
+                    height: Config.scaled(34, bar.uiScale)
                     color: notifmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
                     MouseArea {
@@ -159,7 +167,11 @@ Scope {
                     IconImage {
                         id: notifIcon
 
-                        implicitSize: 32
+                        // Previously had no anchors at all, so it sat
+                        // at the button's top-left corner instead of
+                        // centered in it.
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(32, bar.uiScale)
                         source: Quickshell.iconPath("notifications-symbolic")
                     }
 

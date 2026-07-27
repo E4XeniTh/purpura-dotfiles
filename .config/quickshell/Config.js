@@ -25,6 +25,10 @@ var fontfamily = "Hack"
 
 var notificationtimeout = 5000
 
+// Bar.qml's own base height, before Config.scaled()'s per-screen
+// uiScale is applied to it.
+var barheight = 48
+
 // Rounds px to the nearest whole pixel scaled by a component-local
 // uiScale factor, clamped to never disappear entirely. Used anywhere a
 // size/font was tuned at a reference resolution and needs to scale with
