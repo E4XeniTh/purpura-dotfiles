@@ -72,9 +72,11 @@ later):
 - `hyprland`
 - `quickshell` — built with Pipewire + SystemTray support
 - `qt6-5compat`
+- `qt6ct-kde` (AUR)
+- `kvantum`
 - `base-devel` (`gcc`, `make`)
 - `ttf-hack` — `Config.js`'s `fontfamily`
-- [`libcava`](https://github.com/LukashonakV/cava) — LukashonakV's fork, not the plain `cava` package
+- `libcava` (AUR)
 - `libpulse`
 - `hyprpaper`
 - `hyprshutdown`
@@ -89,6 +91,7 @@ later):
 - `jq`
 - `curl`
 - `pam`
+- 
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*` (e.g. Papirus)
 
