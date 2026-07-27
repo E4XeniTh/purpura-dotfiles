@@ -144,20 +144,43 @@ SettingsPanel {
 
     function toggleWorkspace(name, num) {
         if (!name) return
+        const updated = Object.assign({}, root.pendingWorkspaces)
         const current = root.workspacesFor(name).slice()
         const idx = current.indexOf(num)
-        if (idx >= 0) current.splice(idx, 1)
-        else current.push(num)
-        const updated = Object.assign({}, root.pendingWorkspaces)
-        updated[name] = current
+
+        if (idx >= 0) {
+            current.splice(idx, 1)
+            updated[name] = current
+        } else {
+            // Pinning a workspace that's currently owned by a different
+            // monitor moves it here instead of being a no-op - only one
+            // monitor may hold a given workspace number at a time (see
+            // ownerOf()/boundElsewhere), and previously the button for
+            // an owned-elsewhere workspace was just disabled outright,
+            // leaving no way to actually reassign it short of first
+            // hunting down whichever monitor owned it and unpinning it
+            // there.
+            const owner = root.ownerOf(num, name)
+            if (owner) {
+                const ownerList = root.workspacesFor(owner).slice()
+                const ownerIdx = ownerList.indexOf(num)
+                if (ownerIdx >= 0) {
+                    ownerList.splice(ownerIdx, 1)
+                    updated[owner] = ownerList
+                }
+            }
+            current.push(num)
+            updated[name] = current
+        }
+
         root.pendingWorkspaces = updated
     }
 
     // Which monitor other than `exceptName` currently has workspace
     // `num` pinned, if any - used so the workspace-pin buttons can flag
-    // a workspace that's already claimed elsewhere (and refuse clicks
-    // for it) instead of letting the same workspace get bound to two
-    // monitors by accident.
+    // a workspace that's already claimed elsewhere (red border) and so
+    // toggleWorkspace() knows which monitor to unpin it from when
+    // reassigning it.
     function ownerOf(num, exceptName) {
         for (const m of root.monitors) {
             if (m.name === exceptName) continue
@@ -166,14 +189,13 @@ SettingsPanel {
         return ""
     }
 
-    // Fail-safe run at the top of every applyChanges(): the workspace
-    // buttons' own click handler already refuses to pin a workspace
-    // that's bound elsewhere (see ownerOf()/boundElsewhere above), but
-    // that only guards clicks made through this session - a
-    // monitors.json left over from before that guard existed, or edited
-    // by hand, could still have the same workspace number pinned to two
-    // monitors. If so, keep it only on whichever of those monitors sits
-    // closest to (0, 0) and drop it from the rest, rather than sending
+    // Fail-safe run at the top of every applyChanges(): toggleWorkspace()
+    // already reassigns (rather than duplicates) a workspace pinned
+    // elsewhere for clicks made through this session, but a monitors.json
+    // left over from before that existed, or edited by hand, could still
+    // have the same workspace number pinned to two monitors. If so, keep
+    // it only on whichever of those monitors sits closest to (0, 0) and
+    // drop it from the rest, rather than sending
     // Hyprland a workspace_rule for the same workspace pointed at
     // several outputs.
     function resolveWorkspaceCollisions() {
@@ -1005,10 +1027,12 @@ SettingsPanel {
 
                             readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
                             // Non-empty when some *other* monitor already
-                            // claims this workspace number - that button
-                            // is shown red and can't be toggled from here,
-                            // since only the owning monitor's own card
-                            // should be able to unpin it.
+                            // claims this workspace number - shown red as
+                            // a warning, but still clickable: clicking it
+                            // reassigns the workspace to this monitor
+                            // instead (see toggleWorkspace()), rather than
+                            // being a dead end that only the owning
+                            // monitor's own card could undo.
                             readonly property string ownerElsewhere: root.ownerOf(modelData, root.selectedName)
                             readonly property bool boundElsewhere: wsButton.ownerElsewhere !== ""
 
@@ -1033,7 +1057,6 @@ SettingsPanel {
                                 id: wsMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                enabled: !wsButton.boundElsewhere
                                 onClicked: {
                                     contentWrapper.forceActiveFocus()
                                     root.toggleWorkspace(root.selectedName, wsButton.modelData)
