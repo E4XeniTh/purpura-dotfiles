@@ -62,12 +62,11 @@ hl.env("HYPRCURSOR_SIZE", "24")
 -- qt6ct (not a full Plasma/KDE session) picks the Qt6 style/palette -
 -- see ~/.config/qt6ct/qt6ct.conf, which points style=kvantum at the
 -- KvPurpleBlack theme in ~/.config/Kvantum/.
-hl.env("QT_QPA_PLATFORMTHEME", "qt6ct")
+hl.env("QT_QPA_PLATFORMTHEME", "kde")
 -- Belt-and-suspenders alongside qt6ct.conf's own style=kvantum: some Qt/
 -- KDE Frameworks apps don't fully respect QT_QPA_PLATFORMTHEME's style
 -- cascade and need this forced directly (confirmed live for Kate, which
 -- otherwise kept its default/white chrome).
-hl.env("QT_STYLE_OVERRIDE", "kvantum")
 hl.env("XDG_MENU_PREFIX", "arch-")
 
 --#######################################################################################
