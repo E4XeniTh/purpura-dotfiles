@@ -39,6 +39,24 @@ Row {
         })
     }
 
+    // sortedWorkspaces with a "separator" marker spliced in wherever the
+    // owning monitor changes between one entry and the next, so the Row
+    // below can draw a small divider between each monitor's group of
+    // workspace boxes instead of one continuous, ungrouped run of them.
+    readonly property var rowEntries: {
+        const list = []
+        let lastMonitorName = null
+        for (const ws of root.sortedWorkspaces) {
+            const monName = ws.monitor ? ws.monitor.name : ""
+            if (lastMonitorName !== null && monName !== lastMonitorName) {
+                list.push({ kind: "separator" })
+            }
+            list.push({ kind: "workspace", ws: ws })
+            lastMonitorName = monName
+        }
+        return list
+    }
+
     // A toplevel's lastIpcObject (the only place its at/size/class live
     // - see WindowBox below) is only ever as fresh as the last
     // refreshToplevels() call, unlike title/activated/workspace which
@@ -100,11 +118,39 @@ Row {
     }
 
     Repeater {
-        model: root.sortedWorkspaces
+        model: root.rowEntries
+
+        Loader {
+            id: entryLoader
+            required property var modelData
+
+            sourceComponent: entryLoader.modelData.kind === "separator" ? separatorComponent : workspaceComponent
+        }
+    }
+
+    Component {
+        id: separatorComponent
+
+        Rectangle {
+            width: 2
+            height: root.height * 0.6
+            anchors.verticalCenter: parent.verticalCenter
+            color: Config.fgcolordark
+        }
+    }
+
+    Component {
+        id: workspaceComponent
 
         Rectangle {
             id: wsBox
-            required property var modelData
+
+            // parent is entryLoader (Loader reparents its loaded item
+            // directly) - .ws rather than .modelData itself since the
+            // Repeater's own model entries are now { kind, ws } wrappers,
+            // not bare workspace objects, to make room for the
+            // separator markers spliced into rowEntries above.
+            readonly property var modelData: wsBox.parent.modelData.ws
 
             readonly property var mon: wsBox.modelData.monitor
             readonly property real aspect: (wsBox.mon && wsBox.mon.height > 0)
@@ -225,6 +271,16 @@ Row {
                 font.family: Config.fontfamily
                 font.bold: true
                 font.pixelSize: Math.max(8, Math.min(wsBox.width, wsBox.height) * 0.55)
+            }
+
+            // Switches to this workspace - Hyprland's own activate(),
+            // equivalent to HyprlandIpc.dispatch("workspace <name>").
+            // Covers the whole box (window-grid rectangles/icons and
+            // the number label underneath have no MouseAreas of their
+            // own to compete with).
+            MouseArea {
+                anchors.fill: parent
+                onClicked: wsBox.modelData.activate()
             }
         }
     }

@@ -94,10 +94,15 @@ SettingsPanel {
         //           tun, 46:F0:70:70:22:48, sw, mtu 2800
         //
         // Only the un-indented header line (id + state) is needed here
-        // - ZeroTier's own interface naming convention ("zt" followed
-        // by its 10-hex-digit network address) is what identifies it,
-        // not nmcli's "tun" type token, since any other VPN client
-        // could just as easily show up as a tun device too.
+        // - ZeroTier's own interface naming convention ("zt" + a
+        // generated lowercase-alphanumeric id, NOT necessarily hex -
+        // "zthnhadv3s" itself has 'h'/'n' in it, which the previous
+        // hex-only pattern here missed entirely, hiding it regardless
+        // of managed state) is what identifies it, not nmcli's "tun"
+        // type token, since any other VPN client could just as easily
+        // show up as a tun device too. Deliberately not filtered by
+        // state - unmanaged is the expected/common case here, not a
+        // reason to hide it.
         stdout: StdioCollector {
             onStreamFinished: {
                 const nets = []
@@ -107,7 +112,7 @@ SettingsPanel {
                     if (sepIdx === -1) continue
                     const id = rawLine.slice(0, sepIdx).trim()
                     const state = rawLine.slice(sepIdx + 2).trim()
-                    if (!/^zt[0-9a-f]+$/i.test(id)) continue
+                    if (!/^zt[0-9a-z]+$/i.test(id)) continue
                     nets.push({ name: id, connected: state === "connected" })
                 }
                 root.zerotierNetworks = nets
