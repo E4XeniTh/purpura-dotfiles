@@ -184,7 +184,14 @@ Row {
             width: wsBox.height * wsBox.aspect
             color: Config.fillcolor
             border.width: 2
-            border.color: wsBox.modelData.active ? Config.fgcolor : Config.fgcolordark
+            // hasFullscreen bumps the border up a tier from whatever
+            // it'd otherwise be - fgcolor becomes fgcolorlight when
+            // active, fgcolordark becomes fgcolordarklight when not -
+            // so a workspace holding a fullscreen app always reads as
+            // more prominent than one that doesn't, active or not.
+            border.color: wsBox.modelData.hasFullscreen
+                ? (wsBox.modelData.active ? Config.fgcolorlight : Config.fgcolordarklight)
+                : (wsBox.modelData.active ? Config.fgcolor : Config.fgcolordark)
             radius: 0
             // A window that's fullscreened, off-monitor mid-drag, or
             // just rounds slightly past its workspace's edge would
@@ -209,6 +216,10 @@ Row {
                     readonly property var atArr: winBox.ipcData.at ?? [0, 0]
                     readonly property var sizeArr: winBox.ipcData.size ?? [0, 0]
                     readonly property string winClass: winBox.ipcData.class ?? ""
+                    // No dedicated "fullscreen" QML property on a
+                    // Hyprland toplevel - only lastIpcObject carries
+                    // it, straight from hyprctl clients' own field.
+                    readonly property bool isFullscreen: !!winBox.ipcData.fullscreen
 
                     // Real per-app icon, the same way Tray.qml gets one
                     // - its Image binds straight to SystemTray's own
@@ -229,14 +240,27 @@ Row {
                         ? winBox.desktopEntry.icon
                         : winBox.winClass
 
-                    x: wsBox.mon ? (winBox.atArr[0] - wsBox.mon.x) / wsBox.monWidth * wsBox.width : 0
-                    y: wsBox.mon ? (winBox.atArr[1] - wsBox.mon.y) / wsBox.monHeight * wsBox.height : 0
-                    width: (wsBox.mon && wsBox.monWidth > 0)
-                        ? Math.max(1, winBox.sizeArr[0] / wsBox.monWidth * wsBox.width)
-                        : 1
-                    height: (wsBox.mon && wsBox.monHeight > 0)
-                        ? Math.max(1, winBox.sizeArr[1] / wsBox.monHeight * wsBox.height)
-                        : 1
+                    // A fullscreen window's own reported at/size isn't
+                    // trusted to already cover the full monitor exactly
+                    // - forced to fill this box outright instead, and
+                    // every other window on the same workspace is
+                    // hidden entirely rather than drawn underneath it
+                    // (see visible below), matching what's actually on
+                    // screen once something goes fullscreen.
+                    x: winBox.isFullscreen ? 0
+                        : (wsBox.mon ? (winBox.atArr[0] - wsBox.mon.x) / wsBox.monWidth * wsBox.width : 0)
+                    y: winBox.isFullscreen ? 0
+                        : (wsBox.mon ? (winBox.atArr[1] - wsBox.mon.y) / wsBox.monHeight * wsBox.height : 0)
+                    width: winBox.isFullscreen ? wsBox.width
+                        : ((wsBox.mon && wsBox.monWidth > 0)
+                            ? Math.max(1, winBox.sizeArr[0] / wsBox.monWidth * wsBox.width)
+                            : 1)
+                    height: winBox.isFullscreen ? wsBox.height
+                        : ((wsBox.mon && wsBox.monHeight > 0)
+                            ? Math.max(1, winBox.sizeArr[1] / wsBox.monHeight * wsBox.height)
+                            : 1)
+
+                    visible: !wsBox.modelData.hasFullscreen || winBox.isFullscreen
 
                     color: "transparent"
                     border.width: 1

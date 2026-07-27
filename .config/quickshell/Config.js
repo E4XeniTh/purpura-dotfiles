@@ -13,6 +13,11 @@ var fgcolor = "#9600fa"
 var fgfillcolor = "#aa9600fa"
 var fgcolordark = Qt.darker(fgcolor, 2.5)
 var fgcolorlight = Qt.lighter(fgcolor, 1.55)
+// Mildly dimmed fgcolorlight (not the harsh 2.5x of fgcolordark) - for
+// states that are still fgcolorlight-worthy (e.g. a workspace holding a
+// fullscreen app) but shouldn't compete with something that's also
+// currently active/selected.
+var fgcolordarklight = Qt.darker(fgcolorlight, 1.3)
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
 var fgcolorred = "#e00030"
 
