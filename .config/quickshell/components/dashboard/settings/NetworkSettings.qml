@@ -61,13 +61,18 @@ SettingsPanel {
     // excluded here rather than duplicated in both places.
     readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
 
-    // ---------------- ZeroTier (simple presence check) ----------------
-    // Quickshell.Networking will never see a zt* interface (see the
-    // file-level note above), so this is queried directly through
-    // zerotier-cli - ZeroTier's own CLI - rather than nmcli. Kept
-    // deliberately minimal: no icon/relabeling logic, just "is a
-    // network joined, and is it connected." Refreshed only while this
-    // panel is open, same reasoning as the WiFi scan toggle below.
+    // ---------------- ZeroTier (simple presence check via nmcli) ----------------
+    // zerotier-cli needs root (its local API socket is root-only by
+    // default on most installs) - confirmed live, so it's not something
+    // this shell can just shell out to as the logged-in user. nmcli
+    // works instead: NetworkManager is aware of every device on the
+    // system whether or not it actually manages it, and a live nmcli
+    // dump showed the zt* interface listed there (as "unmanaged") even
+    // though nothing here ever asked NetworkManager to manage it. Kept
+    // deliberately minimal: just "is a zt* interface present, and what
+    // does nmcli say its state is" - no generic device parsing beyond
+    // that (see the file-level note above for why nmcli is needed at
+    // all instead of Quickshell.Networking).
     property var zerotierNetworks: []
 
     function refreshZerotier() {
@@ -77,31 +82,36 @@ SettingsPanel {
 
     Process {
         id: zerotierProcess
-        command: ["zerotier-cli", "listnetworks"]
+        command: ["nmcli"]
 
-        // Output is one "200 listnetworks <nwid> <name> <mac> <status>
-        // <type> <dev>" line per joined network - name is "-" if the
-        // network has none, so nwid is used instead in that case.
+        // Plain `nmcli` (no args) prints one block per device it knows
+        // about, e.g.:
+        //
+        //   zthnhadv3s: unmanaged
+        //
+        //           "zthnhadv3s"
+        //
+        //           tun, 46:F0:70:70:22:48, sw, mtu 2800
+        //
+        // Only the un-indented header line (id + state) is needed here
+        // - ZeroTier's own interface naming convention ("zt" followed
+        // by its 10-hex-digit network address) is what identifies it,
+        // not nmcli's "tun" type token, since any other VPN client
+        // could just as easily show up as a tun device too.
         stdout: StdioCollector {
             onStreamFinished: {
                 const nets = []
-                for (const line of text.split("\n")) {
-                    const fields = line.trim().split(/\s+/)
-                    if (fields[0] !== "200" || fields[1] !== "listnetworks") continue
-                    nets.push({
-                        name: (fields[3] && fields[3] !== "-") ? fields[3] : fields[2],
-                        connected: fields[5] === "OK"
-                    })
+                for (const rawLine of text.split("\n")) {
+                    if (/^\s/.test(rawLine)) continue
+                    const sepIdx = rawLine.lastIndexOf(": ")
+                    if (sepIdx === -1) continue
+                    const id = rawLine.slice(0, sepIdx).trim()
+                    const state = rawLine.slice(sepIdx + 2).trim()
+                    if (!/^zt[0-9a-f]+$/i.test(id)) continue
+                    nets.push({ name: id, connected: state === "connected" })
                 }
                 root.zerotierNetworks = nets
             }
-        }
-
-        // Not installed, no permission, or the zerotier-one service
-        // isn't running - all silently mean "nothing to show" here,
-        // same as any other optional tool this shell touches.
-        stderr: StdioCollector {
-            onStreamFinished: {}
         }
     }
 
