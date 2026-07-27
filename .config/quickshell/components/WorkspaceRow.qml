@@ -124,17 +124,6 @@ Row {
             id: entryLoader
             required property var modelData
 
-            // Loader auto-sizes to whatever it loads by default - the
-            // separator's own Rectangle is deliberately shorter than
-            // the row (60%), so leaving the Loader at that same
-            // shrunk height made "center within my own parent" a
-            // no-op, and the whole thing just sat at Row's default
-            // top-aligned position instead of actually centering in
-            // the bar. Forcing every Loader (workspace or separator)
-            // to the row's full height first is what makes that
-            // centering below mean something.
-            height: root.height
-
             sourceComponent: entryLoader.modelData.kind === "separator" ? separatorComponent : workspaceComponent
         }
     }
@@ -145,8 +134,17 @@ Row {
         Rectangle {
             width: 2
             height: root.height * 0.6
-            anchors.verticalCenter: parent.verticalCenter
-            color: Config.fgcolordark
+            // y rather than anchors.verticalCenter: a Loader with an
+            // explicit height stretches a non-fill-anchored child to
+            // match it (confirmed live - giving entryLoader
+            // height: root.height to fix this separator sitting at the
+            // top instead made it stretch to full height, overriding
+            // this Rectangle's own 60%). Computing y directly against
+            // root.height sidesteps the Loader's size entirely - Row
+            // only manages its children's x, never y, so this is the
+            // only positioning that actually applies.
+            y: (root.height - height) / 2
+            color: Config.fgcolor
         }
     }
 
