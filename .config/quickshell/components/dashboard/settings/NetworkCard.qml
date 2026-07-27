@@ -32,7 +32,23 @@ DashCard {
 
     readonly property bool isWifi: !!(root.network && root.network.device && root.network.device.type === DeviceType.Wifi)
 
-    border.color: (root.network && root.network.connected) ? Config.fgcolorlight : Config.fgcolor
+    // Network.stateChanging is Quickshell's own shorthand for "currently
+    // connecting or disconnecting" - flashed rapidly so that transient
+    // state actually reads as "something is happening" rather than
+    // looking identical to the click just not having registered yet.
+    readonly property bool stateChanging: !!(root.network && root.network.stateChanging)
+    property color blinkColor: Config.fgcolor
+
+    border.color: root.stateChanging
+        ? root.blinkColor
+        : ((root.network && root.network.connected) ? Config.fgcolorlight : Config.fgcolor)
+
+    SequentialAnimation {
+        running: root.stateChanging
+        loops: Animation.Infinite
+        ColorAnimation { target: root; property: "blinkColor"; to: Config.fgcolorlight; duration: 150 }
+        ColorAnimation { target: root; property: "blinkColor"; to: Config.fgcolor; duration: 150 }
+    }
 
     RowLayout {
         anchors {

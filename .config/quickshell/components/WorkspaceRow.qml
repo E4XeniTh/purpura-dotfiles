@@ -91,7 +91,7 @@ Row {
     // Nothing pushes a change notification when monitors.json is
     // rewritten (only ScreenSettings.qml's own Apply button touches
     // it), so this just polls - same interval Network Settings uses
-    // for its own zerotier-cli refresh.
+    // for its own ZeroTier/nmcli refresh.
     Timer {
         interval: 4000
         repeat: true
@@ -117,6 +117,11 @@ Row {
             border.width: 2
             border.color: wsBox.modelData.active ? Config.fgcolor : Config.fgcolordark
             radius: 0
+            // A window that's fullscreened, off-monitor mid-drag, or
+            // just rounds slightly past its workspace's edge would
+            // otherwise draw outside this box's own border - clipped
+            // to keep every window rectangle strictly inside it.
+            clip: true
 
             // One rectangle per window actually open on this
             // workspace, positioned/sized as a fraction of the owning

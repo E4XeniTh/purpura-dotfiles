@@ -1012,6 +1012,8 @@ SettingsPanel {
                         }
                     }
 
+                    Item { Layout.fillWidth: true }
+
                     // ---------------- workspace pins (1-5) ----------------
                     // Binds the selected monitor to any of workspaces
                     // 1-5 (hl.workspace_rule({ workspace, monitor })) -
@@ -1064,8 +1066,6 @@ SettingsPanel {
                             }
                         }
                     }
-
-                    Item { Layout.fillWidth: true }
                 }
 
                 // ---------------- separator ----------------

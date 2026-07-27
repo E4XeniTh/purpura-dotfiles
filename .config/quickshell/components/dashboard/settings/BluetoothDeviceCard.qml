@@ -17,8 +17,26 @@ DashCard {
     required property var device
     property real uiScale: 1.0
 
-    border.color: !device.paired ? Config.fgcolordark
-    : (device.connected ? Config.fgcolorlight : Config.fgcolor)
+    readonly property bool stateChanging: root.device.state === BluetoothDeviceState.Connecting
+        || root.device.state === BluetoothDeviceState.Disconnecting
+
+    // Flashes rapidly while BlueZ is actually mid-connect/disconnect
+    // (as opposed to just sitting connected/disconnected), so that
+    // transient state actually reads as "something is happening" rather
+    // than looking identical to the button just not having registered
+    // the click yet.
+    property color blinkColor: Config.fgcolor
+
+    border.color: root.stateChanging
+        ? root.blinkColor
+        : (!device.paired ? Config.fgcolordark : (device.connected ? Config.fgcolorlight : Config.fgcolor))
+
+    SequentialAnimation {
+        running: root.stateChanging
+        loops: Animation.Infinite
+        ColorAnimation { target: root; property: "blinkColor"; to: Config.fgcolorlight; duration: 150 }
+        ColorAnimation { target: root; property: "blinkColor"; to: Config.fgcolor; duration: 150 }
+    }
 
     // Auto-trust the instant a device becomes paired, so it can
     // reconnect later without prompting.
