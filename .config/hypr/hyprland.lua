@@ -31,7 +31,7 @@ hl.on("hyprland.start", function()
 -- - run first so hyprpaper/everything after sees the final monitor
 -- layout, not just the primary display.
 hl.exec_cmd("~/.config/hypr/scripts/apply-monitors.sh")
-hl.exec_cmd("/usr/lib/polkit-kde-authentication-agent-1")
+hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
 hl.exec_cmd("solaar --window hide")
 hl.exec_cmd("hyprpaper")
 -- HYPRLAND_INSTANCE_SIGNATURE is what xdg-desktop-portal-hyprland needs
