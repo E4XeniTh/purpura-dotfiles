@@ -15,10 +15,12 @@ import "../../../Config.js" as Config
 // hyprlang's Lua frontend (see hyprland.lua), which rejects the older
 // `hyprctl keyword monitor "..."` syntax outright ("keyword can't work
 // with non-legacy parsers. Use eval."), confirmed live. Quickshell's own
-// Quickshell.Hyprland module only exposes dispatch() for dispatcher-
-// class commands (neither keyword nor eval), and its monitor list
-// doesn't appear to include disabled monitors either, so shelling out to
-// the real binary covers both needs with one consistent data source.
+// Quickshell.Hyprland module (see WorkspaceOsd.qml for where this panel
+// instead reaches for its reactive Hyprland.monitors/workspaces data)
+// only exposes dispatch() for the write side - no keyword or eval - and
+// its own monitor list doesn't appear to include disabled monitors
+// either, so shelling out to the real binary is still what covers both
+// read and write needs here with one consistent data source.
 //
 // One monitor at a time by design: selecting a display always re-reads
 // its live hyprctl state right then (never a cached copy) and any

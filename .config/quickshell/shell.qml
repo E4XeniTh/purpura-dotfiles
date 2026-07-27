@@ -24,4 +24,6 @@ Scope {
   VolumeOsd {
     selectedSinkId: dashboard.audioSelectedSinkId
   }
+
+  WorkspaceOsd {}
 }
