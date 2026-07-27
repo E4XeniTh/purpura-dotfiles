@@ -43,11 +43,23 @@ Scope {
 	}
 
 	property bool shouldShowOsd: false
+	// Set from the hover MouseArea below, so the OSD doesn't disappear out
+	// from under the mouse while its mute button/slider are being used.
+	property bool hovered: false
 
 	Timer {
 		id: hideTimer
 		interval: 2500
-		onTriggered: root.shouldShowOsd = false
+
+		// Single-shot, so while hovered this just keeps re-arming itself
+		// instead of actually hiding - it'll hide ~1s after hover ends.
+		onTriggered: {
+			if (root.hovered) {
+				hideTimer.restart()
+			} else {
+				root.shouldShowOsd = false
+			}
+		}
 	}
 
 	// The OSD window will be created and destroyed based on shouldShowOsd.
@@ -68,14 +80,8 @@ Scope {
 			implicitHeight: 84
 			color: "transparent"
 
-			// Click-through, like WorkspaceOsd.qml - purely a glance
-			// indicator now, not an input surface. The mute button and
-			// volume slider drawn below are therefore inert here (an
-			// earlier version of this file actually had this same mask,
-			// removed specifically so those would work) - muting/
-			// adjusting volume still works from Audio settings, just not
-			// from this popup anymore.
-			mask: Region {}
+			// No click mask (unlike before) - the mute button and slider
+			// below need real mouse input to reach them.
 
 			Rectangle {
 				anchors.fill: parent
@@ -84,11 +90,18 @@ Scope {
 				border.width: 2
 				border.color: Config.fgcolor
 
+				MouseArea {
+					anchors.fill: parent
+					hoverEnabled: true
+					onEntered: root.hovered = true
+					onExited: root.hovered = false
+				}
+
 				// Reuses the same device card the audio settings panel
-				// uses, purely for its icon/label/level display now that
-				// this window is click-through - guarded by a Loader (not
-				// just visible:false) since DeviceCard dereferences
-				// .device directly and activeSink can briefly be null.
+				// uses, so muting/dragging volume here behaves identically
+				// - guarded by a Loader (not just visible:false) since
+				// DeviceCard dereferences .device directly and
+				// activeSink can briefly be null.
 				Loader {
 					anchors {
 						fill: parent
