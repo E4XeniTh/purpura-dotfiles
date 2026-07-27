@@ -117,10 +117,15 @@ Row {
 
                     color: "transparent"
                     border.width: 1
-                    // Same selected/non-selected convention as wsBox's
-                    // own border above - "activated" is Hyprland's own
-                    // name for "this is the focused window."
-                    border.color: winBox.modelData.activated ? Config.fgcolor : Config.fgcolordark
+                    // Only lit up fgcolor when BOTH this window is the
+                    // focused one ("activated") AND its workspace is the
+                    // currently active one on its monitor - a focused
+                    // window sitting on a workspace you've since
+                    // switched away from should still read as dimmed,
+                    // not call attention to itself.
+                    border.color: (wsBox.modelData.active && winBox.modelData.activated)
+                        ? Config.fgcolor
+                        : Config.fgcolordark
 
                     IconImage {
                         anchors.centerIn: parent
@@ -150,6 +155,11 @@ Row {
                 text: String(wsBox.modelData.id)
                 color: Config.fgcolorlight
                 opacity: 0.4
+                // Outline so the number stays legible over whatever's
+                // underneath it (light window rectangles/icons, not
+                // just the box's own dark fill).
+                style: Text.Outline
+                styleColor: "black"
                 font.family: Config.fontfamily
                 font.bold: true
                 font.pixelSize: Math.max(8, Math.min(wsBox.width, wsBox.height) * 0.55)
