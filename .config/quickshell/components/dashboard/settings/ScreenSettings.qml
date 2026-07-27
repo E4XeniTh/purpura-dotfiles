@@ -348,6 +348,10 @@ SettingsPanel {
         root.edited = ({})
         root.selectedDirty = false
         root.displayFor = ({})
+        root.pendingWorkspaces = ({})
+        root.pendingStrictWorkspaceWidget = undefined
+        root.pendingShowEmptyWidget = undefined
+        root.pendingShowEmptyOsd = undefined
         root.refreshMonitors()
     }
 
@@ -451,6 +455,14 @@ SettingsPanel {
     function applyChanges() {
         if (!root.dirty) return
 
+        // Commit any staged checkbox changes (see effectiveStrict.../
+        // effectiveShowEmpty* above) into the real properties first -
+        // everything below (and storeSnapshot's __-prefixed keys) reads
+        // the real property, not the pending/effective one.
+        if (root.pendingStrictWorkspaceWidget !== undefined) root.strictWorkspaceWidget = root.pendingStrictWorkspaceWidget
+        if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
+        if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
+
         // Resolve any workspace pinned to more than one monitor before
         // anything else below reads pendingWorkspaces/workspacesFor().
         root.resolveWorkspaceCollisions()
@@ -497,8 +509,9 @@ SettingsPanel {
         // was just set to (or, if untouched, whatever it already
         // remembered).
         //
-        // The "__"-prefixed global flags (see setGlobalFlag above) live
-        // in this same file under non-monitor-name keys - carried over
+        // The "__"-prefixed global flags (committed from pending* just
+        // above, if this Apply changed any) live in this same file under
+        // non-monitor-name keys - carried over
         // explicitly here since this rebuild only otherwise iterates
         // root.monitors, and would silently drop them on every Apply
         // for anything else (a resolution change, enabling a display,
@@ -566,6 +579,9 @@ SettingsPanel {
         if (root.active) {
             root.pendingEnabled = ({})
             root.pendingWorkspaces = ({})
+            root.pendingStrictWorkspaceWidget = undefined
+            root.pendingShowEmptyWidget = undefined
+            root.pendingShowEmptyOsd = undefined
             root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
@@ -684,29 +700,36 @@ SettingsPanel {
     property bool showEmptyWidget: false
     property bool showEmptyOsd: false
 
-    // Single write-through used by all three toggle*() functions below -
-    // merges one flag into whatever's already stored rather than each
-    // toggle needing its own copy of the same read-modify-write.
-    function setGlobalFlag(key, value) {
-        const snapshot = Object.assign({}, root.screensStore)
-        snapshot[key] = value
-        root.screensStore = snapshot
-        monitorsFile.setText(JSON.stringify(snapshot, null, 2) + "\n")
-    }
+    // Staged like `edited`/pendingWorkspaces above now, not written
+    // through immediately - undefined means "no pending change, use the
+    // real property as-is". Cleared (back to undefined) on selectMonitor()
+    // and panel reopen, same as the workspace pins, so clicking a
+    // checkbox and then switching monitors before Apply discards it
+    // instead of persisting.
+    property var pendingStrictWorkspaceWidget: undefined
+    property var pendingShowEmptyWidget: undefined
+    property var pendingShowEmptyOsd: undefined
+
+    readonly property bool effectiveStrictWorkspaceWidget: root.pendingStrictWorkspaceWidget !== undefined
+        ? root.pendingStrictWorkspaceWidget : root.strictWorkspaceWidget
+    readonly property bool effectiveShowEmptyWidget: root.pendingShowEmptyWidget !== undefined
+        ? root.pendingShowEmptyWidget : root.showEmptyWidget
+    readonly property bool effectiveShowEmptyOsd: root.pendingShowEmptyOsd !== undefined
+        ? root.pendingShowEmptyOsd : root.showEmptyOsd
 
     function toggleStrictWorkspaceWidget() {
-        root.strictWorkspaceWidget = !root.strictWorkspaceWidget
-        root.setGlobalFlag("__strictWorkspaceWidget", root.strictWorkspaceWidget)
+        root.pendingStrictWorkspaceWidget = !root.effectiveStrictWorkspaceWidget
+        root.selectedDirty = true
     }
 
     function toggleShowEmptyWidget() {
-        root.showEmptyWidget = !root.showEmptyWidget
-        root.setGlobalFlag("__showEmptyWidget", root.showEmptyWidget)
+        root.pendingShowEmptyWidget = !root.effectiveShowEmptyWidget
+        root.selectedDirty = true
     }
 
     function toggleShowEmptyOsd() {
-        root.showEmptyOsd = !root.showEmptyOsd
-        root.setGlobalFlag("__showEmptyOsd", root.showEmptyOsd)
+        root.pendingShowEmptyOsd = !root.effectiveShowEmptyOsd
+        root.selectedDirty = true
     }
 
     Process {
@@ -1113,15 +1136,131 @@ SettingsPanel {
                     Item { Layout.fillWidth: true }
                 }
 
+                // Reduced to root.uiScale * 0.75 (both these rows and
+                // their "x"/"@"/","  separators) so the workspace pins,
+                // strict-widget and show-empty rows below all still fit
+                // without pushing the panel past the max-height clamp
+                // (see SettingsPanel.qml's maxAvailableHeight).
+                readonly property real geometryUiScale: root.uiScale * 0.75
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(10, root.uiScale)
+                    spacing: Config.scaled(6, root.uiScale)
+                    // Width/height/refresh are meaningless once the
+                    // monitor is set to hyprland's own "preferred" mode
+                    // token - faded out and disabled rather than
+                    // `visible: false`, which would drop the row from
+                    // rightColumn's layout entirely and make the whole
+                    // settings screen change height when the mode
+                    // toggle is flipped.
+                    opacity: root.preferredModes[root.selectedName] ? 0 : 1
+                    enabled: !root.preferredModes[root.selectedName]
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "Width"
+                        value: root.displayFor.width !== undefined ? String(root.displayFor.width) : ""
+                        onEdited: (text) => root.setEdited("width", parseInt(text, 10) || 0)
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
+                        text: "x"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
+                        font.bold: true
+                    }
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "Height"
+                        value: root.displayFor.height !== undefined ? String(root.displayFor.height) : ""
+                        onEdited: (text) => root.setEdited("height", parseInt(text, 10) || 0)
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
+                        text: "@"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
+                        font.bold: true
+                    }
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "Refresh Rate"
+                        value: root.displayFor.refresh !== undefined ? String(root.displayFor.refresh) : ""
+                        onEdited: (text) => root.setEdited("refresh", parseFloat(text) || 60)
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(6, root.uiScale)
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "X Pos"
+                        value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
+                        onEdited: (text) => root.setEdited("x", parseInt(text, 10) || 0)
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
+                        text: "x"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
+                        font.bold: true
+                    }
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "Y Pos"
+                        value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
+                        onEdited: (text) => root.setEdited("y", parseInt(text, 10) || 0)
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignBottom
+                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
+                        text: ","
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
+                        font.bold: true
+                    }
+
+                    LabeledField {
+                        Layout.fillWidth: true
+                        uiScale: root.geometryUiScale
+                        label: "Scale"
+                        value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
+                        onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
+                    }
+                }
+
                 // ---------------- workspace pins (1-5) ----------------
                 // Binds the selected monitor to any of workspaces 1-5
                 // (hl.workspace_rule({ workspace, monitor })) - several
                 // can be lit at once, since Hyprland allows more than
-                // one workspace defaulting to the same monitor. Its own
-                // row now, split out from the mode toggle above.
+                // one workspace defaulting to the same monitor. Below
+                // the geometry rows now, its own row.
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(8, root.uiScale)
+                    Layout.topMargin: Config.scaled(10, root.uiScale)
                     spacing: Config.scaled(8, root.uiScale)
 
                     Repeater {
@@ -1174,122 +1313,17 @@ SettingsPanel {
                     Item { Layout.fillWidth: true }
                 }
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(14, root.uiScale)
-                    spacing: Config.scaled(6, root.uiScale)
-                    // Width/height/refresh are meaningless once the
-                    // monitor is set to hyprland's own "preferred" mode
-                    // token - faded out and disabled rather than
-                    // `visible: false`, which would drop the row from
-                    // rightColumn's layout entirely and make the whole
-                    // settings screen change height when the mode
-                    // toggle is flipped.
-                    opacity: root.preferredModes[root.selectedName] ? 0 : 1
-                    enabled: !root.preferredModes[root.selectedName]
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "Width"
-                        value: root.displayFor.width !== undefined ? String(root.displayFor.width) : ""
-                        onEdited: (text) => root.setEdited("width", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
-                        text: "x"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.uiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "Height"
-                        value: root.displayFor.height !== undefined ? String(root.displayFor.height) : ""
-                        onEdited: (text) => root.setEdited("height", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
-                        text: "@"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.uiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "Refresh Rate"
-                        value: root.displayFor.refresh !== undefined ? String(root.displayFor.refresh) : ""
-                        onEdited: (text) => root.setEdited("refresh", parseFloat(text) || 60)
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(6, root.uiScale)
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "X Pos"
-                        value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
-                        onEdited: (text) => root.setEdited("x", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
-                        text: "x"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.uiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "Y Pos"
-                        value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
-                        onEdited: (text) => root.setEdited("y", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(10, root.uiScale)
-                        text: ","
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.uiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        label: "Scale"
-                        value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
-                        onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
-                    }
-                }
-
                 // ---------------- strict workspace widget toggle ----------------
                 // Global, not per-monitor - controls whether
                 // WorkspaceRow.qml's bar widget shows workspaces past
-                // id 5 at all. Takes effect immediately, no Apply
-                // needed (see toggleStrictWorkspaceWidget() above).
+                // id 5 at all. Staged like the workspace pins above -
+                // only takes effect on Apply, discarded if a different
+                // monitor is selected first (see
+                // effectiveStrictWorkspaceWidget/toggleStrictWorkspaceWidget()
+                // above).
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(24, root.uiScale)
+                    Layout.topMargin: Config.scaled(16, root.uiScale)
                     spacing: Config.scaled(8, root.uiScale)
 
                     Text {
@@ -1312,7 +1346,7 @@ SettingsPanel {
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
                         Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.strictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
+                        color: root.effectiveStrictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
                         border.width: Config.scaled(2, root.uiScale)
                         border.color: Config.fgcolor
                         radius: 0
@@ -1355,7 +1389,7 @@ SettingsPanel {
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
                         Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showEmptyWidget ? Config.fgcolor : Config.fillcolor
+                        color: root.effectiveShowEmptyWidget ? Config.fgcolor : Config.fillcolor
                         border.width: Config.scaled(2, root.uiScale)
                         border.color: Config.fgcolor
                         radius: 0
@@ -1392,7 +1426,7 @@ SettingsPanel {
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
                         Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showEmptyOsd ? Config.fgcolor : Config.fillcolor
+                        color: root.effectiveShowEmptyOsd ? Config.fgcolor : Config.fillcolor
                         border.width: Config.scaled(2, root.uiScale)
                         border.color: Config.fgcolor
                         radius: 0

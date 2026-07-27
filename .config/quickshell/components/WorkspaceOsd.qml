@@ -132,6 +132,12 @@ Scope {
                 // nothing has actually changed yet) has no prior value to
                 // slide *from* - skip showing then, only on real switches.
                 if (!osdWindow.hyprMonitor || osdWindow.activeId < 0) return
+                // monitorWorkspaces' hardcoded id<=5 filter can leave this
+                // monitor with nothing at all to show (e.g. every real
+                // workspace here is >5 and showEmptyOsd is off) - popping
+                // up an empty box row would just be a floating border for
+                // no reason, so skip entirely rather than show it.
+                if (osdWindow.monitorWorkspaces.length === 0) return
                 osdWindow.reallyVisible = true
                 hideTimer.restart()
             }
