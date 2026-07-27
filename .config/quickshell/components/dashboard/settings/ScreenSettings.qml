@@ -241,6 +241,36 @@ SettingsPanel {
         if (changed) root.pendingWorkspaces = updated
     }
 
+    // Fail-safe for a monitor that ends up with zero workspaces pinned
+    // to it after this Apply (e.g. every one of its 1-5 pins just got
+    // toggled off) - without anything bound to it, that monitor is
+    // unreachable via workspace switching until Hyprland happens to
+    // hand it a spare number on its own, and even then that assignment
+    // never makes it into monitors.json/apply-monitors.sh, so it
+    // doesn't survive a restart. Gives it the lowest number > 5 that no
+    // other monitor already uses (1-5 stays reserved for deliberate
+    // pins), so an enabled monitor is never left with nothing at all.
+    function resolveEmptyWorkspaceFailsafe() {
+        const used = new Set()
+        for (const m of root.monitors) {
+            for (const num of root.workspacesFor(m.name)) used.add(num)
+        }
+
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        let nextSpare = 6
+
+        for (const m of root.monitors) {
+            if (!root.enabledFor(m.name)) continue
+            if (root.workspacesFor(m.name).length > 0) continue
+
+            while (used.has(nextSpare)) nextSpare++
+            used.add(nextSpare)
+            updated[m.name] = [nextSpare]
+        }
+
+        root.pendingWorkspaces = updated
+    }
+
     // One-shot x/y override applied only during applyChanges() (see
     // resolveOriginFailsafe below), never persisted as staged UI state
     // the way pendingEnabled/edited are - cleared again the moment
@@ -425,6 +455,9 @@ SettingsPanel {
         // anything else below reads pendingWorkspaces/workspacesFor().
         root.resolveWorkspaceCollisions()
 
+        // Then make sure nothing was left with zero workspaces at all.
+        root.resolveEmptyWorkspaceFailsafe()
+
         // Only touched monitors are actually sent live - the selected
         // one (if edited) plus any right-clicked enable/disable
         // toggles - not every monitor every time, which used to
@@ -463,7 +496,13 @@ SettingsPanel {
         // state, so re-enabling a monitor later shows exactly what it
         // was just set to (or, if untouched, whatever it already
         // remembered).
-        const storeSnapshot = {}
+        //
+        // __strictWorkspaceWidget (see below) lives in this same file
+        // under a non-monitor-name key - carried over explicitly here
+        // since this rebuild only otherwise iterates root.monitors, and
+        // would silently drop it on every Apply for anything else
+        // (a resolution change, enabling a display, etc.) otherwise.
+        const storeSnapshot = { __strictWorkspaceWidget: root.strictWorkspaceWidget }
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
             const state = root.effectiveStateFor(m.name)
@@ -618,6 +657,26 @@ SettingsPanel {
         screensStoreProcess.running = true
     }
 
+    // Global (not per-monitor) toggle for whether WorkspaceRow.qml's bar
+    // widget shows workspaces past id 5 - the "unmanaged" spare numbers
+    // Hyprland hands a monitor with nothing explicitly pinned to it
+    // (see resolveEmptyWorkspaceFailsafe above). Stored in this same
+    // monitors.json under a "__"-prefixed key so it isn't mistaken for
+    // a monitor name by anything that iterates the file's other keys.
+    // Takes effect immediately on click - it's a display preference for
+    // another component, not a live Hyprland/hardware change, so it
+    // doesn't need to go through the staged edit + Apply flow the rest
+    // of this panel uses.
+    property bool strictWorkspaceWidget: false
+
+    function toggleStrictWorkspaceWidget() {
+        root.strictWorkspaceWidget = !root.strictWorkspaceWidget
+        const snapshot = Object.assign({}, root.screensStore)
+        snapshot.__strictWorkspaceWidget = root.strictWorkspaceWidget
+        root.screensStore = snapshot
+        monitorsFile.setText(JSON.stringify(snapshot, null, 2) + "\n")
+    }
+
     Process {
         id: screensStoreProcess
         // Read via `cat` (like every other read in this file goes
@@ -631,13 +690,18 @@ SettingsPanel {
                 try {
                     const parsed = JSON.parse(text)
                     root.screensStore = parsed
+                    root.strictWorkspaceWidget = !!parsed.__strictWorkspaceWidget
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
                     // "preferred" would show "Manual" until reselected
-                    // once quickshell restarts.
+                    // once quickshell restarts. "__"-prefixed keys
+                    // (__strictWorkspaceWidget) aren't monitor names -
+                    // skipped here rather than seeding a stray,
+                    // meaningless preferredModes entry for them.
                     const seeded = Object.assign({}, root.preferredModes)
                     for (const name in parsed) {
+                        if (name.startsWith("__")) continue
                         if (seeded[name] === undefined) {
                             seeded[name] = parsed[name].mode === "preferred"
                         }
@@ -1183,6 +1247,54 @@ SettingsPanel {
                         value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
                         onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
                     }
+                }
+
+                // ---------------- strict workspace widget toggle ----------------
+                // Global, not per-monitor - controls whether
+                // WorkspaceRow.qml's bar widget shows workspaces past
+                // id 5 at all. Takes effect immediately, no Apply
+                // needed (see toggleStrictWorkspaceWidget() above).
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(10, root.uiScale)
+                    spacing: Config.scaled(8, root.uiScale)
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.strictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleStrictWorkspaceWidget()
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: "Strict Workspace Widget"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleStrictWorkspaceWidget()
+                            }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
                 }
 
                 // ---------------- bottom of right pane: identify + apply ----------------

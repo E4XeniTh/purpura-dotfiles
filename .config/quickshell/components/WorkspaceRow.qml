@@ -31,7 +31,15 @@ Row {
     readonly property var sortedWorkspaces: {
         const monitorRank = {}
         root.sortedMonitors.forEach((s, i) => { monitorRank[s.name] = i })
-        return Hyprland.workspaces.values.slice().sort((a, b) => {
+        // strictWorkspaceWidget (Screen Settings' toggle, above Identify)
+        // drops anything past id 5 entirely when on - the "unmanaged"
+        // spare numbers Hyprland hands a monitor with nothing pinned to
+        // it, same range excluded from WorkspaceOsd.qml already.
+        let workspaces = Hyprland.workspaces.values.slice()
+        if (root.strictWorkspaceWidget) {
+            workspaces = workspaces.filter(w => w.id <= 5)
+        }
+        return workspaces.sort((a, b) => {
             const rankA = (a.monitor && monitorRank[a.monitor.name] !== undefined) ? monitorRank[a.monitor.name] : 999
             const rankB = (b.monitor && monitorRank[b.monitor.name] !== undefined) ? monitorRank[b.monitor.name] : 999
             if (rankA !== rankB) return rankA - rankB
@@ -90,6 +98,12 @@ Row {
         const stored = root.screensStore[workspace.monitor.name]
         return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
     }
+
+    // Global toggle from the same file, stored under a non-monitor-name
+    // key (see ScreenSettings.qml's toggleStrictWorkspaceWidget) - reuses
+    // the polling already happening for isPinned() above rather than
+    // needing its own separate read.
+    readonly property bool strictWorkspaceWidget: !!root.screensStore.__strictWorkspaceWidget
 
     Process {
         id: screensStoreProcess
