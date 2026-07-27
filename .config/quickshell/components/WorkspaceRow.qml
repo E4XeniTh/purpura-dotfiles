@@ -122,7 +122,17 @@ Row {
                     IconImage {
                         anchors.centerIn: parent
                         implicitSize: Math.max(4, Math.min(winBox.width, winBox.height) * 0.6)
-                        source: winBox.iconName.length > 0 ? Quickshell.iconPath(winBox.iconName) : ""
+                        // The plain single-arg iconPath() renders "a
+                        // missing texture" image when the name doesn't
+                        // resolve in the current icon theme (documented
+                        // behavior, not a bug) rather than failing
+                        // quietly - the two-arg fallback form loads a
+                        // generic icon instead whenever the specific
+                        // app/class name isn't a real theme icon, same
+                        // fallback pattern BluetoothDeviceCard.qml uses.
+                        source: winBox.iconName.length > 0
+                            ? Quickshell.iconPath(winBox.iconName, "application-x-executable")
+                            : Quickshell.iconPath("application-x-executable")
                     }
                 }
             }
