@@ -79,11 +79,11 @@ sudo cp ../pam.d/quickshell-auth /etc/pam.d/quickshell-auth
 Re-run `make` after pulling changes to `helpers/auth.c` or
 `helpers/cava_bridge.c`.
 
-## Dependencies
+## Dependencies and affected apps
 
-Beyond a base Arch install (not counting KDE/Qt6 theming - separate,
-later):
+Beyond a base Arch install:
 
+- `kitty`
 - `hyprland`
 - `quickshell` — built with Pipewire + SystemTray support
 - `qt6-5compat`
@@ -106,12 +106,13 @@ later):
 - `jq`
 - `curl`
 - `pam`
+- `xembedsniproxy` - (useful if you emulate windows applications through Wayland)
 - 
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*` (e.g. Papirus)
 
 **Keybind-launched apps** (swap freely — `local` vars at the top of `hyprland.lua`):
-- `kitty`
+
 - `dolphin`
 - `rofi`
 - Waterfox (Flatpak)
