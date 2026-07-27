@@ -16,6 +16,13 @@ Rectangle {
     // right monitor.
     property var screen: null
 
+    // Bar.qml's Variants instantiate one Tray per connected screen (the
+    // bar's PanelWindow only shows on the primary one, but the whole
+    // tree - this IpcHandler included - still gets built for every
+    // screen). Left true by default so a single-instance/standalone use
+    // of this component isn't affected. See `enabled` below.
+    property bool isPrimary: true
+
     // Was TrayMenuState.
     property var openMenu: null
     property var menuScreen: null
@@ -36,6 +43,14 @@ Rectangle {
 
     IpcHandler {
         target: "trayMenu"
+
+        // Only the primary screen's instance actually registers -
+        // every other screen's Tray would otherwise try to claim the
+        // same "trayMenu" target too, and only the first one to
+        // register wins ("Handler was registered but will not be used
+        // because another handler is registered for target trayMenu",
+        // seen live on any multi-monitor startup).
+        enabled: root.isPrimary
 
         // hide() only - no toggle/show. Opening a specific menu needs
         // that tray item's QsMenuHandle, its screen, and click-position

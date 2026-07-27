@@ -634,7 +634,7 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "audio"
-                onClosed: dashWindow.onSettingsPanelClosed()
+                onPanelClosed: dashWindow.onSettingsPanelClosed()
                 selectedSinkId: root.audioSelectedSinkId
                 selectedSourceId: root.audioSelectedSourceId
                 onSinkSelected: (id) => root.audioSelectedSinkId = id
@@ -651,7 +651,7 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "network"
-                onClosed: dashWindow.onSettingsPanelClosed()
+                onPanelClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Bluetooth settings, opened from the bluetooth icon above.
@@ -664,7 +664,7 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "bluetooth"
-                onClosed: dashWindow.onSettingsPanelClosed()
+                onPanelClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Screen settings, opened from the screen icon above. Same
@@ -681,7 +681,7 @@ Scope {
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "screen"
                 primaryMonitor: root.primaryMonitor
-                onClosed: dashWindow.onSettingsPanelClosed()
+                onPanelClosed: dashWindow.onSettingsPanelClosed()
                 onIdentifyingChanged: root.identifying = screenSettings.identifying
                 onPrimarySelected: (name) => root.primaryMonitor = name
             }

@@ -90,6 +90,7 @@ Scope {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     screen: modelData
+                    isPrimary: root.dashboard ? modelData.name === root.effectivePrimaryName : true
                 }
 
                 // See WorkspaceRow.qml - sits directly to the left of

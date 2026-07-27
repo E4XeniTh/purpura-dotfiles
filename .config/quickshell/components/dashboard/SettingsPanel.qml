@@ -31,7 +31,13 @@ PanelWindow {
     // its childrenRect can drive the box's "open" height.
     default property alias content: contentHolder.data
 
-    signal closed()
+    // Named panelClosed rather than closed - PanelWindow's own base
+    // class (WindowInterface) already declares a `closed()` signal of
+    // its own (fired by the compositor/window system), and redeclaring
+    // the same name here silently shadowed it ("Duplicate signal name:
+    // invalid override of property change signal or superclass
+    // signal", seen live on startup).
+    signal panelClosed()
 
     // Actual window visibility - stays true through the close animation
     // (box shrinking back to the horizontal line) and only drops once
@@ -221,7 +227,7 @@ PanelWindow {
             box.height = 4
 
             root.reallyVisible = false
-            root.closed()
+            root.panelClosed()
         }
     }
 }

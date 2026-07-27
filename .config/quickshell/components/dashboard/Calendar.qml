@@ -166,7 +166,7 @@ Item {
                     height: Config.scaled(20, root.uiScale)
 
                     horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignCenter
+                    verticalAlignment: Text.AlignVCenter
                     text: modelData
                     color: Config.fgcolor
                     font.family: Config.fontfamily

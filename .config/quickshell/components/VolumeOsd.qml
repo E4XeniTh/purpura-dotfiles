@@ -29,9 +29,19 @@ Scope {
 	}
 
 	Connections {
-		target: root.activeSink?.audio
+		// ?? null rather than bare optional chaining - target expects a
+		// real QObject* or null, and assigning plain `undefined` (what
+		// `?.` produces before activeSink resolves at startup) warned
+		// ("Unable to assign [undefined] to QObject*").
+		target: root.activeSink?.audio ?? null
 
-		function onVolumeChanged() {
+		// PwNodeAudioIface's "volume" property (see Quickshell's own
+		// Pipewire service) is declared with NOTIFY volumesChanged, not
+		// volumeChanged - it's computed from the underlying per-channel
+		// volumes array. Connections resolves a handler against the
+		// real signal name, so onVolumeChanged never matched anything
+		// ("no signal of the target matches the name").
+		function onVolumesChanged() {
 			root.shouldShowOsd = true;
 			hideTimer.restart();
 		}
