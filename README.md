@@ -107,7 +107,8 @@ Beyond a base Arch install:
 - `curl`
 - `pam`
 - `xembedsniproxy` - (useful if you emulate windows applications through Wayland)
-- 
+- `networkmanager` - provides `nmcli`, which Network Settings' Connections tab shells out to for Bluetooth/USB tethering and other interfaces `Quickshell.Networking` doesn't expose (only Wifi/Ethernet)
+- `zerotier-one` (AUR) - only needed if you actually use ZeroTier; its `zt*` interface already shows up via `nmcli` without this being invoked directly
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*` (e.g. Papirus)
 

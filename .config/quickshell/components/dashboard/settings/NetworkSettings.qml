@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Networking
+import Quickshell.Io
 import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
@@ -18,7 +19,10 @@ import "../../../Config.js" as Config
 // types are ever surfaced by this module; other NetworkManager device
 // types (tun/VPN/bridge/etc, e.g. a ZeroTier interface) are silently
 // ignored at the backend level and will never appear here, regardless of
-// anything done in this file.
+// anything done in this file. The Connections tab below works around
+// that for a few specific cases (Bluetooth tethering, USB tethering,
+// ZeroTier) by separately parsing plain `nmcli`'s own device dump -
+// see nmcliBlocks/extraConnectionEntries/etherOverrides.
 SettingsPanel {
     id: root
 
@@ -60,12 +64,190 @@ SettingsPanel {
     // excluded here rather than duplicated in both places.
     readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
 
+    // ---------------- nmcli device dump (Bluetooth/USB tethering, ZeroTier, etc.) ----------------
+    // Plain `nmcli` (no args) prints one block per device it knows
+    // about, in a fixed shape regardless of device type, e.g.:
+    //
+    //   enp14s0u3: disconnected
+    //
+    //           "Samsung Galaxy series misc."
+    //
+    //           1 connection available
+    //
+    //           ethernet (rndis_host), 2E:35:19:35:D6:6E, autoconnect, hw, mtu 1500
+    //
+    // Unlike Quickshell.Networking, NetworkManager (and therefore
+    // nmcli) is aware of every device on the system, managed or not - a
+    // live nmcli dump showed a ZeroTier zt* interface listed here (as
+    // "unmanaged") even though nothing in this shell ever asked
+    // NetworkManager to manage it. Refreshed only while this panel is
+    // open (see onActiveChanged/nmcliRefreshTimer below), since none of
+    // this is reactive the way Networking.devices is.
+    property var nmcliBlocks: []
+
+    function refreshNmcli() {
+        nmcliDumpProcess.running = false
+        nmcliDumpProcess.running = true
+    }
+
+    Process {
+        id: nmcliDumpProcess
+        command: ["nmcli"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.nmcliBlocks = root.parseNmcliDump(text)
+            }
+        }
+    }
+
+    Timer {
+        id: nmcliRefreshTimer
+        interval: 4000
+        repeat: true
+        onTriggered: root.refreshNmcli()
+    }
+
+    // Splits nmcli's block-per-device dump into { id, state, name,
+    // typeLine } objects. Header lines (device id/MAC + state) are
+    // never indented; every other non-blank line in a block is. The
+    // header's own id/state split uses ": " (colon-space) rather than
+    // a plain colon split, since a Bluetooth device's id is itself a
+    // colon-separated MAC address - only the real id/state boundary
+    // has a space after its colon.
+    function parseNmcliDump(text) {
+        const blocks = []
+        let current = null
+
+        for (const rawLine of text.split("\n")) {
+            if (rawLine.trim().length === 0) continue
+
+            if (!/^\s/.test(rawLine)) {
+                const sepIdx = rawLine.lastIndexOf(": ")
+                if (sepIdx === -1) { current = null; continue }
+                current = {
+                    id: rawLine.slice(0, sepIdx).trim(),
+                    state: rawLine.slice(sepIdx + 2).trim(),
+                    name: "",
+                    typeLine: ""
+                }
+                blocks.push(current)
+                continue
+            }
+
+            if (!current) continue
+            const trimmed = rawLine.trim()
+            if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+                current.name = trimmed.slice(1, -1)
+            } else if (/^\d+\s+connections?\s+available$/i.test(trimmed)) {
+                // Just a count, nothing worth keeping.
+            } else {
+                current.typeLine = trimmed
+            }
+        }
+
+        return blocks
+    }
+
+    // typeLine looks like "bt (bluez), MAC, hw" or plain "tun, MAC, sw,
+    // mtu 2800" (no driver in parens) - only the leading type token and
+    // optional driver are needed here.
+    function nmcliTypeInfo(block) {
+        const m = block.typeLine.match(/^(\S+)(?:\s*\(([^)]*)\))?/)
+        return {
+            baseType: m ? m[1].toLowerCase() : "",
+            driver: (m && m[2]) ? m[2].toLowerCase() : ""
+        }
+    }
+
+    // Common Linux driver names for a phone's USB-tethered "ethernet"
+    // interface (Android's rndis_host, iOS's ipheth, etc.) - matched
+    // against so a tethered phone doesn't look identical to a real
+    // wired NIC in this tab.
+    readonly property var usbTetherDrivers: ["rndis_host", "rndis", "cdc_ether", "cdc_ncm", "cdc_acm", "usbnet", "ipheth"]
+
+    // Interface name -> { label, icon }, only for nmcli's "ethernet"
+    // blocks whose driver matches usbTetherDrivers - these interfaces
+    // already appear via Quickshell.Networking's own wiredNetworks
+    // (Ethernet is a supported device type there), so this only
+    // relabels/re-icons the existing entry rather than duplicating it.
+    readonly property var etherOverrides: {
+        const map = {}
+        for (const block of root.nmcliBlocks) {
+            const info = root.nmcliTypeInfo(block)
+            if (info.baseType !== "ethernet") continue
+            if (root.usbTetherDrivers.indexOf(info.driver) === -1) continue
+            map[block.id] = { label: "USB Tether", icon: "drive-harddisk-usb-symbolic" }
+        }
+        return map
+    }
+
+    function wiredSecondaryLabel(n) {
+        const override = (n.device && root.etherOverrides[n.device.name]) ? root.etherOverrides[n.device.name] : null
+        return override ? override.label : "Wired"
+    }
+
+    function wiredIconOverride(n) {
+        const override = (n.device && root.etherOverrides[n.device.name]) ? root.etherOverrides[n.device.name] : null
+        return override ? override.icon : ""
+    }
+
+    // Every nmcli block Quickshell.Networking will never surface on
+    // its own - anything that isn't wifi (own tab), ethernet (already
+    // covered above, whether tethered or not) or loopback. Read-only:
+    // there's no Network object here to call .connect()/.forget() on,
+    // just what nmcli reported this refresh.
+    readonly property var extraConnectionEntries: {
+        const skip = { wifi: true, ethernet: true, loopback: true }
+        const list = []
+
+        for (const block of root.nmcliBlocks) {
+            const info = root.nmcliTypeInfo(block)
+            if (!info.baseType || skip[info.baseType]) continue
+
+            let label = info.baseType.charAt(0).toUpperCase() + info.baseType.slice(1)
+            let icon = "network-wired-symbolic"
+
+            if (info.baseType === "bt") {
+                label = "BT Tether"
+                icon = "bluetooth-symbolic"
+            } else if (info.baseType === "tun") {
+                icon = "network-vpn-symbolic"
+                // ZeroTier's own interface naming convention: "zt"
+                // followed by its 10-hex-digit network address, e.g.
+                // "zthnhadv3s" - any other tun interface (a VPN client
+                // not otherwise identified) just gets a generic label.
+                label = /^zt[0-9a-f]+$/i.test(block.id) ? "ZeroTier" : "Tunnel"
+            }
+
+            list.push({
+                kind: "extra",
+                displayName: block.name.length > 0 ? block.name : block.id,
+                secondaryLabel: label,
+                icon: icon,
+                connected: block.state === "connected"
+            })
+        }
+
+        return list
+    }
+
     readonly property var connectionEntries: {
         const connected = root.wiredNetworks.filter(n => n.connected)
         const disconnected = root.wiredNetworks.filter(n => !n.connected)
-        const list = connected.map(n => ({ kind: "network", network: n }))
-        for (const n of disconnected) list.push({ kind: "network", network: n })
-        return list
+        const list = connected.map(n => ({
+            kind: "network",
+            network: n,
+            secondaryLabel: root.wiredSecondaryLabel(n),
+            iconOverride: root.wiredIconOverride(n)
+        }))
+        for (const n of disconnected) list.push({
+            kind: "network",
+            network: n,
+            secondaryLabel: root.wiredSecondaryLabel(n),
+            iconOverride: root.wiredIconOverride(n)
+        })
+        return list.concat(root.extraConnectionEntries)
     }
 
     // ---------------- WiFi tab: connected + remembered on top, separator, then found networks ----------------
@@ -98,7 +280,15 @@ SettingsPanel {
         }
     }
 
-    onActiveChanged: root.updateWifiScanning()
+    onActiveChanged: {
+        root.updateWifiScanning()
+        if (root.active) {
+            root.refreshNmcli()
+            nmcliRefreshTimer.restart()
+        } else {
+            nmcliRefreshTimer.stop()
+        }
+    }
     onCurrentTabChanged: root.updateWifiScanning()
 
     // SettingsPanel sizes itself off this outer Item's height via
@@ -295,6 +485,7 @@ SettingsPanel {
 
                         sourceComponent: modelData.kind === "device" ? deviceRowComponent
                             : modelData.kind === "network" ? networkRowComponent
+                            : modelData.kind === "extra" ? extraRowComponent
                             : separatorRowComponent
                     }
                 }
@@ -321,6 +512,22 @@ SettingsPanel {
                         uiScale: root.uiScale
                         network: parent.modelData.network
                         allowForget: root.currentTab === 2
+                        secondaryLabel: parent.modelData.secondaryLabel ?? ""
+                        iconOverride: parent.modelData.iconOverride ?? ""
+                    }
+                }
+
+                // Connections tab only - see extraConnectionEntries.
+                Component {
+                    id: extraRowComponent
+
+                    ExtraConnectionCard {
+                        anchors.fill: parent
+                        uiScale: root.uiScale
+                        displayName: parent.modelData.displayName
+                        secondaryLabel: parent.modelData.secondaryLabel
+                        iconName: parent.modelData.icon
+                        connected: parent.modelData.connected
                     }
                 }
 

@@ -30,6 +30,15 @@ DashCard {
     property real uiScale: 1.0
     property bool allowForget: false
 
+    // Set from NetworkSettings.qml's Connections tab only (WiFi tab
+    // leaves both at their default, unchanged look) - secondaryLabel
+    // distinguishes what kind of connection this actually is (e.g. a
+    // USB-tethered phone showing up as a plain Ethernet device would
+    // otherwise be indistinguishable from a real wired NIC), and
+    // iconOverride swaps the icon to match when set.
+    property string secondaryLabel: ""
+    property string iconOverride: ""
+
     readonly property bool isWifi: !!(root.network && root.network.device && root.network.device.type === DeviceType.Wifi)
 
     border.color: (root.network && root.network.connected) ? Config.fgcolorlight : Config.fgcolor
@@ -48,7 +57,9 @@ DashCard {
             IconImage {
                 id: networkIcon
                 anchors.fill: parent
-                source: Quickshell.iconPath(root.isWifi ? "network-wireless-symbolic" : "network-wired-symbolic")
+                source: root.iconOverride.length > 0
+                    ? Quickshell.iconPath(root.iconOverride, "network-wired-symbolic")
+                    : Quickshell.iconPath(root.isWifi ? "network-wireless-symbolic" : "network-wired-symbolic", "network-wired-symbolic")
             }
 
             ColorOverlay {
@@ -58,14 +69,29 @@ DashCard {
             }
         }
 
-        Text {
+        ColumnLayout {
             Layout.fillWidth: true
-            text: root.network ? root.network.name : ""
-            color: Config.fgcolor
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(15, root.uiScale)
-            font.bold: true
-            elide: Text.ElideRight
+            spacing: 0
+
+            Text {
+                Layout.fillWidth: true
+                text: root.network ? root.network.name : ""
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(15, root.uiScale)
+                font.bold: true
+                elide: Text.ElideRight
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: root.secondaryLabel.length > 0
+                text: root.secondaryLabel
+                color: Config.fgcolordark
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(11, root.uiScale)
+                elide: Text.ElideRight
+            }
         }
     }
 
