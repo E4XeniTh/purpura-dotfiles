@@ -339,8 +339,33 @@ Row {
                     // an entry literally named after the raw class
                     // string (the fallback below, for whatever
                     // heuristicLookup can't match).
+                    //
+                    // heuristicLookup() itself only ever tries an exact
+                    // desktop-file-id match or an exact (case-
+                    // insensitive) StartupWMClass match (confirmed
+                    // against Quickshell's own source) - it has no
+                    // substring/fuzzy matching at all. Flatpak apps
+                    // commonly report a short runtime class ("waterfox")
+                    // that matches neither their reverse-DNS desktop
+                    // file id nor StartupWMClass ("net.waterfox.
+                    // waterfox"), so heuristicLookup comes back empty
+                    // and this fell all the way through to the generic
+                    // fallback icon. Falls back here to a substring
+                    // search over every installed .desktop entry's own
+                    // id for one that contains this window's class, so
+                    // Waterfox (and anything else shaped the same way)
+                    // still resolves to its real icon.
+                    function substringLookup(cls) {
+                        const lower = cls.toLowerCase()
+                        const apps = DesktopEntries.applications.values
+                        for (const app of apps) {
+                            if (app.id.toLowerCase().includes(lower)) return app
+                        }
+                        return null
+                    }
+
                     readonly property var desktopEntry: winBox.winClass.length > 0
-                        ? DesktopEntries.heuristicLookup(winBox.winClass)
+                        ? (DesktopEntries.heuristicLookup(winBox.winClass) ?? winBox.substringLookup(winBox.winClass))
                         : null
                     readonly property string iconName: (winBox.desktopEntry && winBox.desktopEntry.icon.length > 0)
                         ? winBox.desktopEntry.icon
