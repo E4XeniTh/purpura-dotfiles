@@ -383,24 +383,54 @@ SettingsPanel {
     // Apply finishes building its output.
     property var positionOverrides: ({})
 
-    // Fail-safe for the exact bug reported live: resetting
-    // hyprland.lua's monitor config and then disabling every display
-    // except one that's been moved away from (0, 0) leaves nothing
-    // anchored at the origin - the bar/wallpaper/dashboard (all of
-    // which live on primaryMonitor, see Bar.qml/effectivePrimaryName)
-    // then vanish until something else forces a relayout (e.g. opening
-    // rofi). If no enabled monitor already sits at (0, 0) after this
-    // Apply, force the primary monitor there - it's guaranteed enabled
-    // (MonitorCard's own onToggleEnabled refuses to disable it), so
-    // it's always a safe thing to anchor at the origin. Falls back to
-    // whichever monitor is enabled if primaryMonitor itself is stale/
-    // missing.
+    // Fail-safe for two related ways a monitor's *actual* live position
+    // can drift out from under what this panel believes it should be -
+    // both only ever affecting a monitor this Apply didn't itself
+    // explicitly resend a position for, since hyprland.lua's own
+    // top-level rule is a blanket `hl.monitor({ output = "auto" })`
+    // wildcard: any monitor never (yet) given its own specific
+    // per-output override is still governed by that wildcard, not
+    // pinned anywhere in particular.
+    //
+    // 1. Resetting hyprland.lua's monitor config, then disabling every
+    //    display except one that's been moved away from (0, 0), leaves
+    //    nothing anchored at the origin - the bar/wallpaper/dashboard
+    //    (all of which live on primaryMonitor, see Bar.qml/
+    //    effectivePrimaryName) then vanish until something else forces
+    //    a relayout (e.g. opening rofi).
+    //
+    // 2. Repositioning *other* monitors without ever re-typing the
+    //    primary's own already-correct numbers - so it was never added
+    //    to `touched` in the first place - can still move the primary:
+    //    confirmed live, Hyprland silently re-runs its own "auto"
+    //    placement for a monitor still under that wildcard the moment
+    //    some *other* monitor's position changes, even though nothing
+    //    in monitors.json/this panel ever asked for that. Reported
+    //    live: repositioning two secondary monitors into a real
+    //    (non-side-by-side) physical layout, without ever re-typing the
+    //    primary's already-correct (0, 0) - so it stayed on "auto" the
+    //    whole time - silently kicked the primary over to x=1920 (right
+    //    past one of the other two's new width) once those were
+    //    explicitly sent.
+    //
+    // Both are fixed the same way: whenever this Apply is touching
+    // anything at all, the primary monitor always gets its own
+    // explicit hl.monitor() line too - forced to (0, 0) if nothing else
+    // already claims the origin (case 1), otherwise just re-asserting
+    // wherever it currently, correctly, already is (case 2, via
+    // effectiveStateFor()'s ordinary remembered/live fallback - no
+    // override needed since nothing's actually wrong with its intended
+    // value, only with it being left unpinned). Skipped entirely when
+    // nothing else is touched this Apply either - a checkbox-only or
+    // workspace-pin-only Apply isn't perturbing Hyprland's layout at
+    // all, so there's nothing for the primary to drift *because of*.
     function resolveOriginFailsafe(touched) {
+        if (touched.size === 0) return
+
         const anyAtOrigin = root.monitors.some(m => {
             const state = root.effectiveStateFor(m.name)
             return state && !state.disabled && state.x === 0 && state.y === 0
         })
-        if (anyAtOrigin) return
 
         // Has to actually be enabled - overriding a disabled monitor's
         // position would do nothing (effectiveStateFor never reports an
@@ -415,9 +445,12 @@ SettingsPanel {
         }
         if (!fallbackName) return
 
-        const overrides = Object.assign({}, root.positionOverrides)
-        overrides[fallbackName] = { x: 0, y: 0 }
-        root.positionOverrides = overrides
+        if (!anyAtOrigin) {
+            const overrides = Object.assign({}, root.positionOverrides)
+            overrides[fallbackName] = { x: 0, y: 0 }
+            root.positionOverrides = overrides
+        }
+
         touched.add(fallbackName)
     }
 
@@ -453,12 +486,16 @@ SettingsPanel {
     // cached copy. root.edited is deliberately NOT cleared here anymore
     // (see its own declaration above) - a monitor's staged geometry
     // edit survives switching away and back, only selectedDirty (the
-    // checkbox/preferredMode signal, not geometry) resets.
+    // checkbox/preferredMode signal, not geometry) resets. Same for
+    // root.pendingWorkspaces (workspace-pin buttons) - already keyed
+    // per monitor name (never the flat-blob shape edited used to be),
+    // so persisting it across switches carries none of that same risk;
+    // only the checkbox pending* properties actually need discarding on
+    // reselect.
     function selectMonitor(name) {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        root.pendingWorkspaces = ({})
         root.pendingStrictWorkspaceWidget = undefined
         root.pendingShowEmptyWidget = undefined
         root.pendingShowEmptyOsd = undefined
