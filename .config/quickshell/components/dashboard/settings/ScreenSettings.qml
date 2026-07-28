@@ -303,22 +303,39 @@ SettingsPanel {
 
     // Fail-safe for a monitor that ends up with zero workspaces pinned
     // to it after this Apply (e.g. every one of its 1-5 pins just got
-    // toggled off) - without anything bound to it, that monitor is
-    // unreachable via workspace switching until Hyprland happens to
-    // hand it a spare number on its own, and even then that assignment
-    // never makes it into monitors.json/apply-monitors.sh, so it
-    // doesn't survive a restart. Gives it the lowest number > 5 that no
-    // other monitor already uses (1-5 stays reserved for deliberate
-    // pins), so an enabled monitor is never left with nothing at all.
+    // toggled off, or reassigned to another monitor - since
+    // seedDefaultWorkspacesIfFresh() pins all five to the primary
+    // monitor on a fresh install, every *other* monitor starts out
+    // exactly this "unmanaged" from the very first Apply onward, not
+    // just after some later edit) - without anything bound to it, that
+    // monitor is unreachable via workspace switching until Hyprland
+    // happens to hand it a spare number on its own, and even then that
+    // assignment never makes it into monitors.json/apply-monitors.sh,
+    // so it doesn't survive a restart. Gives it the lowest number > 5
+    // that no other monitor already uses (1-5 stays reserved for
+    // deliberate pins), so an enabled monitor is never left stuck on
+    // whatever it happened to be showing before this Apply.
     //
-    // Skipped entirely for a monitor that's never had a real (non-"__")
-    // monitors.json entry at all this session (root.hadExistingConfig) -
-    // a brand new install/never-configured monitor hasn't lost a
-    // previous pin, it's simply never been touched, and should stay
-    // fully unmanaged (no workspace_rule at all) until the user
-    // deliberately pins something through the 1-5 buttons themselves,
-    // rather than silently claiming a spare number on its very first
-    // Apply (which might just be a resolution change, say).
+    // Runs unconditionally now (previously skipped for a monitor with
+    // no prior real monitors.json entry at all - reverted after this
+    // read live as DP-2 staying stuck on a workspace 1-5 had just
+    // reassigned away to DP-1, only fixable by disabling and
+    // re-enabling DP-2 by hand): assigning it a rule AND actually
+    // moving it there (see the moveworkspacetomonitor dispatch below,
+    // which fires for every monitor in pendingWorkspaces - this
+    // included) is exactly what makes an unmanaged monitor immediately
+    // reachable instead of silently correct-on-paper-only until
+    // something else forces Hyprland to reassign it.
+    //
+    // Populated fresh by resolveEmptyWorkspaceFailsafe() every time it
+    // runs, with whichever monitor names it just handed a brand new
+    // spare number this Apply - read afterward in applyChanges() to
+    // force those specific monitors onto their new workspace
+    // immediately (see the focus dispatch pair there), since a spare
+    // number that's never existed before has nothing for
+    // moveworkspacetomonitor to actually relocate.
+    property var freshSpareMonitors: []
+
     function resolveEmptyWorkspaceFailsafe() {
         const used = new Set()
         for (const m of root.monitors) {
@@ -326,19 +343,21 @@ SettingsPanel {
         }
 
         const updated = Object.assign({}, root.pendingWorkspaces)
+        const fresh = []
         let nextSpare = 6
 
         for (const m of root.monitors) {
             if (!root.enabledFor(m.name)) continue
             if (root.workspacesFor(m.name).length > 0) continue
-            if (!root.hadExistingConfig) continue
 
             while (used.has(nextSpare)) nextSpare++
             used.add(nextSpare)
             updated[m.name] = [nextSpare]
+            fresh.push(m.name)
         }
 
         root.pendingWorkspaces = updated
+        root.freshSpareMonitors = fresh
     }
 
     // One-shot x/y override applied only during applyChanges() (see
@@ -598,6 +617,26 @@ SettingsPanel {
                 sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
                 sendLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
             }
+        }
+
+        // Monitors that just got a fresh spare (> 5) from
+        // resolveEmptyWorkspaceFailsafe() above need forcing onto it
+        // right now, not just a workspace_rule for whenever Hyprland
+        // next reassigns them on its own - that spare number has never
+        // existed before, so the moveworkspacetomonitor dispatch above
+        // has nothing real to relocate for it. Focusing the monitor
+        // first, then the workspace, creates it fresh there
+        // specifically rather than wherever happens to be focused right
+        // now - this is what actually fixes a monitor staying stuck on
+        // whatever it showed before this Apply once its old workspace
+        // got reassigned elsewhere (reported live: DP-2 stuck showing
+        // workspace 2 after it was reassigned entirely to DP-1, only
+        // fixable by disabling and re-enabling DP-2 by hand).
+        for (const name of root.freshSpareMonitors) {
+            const num = root.workspacesFor(name)[0]
+            if (num === undefined) continue
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
         }
 
         // monitors.json persists the *whole* layout, not just what
