@@ -66,7 +66,7 @@ Item {
                 color: Config.fgcolor
 
                 Behavior on height {
-                    NumberAnimation { duration: 60 }
+                    NumberAnimation { duration: 50 }
                 }
             }
         }
