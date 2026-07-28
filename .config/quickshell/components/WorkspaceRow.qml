@@ -411,10 +411,12 @@ Row {
             // a number that would otherwise look like a deliberate pin.
             Text {
                 anchors {
-                    top: parent.top
-                    left: parent.left
-                    margins: 3
+                    bottom: parent.bottom
+                    right: parent.right
+                    rightMargin: 4
                 }
+                horizontalAlignment: Text.AlignRight
+                verticalAlignment: Text.AlignBottom
                 z: 10
                 visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
@@ -435,10 +437,10 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with).
-            MouseArea {
-                anchors.fill: parent
-                onClicked: wsBox.modelData.activate()
-            }
+            //MouseArea {
+            //    anchors.fill: parent
+            //    onClicked: wsBox.modelData.activate()
+            //}
         }
     }
 }
