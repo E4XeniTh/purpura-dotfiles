@@ -410,7 +410,11 @@ Row {
             // and its window grid still show either way, just without
             // a number that would otherwise look like a deliberate pin.
             Text {
-                anchors.centerIn: parent
+                anchors {
+                    top: parent.top
+                    left: parent.left
+                    margins: 3
+                }
                 z: 10
                 visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
