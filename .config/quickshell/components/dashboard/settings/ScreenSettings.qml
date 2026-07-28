@@ -77,6 +77,7 @@ SettingsPanel {
     // of setting a local property directly, for the same reason.
     property string primaryMonitor: ""
     signal primarySelected(string name)
+    onPrimaryMonitorChanged: root.seedDefaultWorkspacesIfFresh()
 
     function baseFor(name) {
         for (const m of root.monitors) {
@@ -129,11 +130,13 @@ SettingsPanel {
     // Workspace numbers (1-5) pinned to each monitor, keyed by name -
     // staged across multiple monitors like pendingEnabled (not discarded
     // when a different monitor is selected), applied and persisted into
-    // monitors.json's per-monitor "workspaces" array on Apply. Toggling
-    // one off here only stops it from being reasserted on future logins
-    // - Hyprland has no "unbind" for an already-running session, so an
-    // open workspace may need a manual move (or a restart) to actually
-    // leave its old monitor immediately.
+    // monitors.json's per-monitor "workspaces" array on Apply. A
+    // workspace can only ever be *reassigned* to a different monitor
+    // through the buttons below (see toggleWorkspace()), never fully
+    // unbound - every workspace 1-5 always belongs to exactly one
+    // monitor (see seedDefaultWorkspacesIfFresh() and
+    // resolveDisabledMonitorWorkspaces() for how that stays true on a
+    // fresh setup or when a monitor gets disabled).
     property var pendingWorkspaces: ({})
 
     function workspacesFor(name) {
@@ -142,44 +145,39 @@ SettingsPanel {
         return (stored && stored.workspaces) ? stored.workspaces : []
     }
 
+    // Reassigns workspace `num` to monitor `name`, stealing it from
+    // whichever monitor currently owns it if any (only one monitor may
+    // hold a given number at a time - see ownerOf()) - never a plain
+    // toggle-off. A workspace already bound to `name` is a no-op:
+    // deactivating a workspace entirely (leaving it owned by nobody)
+    // isn't something the buttons allow anymore, since every workspace
+    // 1-5 is meant to always be reachable from some monitor.
     function toggleWorkspace(name, num) {
         if (!name) return
+        if (root.workspacesFor(name).includes(num)) return
+
         const updated = Object.assign({}, root.pendingWorkspaces)
         const current = root.workspacesFor(name).slice()
-        const idx = current.indexOf(num)
 
-        if (idx >= 0) {
-            current.splice(idx, 1)
-            updated[name] = current
-        } else {
-            // Pinning a workspace that's currently owned by a different
-            // monitor moves it here instead of being a no-op - only one
-            // monitor may hold a given workspace number at a time (see
-            // ownerOf()/boundElsewhere), and previously the button for
-            // an owned-elsewhere workspace was just disabled outright,
-            // leaving no way to actually reassign it short of first
-            // hunting down whichever monitor owned it and unpinning it
-            // there.
-            const owner = root.ownerOf(num, name)
-            if (owner) {
-                const ownerList = root.workspacesFor(owner).slice()
-                const ownerIdx = ownerList.indexOf(num)
-                if (ownerIdx >= 0) {
-                    ownerList.splice(ownerIdx, 1)
-                    updated[owner] = ownerList
-                }
+        const owner = root.ownerOf(num, name)
+        if (owner) {
+            const ownerList = root.workspacesFor(owner).slice()
+            const ownerIdx = ownerList.indexOf(num)
+            if (ownerIdx >= 0) {
+                ownerList.splice(ownerIdx, 1)
+                updated[owner] = ownerList
             }
-            current.push(num)
-            updated[name] = current
         }
+        current.push(num)
+        updated[name] = current
 
         root.pendingWorkspaces = updated
     }
 
     // Which monitor other than `exceptName` currently has workspace
     // `num` pinned, if any - used so the workspace-pin buttons can flag
-    // a workspace that's already claimed elsewhere (red border) and so
-    // toggleWorkspace() knows which monitor to unpin it from when
+    // a workspace that's already claimed elsewhere (dimmed border) and
+    // so toggleWorkspace() knows which monitor to unpin it from when
     // reassigning it.
     function ownerOf(num, exceptName) {
         for (const m of root.monitors) {
@@ -187,6 +185,40 @@ SettingsPanel {
             if (root.workspacesFor(m.name).includes(num)) return m.name
         }
         return ""
+    }
+
+    // Fail-safe run at the top of every applyChanges(), before anything
+    // else that reads workspacesFor() - a monitor being disabled this
+    // Apply (pendingEnabled, right-click enable/disable, distinct from
+    // toggleWorkspace()'s per-workspace reassignment) would otherwise
+    // leave whatever workspaces it owned pinned to a monitor nobody can
+    // switch to anymore, unreachable until it's re-enabled. Moved to the
+    // primary monitor instead - guaranteed enabled (see
+    // resolveOriginFailsafe below) so always a safe place to land them.
+    function resolveDisabledMonitorWorkspaces() {
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        let changed = false
+
+        for (const m of root.monitors) {
+            if (root.enabledFor(m.name)) continue
+            if (m.name === root.primaryMonitor) continue
+
+            const current = root.workspacesFor(m.name)
+            if (current.length === 0) continue
+
+            const primaryList = (updated[root.primaryMonitor] !== undefined
+                ? updated[root.primaryMonitor]
+                : root.workspacesFor(root.primaryMonitor)).slice()
+            for (const num of current) {
+                if (!primaryList.includes(num)) primaryList.push(num)
+            }
+
+            updated[root.primaryMonitor] = primaryList
+            updated[m.name] = []
+            changed = true
+        }
+
+        if (changed) root.pendingWorkspaces = updated
     }
 
     // Fail-safe run at the top of every applyChanges(): toggleWorkspace()
@@ -501,6 +533,11 @@ SettingsPanel {
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
 
+        // Move any workspace a monitor being disabled this Apply still
+        // owns over to the primary monitor first - see
+        // resolveDisabledMonitorWorkspaces() above.
+        root.resolveDisabledMonitorWorkspaces()
+
         // Drop any leftover fail-safe spare (> 5) a monitor no longer
         // needs before anything else below reads pendingWorkspaces/
         // workspacesFor() - see stripSpareWorkspaces() above.
@@ -744,6 +781,41 @@ SettingsPanel {
     property bool configCheckedOnce: false
     property bool hadExistingConfig: false
 
+    // Whether seedDefaultWorkspacesIfFresh() below has already done its
+    // one and only job this session - deliberately separate from
+    // hadExistingConfig (which intentionally stays false for the rest
+    // of the session, well past this point, for
+    // resolveEmptyWorkspaceFailsafe's sake). pendingWorkspaces itself
+    // can't be used as an "already seeded" signal instead, since it
+    // gets wiped back to {} every time the panel is reopened or
+    // Apply runs, regardless of what's actually saved by then - without
+    // its own flag, reopening the panel after the user had since
+    // customized their workspace pins differently would silently stomp
+    // them back to the fresh-install default.
+    property bool hasSeededDefaultWorkspaces: false
+
+    // Seeds all five workspaces onto the primary monitor the moment a
+    // brand new setup is confirmed (hadExistingConfig false, right
+    // after configCheckedOnce flips true - see screensStoreProcess
+    // below) - every workspace 1-5 always belongs to exactly one
+    // monitor now (see toggleWorkspace()'s no-op-if-already-bound
+    // guard), so a fresh install needs a starting owner for all of
+    // them rather than none. Also hooked to onPrimaryMonitorChanged
+    // above in case that arrives after the config check rather than
+    // before (primaryMonitor is fed in from Dashboard.qml, a separate
+    // property binding).
+    function seedDefaultWorkspacesIfFresh() {
+        if (!root.configCheckedOnce) return
+        if (root.hadExistingConfig) return
+        if (root.hasSeededDefaultWorkspaces) return
+        if (!root.primaryMonitor) return
+
+        root.hasSeededDefaultWorkspaces = true
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        updated[root.primaryMonitor] = [1, 2, 3, 4, 5]
+        root.pendingWorkspaces = updated
+    }
+
     function loadScreensStore() {
         screensStoreProcess.running = false
         screensStoreProcess.running = true
@@ -839,12 +911,14 @@ SettingsPanel {
                     if (!root.configCheckedOnce) {
                         root.configCheckedOnce = true
                         root.hadExistingConfig = Object.keys(parsed).some(k => !k.startsWith("__"))
+                        root.seedDefaultWorkspacesIfFresh()
                     }
                 } catch (e) {
                     root.screensStore = {}
                     if (!root.configCheckedOnce) {
                         root.configCheckedOnce = true
                         root.hadExistingConfig = false
+                        root.seedDefaultWorkspacesIfFresh()
                     }
                 }
             }
@@ -1350,24 +1424,29 @@ SettingsPanel {
                             id: wsButton
                             required property int modelData
 
+                            // Every workspace 1-5 always belongs to
+                            // exactly one monitor (see
+                            // seedDefaultWorkspacesIfFresh()/
+                            // resolveDisabledMonitorWorkspaces() below,
+                            // and toggleWorkspace()'s no-op-if-already-
+                            // bound guard) - so only two states are ever
+                            // meaningful here: bound to the monitor
+                            // currently selected in this panel (fgcolor),
+                            // or not (fgcolordark), whether that's
+                            // because it's owned elsewhere or - in
+                            // principle only - unowned entirely. Clicking
+                            // it either way still reassigns it here (see
+                            // toggleWorkspace()); this used to warn red
+                            // for "owned elsewhere" specifically, but
+                            // reassigning is the normal, expected way to
+                            // use these now, not something to flag.
                             readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
-                            // Non-empty when some *other* monitor already
-                            // claims this workspace number - shown red as
-                            // a warning, but still clickable: clicking it
-                            // reassigns the workspace to this monitor
-                            // instead (see toggleWorkspace()), rather than
-                            // being a dead end that only the owning
-                            // monitor's own card could undo.
-                            readonly property string ownerElsewhere: root.ownerOf(modelData, root.selectedName)
-                            readonly property bool boundElsewhere: wsButton.ownerElsewhere !== ""
 
                             Layout.preferredWidth: Config.scaled(28, root.uiScale)
                             Layout.preferredHeight: Config.scaled(28, root.uiScale)
                             uiScale: root.uiScale
                             color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                            border.color: wsButton.boundElsewhere
-                                ? Config.fgcolorred
-                                : (wsButton.bound ? Config.fgcolor : Config.fgcolordark)
+                            border.color: wsButton.bound ? Config.fgcolor : Config.fgcolordark
 
                             Text {
                                 anchors.centerIn: parent
