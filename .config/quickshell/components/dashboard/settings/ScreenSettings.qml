@@ -104,11 +104,28 @@ SettingsPanel {
         return base ? !base.disabled : false
     }
 
-    // Width/height/refresh/x/y/scale edits, always for whichever
-    // monitor is currently selected - discarded (not merged, not
-    // persisted) the instant a different monitor is selected or Apply
-    // runs, rather than staged per-monitor across the whole session.
+    // Width/height/refresh/x/y/scale edits, keyed by monitor name -
+    // staged across monitor switches like pendingEnabled/pendingBrightness
+    // below (not discarded until Apply runs or the panel is reopened),
+    // so editing several displays in a row and applying once actually
+    // sends all of them. Keyed per-name deliberately, not a single flat
+    // {width, height, ...} blob for "whichever monitor is selected" -
+    // that was tried once already and broke: with only one shared blob,
+    // switching monitors made the input boxes show leftover values
+    // typed for the *previous* monitor instead of that monitor's own
+    // real state, since nothing distinguished which monitor a value
+    // actually belonged to. effectiveStateFor() below only ever reads
+    // root.edited[name], so a value can never leak onto a different
+    // monitor's fields this way.
     property var edited: ({})
+    // Still monitor-selection-scoped (discarded on selectMonitor()) -
+    // used for things that are genuinely tied to "whatever's currently
+    // selected in this panel" rather than a specific monitor's own
+    // state: the checkbox toggles below (toggleStrictWorkspaceWidget
+    // etc.) and togglePreferredMode(). Geometry edits no longer rely on
+    // this for correctness (see effectiveStateFor()) - only for also
+    // marking the then-selected monitor as touched, alongside the
+    // dedicated edited-keys loop in applyChanges().
     property bool selectedDirty: false
 
     // Whether each monitor's mode toggle is set to "Preferred", keyed by
@@ -408,10 +425,13 @@ SettingsPanel {
         || Object.keys(root.pendingEnabled).length > 0
         || Object.keys(root.pendingBrightness).length > 0
         || Object.keys(root.pendingWorkspaces).length > 0
+        || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
-        updated[key] = value
+        const forSelected = Object.assign({}, updated[root.selectedName] || {})
+        forSelected[key] = value
+        updated[root.selectedName] = forSelected
         root.edited = updated
         root.selectedDirty = true
     }
@@ -429,12 +449,13 @@ SettingsPanel {
     // fetch lands, in monitorsProcess below.
     property var displayFor: ({})
 
-    // Always re-queries hyprctl fresh right then and discards whatever
-    // was being edited for the previously selected monitor - never
-    // trusts a cached copy or remembers unsaved edits across monitors.
+    // Always re-queries hyprctl fresh right then - never trusts a
+    // cached copy. root.edited is deliberately NOT cleared here anymore
+    // (see its own declaration above) - a monitor's staged geometry
+    // edit survives switching away and back, only selectedDirty (the
+    // checkbox/preferredMode signal, not geometry) resets.
     function selectMonitor(name) {
         root.selectedName = name
-        root.edited = ({})
         root.selectedDirty = false
         root.displayFor = ({})
         root.pendingWorkspaces = ({})
@@ -466,8 +487,10 @@ SettingsPanel {
         const base = root.baseFor(name)
         if (!base) return null
 
-        const isSelected = name === root.selectedName
-        const e = isSelected ? root.edited : {}
+        // Per-name lookup, not gated on this being the *currently
+        // selected* monitor - see root.edited's own declaration for why
+        // that gate used to exist and why it's gone now.
+        const e = root.edited[name] || {}
         const stored = root.screensStore[name]
         const remembered = base.disabled && stored ? stored : base
         const override = root.positionOverrides[name]
@@ -500,9 +523,8 @@ SettingsPanel {
         // "preferred"/"auto" and silently discarded exactly the
         // remembered values the input boxes were already showing.
         const hasRememberedGeometry = wasActive || !!stored
-        const usesExplicitMode = isSelected
-            ? (!root.preferredModes[name] && (hasRememberedGeometry || e.width !== undefined || e.height !== undefined))
-            : hasRememberedGeometry
+        const usesExplicitMode = !root.preferredModes[name]
+            && (hasRememberedGeometry || e.width !== undefined || e.height !== undefined)
         const usesExplicitPosition = !!override || hasRememberedGeometry || e.x !== undefined || e.y !== undefined
 
         return {
@@ -569,12 +591,18 @@ SettingsPanel {
         // Then make sure nothing was left with zero workspaces at all.
         root.resolveEmptyWorkspaceFailsafe()
 
-        // Only touched monitors are actually sent live - the selected
-        // one (if edited) plus any right-clicked enable/disable
-        // toggles - not every monitor every time, which used to
-        // trigger Hyprland's layout reflow for displays nobody asked to
-        // change.
+        // Only touched monitors are actually sent live - any monitor
+        // with a staged geometry edit (root.edited, now persisting
+        // across monitor switches - see its declaration above), any
+        // right-clicked enable/disable toggle, plus whichever monitor
+        // is currently selected if selectedDirty (covers
+        // togglePreferredMode(), which doesn't touch root.edited at
+        // all) - not every monitor every time, which used to trigger
+        // Hyprland's layout reflow for displays nobody asked to change.
         const touched = new Set(Object.keys(root.pendingEnabled))
+        for (const name of Object.keys(root.edited)) {
+            if (Object.keys(root.edited[name]).length > 0) touched.add(name)
+        }
         if (root.selectedDirty && root.selectedName) {
             touched.add(root.selectedName)
         }
