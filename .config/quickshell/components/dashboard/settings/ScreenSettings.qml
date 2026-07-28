@@ -62,7 +62,18 @@ SettingsPanel {
     // monitor's enabled/disabled state. Not on every panel open/close
     // and not on every Apply in general - those don't change which
     // physical displays exist.
-    Component.onCompleted: root.detectDdcDisplays()
+    //
+    // loadScreensStore() also needs to run eagerly here, not just on
+    // panel open (see onActiveChanged below) - seedDefaultWorkspacesIfFresh()
+    // (see effectivePrimaryName/screensStoreProcess further down) has to
+    // fire the moment quickshell starts on a brand new setup, so the
+    // primary monitor already shows all five workspaces preselected the
+    // very first time Screen Settings gets opened, rather than only
+    // after it's been opened once already.
+    Component.onCompleted: {
+        root.detectDdcDisplays()
+        root.loadScreensStore()
+    }
 
     // Raw hyprctl monitors, refreshed on open, on selecting a monitor,
     // and after Apply.
@@ -78,6 +89,20 @@ SettingsPanel {
     property string primaryMonitor: ""
     signal primarySelected(string name)
     onPrimaryMonitorChanged: root.seedDefaultWorkspacesIfFresh()
+
+    // primaryMonitor itself defaults to a hardcoded output name
+    // ("DP-1", see Dashboard.qml) and isn't persisted to disk, so on a
+    // genuinely fresh setup (or a different machine entirely) it can
+    // easily point at a name nothing is actually connected to. Same
+    // "resolve to whichever screen is actually there" fallback Bar.qml/
+    // LockScreen.qml already use, so seedDefaultWorkspacesIfFresh()
+    // below seeds the monitor Quickshell will actually treat as primary
+    // instead of a name that might not exist at all.
+    readonly property string effectivePrimaryName: {
+        const preferred = root.primaryMonitor
+        if (preferred && Quickshell.screens.some(s => s.name === preferred)) return preferred
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
+    }
 
     function baseFor(name) {
         for (const m of root.monitors) {
@@ -898,9 +923,11 @@ SettingsPanel {
     // them back to the fresh-install default.
     property bool hasSeededDefaultWorkspaces: false
 
-    // Seeds all five workspaces onto the primary monitor the moment a
-    // brand new setup is confirmed (hadExistingConfig false, right
-    // after configCheckedOnce flips true - see screensStoreProcess
+    // Seeds all five workspaces onto whichever monitor will actually be
+    // treated as primary (effectivePrimaryName, not the raw
+    // primaryMonitor property - see its own declaration for why) the
+    // moment a brand new setup is confirmed (hadExistingConfig false,
+    // right after configCheckedOnce flips true - see screensStoreProcess
     // below) - every workspace 1-5 always belongs to exactly one
     // monitor now (see toggleWorkspace()'s no-op-if-already-bound
     // guard), so a fresh install needs a starting owner for all of
@@ -912,11 +939,11 @@ SettingsPanel {
         if (!root.configCheckedOnce) return
         if (root.hadExistingConfig) return
         if (root.hasSeededDefaultWorkspaces) return
-        if (!root.primaryMonitor) return
+        if (!root.effectivePrimaryName) return
 
         root.hasSeededDefaultWorkspaces = true
         const updated = Object.assign({}, root.pendingWorkspaces)
-        updated[root.primaryMonitor] = [1, 2, 3, 4, 5]
+        updated[root.effectivePrimaryName] = [1, 2, 3, 4, 5]
         root.pendingWorkspaces = updated
     }
 
