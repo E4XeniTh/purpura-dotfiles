@@ -37,7 +37,7 @@ Rectangle {
     // segmentsBox below can be sized directly from these instead of
     // measuring the Row it contains - anchoring that Row to fill a box
     // whose own size came *from* the Row would be a binding cycle.
-    readonly property int segmentCount: 14
+    readonly property int segmentCount: 18
     readonly property real segmentWidth: Config.scaled(4, root.uiScale)
     readonly property real segmentSpacing: Config.scaled(2, root.uiScale)
     readonly property real segmentAreaWidth: root.segmentCount * root.segmentWidth + (root.segmentCount - 1) * root.segmentSpacing
@@ -53,7 +53,7 @@ Rectangle {
         root.activeSink.audio.volume = Math.max(0, Math.min(1, mx / root.segmentAreaWidth))
     }
 
-    color: iconArea.containsMouse || dragArea.containsMouse ? Config.fgcolorhover : "transparent"
+    color: "transparent"
     border.width: Config.scaled(2, root.uiScale)
     border.color: Config.fgcolor
     radius: 0
@@ -82,7 +82,7 @@ Rectangle {
             ColorOverlay {
                 anchors.fill: volIcon
                 source: volIcon
-                color: Config.fgcolor
+                color: iconArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
             }
 
             MouseArea {
@@ -115,7 +115,7 @@ Rectangle {
                         width: root.segmentWidth
                         height: segmentsBox.height
                         radius: 0
-                        color: index < root.litSegments ? Config.fgcolor : Config.fgcolordark
+                        color: index < root.litSegments ? dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor : Config.fgcolordark
                     }
                 }
             }
