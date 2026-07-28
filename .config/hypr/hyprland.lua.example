@@ -176,7 +176,17 @@ hl.config({
 --## https://wiki.hypr.land/Configuring/Basics/Binds/                                   #
 --#######################################################################################
 
+-- Discord push-to-talk on a side mouse button. A plain (press-only)
+-- bind here only ever forwards a single synthetic click to Discord -
+-- press and release bundled together the instant the button goes
+-- down, not a real sustained hold - which reads as PTT toggling on
+-- and immediately back off. Needs a *second* bind for the release
+-- half of the same button, dispatching the same pass() at the same
+-- window, so Discord actually receives two separate events (a press,
+-- then later a release) instead of one bundled click - `{ release =
+-- true }` is the Lua-API equivalent of a plain hyprland.conf `bindr`.
 hl.bind("mouse:276", hl.dsp.pass({ window = "initialclass:^(discord)$" }))
+hl.bind("mouse:276", hl.dsp.pass({ window = "initialclass:^(discord)$" }), { release = true })
 
 hl.bind(mainMod .. " + return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
