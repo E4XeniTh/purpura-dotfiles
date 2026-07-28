@@ -164,20 +164,6 @@ Scope {
                     }
                 }
 
-                // Sits centered in the same 42px gap style as
-                // workspaceDashboardSeparator above, but to the right of
-                // the dashboard-open button instead of its left, between
-                // it and the new volume control.
-                Rectangle {
-                    id: dashboardVolumeSeparator
-                    width: Config.scaled(2, bar.uiScale)
-                    height: parent.height - Config.scaled(12, bar.uiScale)
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.left: clockCard.right
-                    anchors.leftMargin: Config.scaled(21, bar.uiScale)
-                    color: Config.fgcolor
-                }
-
                 VolumeControl {
                     id: volumeControl
                     uiScale: bar.uiScale
