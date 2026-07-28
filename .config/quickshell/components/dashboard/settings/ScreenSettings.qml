@@ -1205,6 +1205,7 @@ SettingsPanel {
                         pendingEnabled: root.enabledFor(modelData.name)
                         isPrimary: root.primaryMonitor === modelData.name
                         brightness: root.brightnessFor(modelData.name)
+                        supportsDdc: root.ddcBusNumbers[modelData.name] !== undefined
 
                         // Steals keyboard focus away from any TextInput
                         // in the right-hand form before switching, and

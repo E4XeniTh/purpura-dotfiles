@@ -25,6 +25,13 @@ DashCard {
     required property bool selected
     required property bool isPrimary
     required property real brightness // 0-100
+    // False for a monitor ddcutil never mapped to an I2C bus at all
+    // (see ScreenSettings.qml's ddcBusNumbers) - e.g. a TV/monitor with
+    // no DDC/CI support, or ddcutil simply not installed. The
+    // brightness slider (and its separator) below is meaningless for
+    // one of these - dragging it would only ever fail silently on
+    // Apply, so it's hidden entirely rather than shown broken.
+    required property bool supportsDdc
     property real uiScale: 1.0
 
     signal clicked()
@@ -98,13 +105,15 @@ DashCard {
         }
 
         Rectangle {
+            visible: root.supportsDdc
             Layout.fillWidth: true
             Layout.preferredHeight: Config.scaled(1, root.uiScale)
             color: root.border.color
         }
-        
+
 
         DeviceSlider {
+            visible: root.supportsDdc
             Layout.fillWidth: true
             // Thinner/smaller than the volume OSD's own slider - this
             // is a secondary control buried in a small list card.

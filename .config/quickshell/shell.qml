@@ -6,7 +6,7 @@ import "components/dashboard"
 
 Scope {
   PowerMenu { id: powerMenu }
-  LockScreen { id: lockScreen }
+  LockScreen { id: lockScreen; dashboard: dashboard }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu
