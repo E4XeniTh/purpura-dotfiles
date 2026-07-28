@@ -241,6 +241,34 @@ SettingsPanel {
         if (changed) root.pendingWorkspaces = updated
     }
 
+    // Numbers > 5 only ever end up in a monitor's pinned list through
+    // resolveEmptyWorkspaceFailsafe() below - never through the 1-5
+    // pin buttons - so they're derived/ephemeral, not a real saved
+    // choice. Run before that fail-safe (and before
+    // resolveWorkspaceCollisions(), so a stale spare can't count as a
+    // "collision" against anything): without this, a spare handed to a
+    // monitor while it had nothing else pinned (e.g. mid-reset) stuck
+    // around forever afterwards even once the monitor was later given
+    // real 1-5 pins, since toggleWorkspace() only ever appends to
+    // whatever was already stored - reported live as a monitor ending
+    // up with more workspaces pinned than were ever clicked, one of
+    // them an unreachable number with no button to remove it.
+    function stripSpareWorkspaces() {
+        const updated = Object.assign({}, root.pendingWorkspaces)
+        let changed = false
+
+        for (const m of root.monitors) {
+            const current = root.workspacesFor(m.name)
+            const stripped = current.filter(num => num <= 5)
+            if (stripped.length !== current.length) {
+                updated[m.name] = stripped
+                changed = true
+            }
+        }
+
+        if (changed) root.pendingWorkspaces = updated
+    }
+
     // Fail-safe for a monitor that ends up with zero workspaces pinned
     // to it after this Apply (e.g. every one of its 1-5 pins just got
     // toggled off) - without anything bound to it, that monitor is
@@ -250,6 +278,15 @@ SettingsPanel {
     // doesn't survive a restart. Gives it the lowest number > 5 that no
     // other monitor already uses (1-5 stays reserved for deliberate
     // pins), so an enabled monitor is never left with nothing at all.
+    //
+    // Skipped entirely for a monitor that's never had a real (non-"__")
+    // monitors.json entry at all this session (root.hadExistingConfig) -
+    // a brand new install/never-configured monitor hasn't lost a
+    // previous pin, it's simply never been touched, and should stay
+    // fully unmanaged (no workspace_rule at all) until the user
+    // deliberately pins something through the 1-5 buttons themselves,
+    // rather than silently claiming a spare number on its very first
+    // Apply (which might just be a resolution change, say).
     function resolveEmptyWorkspaceFailsafe() {
         const used = new Set()
         for (const m of root.monitors) {
@@ -262,6 +299,7 @@ SettingsPanel {
         for (const m of root.monitors) {
             if (!root.enabledFor(m.name)) continue
             if (root.workspacesFor(m.name).length > 0) continue
+            if (!root.hadExistingConfig) continue
 
             while (used.has(nextSpare)) nextSpare++
             used.add(nextSpare)
@@ -462,6 +500,11 @@ SettingsPanel {
         if (root.pendingStrictWorkspaceWidget !== undefined) root.strictWorkspaceWidget = root.pendingStrictWorkspaceWidget
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
+
+        // Drop any leftover fail-safe spare (> 5) a monitor no longer
+        // needs before anything else below reads pendingWorkspaces/
+        // workspacesFor() - see stripSpareWorkspaces() above.
+        root.stripSpareWorkspaces()
 
         // Resolve any workspace pinned to more than one monitor before
         // anything else below reads pendingWorkspaces/workspacesFor().
@@ -673,6 +716,15 @@ SettingsPanel {
     // this file itself.
     property var screensStore: ({})
 
+    // Whether monitors.json already had at least one real (non-"__")
+    // monitor entry the very first time this panel read it this
+    // session - captured once, on the first read only, so it keeps
+    // meaning "this was a brand new setup" even after applyChanges()
+    // itself later writes a first entry for every monitor (see
+    // resolveEmptyWorkspaceFailsafe's use of this below).
+    property bool configCheckedOnce: false
+    property bool hadExistingConfig: false
+
     function loadScreensStore() {
         screensStoreProcess.running = false
         screensStoreProcess.running = true
@@ -680,11 +732,11 @@ SettingsPanel {
 
     // Global (not per-monitor) toggles, all stored in this same
     // monitors.json under "__"-prefixed keys so none are mistaken for a
-    // monitor name by anything that iterates the file's other keys, and
-    // all take effect immediately on click - they're display
-    // preferences for other components (WorkspaceRow.qml/WorkspaceOsd.qml),
-    // not live Hyprland/hardware changes, so none need the staged
-    // edit + Apply flow the rest of this panel uses.
+    // monitor name by anything that iterates the file's other keys -
+    // display preferences for other components (WorkspaceRow.qml/
+    // WorkspaceOsd.qml), not live Hyprland/hardware changes, but staged
+    // through the same pending/effective + Apply flow as everything else
+    // in this panel now (see pendingStrictWorkspaceWidget etc. below).
     //
     // strictWorkspaceWidget: whether WorkspaceRow.qml's bar widget shows
     // workspaces past id 5 at all - the "unmanaged" spare numbers
@@ -764,8 +816,17 @@ SettingsPanel {
                         }
                     }
                     root.preferredModes = seeded
+
+                    if (!root.configCheckedOnce) {
+                        root.configCheckedOnce = true
+                        root.hadExistingConfig = Object.keys(parsed).some(k => !k.startsWith("__"))
+                    }
                 } catch (e) {
                     root.screensStore = {}
+                    if (!root.configCheckedOnce) {
+                        root.configCheckedOnce = true
+                        root.hadExistingConfig = false
+                    }
                 }
             }
         }
