@@ -901,47 +901,42 @@ SettingsPanel {
     // this file itself.
     property var screensStore: ({})
 
-    // Whether monitors.json already had at least one real (non-"__")
-    // monitor entry the very first time this panel read it this
-    // session - captured once, on the first read only, so it keeps
-    // meaning "this was a brand new setup" even after applyChanges()
-    // itself later writes a first entry for every monitor (see
-    // resolveEmptyWorkspaceFailsafe's use of this below).
-    property bool configCheckedOnce: false
-    property bool hadExistingConfig: false
-
-    // Whether seedDefaultWorkspacesIfFresh() below has already done its
-    // one and only job this session - deliberately separate from
-    // hadExistingConfig (which intentionally stays false for the rest
-    // of the session, well past this point, for
-    // resolveEmptyWorkspaceFailsafe's sake). pendingWorkspaces itself
-    // can't be used as an "already seeded" signal instead, since it
-    // gets wiped back to {} every time the panel is reopened or
-    // Apply runs, regardless of what's actually saved by then - without
-    // its own flag, reopening the panel after the user had since
-    // customized their workspace pins differently would silently stomp
-    // them back to the fresh-install default.
-    property bool hasSeededDefaultWorkspaces: false
+    // Whether monitors.json currently has at least one real (non-"__")
+    // monitor entry - live, re-evaluated from root.screensStore on
+    // every read, NOT captured once and frozen. An earlier version
+    // captured this only on the very first read of the session and
+    // never again, on the theory that a monitor's own workspace
+    // fail-safe needed "brand new setup" to keep meaning that for the
+    // rest of the session - but nothing here still needs that (see
+    // resolveEmptyWorkspaceFailsafe, unconditional now), and freezing
+    // it broke exactly the workflow it was meant to support: deleting
+    // monitors.json and letting Hyprland auto-place everything again
+    // mid-session, while quickshell itself (and this property) had
+    // already lived through the *old* monitors.json existing earlier
+    // in the same session, and would stay stuck believing a real
+    // config still existed even after it was deleted.
+    readonly property bool hasRealMonitorsConfig: Object.keys(root.screensStore).some(k => !k.startsWith("__"))
 
     // Seeds all five workspaces onto whichever monitor will actually be
     // treated as primary (effectivePrimaryName, not the raw
-    // primaryMonitor property - see its own declaration for why) the
-    // moment a brand new setup is confirmed (hadExistingConfig false,
-    // right after configCheckedOnce flips true - see screensStoreProcess
-    // below) - every workspace 1-5 always belongs to exactly one
-    // monitor now (see toggleWorkspace()'s no-op-if-already-bound
-    // guard), so a fresh install needs a starting owner for all of
-    // them rather than none. Also hooked to onPrimaryMonitorChanged
-    // above in case that arrives after the config check rather than
-    // before (primaryMonitor is fed in from Dashboard.qml, a separate
-    // property binding).
+    // primaryMonitor property - see its own declaration for why)
+    // whenever monitors.json currently has no real config at all -
+    // every workspace 1-5 always belongs to exactly one monitor now
+    // (see toggleWorkspace()'s no-op-if-already-bound guard), so a
+    // fresh setup needs a starting owner for all of them rather than
+    // none. Guarded on pendingWorkspaces not already having an entry
+    // for that monitor, rather than a separate one-shot flag, so this
+    // can re-seed after a later reopen/Apply reset pendingWorkspaces
+    // back to {} while still genuinely fresh, but never overwrites an
+    // in-progress edit the user's already made this same session.
+    // Called both from screensStoreProcess below (every read, not just
+    // the first) and onPrimaryMonitorChanged above, in case the primary
+    // changes while still on a fresh, unconfigured setup.
     function seedDefaultWorkspacesIfFresh() {
-        if (!root.configCheckedOnce) return
-        if (root.hadExistingConfig) return
-        if (root.hasSeededDefaultWorkspaces) return
+        if (root.hasRealMonitorsConfig) return
         if (!root.effectivePrimaryName) return
+        if (root.pendingWorkspaces[root.effectivePrimaryName] !== undefined) return
 
-        root.hasSeededDefaultWorkspaces = true
         const updated = Object.assign({}, root.pendingWorkspaces)
         updated[root.effectivePrimaryName] = [1, 2, 3, 4, 5]
         root.pendingWorkspaces = updated
@@ -1039,18 +1034,15 @@ SettingsPanel {
                     }
                     root.preferredModes = seeded
 
-                    if (!root.configCheckedOnce) {
-                        root.configCheckedOnce = true
-                        root.hadExistingConfig = Object.keys(parsed).some(k => !k.startsWith("__"))
-                        root.seedDefaultWorkspacesIfFresh()
-                    }
+                    // Every read, not just the first - see
+                    // hasRealMonitorsConfig/seedDefaultWorkspacesIfFresh()
+                    // above for why this needs to keep re-checking
+                    // rather than trusting whatever it saw the first
+                    // time this session.
+                    root.seedDefaultWorkspacesIfFresh()
                 } catch (e) {
                     root.screensStore = {}
-                    if (!root.configCheckedOnce) {
-                        root.configCheckedOnce = true
-                        root.hadExistingConfig = false
-                        root.seedDefaultWorkspacesIfFresh()
-                    }
+                    root.seedDefaultWorkspacesIfFresh()
                 }
             }
         }
