@@ -744,26 +744,42 @@ SettingsPanel {
             sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
         }
 
-        // Monitors that just went from having no real (1-5) workspace
-        // at all (wasUnmanaged, snapshotted before this function's own
-        // fail-safes ran) to having one this Apply - whatever such a
-        // monitor is currently, live, showing (some spare/unmanaged
-        // number it was left running on) needs rescuing onto the
-        // workspace it was just assigned, via clientsQueryProcess below,
-        // rather than left stranded on an orphaned workspace only
-        // reachable through WorkspaceRow. root.baseFor(name) is the last
-        // hyprctl monitors read this panel did - not re-fetched fresh
-        // here, same acceptable staleness tradeoff already made
-        // elsewhere in this file (e.g. resolveOriginFailsafe's anyAtOrigin
-        // check).
-        const rescues = []
+        // Monitors that just went from having no real (1-5) workspace at
+        // all (wasUnmanaged, snapshotted before this function's own
+        // fail-safes ran) to having one or more this Apply - always
+        // switched onto the lowest-numbered one just assigned (e.g.
+        // workspace 4 if both 4 and 5 got pinned in the same Apply),
+        // exactly the same "force it, don't just leave a rule for
+        // whenever Hyprland gets around to it" reasoning
+        // freshSpareMonitors above uses - otherwise the monitor keeps
+        // showing its old unmanaged workspace (with or without windows
+        // open on it) until someone manually switches away from it.
+        const newlyManaged = []
         for (const name of wasUnmanaged) {
             const managed = root.workspacesFor(name).filter(n => n <= 5)
             if (managed.length === 0) continue
-            const base = root.baseFor(name)
+            newlyManaged.push({ monitor: name, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
+        }
+        for (const entry of newlyManaged) {
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
+        }
+
+        // Any of those same monitors that also had a real window open
+        // on their old (live, pre-Apply) active workspace gets that
+        // window rescued onto the new one too, via clientsQueryProcess
+        // below, rather than left stranded on the now-orphaned
+        // workspace only reachable through WorkspaceRow.
+        // root.baseFor(name) is the last hyprctl monitors read this
+        // panel did - not re-fetched fresh here, same acceptable
+        // staleness tradeoff already made elsewhere in this file (e.g.
+        // resolveOriginFailsafe's anyAtOrigin check).
+        const rescues = []
+        for (const entry of newlyManaged) {
+            const base = root.baseFor(entry.monitor)
             const oldId = (base && base.activeWorkspace) ? base.activeWorkspace.id : undefined
-            if (oldId === undefined || managed.includes(oldId)) continue
-            rescues.push({ monitor: name, oldWorkspace: oldId, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
+            if (oldId === undefined || oldId === entry.newWorkspace) continue
+            rescues.push({ monitor: entry.monitor, oldWorkspace: oldId, newWorkspace: entry.newWorkspace })
         }
 
         // monitors.json persists the *whole* layout, not just what
