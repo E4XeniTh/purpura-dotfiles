@@ -537,10 +537,20 @@ SettingsPanel {
         // Workspace-button toggles resend that monitor's whole current
         // workspace list (not just the number just clicked) - same
         // "touched monitor gets its full effective state resent"
-        // approach buildMonitorLine already uses.
+        // approach buildMonitorLine already uses. Each one also gets an
+        // explicit moveworkspacetomonitor dispatch alongside its
+        // workspace_rule - the rule alone only steers where a workspace
+        // goes at *creation* (or whenever Hyprland next reassigns it on
+        // its own), not one that's already live and sitting on its old
+        // monitor with real windows open (e.g. rebinding workspace 2 to
+        // DP-1 while Discord's still open on it over on DP-2 - reported
+        // live as the pin appearing to do nothing at all). Harmless
+        // no-op if that workspace doesn't exist yet.
+        const dispatchLines = []
         for (const name of Object.keys(root.pendingWorkspaces)) {
             for (const num of root.workspacesFor(name)) {
                 sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
+                dispatchLines.push(`moveworkspacetomonitor ${num} ${name}`)
             }
         }
 
@@ -586,8 +596,14 @@ SettingsPanel {
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
-        if (sendLines.length > 0) {
-            const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
+        if (sendLines.length > 0 || dispatchLines.length > 0) {
+            // eval lines (hl.monitor()/hl.workspace_rule(), parsed by
+            // hyprland.lua's Lua frontend) run first, then the plain
+            // dispatch lines - so a workspace's rule is already in
+            // place by the time it's actually moved.
+            const evalParts = sendLines.map(l => `hyprctl eval '${l}'`)
+            const dispatchParts = dispatchLines.map(l => `hyprctl dispatch ${l}`)
+            const script = evalParts.concat(dispatchParts).join(" ; ")
             console.log("ScreenSettings: applying:\n" + script)
             applyProcess.command = ["sh", "-c", script]
             applyProcess.running = false
