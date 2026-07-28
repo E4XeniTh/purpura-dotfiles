@@ -403,7 +403,7 @@ Row {
                 visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
                 color: Config.fgcolor
-                opacity: 0.4
+                opacity: 0.75
                 // Outline so the number stays legible over whatever's
                 // underneath it (light window rectangles/icons, not
                 // just the box's own dark fill).

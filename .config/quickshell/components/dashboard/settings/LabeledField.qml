@@ -29,7 +29,7 @@ Column {
 
     Rectangle {
         width: parent.width
-        height: Config.scaled(40, root.uiScale)
+        height: Config.scaled(32, root.uiScale)
         color: Config.fillcolor
         border.width: Config.scaled(2, root.uiScale)
         border.color: input.activeFocus ? Config.fgcolorlight : Config.fgcolor
@@ -44,7 +44,7 @@ Column {
             verticalAlignment: TextInput.AlignVCenter
             color: Config.fgcolor
             font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(18, root.uiScale)
+            font.pixelSize: Config.scaled(16, root.uiScale)
             selectByMouse: true
             clip: true
 
