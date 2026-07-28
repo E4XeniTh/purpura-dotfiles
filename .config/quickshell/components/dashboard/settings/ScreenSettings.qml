@@ -636,6 +636,21 @@ SettingsPanel {
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
 
+        // Snapshot which monitors have no real (1-5) workspace at all in
+        // the last-applied config, before any of this Apply's own
+        // fail-safes below touch pendingWorkspaces - used after
+        // sendLines is built to detect one that's about to gain its
+        // first real pin this Apply (see the rescues array further
+        // down), so whatever it's currently showing can be rescued
+        // rather than left stranded on an now-orphaned unmanaged
+        // workspace.
+        const wasUnmanaged = new Set()
+        for (const m of root.monitors) {
+            const stored = root.screensStore[m.name]
+            const storedList = (stored && stored.workspaces) ? stored.workspaces : []
+            if (!storedList.some(n => n <= 5)) wasUnmanaged.add(m.name)
+        }
+
         // Move any workspace a monitor being disabled this Apply still
         // owns over to the primary monitor first - see
         // resolveDisabledMonitorWorkspaces() above.
@@ -729,6 +744,28 @@ SettingsPanel {
             sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
         }
 
+        // Monitors that just went from having no real (1-5) workspace
+        // at all (wasUnmanaged, snapshotted before this function's own
+        // fail-safes ran) to having one this Apply - whatever such a
+        // monitor is currently, live, showing (some spare/unmanaged
+        // number it was left running on) needs rescuing onto the
+        // workspace it was just assigned, via clientsQueryProcess below,
+        // rather than left stranded on an orphaned workspace only
+        // reachable through WorkspaceRow. root.baseFor(name) is the last
+        // hyprctl monitors read this panel did - not re-fetched fresh
+        // here, same acceptable staleness tradeoff already made
+        // elsewhere in this file (e.g. resolveOriginFailsafe's anyAtOrigin
+        // check).
+        const rescues = []
+        for (const name of wasUnmanaged) {
+            const managed = root.workspacesFor(name).filter(n => n <= 5)
+            if (managed.length === 0) continue
+            const base = root.baseFor(name)
+            const oldId = (base && base.activeWorkspace) ? base.activeWorkspace.id : undefined
+            if (oldId === undefined || managed.includes(oldId)) continue
+            rescues.push({ monitor: name, oldWorkspace: oldId, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
+        }
+
         // monitors.json persists the *whole* layout, not just what
         // changed this time, since apply-monitors.sh replays every
         // entry's "line" from scratch at login (hyprland.lua only
@@ -771,12 +808,18 @@ SettingsPanel {
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
-        if (sendLines.length > 0) {
-            const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
-            console.log("ScreenSettings: applying:\n" + script)
-            applyProcess.command = ["sh", "-c", script]
-            applyProcess.running = false
-            applyProcess.running = true
+        // Rescuing needs a fresh window list first - deferred through
+        // clientsQueryProcess/runApplyScript() rather than sent
+        // immediately, so the rescue dispatches land in the same script
+        // (and thus the same capture/restore-wrapped run) instead of a
+        // separate, later Apply.
+        if (rescues.length > 0) {
+            root.pendingSendLines = sendLines
+            root.pendingRescues = rescues
+            clientsQueryProcess.running = false
+            clientsQueryProcess.running = true
+        } else {
+            root.runApplyScript(sendLines)
         }
 
         root.applyBrightness()
@@ -887,6 +930,82 @@ SettingsPanel {
         interval: 300
         repeat: false
         onTriggered: root.refreshMonitors()
+    }
+
+    // Carries applyChanges()'s already-built sendLines and rescues
+    // array across the async hyprctl clients query below - only
+    // actually populated when applyChanges() found at least one
+    // monitor to rescue windows for.
+    property var pendingSendLines: []
+    property var pendingRescues: []
+
+    Process {
+        id: clientsQueryProcess
+        command: ["hyprctl", "-j", "clients"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const sendLines = root.pendingSendLines.slice()
+                try {
+                    const clients = JSON.parse(text)
+                    // Every open window still sitting on a monitor's old,
+                    // now-orphaned unmanaged workspace gets silently
+                    // (follow = false, so focus isn't disturbed) relocated
+                    // onto whichever workspace that monitor was just
+                    // assigned - see the rescues array built in
+                    // applyChanges().
+                    for (const rescue of root.pendingRescues) {
+                        for (const c of clients) {
+                            if (c.workspace && c.workspace.id === rescue.oldWorkspace) {
+                                sendLines.push(`hl.dispatch(hl.dsp.window.move({ workspace = "${rescue.newWorkspace}", window = "address:${c.address}", follow = false }))`)
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn("ScreenSettings: hyprctl clients query failed, skipping unmanaged-window rescue:\n" + text)
+                }
+                root.pendingSendLines = []
+                root.pendingRescues = []
+                root.runApplyScript(sendLines)
+            }
+        }
+    }
+
+    // Actually sends this Apply's built-up Lua lines to Hyprland -
+    // split out from applyChanges() itself since the window-rescue
+    // dispatches need a fresh hyprctl clients query first, deferring
+    // this call, whenever applyChanges() found a monitor to rescue
+    // windows for (clientsQueryProcess above).
+    //
+    // Wraps the real lines with a capture/restore pair so Apply never
+    // leaves the cursor/focus wherever the *last* dispatch in the chain
+    // happened to land (e.g. on whichever monitor just got a fresh spare
+    // workspace forced onto it, or the TV a rescue above just moved
+    // windows onto) - reported live as every Apply visibly yanking focus
+    // over to some other monitor entirely. hl.get_active_workspace()
+    // captures whatever's actually focused (wherever the dashboard/this
+    // panel was opened) before any of this Apply's own dispatches run,
+    // into a plain Lua global - relies on every hyprctl eval call in
+    // this chain sharing one persistent Lua state for the whole
+    // Hyprland session (the same reason hl.dsp.* is even resolvable
+    // this way at all, called bare with no keybind context), so a
+    // global set in the first eval call is still readable in the last
+    // one. Restored as the very last dispatch in the chain - untested
+    // live (no way to run Hyprland from here), so if the cursor still
+    // ends up somewhere unexpected after Apply, this global-persistence
+    // assumption is the first thing to check.
+    function runApplyScript(sendLines) {
+        if (sendLines.length === 0) return
+
+        const captureLine = "do local w = hl.get_active_workspace(); if w then _PurpuraRestoreWorkspace = tostring(w.id) end end"
+        const restoreLine = "if _PurpuraRestoreWorkspace then hl.dispatch(hl.dsp.focus({ workspace = _PurpuraRestoreWorkspace })) end"
+        const finalLines = [captureLine].concat(sendLines).concat([restoreLine])
+
+        const script = finalLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
+        console.log("ScreenSettings: applying:\n" + script)
+        applyProcess.command = ["sh", "-c", script]
+        applyProcess.running = false
+        applyProcess.running = true
     }
 
     // ---------------- combined monitor state (monitors.json) ----------------
