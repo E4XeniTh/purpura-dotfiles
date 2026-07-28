@@ -153,9 +153,21 @@ Row {
     // update live - re-requested on every Hyprland event so the little
     // per-window rectangles track real opens/closes/moves/resizes
     // instead of a one-off snapshot from whenever quickshell started.
+    //
+    // Also re-polls monitors.json here rather than waiting for the
+    // Timer's own 4s interval - Screen Settings' Apply always fires at
+    // least one Hyprland event of its own (a monitor/workspace dispatch,
+    // see ScreenSettings.qml), so this piggybacks on that instead of
+    // needing its own cross-component signal. Numbers/icons on other
+    // monitors' workspaces sometimes not rendering right after a fresh
+    // config or enabling/disabling a monitor was this same lag - a real
+    // monitor.json write just hadn't been picked up by this poll yet.
     Connections {
         target: Hyprland
-        function onRawEvent(event) { Hyprland.refreshToplevels() }
+        function onRawEvent(event) {
+            Hyprland.refreshToplevels()
+            root.loadScreensStore()
+        }
     }
     Component.onCompleted: {
         Hyprland.refreshToplevels()
