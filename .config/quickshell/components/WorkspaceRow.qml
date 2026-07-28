@@ -42,15 +42,19 @@ Row {
     // since clicking one of these should actually create/switch to it).
     readonly property bool showEmptyWidget: !!root.screensStore.__showEmptyWidget
 
-    function placeholderWorkspaces() {
+    // existingIds: every workspace id currently real in Hyprland,
+    // computed once in sortedWorkspaces below and passed in here rather
+    // than re-derived per-monitor - workspace ids are globally unique
+    // (never two monitors sharing one), so checking existence against a
+    // single flat set is both simpler and immune to a real workspace's
+    // own .monitor being momentarily null right as it's created (see
+    // sortedWorkspaces' dedup comment below) - keying existence off
+    // per-monitor buckets used to let a placeholder for the same id
+    // sneak in right alongside that real, momentarily-monitor-less
+    // object, showing as a spurious extra box for the ~20ms it took
+    // Hyprland to finish assigning the new workspace to its monitor.
+    function placeholderWorkspaces(existingIds) {
         if (!root.showEmptyWidget) return []
-
-        const existingByMonitor = {}
-        for (const ws of Hyprland.workspaces.values) {
-            const monName = ws.monitor ? ws.monitor.name : ""
-            if (!existingByMonitor[monName]) existingByMonitor[monName] = new Set()
-            existingByMonitor[monName].add(ws.id)
-        }
 
         const placeholders = []
         for (const monName in root.screensStore) {
@@ -61,16 +65,26 @@ Row {
             const mon = Hyprland.monitors.values.find(m => m.name === monName)
             if (!mon) continue
 
-            const existing = existingByMonitor[monName] || new Set()
             for (const num of stored.workspaces) {
-                if (existing.has(num)) continue
+                if (existingIds.has(num)) continue
                 placeholders.push({
                     id: num,
                     monitor: mon,
                     active: false,
                     hasFullscreen: false,
                     toplevels: { values: [] },
-                    activate: () => Hyprland.dispatch("workspace " + num)
+                    // A plain "workspace N" dispatch only reliably lands
+                    // on the pinned monitor if Hyprland still has its
+                    // workspace_rule (from the last Apply) in effect for
+                    // this id - focusmonitor first makes this correct
+                    // regardless, rather than silently creating/
+                    // switching to workspace N on whatever monitor
+                    // happens to be focused right now instead of the one
+                    // this box is actually sitting under.
+                    activate: () => {
+                        Hyprland.dispatch("focusmonitor " + monName)
+                        Hyprland.dispatch("workspace " + num)
+                    }
                 })
             }
         }
@@ -80,15 +94,33 @@ Row {
     readonly property var sortedWorkspaces: {
         const monitorRank = {}
         root.sortedMonitors.forEach((s, i) => { monitorRank[s.name] = i })
+
+        // Hyprland.workspaces.values can briefly hold two entries for
+        // the same id when switching creates a brand new workspace
+        // (e.g. onto a number nobody's visited this session) - the
+        // old/about-to-be-pruned object and the new one, the new one
+        // sometimes surfacing with .monitor still null for a tick
+        // before Hyprland finishes assigning it. Deduped by id here
+        // (globally unique) rather than trusting the raw list
+        // untouched, preferring whichever copy already has a resolved
+        // monitor - this (plus existingIds below) is what let an
+        // extra/duplicate box flash for ~20ms during a workspace swap.
+        const byId = new Map()
+        for (const w of Hyprland.workspaces.values) {
+            const prev = byId.get(w.id)
+            if (!prev || (!prev.monitor && w.monitor)) byId.set(w.id, w)
+        }
+
         // strictWorkspaceWidget (Screen Settings' toggle, above Identify)
         // drops anything past id 5 entirely when on - the "unmanaged"
         // spare numbers Hyprland hands a monitor with nothing pinned to
         // it, same range excluded from WorkspaceOsd.qml already.
-        let workspaces = Hyprland.workspaces.values.slice()
+        let workspaces = Array.from(byId.values())
         if (root.strictWorkspaceWidget) {
             workspaces = workspaces.filter(w => w.id <= 5)
         }
-        workspaces = workspaces.concat(root.placeholderWorkspaces())
+
+        workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
         return workspaces.sort((a, b) => {
             const rankA = (a.monitor && monitorRank[a.monitor.name] !== undefined) ? monitorRank[a.monitor.name] : 999
             const rankB = (b.monitor && monitorRank[b.monitor.name] !== undefined) ? monitorRank[b.monitor.name] : 999

@@ -113,6 +113,22 @@ Scope {
                     anchors.rightMargin: Config.scaled(10 + 32, bar.uiScale)
                 }
 
+                // Sits centered in the 42px gap above (10 base inset +
+                // 32 deliberate breathing room) between workspaceRow and
+                // the dashboard-open button - full bar height rather
+                // than the shorter 60%-height ones WorkspaceRow.qml
+                // draws between its own monitor groups, so this one
+                // reads as a stronger divider between the two.
+                Rectangle {
+                    id: workspaceDashboardSeparator
+                    width: Config.scaled(2, bar.uiScale)
+                    height: parent.height - Config.scaled(12, bar.uiScale)
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: clockCard.left
+                    anchors.rightMargin: Config.scaled(21, bar.uiScale)
+                    color: Config.fgcolor
+                }
+
                 Rectangle {
                     id: clockCard
                     anchors.centerIn: parent
