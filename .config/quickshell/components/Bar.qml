@@ -121,11 +121,11 @@ Scope {
                 // reads as a stronger divider between the two.
                 Rectangle {
                     id: workspaceDashboardSeparator
-                    width: Config.scaled(2, bar.uiScale)
-                    height: parent.height - Config.scaled(12, bar.uiScale)
+                    width: Config.scaled(12, bar.uiScale)
+                    height: Config.scaled(2, bar.uiScale)
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
-                    anchors.rightMargin: Config.scaled(21, bar.uiScale)
+                    anchors.rightMargin: Config.scaled(15, bar.uiScale)
                     color: Config.fgcolor
                 }
 
@@ -151,6 +151,16 @@ Scope {
                                 root.dashboard.toggle(modelData)
                             }
                         }
+                    }
+
+                    Rectangle {
+                        id: workspaceDashboardSeparatorR
+                        width: Config.scaled(12, bar.uiScale)
+                        height: Config.scaled(2, bar.uiScale)
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: clockCard.right
+                        anchors.leftMargin: Config.scaled(16, bar.uiScale)
+                        color: Config.fgcolor
                     }
                 }
 

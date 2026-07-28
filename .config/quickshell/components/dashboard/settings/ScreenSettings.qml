@@ -1372,7 +1372,7 @@ SettingsPanel {
                     Text {
                         Layout.alignment: Qt.AlignBottom
                         Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: "x"
+                        text: "&"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(16, root.geometryUiScale)
@@ -1390,7 +1390,7 @@ SettingsPanel {
                     Text {
                         Layout.alignment: Qt.AlignBottom
                         Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: ","
+                        text: "@"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(16, root.geometryUiScale)
@@ -1486,7 +1486,7 @@ SettingsPanel {
                     spacing: Config.scaled(8, root.uiScale)
 
                     Text {
-                        text: "Strict widget:"
+                        text: "Only managed workspaces in widget:"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1538,7 +1538,7 @@ SettingsPanel {
                     spacing: Config.scaled(8, root.uiScale)
 
                     Text {
-                        text: "Show Empty:"
+                        text: "Show empty workspaces:"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1564,7 +1564,7 @@ SettingsPanel {
                     }
 
                     Text {
-                        text: "Widget"
+                        text: "In widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1601,7 +1601,7 @@ SettingsPanel {
                     }
 
                     Text {
-                        text: "OSD"
+                        text: "In OSD"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
