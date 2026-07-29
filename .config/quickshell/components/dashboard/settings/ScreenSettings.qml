@@ -636,11 +636,17 @@ SettingsPanel {
     }
 
     // writeToDisk (default true - the Set Init button always passes true
-    // explicitly, Apply always passes false) controls whether this Apply
-    // gets written to monitors.json at all, i.e. whether it's part of
-    // what scripts/apply-monitors.sh replays at the next login. Nothing
-    // else about this function changes either way - both buttons run
-    // the exact same live hyprctl eval calls/fail-safes below.
+    // explicitly, Apply always passes false) controls whether this
+    // Apply's *monitor* geometry/workspace-pin data gets written to
+    // monitors.json, i.e. whether it's part of what
+    // scripts/apply-monitors.sh replays at the next login. Everything
+    // else about this function is identical either way - both buttons
+    // run the exact same live hyprctl eval calls/fail-safes below, and
+    // the Strict Workspace Widget/Show Empty checkboxes always sync to
+    // the file regardless of writeToDisk (see near the bottom) since
+    // they have no live hyprctl equivalent at all - reading
+    // monitors.json is the only way WorkspaceRow.qml/WorkspaceOsd.qml
+    // ever learn about them.
     function applyChanges(writeToDisk) {
         if (writeToDisk === undefined) writeToDisk = true
         if (!root.dirty) return
@@ -838,13 +844,33 @@ SettingsPanel {
             }
         }
 
-        // Kept in memory either way, so this session's own UI (a
-        // reselected/disabled monitor's remembered geometry, etc.)
-        // reflects whichever button was actually used - only the disk
-        // write itself is conditional.
-        root.screensStore = storeSnapshot
         if (writeToDisk) {
+            root.screensStore = storeSnapshot
             monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        } else {
+            // The Strict Workspace Widget/Show Empty checkboxes have no
+            // live hyprctl equivalent at all - unlike monitor position/
+            // workspace pins (sent straight to Hyprland via the eval
+            // calls above regardless of which button this is),
+            // WorkspaceRow.qml/WorkspaceOsd.qml only ever learn about
+            // these by reading monitors.json. Skipping the write
+            // entirely, the same way the rest of an Apply does, would
+            // silently make this button never actually apply them.
+            //
+            // Synced on their own here instead, merged onto whatever's
+            // actually on disk right now (root.screensStore, only ever
+            // updated by Set Init/here - never by the temporary monitor
+            // geometry an Apply computes above) rather than storeSnapshot,
+            // which also has this Apply's own temporary per-monitor
+            // entries mixed in - those specifically must NOT reach the
+            // file.
+            const flagsOnly = Object.assign({}, root.screensStore, {
+                __strictWorkspaceWidget: root.strictWorkspaceWidget,
+                __showEmptyWidget: root.showEmptyWidget,
+                __showEmptyOsd: root.showEmptyOsd
+            })
+            root.screensStore = flagsOnly
+            monitorsFile.setText(JSON.stringify(flagsOnly, null, 2) + "\n")
         }
 
         // Rescuing needs a fresh window list first - deferred through
@@ -1772,11 +1798,16 @@ SettingsPanel {
                     // - it writes the whole layout to monitors.json (what
                     // scripts/apply-monitors.sh replays at login) as well
                     // as sending it live. Apply, to its right, sends the
-                    // exact same live hyprctl eval calls but never touches
-                    // monitors.json at all - for a change you only want
-                    // for the rest of this session (e.g. temporarily
-                    // swapping to a single TV output for the night)
-                    // without it becoming what boots next time.
+                    // exact same live hyprctl eval calls but skips writing
+                    // any *monitor* geometry to monitors.json - for a
+                    // change you only want for the rest of this session
+                    // (e.g. temporarily swapping to a single TV output for
+                    // the night) without it becoming what boots next time.
+                    // The Strict Workspace Widget/Show Empty checkboxes
+                    // are the one exception - they still sync to the file
+                    // either way (see applyChanges()), since that's the
+                    // only way WorkspaceRow.qml/WorkspaceOsd.qml ever
+                    // learn about them at all.
                     DashCard {
                         id: setInitButton
 

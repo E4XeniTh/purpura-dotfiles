@@ -147,7 +147,10 @@ Beyond a base Arch install:
   change: **Set Init** saves it to `~/.config/quickshell/monitors.json`
   (gitignored - machine-specific) as well as sending it live - this is
   what `scripts/apply-monitors.sh` replays on every login. **Apply**
-  sends the exact same change live but never touches `monitors.json` -
-  for something you only want for the rest of this session (e.g.
-  temporarily switching to a single TV output for the night) without it
-  becoming what boots next time.
+  sends the exact same change live but skips writing any *monitor*
+  geometry to `monitors.json` - for something you only want for the
+  rest of this session (e.g. temporarily switching to a single TV
+  output for the night) without it becoming what boots next time. The
+  "Only managed workspaces"/"Show empty workspaces" checkboxes are the
+  one exception - they still sync to the file either way, since reading
+  it is the only way the bar/OSD workspace widgets ever learn about them.
