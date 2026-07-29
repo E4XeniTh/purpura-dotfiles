@@ -49,6 +49,17 @@ Scope {
     property var audioSelectedSinkId: null
     property var audioSelectedSourceId: null
 
+    // Same reasoning again, for ScreenSettings' own screensStore (parsed
+    // monitors.json content, plus whatever it rebuilds in memory on
+    // every Apply - including "Apply" specifically, which never writes
+    // that rebuild to disk at all). WorkspaceRow.qml/WorkspaceOsd.qml
+    // read this instead of independently polling monitors.json
+    // themselves now, so an Apply's live effects (workspace pins, the
+    // Strict Workspace Widget/Show Empty checkboxes) actually show up
+    // for them immediately, without needing a file write that Apply is
+    // specifically designed to skip.
+    property var liveScreensStore: ({})
+
     // ---------------- Monitor brightness (DDC/CI + brightnessctl) ----------------
     // Lifted up here rather than living on each screen's own
     // ScreenSettings instance - brightness is a property of the
@@ -1195,6 +1206,7 @@ Scope {
                 onPanelClosed: dashWindow.onSettingsPanelClosed()
                 onIdentifyingChanged: root.identifying = screenSettings.identifying
                 onPrimarySelected: (name) => root.primaryMonitor = name
+                onScreensStoreChanged: root.liveScreensStore = screenSettings.screensStore
             }
 
             // Battery levels, opened from the battery icon above (index
