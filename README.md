@@ -145,4 +145,8 @@ Beyond a base Arch install:
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
   that file only defines the primary display. Changes are saved to
   `~/.config/quickshell/monitors.json` (gitignored - machine-specific)
-  and replayed by `scripts/apply-monitors.sh` on every login.
+  and replayed by `scripts/apply-monitors.sh` on every login. Screen
+  Settings' "Remember on boot" checkbox (on by default) controls
+  whether that replay happens at all - turn it off to have
+  `hyprland.lua`'s own static monitor line win every boot instead,
+  without touching `monitors.json` itself.

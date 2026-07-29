@@ -28,6 +28,22 @@ CONF="$HOME/.config/quickshell/monitors.json"
 
 [ -f "$CONF" ] || exit 0
 
+# "Remember on boot" checkbox in Screen Settings (__rememberOnBoot,
+# same global-flag convention as __strictWorkspaceWidget etc. below) -
+# defaults to true so a monitors.json from before this checkbox existed
+# keeps replaying exactly as it always has. Explicitly false skips this
+# script entirely, leaving hyprland.lua's own static hl.monitor({...})
+# block as the only thing that runs - monitors.json itself is untouched
+# either way, still written on every Apply.
+#
+# `// true` alone doesn't work here - confirmed live that jq's `//`
+# falls back to the right-hand side for a literal `false` too, not just
+# null/missing, which would silently ignore the checkbox entirely. Only
+# `has()` actually distinguishes "key present and false" from "key
+# absent".
+REMEMBER_ON_BOOT=$(jq -r 'if has("__rememberOnBoot") then .__rememberOnBoot else true end' "$CONF" 2>/dev/null)
+[ "$REMEMBER_ON_BOOT" = "false" ] && exit 0
+
 # "__"-prefixed keys (__strictWorkspaceWidget, __showEmptyWidget,
 # __showEmptyOsd - the global bar/OSD toggles, plain booleans not
 # monitor entries, see ScreenSettings.qml) have to be filtered out

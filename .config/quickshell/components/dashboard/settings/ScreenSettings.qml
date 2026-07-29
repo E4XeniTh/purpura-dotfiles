@@ -521,6 +521,7 @@ SettingsPanel {
         root.pendingStrictWorkspaceWidget = undefined
         root.pendingShowEmptyWidget = undefined
         root.pendingShowEmptyOsd = undefined
+        root.pendingRememberOnBoot = undefined
         root.refreshMonitors()
     }
 
@@ -632,6 +633,7 @@ SettingsPanel {
         if (root.pendingStrictWorkspaceWidget !== undefined) root.strictWorkspaceWidget = root.pendingStrictWorkspaceWidget
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
+        if (root.pendingRememberOnBoot !== undefined) root.rememberOnBoot = root.pendingRememberOnBoot
 
         // Snapshot which monitors have no real (1-5) workspace at all in
         // the last-applied config, before any of this Apply's own
@@ -797,7 +799,8 @@ SettingsPanel {
         const storeSnapshot = {
             __strictWorkspaceWidget: root.strictWorkspaceWidget,
             __showEmptyWidget: root.showEmptyWidget,
-            __showEmptyOsd: root.showEmptyOsd
+            __showEmptyOsd: root.showEmptyOsd,
+            __rememberOnBoot: root.rememberOnBoot
         }
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
@@ -867,6 +870,7 @@ SettingsPanel {
             root.pendingStrictWorkspaceWidget = undefined
             root.pendingShowEmptyWidget = undefined
             root.pendingShowEmptyOsd = undefined
+            root.pendingRememberOnBoot = undefined
             root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
@@ -1102,6 +1106,16 @@ SettingsPanel {
     property bool showEmptyWidget: false
     property bool showEmptyOsd: false
 
+    // Whether scripts/apply-monitors.sh replays monitors.json at all on
+    // login - default true (unlike the three above). Disabling this
+    // doesn't touch monitors.json itself (still written on every Apply,
+    // same as always) - it just makes the boot script skip straight
+    // past it and leave hyprland.lua's own static hl.monitor({...})
+    // block as the only thing that runs, for anyone who'd rather hand-
+    // edit that file directly than have this panel's saved layout win
+    // every boot.
+    property bool rememberOnBoot: true
+
     // Staged like `edited`/pendingWorkspaces above now, not written
     // through immediately - undefined means "no pending change, use the
     // real property as-is". Cleared (back to undefined) on selectMonitor()
@@ -1111,6 +1125,7 @@ SettingsPanel {
     property var pendingStrictWorkspaceWidget: undefined
     property var pendingShowEmptyWidget: undefined
     property var pendingShowEmptyOsd: undefined
+    property var pendingRememberOnBoot: undefined
 
     readonly property bool effectiveStrictWorkspaceWidget: root.pendingStrictWorkspaceWidget !== undefined
         ? root.pendingStrictWorkspaceWidget : root.strictWorkspaceWidget
@@ -1118,6 +1133,8 @@ SettingsPanel {
         ? root.pendingShowEmptyWidget : root.showEmptyWidget
     readonly property bool effectiveShowEmptyOsd: root.pendingShowEmptyOsd !== undefined
         ? root.pendingShowEmptyOsd : root.showEmptyOsd
+    readonly property bool effectiveRememberOnBoot: root.pendingRememberOnBoot !== undefined
+        ? root.pendingRememberOnBoot : root.rememberOnBoot
 
     function toggleStrictWorkspaceWidget() {
         root.pendingStrictWorkspaceWidget = !root.effectiveStrictWorkspaceWidget
@@ -1131,6 +1148,11 @@ SettingsPanel {
 
     function toggleShowEmptyOsd() {
         root.pendingShowEmptyOsd = !root.effectiveShowEmptyOsd
+        root.selectedDirty = true
+    }
+
+    function toggleRememberOnBoot() {
+        root.pendingRememberOnBoot = !root.effectiveRememberOnBoot
         root.selectedDirty = true
     }
 
@@ -1150,6 +1172,12 @@ SettingsPanel {
                     root.strictWorkspaceWidget = !!parsed.__strictWorkspaceWidget
                     root.showEmptyWidget = !!parsed.__showEmptyWidget
                     root.showEmptyOsd = !!parsed.__showEmptyOsd
+                    // Defaults true, unlike the three above - absent
+                    // entirely on a fresh/pre-existing monitors.json
+                    // that predates this checkbox, and it should stay
+                    // remembering on boot exactly as it always has
+                    // until someone actually turns it off.
+                    root.rememberOnBoot = parsed.__rememberOnBoot !== undefined ? !!parsed.__rememberOnBoot : true
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
@@ -1726,6 +1754,51 @@ SettingsPanel {
                             onClicked: {
                                 root.identifying = true
                                 identifyTimer.restart()
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredWidth: Config.scaled(16, root.uiScale) }
+
+                    // ---------------- middle: remember on boot ----------------
+                    // Global, not per-monitor - doesn't touch monitors.json
+                    // itself, just whether scripts/apply-monitors.sh
+                    // replays it at login at all (see
+                    // effectiveRememberOnBoot/toggleRememberOnBoot()
+                    // above). Defaults on, same as monitors.json replay
+                    // always has.
+                    Text {
+                        text: "Remember on boot:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleRememberOnBoot()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        Layout.leftMargin: Config.scaled(8, root.uiScale)
+                        color: root.effectiveRememberOnBoot ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.toggleRememberOnBoot()
                             }
                         }
                     }
