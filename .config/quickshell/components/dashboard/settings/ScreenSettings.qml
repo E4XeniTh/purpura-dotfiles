@@ -481,16 +481,6 @@ SettingsPanel {
         || (root.dashboardRoot ? Object.keys(root.dashboardRoot.pendingBrightness).length > 0 : false)
         || Object.keys(root.pendingWorkspaces).length > 0
         || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
-        // Checked directly (not just via selectedDirty) for the same
-        // reason edited/pendingWorkspaces are above - these persist
-        // across selectMonitor() now, so relying solely on selectedDirty
-        // (which selectMonitor() does reset) would make the Apply
-        // button stop glowing after switching monitors despite a
-        // checkbox change still being staged.
-        || root.pendingStrictWorkspaceWidget !== undefined
-        || root.pendingShowEmptyWidget !== undefined
-        || root.pendingShowEmptyOsd !== undefined
-        || root.pendingRememberOnBoot !== undefined
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -528,13 +518,9 @@ SettingsPanel {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        // Deliberately NOT resetting pendingStrictWorkspaceWidget/
-        // pendingShowEmptyWidget/pendingShowEmptyOsd/pendingRememberOnBoot
-        // here - they're global (not per-monitor) settings, so a checkbox
-        // toggle should survive switching to a different monitor's view
-        // the same way edited/pendingWorkspaces already do, rather than
-        // being silently discarded. Still reset on an actual panel
-        // close/reopen (see onActiveChanged below), same as those.
+        root.pendingStrictWorkspaceWidget = undefined
+        root.pendingShowEmptyWidget = undefined
+        root.pendingShowEmptyOsd = undefined
         root.refreshMonitors()
     }
 
@@ -646,7 +632,6 @@ SettingsPanel {
         if (root.pendingStrictWorkspaceWidget !== undefined) root.strictWorkspaceWidget = root.pendingStrictWorkspaceWidget
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
-        if (root.pendingRememberOnBoot !== undefined) root.rememberOnBoot = root.pendingRememberOnBoot
 
         // Snapshot which monitors have no real (1-5) workspace at all in
         // the last-applied config, before any of this Apply's own
@@ -812,8 +797,7 @@ SettingsPanel {
         const storeSnapshot = {
             __strictWorkspaceWidget: root.strictWorkspaceWidget,
             __showEmptyWidget: root.showEmptyWidget,
-            __showEmptyOsd: root.showEmptyOsd,
-            __rememberOnBoot: root.rememberOnBoot
+            __showEmptyOsd: root.showEmptyOsd
         }
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
@@ -836,20 +820,6 @@ SettingsPanel {
 
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
-
-        // Also remembered as the "baseline" - the everyday layout to
-        // fall back to at the next boot when Remember on Boot is off
-        // (see apply-monitors.sh) - but only while it's actually on
-        // right now. A nightly "swap to TV-only" Apply made with the
-        // checkbox off is exactly the kind of change that should NOT
-        // become the new baseline - it's tonight-only, and the next
-        // boot should restore whatever the layout was before it,
-        // rather than either replaying tonight's temporary change or
-        // falling back to Hyprland's own dumb auto-placement (which
-        // doesn't know any monitor's actual intended position at all).
-        if (root.rememberOnBoot) {
-            baselineFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
-        }
 
         // Rescuing needs a fresh window list first - deferred through
         // clientsQueryProcess/runApplyScript() rather than sent
@@ -882,16 +852,6 @@ SettingsPanel {
         root.positionOverrides = ({})
         root.edited = ({})
         root.selectedDirty = false
-        // Reset back to undefined now that they've been committed into
-        // the real properties above - otherwise dirty (which checks
-        // these directly, not just selectedDirty, so a checkbox change
-        // survives switching monitors) would keep reporting true and
-        // the Apply button would never stop glowing after actually
-        // applying.
-        root.pendingStrictWorkspaceWidget = undefined
-        root.pendingShowEmptyWidget = undefined
-        root.pendingShowEmptyOsd = undefined
-        root.pendingRememberOnBoot = undefined
         // preferredMode intentionally left as-is - Apply shouldn't flip
         // the toggle back to "Manual" for the monitor you just applied.
     }
@@ -907,7 +867,6 @@ SettingsPanel {
             root.pendingStrictWorkspaceWidget = undefined
             root.pendingShowEmptyWidget = undefined
             root.pendingShowEmptyOsd = undefined
-            root.pendingRememberOnBoot = undefined
             root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
@@ -1143,17 +1102,6 @@ SettingsPanel {
     property bool showEmptyWidget: false
     property bool showEmptyOsd: false
 
-    // Whether scripts/apply-monitors.sh replays monitors.json itself at
-    // login, or falls back to monitors.baseline.json instead - default
-    // true (unlike the three above). The baseline is a separate saved
-    // layout, only ever updated by an Apply made while this was on (see
-    // applyChanges()/baselineFile below) - so a one-off Apply made with
-    // this switched off (e.g. temporarily going TV-only for the night)
-    // doesn't become what boots next time; the baseline (your last
-    // "for real" layout) does instead. Doesn't touch monitors.json
-    // itself either way - still written on every Apply, same as always.
-    property bool rememberOnBoot: true
-
     // Staged like `edited`/pendingWorkspaces above now, not written
     // through immediately - undefined means "no pending change, use the
     // real property as-is". Cleared (back to undefined) on selectMonitor()
@@ -1163,7 +1111,6 @@ SettingsPanel {
     property var pendingStrictWorkspaceWidget: undefined
     property var pendingShowEmptyWidget: undefined
     property var pendingShowEmptyOsd: undefined
-    property var pendingRememberOnBoot: undefined
 
     readonly property bool effectiveStrictWorkspaceWidget: root.pendingStrictWorkspaceWidget !== undefined
         ? root.pendingStrictWorkspaceWidget : root.strictWorkspaceWidget
@@ -1171,8 +1118,6 @@ SettingsPanel {
         ? root.pendingShowEmptyWidget : root.showEmptyWidget
     readonly property bool effectiveShowEmptyOsd: root.pendingShowEmptyOsd !== undefined
         ? root.pendingShowEmptyOsd : root.showEmptyOsd
-    readonly property bool effectiveRememberOnBoot: root.pendingRememberOnBoot !== undefined
-        ? root.pendingRememberOnBoot : root.rememberOnBoot
 
     function toggleStrictWorkspaceWidget() {
         root.pendingStrictWorkspaceWidget = !root.effectiveStrictWorkspaceWidget
@@ -1186,11 +1131,6 @@ SettingsPanel {
 
     function toggleShowEmptyOsd() {
         root.pendingShowEmptyOsd = !root.effectiveShowEmptyOsd
-        root.selectedDirty = true
-    }
-
-    function toggleRememberOnBoot() {
-        root.pendingRememberOnBoot = !root.effectiveRememberOnBoot
         root.selectedDirty = true
     }
 
@@ -1210,12 +1150,6 @@ SettingsPanel {
                     root.strictWorkspaceWidget = !!parsed.__strictWorkspaceWidget
                     root.showEmptyWidget = !!parsed.__showEmptyWidget
                     root.showEmptyOsd = !!parsed.__showEmptyOsd
-                    // Defaults true, unlike the three above - absent
-                    // entirely on a fresh/pre-existing monitors.json
-                    // that predates this checkbox, and it should stay
-                    // remembering on boot exactly as it always has
-                    // until someone actually turns it off.
-                    root.rememberOnBoot = parsed.__rememberOnBoot !== undefined ? !!parsed.__rememberOnBoot : true
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
@@ -1253,16 +1187,6 @@ SettingsPanel {
         // Write-only from here (screensStoreProcess above is what reads
         // it back, and apply-monitors.sh is what replays it at login) -
         // no need to preload/read it back through this FileView too.
-        preload: false
-    }
-
-    // The "everyday" layout - only ever updated by an Apply made while
-    // Remember on Boot is on (see applyChanges() above). Read back by
-    // apply-monitors.sh, not by anything here, on the same write-only
-    // reasoning as monitorsFile.
-    FileView {
-        id: baselineFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.baseline.json"
         preload: false
     }
 
@@ -1802,51 +1726,6 @@ SettingsPanel {
                             onClicked: {
                                 root.identifying = true
                                 identifyTimer.restart()
-                            }
-                        }
-                    }
-
-                    Item { Layout.preferredWidth: Config.scaled(16, root.uiScale) }
-
-                    // ---------------- middle: remember on boot ----------------
-                    // Global, not per-monitor - doesn't touch monitors.json
-                    // itself, just whether scripts/apply-monitors.sh
-                    // replays it at login at all (see
-                    // effectiveRememberOnBoot/toggleRememberOnBoot()
-                    // above). Defaults on, same as monitors.json replay
-                    // always has.
-                    Text {
-                        text: "Remember on boot:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleRememberOnBoot()
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        Layout.leftMargin: Config.scaled(8, root.uiScale)
-                        color: root.effectiveRememberOnBoot ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleRememberOnBoot()
                             }
                         }
                     }
