@@ -21,6 +21,16 @@ Scope {
 	// AudioSettings.qml).
 	property var selectedSinkId: null
 
+	// Fed in from shell.qml too - a cross-reference to the other OSD's
+	// own Scope instance, so each can tell whether the other is
+	// currently shown (see otherOsdShown below) and shift itself out of
+	// dead center instead of the two overlapping directly. A plain id
+	// reference doesn't work here - VolumeOsd.qml/BrightnessOsd.qml are
+	// separate top-level Scopes (siblings in shell.qml), and QML ids
+	// aren't visible outside the component they're declared in.
+	property var brightnessOsd: null
+	readonly property bool otherOsdShown: !!(root.brightnessOsd && root.brightnessOsd.shouldShowOsd)
+
 	readonly property var activeSink: root.selectedSinkId !== null
 		? (Pipewire.nodes.values.find(n => n.audio && !n.isStream && n.isSink && n.id === root.selectedSinkId) ?? Pipewire.defaultAudioSink)
 		: Pipewire.defaultAudioSink
@@ -56,8 +66,6 @@ Scope {
 
 	property bool shouldShowOsd: false
 
-	property alias volumelazyloader: volumelazyloader.item
-
 	Timer {
 		id: hideTimer
 		interval: 1500
@@ -71,7 +79,6 @@ Scope {
 	// PanelWindow.visible could be set instead of using a loader, but using
 	// a loader will reduce the memory overhead when the window isn't open.
 	LazyLoader {
-        id: volumelazyloader
 		active: root.shouldShowOsd
 
 		PanelWindow {
@@ -80,8 +87,16 @@ Scope {
 
 			anchors.bottom: true
 			margins.bottom: screen.height / 8
-			anchors.right: brightnesslazyloader.active ? 1 : 0
-			margins.right: brightnesslazyloader.active ? screen.width / 2 : ""
+
+			// Centered by default (no left/right anchor at all) - only
+			// shifted left-of-center when BrightnessOsd is ALSO up right
+			// now, so the pair sits side by side (volume left,
+			// brightness right - same left-to-right order Bar.qml's own
+			// widgets use) instead of directly on top of each other.
+			// Symmetric with BrightnessOsd.qml's own mirror-image
+			// version of this same margin.
+			anchors.left: root.otherOsdShown
+			margins.left: root.otherOsdShown ? Math.max(0, screen.width / 2 - implicitWidth - 10) : 0
 			exclusiveZone: 0
 
 			implicitWidth: 500
@@ -90,8 +105,7 @@ Scope {
 
 			// Purely a display now - no click mask needed since nothing
 			// inside accepts mouse input for muting/dragging anymore (see
-			// the icon/DigitalBar/percentage row below), only hover-to-
-			// stay-open like before.
+			// the icon/DigitalBar/percentage row below).
 
 			Rectangle {
 				anchors.fill: parent

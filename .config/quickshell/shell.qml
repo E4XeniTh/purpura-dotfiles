@@ -22,11 +22,15 @@ Scope {
   }
 
   VolumeOsd {
+    id: volumeOsd
     selectedSinkId: dashboard.audioSelectedSinkId
+    brightnessOsd: brightnessOsd
   }
 
   BrightnessOsd {
+    id: brightnessOsd
     dashboard: dashboard
+    volumeOsd: volumeOsd
   }
 
   WorkspaceOsd {}

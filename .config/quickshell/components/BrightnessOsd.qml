@@ -19,6 +19,16 @@ Scope {
     // Fed in from shell.qml, same as Bar.qml's own dashboard reference.
     property var dashboard: null
 
+    // Fed in from shell.qml too - a cross-reference to the other OSD's
+    // own Scope instance, so each can tell whether the other is
+    // currently shown (see otherOsdShown below) and shift itself out of
+    // dead center instead of the two overlapping directly. A plain id
+    // reference doesn't work here - VolumeOsd.qml/BrightnessOsd.qml are
+    // separate top-level Scopes (siblings in shell.qml), and QML ids
+    // aren't visible outside the component they're declared in.
+    property var volumeOsd: null
+    readonly property bool otherOsdShown: !!(root.volumeOsd && root.volumeOsd.shouldShowOsd)
+
     readonly property string targetMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
     readonly property real currentBrightness: (root.dashboard && root.dashboard.liveBrightness[root.targetMonitor] !== undefined)
         ? root.dashboard.liveBrightness[root.targetMonitor]
@@ -41,8 +51,6 @@ Scope {
 
     property bool shouldShowOsd: false
 
-    property alias brightnesslazyloader: brightnesslazyloader.item
-
     Timer {
         id: hideTimer
         interval: 1500
@@ -56,7 +64,6 @@ Scope {
     // PanelWindow.visible could be set instead of using a loader, but using
     // a loader will reduce the memory overhead when the window isn't open.
     LazyLoader {
-        id: brightnesslazyloader
         active: root.shouldShowOsd
 
         PanelWindow {
@@ -65,7 +72,16 @@ Scope {
 
             anchors.bottom: true
             margins.bottom: screen.height / 8
-            margins.left: volumeslazyloader.active ? screen.height / 2 : ""
+
+            // Centered by default (no left/right anchor at all) - only
+            // shifted right-of-center when VolumeOsd is ALSO up right
+            // now, so the pair sits side by side (volume left,
+            // brightness right - same left-to-right order Bar.qml's own
+            // widgets use) instead of directly on top of each other.
+            // Symmetric with VolumeOsd.qml's own mirror-image version of
+            // this same margin.
+            anchors.right: root.otherOsdShown
+            margins.right: root.otherOsdShown ? Math.max(0, screen.width / 2 - implicitWidth - 10) : 0
             exclusiveZone: 0
 
             implicitWidth: 500
@@ -73,7 +89,7 @@ Scope {
             color: "transparent"
 
             // Purely a display - no click mask needed since nothing
-            // inside accepts mouse input, only hover-to-stay-open.
+            // inside accepts mouse input.
 
             Rectangle {
                 anchors.fill: parent
@@ -81,14 +97,6 @@ Scope {
                 radius: 0
                 border.width: 2
                 border.color: Config.fgcolor
-
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                    onEntered: root.hovered = true
-                    onExited: root.hovered = false
-                }
 
                 RowLayout {
                     anchors.fill: parent
