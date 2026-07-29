@@ -88,8 +88,12 @@ Rectangle {
             }
         }
 
+        // Fixed width (fits "100%") regardless of digit count, so the
+        // widget's own overall width doesn't jitter as the level changes.
         Text {
             anchors.verticalCenter: parent.verticalCenter
+            width: Config.scaled(40, root.uiScale)
+            horizontalAlignment: Text.AlignRight
             text: Math.round(root.percentage * 100) + "%"
             color: Config.fgcolor
             font.family: Config.fontfamily

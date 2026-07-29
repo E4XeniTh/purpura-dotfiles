@@ -49,13 +49,6 @@ Scope {
     property var audioSelectedSinkId: null
     property var audioSelectedSourceId: null
 
-    // Same reasoning again, for which monitor is currently selected in
-    // Screen Settings - Bar.qml's BrightnessControl widget needs to
-    // reach whichever monitor that is (it can be any connected display,
-    // not necessarily the bar's own primary-designated screen) to know
-    // what to actually adjust.
-    property string videoSelectedMonitor: ""
-
     // ---------------- Monitor brightness (DDC/CI + brightnessctl) ----------------
     // Lifted up here rather than living on each screen's own
     // ScreenSettings instance - brightness is a property of the
@@ -82,6 +75,18 @@ Scope {
     // before its own debounced apply fires).
     property var pendingBrightness: ({})
 
+    // Whether the two detect Processes below have completed at least
+    // once since the last detectBrightnessControllers() call - false
+    // for the (usually brief, but real - ddcutil talks to actual I2C
+    // hardware) window right after startup/a re-detect, during which
+    // supportsBrightness() can't yet be trusted either way. Bar.qml's
+    // BrightnessControl shows a "detecting..." placeholder instead of
+    // hiding itself while this is false, rather than assuming
+    // unsupported and popping in later.
+    property bool ddcDetectDone: false
+    property bool brightnessctlDetectDone: false
+    readonly property bool brightnessDetectionDone: root.ddcDetectDone && root.brightnessctlDetectDone
+
     // eDP is the standard Linux/Wayland output name for a laptop's own
     // built-in panel - the one case ddcutil structurally can't reach,
     // which is exactly the case brightnessctl exists for.
@@ -106,6 +111,8 @@ Scope {
     }
 
     function detectBrightnessControllers() {
+        root.ddcDetectDone = false
+        root.brightnessctlDetectDone = false
         ddcDetectProcess.running = false
         ddcDetectProcess.running = true
         brightnessctlDetectProcess.running = false
@@ -231,6 +238,7 @@ Scope {
                     }
                 }
                 root.ddcBusNumbers = map
+                root.ddcDetectDone = true
                 root.queueBrightnessQueries()
             }
         }
@@ -240,6 +248,10 @@ Scope {
                 if (text.length > 0) {
                     console.warn("Dashboard: ddcutil detect error(s) (brightness sliders may not work):\n" + text)
                 }
+                // Also marked done here, not just in stdout above - if
+                // ddcutil isn't installed at all, this is the only
+                // collector that ever fires (no stdout is produced).
+                root.ddcDetectDone = true
             }
         }
     }
@@ -303,6 +315,7 @@ Scope {
         stdout: StdioCollector {
             onStreamFinished: {
                 root.hasBrightnessctlDevice = /^[^,]+,backlight,/m.test(text)
+                root.brightnessctlDetectDone = true
                 root.queueBrightnessQueries()
             }
         }
@@ -312,6 +325,10 @@ Scope {
                 if (text.length > 0) {
                     console.warn("Dashboard: brightnessctl detect error(s) (laptop panel brightness may not work):\n" + text)
                 }
+                // Also marked done here, not just in stdout above - if
+                // brightnessctl isn't installed at all, this is the
+                // only collector that ever fires (no stdout is produced).
+                root.brightnessctlDetectDone = true
             }
         }
     }
@@ -1000,7 +1017,6 @@ Scope {
                 onPanelClosed: dashWindow.onSettingsPanelClosed()
                 onIdentifyingChanged: root.identifying = screenSettings.identifying
                 onPrimarySelected: (name) => root.primaryMonitor = name
-                onSelectedNameChanged: root.videoSelectedMonitor = screenSettings.selectedName
             }
 
             // Battery levels, opened from the battery icon above (index
