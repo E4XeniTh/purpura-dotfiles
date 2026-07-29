@@ -868,6 +868,16 @@ SettingsPanel {
         root.positionOverrides = ({})
         root.edited = ({})
         root.selectedDirty = false
+        // Reset back to undefined now that they've been committed into
+        // the real properties above - otherwise dirty (which checks
+        // these directly, not just selectedDirty, so a checkbox change
+        // survives switching monitors) would keep reporting true and
+        // the Apply button would never stop glowing after actually
+        // applying.
+        root.pendingStrictWorkspaceWidget = undefined
+        root.pendingShowEmptyWidget = undefined
+        root.pendingShowEmptyOsd = undefined
+        root.pendingRememberOnBoot = undefined
         // preferredMode intentionally left as-is - Apply shouldn't flip
         // the toggle back to "Manual" for the monitor you just applied.
     }
