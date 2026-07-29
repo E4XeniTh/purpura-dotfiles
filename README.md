@@ -132,6 +132,10 @@ Beyond a base Arch install:
 - Colors, font family, and notification timeout live in `Config.js` (base
   of the quickshell config, imported as `Config` from any component). Edit
   it and restart `qs` to re-theme.
+- `Config.solaarEnabled` (default `true`) turns Solaar integration off
+  entirely - `solaar show` is never invoked at all while it's `false`,
+  not just run and ignored. Set it to `false` if solaar isn't installed
+  or you just don't want it polled.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
 - Monitor layout (resolution, position, scale, on/off) is set from the
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -

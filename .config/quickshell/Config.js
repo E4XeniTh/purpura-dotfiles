@@ -25,6 +25,14 @@ var fontfamily = "Hack"
 
 var notificationtimeout = 5000
 
+// Master switch for all Solaar (Logitech Unifying/Bolt) integration -
+// Dashboard.qml never even starts the `solaar show` Process at all
+// while this is false (not just "runs it but ignores the result"), so
+// a machine without solaar installed, or a user who just doesn't want
+// it polled, can turn this off entirely. Restart `qs` after changing,
+// same as any other value in this file.
+var solaarEnabled = true
+
 // Bar.qml's own base height, before Config.scaled()'s per-screen
 // uiScale is applied to it.
 var barheight = 48

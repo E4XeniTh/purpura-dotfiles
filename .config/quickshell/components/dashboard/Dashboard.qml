@@ -379,6 +379,116 @@ Scope {
         }
     }
 
+    // ---------------- Solaar (Logitech Unifying/Bolt peripherals) ----------------
+    // Lifted up here rather than living on BatterySettings.qml directly
+    // - each screen's dashWindow has its own BatterySettings instance,
+    // and a full `solaar show` walks every HID++ feature on every
+    // paired peripheral (seconds, not milliseconds), so one shared poll
+    // beats one per screen. Also started at Quickshell startup instead
+    // of waiting for the panel to ever be opened, so devices don't
+    // still be showing empty the first time someone actually looks.
+    //
+    // refreshSolaar() is the single choke point Config.solaarEnabled
+    // gates - Component.onCompleted below and solaarRefreshTimer both
+    // route through it, so the `solaar` binary is never even invoked
+    // once while integration is turned off, not just "run but ignored".
+    property var solaarDevices: []
+
+    function refreshSolaar() {
+        if (!Config.solaarEnabled) return
+        solaarProcess.running = false
+        solaarProcess.running = true
+    }
+
+    // Best-effort text parsing of `solaar show`'s default (human-
+    // readable, no stable JSON output as of writing) dump. Two header
+    // shapes exist and both need handling: a receiver-paired peripheral
+    // is indented exactly 2 spaces as "N: Name" (e.g. "  1: G703
+    // LIGHTSPEED..."), while a standalone peripheral (no receiver - a
+    // Bluetooth/USB-wired device like a headset) or a receiver itself
+    // is a bare, unindented name line at column 0 (e.g. "PRO X TKL",
+    // "Lightspeed Receiver"). A receiver's own block never contains a
+    // "Battery:" line (only "Has N paired device(s)..."), so treating
+    // its name the same as a real device's is harmless - it just gets
+    // silently overwritten by the next real header before any battery
+    // match ever fires for it, without needing to special-case
+    // receivers vs. devices at all.
+    //
+    // Deeper "N: ..." lines also exist further down in a real device's
+    // own block (HID++ feature listings, per-effect tables) - those are
+    // indented well past 2 spaces, so anchoring the receiver-paired
+    // pattern to *exactly* 2 leading spaces is what keeps this from
+    // misreading one of those as a new device header mid-block.
+    //
+    // Some HID++ features (e.g. ADC MEASUREMENT) also print their own
+    // nested "Battery: ..." reading before the block's real summary
+    // line at the end - pendingName is cleared the moment a match is
+    // found so a second one for the same device doesn't push a
+    // duplicate entry. Confirmed live against a real `solaar show` dump
+    // that BatteryStatus is exactly one of FULL/DISCHARGING/RECHARGING
+    // (never a bare "CHARGING") - RECHARGING is the only one that means
+    // actually charging right now.
+    //
+    // If solaar isn't installed, this command fails and solaarDevices
+    // simply stays empty, which already hides the section entirely
+    // (there's no separate header to hide alongside it). Flag if a
+    // solaar version ever changes this format.
+    Process {
+        id: solaarProcess
+        command: ["solaar", "show"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const devices = []
+                let pendingName = null
+                for (const rawLine of text.split("\n")) {
+                    const pairedMatch = rawLine.match(/^ {2}(\d+):\s+(.+?)\s*$/)
+                    if (pairedMatch) {
+                        pendingName = pairedMatch[2]
+                        continue
+                    }
+
+                    if (/^\S/.test(rawLine) && !/^(solaar version|solaar show|rules cannot access)/i.test(rawLine)) {
+                        pendingName = rawLine.trim()
+                        continue
+                    }
+
+                    if (!pendingName) continue
+
+                    const battMatch = rawLine.match(/Battery:\s*(\d+)%(?:.*?BatteryStatus\.(\w+))?/)
+                    if (battMatch) {
+                        devices.push({
+                            name: pendingName,
+                            percentage: parseInt(battMatch[1], 10) / 100,
+                            charging: battMatch[2] === "RECHARGING"
+                        })
+                        pendingName = null
+                    }
+                }
+                root.solaarDevices = devices
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: solaar show error(s):\n" + text)
+                }
+            }
+        }
+    }
+
+    // Polled continuously from startup, not just while a Battery
+    // Settings panel is open - solaar has no live change notification
+    // this shell can subscribe to, only a point-in-time CLI dump.
+    Timer {
+        id: solaarRefreshTimer
+        interval: 270000
+        repeat: true
+        running: Config.solaarEnabled
+        onTriggered: root.refreshSolaar()
+    }
+
     function close() {
         open = false
         screen = null
@@ -396,8 +506,12 @@ Scope {
     // Probes ddcutil/brightnessctl once, eagerly, rather than waiting
     // for a Screen Settings panel to open - Bar.qml's BrightnessControl
     // widget needs a live brightness reading from the moment the bar
-    // itself appears.
-    Component.onCompleted: root.detectBrightnessControllers()
+    // itself appears. Same reasoning for the first solaar show - a
+    // no-op if Config.solaarEnabled is false (see refreshSolaar()).
+    Component.onCompleted: {
+        root.detectBrightnessControllers()
+        root.refreshSolaar()
+    }
 
     IpcHandler {
         target: "dashboard"
@@ -1037,6 +1151,7 @@ Scope {
                 uiScale: dashWindow.uiScale
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "battery"
+                dashboardRoot: root
                 onPanelClosed: dashWindow.onSettingsPanelClosed()
             }
 
