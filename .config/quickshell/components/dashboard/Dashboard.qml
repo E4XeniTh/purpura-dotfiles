@@ -497,7 +497,19 @@ Scope {
                         pendingName = null
                     }
                 }
-                root.solaarDevices = devices
+                // Only replace the cached list when this poll actually
+                // found something - a receiver/multi-device setup going
+                // from N devices to zero all at once in a single poll is
+                // almost always a transient CLI hiccup (a race with
+                // solaar's own GUI instance also querying the receiver,
+                // a brief HID++ timeout, etc.), not every peripheral
+                // really vanishing at the same instant. Keeping the last
+                // known-good list instead of blanking it avoids the
+                // whole Battery Settings Solaar section flickering empty
+                // once a refresh cycle. A genuinely unplugged receiver
+                // just means this list goes stale until it's reconnected
+                // and a poll actually sees it again.
+                if (devices.length > 0) root.solaarDevices = devices
             }
         }
 
@@ -515,7 +527,7 @@ Scope {
     // this shell can subscribe to, only a point-in-time CLI dump.
     Timer {
         id: solaarRefreshTimer
-        interval: 270000
+        interval: 60000
         repeat: true
         running: Config.solaarEnabled
         onTriggered: root.refreshSolaar()
