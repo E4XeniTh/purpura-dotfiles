@@ -200,6 +200,17 @@ Scope {
         id: ddcDetectProcess
         command: ["ddcutil", "detect"]
 
+        // Not set from the stdout/stderr collectors below - if ddcutil
+        // isn't installed at all, the process fails to even start and
+        // Quickshell never touches either stdio parser at all (confirmed
+        // in Quickshell's own Process::onErrorOccurred, which only emits
+        // runningChanged() for QProcess::FailedToStart), which left this
+        // permanently stuck undetected the first time this shipped.
+        // running transitions back to false on every path - normal exit,
+        // manual stop, or failed-to-start - so this is the one signal
+        // that's actually guaranteed to fire.
+        onRunningChanged: if (!running) root.ddcDetectDone = true
+
         stdout: StdioCollector {
             onStreamFinished: {
                 // Each block (one per detected display) contains both an
@@ -238,7 +249,6 @@ Scope {
                     }
                 }
                 root.ddcBusNumbers = map
-                root.ddcDetectDone = true
                 root.queueBrightnessQueries()
             }
         }
@@ -248,10 +258,6 @@ Scope {
                 if (text.length > 0) {
                     console.warn("Dashboard: ddcutil detect error(s) (brightness sliders may not work):\n" + text)
                 }
-                // Also marked done here, not just in stdout above - if
-                // ddcutil isn't installed at all, this is the only
-                // collector that ever fires (no stdout is produced).
-                root.ddcDetectDone = true
             }
         }
     }
@@ -312,10 +318,14 @@ Scope {
         id: brightnessctlDetectProcess
         command: ["brightnessctl", "-m"]
 
+        // See ddcDetectProcess's identical onRunningChanged above - the
+        // only signal actually guaranteed to fire if brightnessctl isn't
+        // installed at all.
+        onRunningChanged: if (!running) root.brightnessctlDetectDone = true
+
         stdout: StdioCollector {
             onStreamFinished: {
                 root.hasBrightnessctlDevice = /^[^,]+,backlight,/m.test(text)
-                root.brightnessctlDetectDone = true
                 root.queueBrightnessQueries()
             }
         }
@@ -325,10 +335,6 @@ Scope {
                 if (text.length > 0) {
                     console.warn("Dashboard: brightnessctl detect error(s) (laptop panel brightness may not work):\n" + text)
                 }
-                // Also marked done here, not just in stdout above - if
-                // brightnessctl isn't installed at all, this is the
-                // only collector that ever fires (no stdout is produced).
-                root.brightnessctlDetectDone = true
             }
         }
     }

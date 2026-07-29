@@ -132,11 +132,17 @@ Rectangle {
             }
         }
 
+        // Same width as the real bar (bar.implicitWidth, even while
+        // hidden) and centered within it, so this doesn't shift the
+        // percentage slot over versus the normal state.
         Text {
             visible: root.detecting
             anchors.verticalCenter: parent.verticalCenter
-            text: "detecting..."
-            color: Config.fgcolordark
+            width: bar.implicitWidth
+            horizontalAlignment: Text.AlignHCenter
+            text: "detecting"
+            font.italic: true
+            color: Config.fgcolordarklight
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(13, root.uiScale)
         }

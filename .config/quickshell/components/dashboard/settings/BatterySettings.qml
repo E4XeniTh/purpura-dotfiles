@@ -36,16 +36,35 @@ SettingsPanel {
 
     // ---------------- Solaar (Logitech Unifying/Bolt peripherals) ----------------
     // Best-effort text parsing of `solaar show`'s default (human-
-    // readable, no stable JSON output as of writing) dump - each
-    // peripheral is a "N: Name" header line, followed eventually by a
-    // "Battery: NN%, discharging/charging/..." line. A receiver's own
-    // header line never matches "N: Name" (no leading number), so it's
-    // excluded without needing to special-case it - only real
-    // peripherals ever produce an entry here. If solaar isn't installed
-    // or isn't running, this command fails and solaarDevices simply
-    // stays empty, which already hides the section entirely (there's no
-    // separate header to hide alongside it). Flag if a solaar version
-    // ever changes this format.
+    // readable, no stable JSON output as of writing) dump. Two header
+    // shapes exist and both need handling: a receiver-paired peripheral
+    // is indented exactly 2 spaces as "N: Name" (e.g. "  1: G703
+    // LIGHTSPEED..."), while a standalone peripheral (no receiver - a
+    // Bluetooth/USB-wired device like a headset) or a receiver itself
+    // is a bare, unindented name line at column 0 (e.g. "PRO X TKL",
+    // "Lightspeed Receiver"). A receiver's own block never contains a
+    // "Battery:" line (only "Has N paired device(s)..."), so treating
+    // its name the same as a real device's is harmless - it just gets
+    // silently overwritten by the next real header before any battery
+    // match ever fires for it, without needing to special-case
+    // receivers vs. devices at all.
+    //
+    // Deeper "N: ..." lines also exist further down in a real device's
+    // own block (HID++ feature listings, per-effect tables) - those are
+    // indented well past 2 spaces, so anchoring the receiver-paired
+    // pattern to *exactly* 2 leading spaces is what keeps this from
+    // misreading one of those as a new device header mid-block.
+    //
+    // Some HID++ features (e.g. ADC MEASUREMENT) also print their own
+    // nested "Battery: ..." reading before the block's real summary
+    // line at the end - pendingName is cleared the moment a match is
+    // found so a second one for the same device doesn't push a
+    // duplicate entry.
+    //
+    // If solaar isn't installed or isn't running, this command fails
+    // and solaarDevices simply stays empty, which already hides the
+    // section entirely (there's no separate header to hide alongside
+    // it). Flag if a solaar version ever changes this format.
     property var solaarDevices: []
 
     function refreshSolaar() {
@@ -60,25 +79,33 @@ SettingsPanel {
         stdout: StdioCollector {
             onStreamFinished: {
                 const devices = []
-                let current = null
+                let pendingName = null
                 for (const rawLine of text.split("\n")) {
-                    const nameMatch = rawLine.match(/^\s*\d+:\s+(.+?)\s*$/)
-                    if (nameMatch) {
-                        current = nameMatch[1]
+                    const pairedMatch = rawLine.match(/^ {2}(\d+):\s+(.+?)\s*$/)
+                    if (pairedMatch) {
+                        pendingName = pairedMatch[2]
                         continue
                     }
-                    if (!current) continue
 
-                    const battMatch = rawLine.match(/Battery:\s*(\d+)%,\s*(\w+)/)
+                    if (/^\S/.test(rawLine) && !/^(solaar version|solaar show|rules cannot access)/i.test(rawLine)) {
+                        pendingName = rawLine.trim()
+                        continue
+                    }
+
+                    if (!pendingName) continue
+
+                    // BatteryStatus suffix (DISCHARGING/FULL/RECHARGING/...)
+                    // is optional here in case a future solaar version
+                    // drops it - percentage alone is still useful.
+                    const battMatch = rawLine.match(/Battery:\s*(\d+)%(?:.*?BatteryStatus\.(\w+))?/)
                     if (battMatch) {
+                        const status = battMatch[2] ?? ""
                         devices.push({
-                            name: current,
+                            name: pendingName,
                             percentage: parseInt(battMatch[1], 10) / 100,
-                            // Exact match, not includes() - "discharging"
-                            // itself contains "charging" as a substring.
-                            charging: battMatch[2].toLowerCase() === "charging"
+                            charging: /RECHARG/.test(status) || status === "ALMOST_FULL"
                         })
-                        current = null
+                        pendingName = null
                     }
                 }
                 root.solaarDevices = devices
@@ -86,13 +113,15 @@ SettingsPanel {
         }
     }
 
-    // Polled while this panel is open (same interval class as Network
-    // Settings' own ZeroTier refresh) - solaar has no live change
-    // notification this shell can subscribe to, only a point-in-time
-    // CLI dump.
+    // Polled while this panel is open - solaar has no live change
+    // notification this shell can subscribe to, only a point-in-time CLI
+    // dump. A full `solaar show` walks every HID++ feature on every
+    // paired peripheral (seconds, not milliseconds), so this is
+    // deliberately slow (4.5 minutes) rather than the few-seconds
+    // interval other panels poll at.
     Timer {
         id: solaarRefreshTimer
-        interval: 15000
+        interval: 270000
         repeat: true
         onTriggered: root.refreshSolaar()
     }
@@ -138,9 +167,9 @@ SettingsPanel {
 
     // batteryEntries always has at least the two separators, even with
     // nothing to actually show either side of them - this is what the
-    // "No batteries detected" message/list visibility below actually
-    // check instead, so a completely empty machine doesn't render two
-    // lone dividers with nothing between them.
+    // empty-state message/list visibility below actually check instead,
+    // so a completely empty machine doesn't render two lone dividers
+    // with nothing between them.
     readonly property bool hasAnyBattery: root.hasSystemBattery || root.solaarDevices.length > 0 || root.bluetoothBatteryDevices.length > 0
 
     Column {
@@ -162,6 +191,7 @@ SettingsPanel {
         readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
 
         Text {
+            visible: root.hasAnyBattery
             text: "Battery"
             color: Config.fgcolor
             font.family: Config.fontfamily
@@ -169,14 +199,23 @@ SettingsPanel {
             font.bold: true
         }
 
-        Text {
+        // Same fixed-height empty-state swap BluetoothSettings.qml uses
+        // for "No Bluetooth receiver detected." - a plain centered
+        // message in a reserved-height box instead of the title +
+        // (now-empty) list.
+        Item {
             visible: !root.hasAnyBattery
             width: batteryContent.contentWidth
-            horizontalAlignment: Text.AlignHCenter
-            text: "No batteries detected"
-            color: Config.fgcolordark
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(13, root.uiScale)
+            height: Config.scaled(200, root.uiScale)
+
+            Text {
+                anchors.centerIn: parent
+                text: "No Internal/External battery detected."
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(16, root.uiScale)
+                font.bold: true
+            }
         }
 
         ListView {
