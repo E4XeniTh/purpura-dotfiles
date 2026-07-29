@@ -481,6 +481,15 @@ SettingsPanel {
         || (root.dashboardRoot ? Object.keys(root.dashboardRoot.pendingBrightness).length > 0 : false)
         || Object.keys(root.pendingWorkspaces).length > 0
         || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
+        // Checked directly (not just via selectedDirty) for the same
+        // reason edited/pendingWorkspaces are above - these persist
+        // across selectMonitor() now, so relying solely on selectedDirty
+        // (which selectMonitor() does reset) would make the Apply
+        // button stop glowing after switching monitors despite a
+        // checkbox change still being staged.
+        || root.pendingStrictWorkspaceWidget !== undefined
+        || root.pendingShowEmptyWidget !== undefined
+        || root.pendingShowEmptyOsd !== undefined
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -518,9 +527,13 @@ SettingsPanel {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        root.pendingStrictWorkspaceWidget = undefined
-        root.pendingShowEmptyWidget = undefined
-        root.pendingShowEmptyOsd = undefined
+        // Deliberately NOT resetting pendingStrictWorkspaceWidget/
+        // pendingShowEmptyWidget/pendingShowEmptyOsd here - they're
+        // global (not per-monitor) settings, so a checkbox toggle
+        // should survive switching to a different monitor's view the
+        // same way edited/pendingWorkspaces already do, rather than
+        // being silently discarded. Still reset on an actual panel
+        // close/reopen (see onActiveChanged below), same as those.
         root.refreshMonitors()
     }
 
@@ -622,7 +635,14 @@ SettingsPanel {
         return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${state.scale}" })`
     }
 
-    function applyChanges() {
+    // writeToDisk (default true - the Set Init button always passes true
+    // explicitly, Apply always passes false) controls whether this Apply
+    // gets written to monitors.json at all, i.e. whether it's part of
+    // what scripts/apply-monitors.sh replays at the next login. Nothing
+    // else about this function changes either way - both buttons run
+    // the exact same live hyprctl eval calls/fail-safes below.
+    function applyChanges(writeToDisk) {
+        if (writeToDisk === undefined) writeToDisk = true
         if (!root.dirty) return
 
         // Commit any staged checkbox changes (see effectiveStrict.../
@@ -818,8 +838,14 @@ SettingsPanel {
             }
         }
 
+        // Kept in memory either way, so this session's own UI (a
+        // reselected/disabled monitor's remembered geometry, etc.)
+        // reflects whichever button was actually used - only the disk
+        // write itself is conditional.
         root.screensStore = storeSnapshot
-        monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        if (writeToDisk) {
+            monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        }
 
         // Rescuing needs a fresh window list first - deferred through
         // clientsQueryProcess/runApplyScript() rather than sent
@@ -852,6 +878,15 @@ SettingsPanel {
         root.positionOverrides = ({})
         root.edited = ({})
         root.selectedDirty = false
+        // Reset back to undefined now that they've been committed into
+        // the real properties above - otherwise dirty (which checks
+        // these directly, not just selectedDirty, so a checkbox change
+        // survives switching monitors) would keep reporting true and
+        // the Apply button would never stop glowing after actually
+        // applying.
+        root.pendingStrictWorkspaceWidget = undefined
+        root.pendingShowEmptyWidget = undefined
+        root.pendingShowEmptyOsd = undefined
         // preferredMode intentionally left as-is - Apply shouldn't flip
         // the toggle back to "Manual" for the monitor you just applied.
     }
@@ -1732,7 +1767,53 @@ SettingsPanel {
 
                     Item { Layout.fillWidth: true }
 
-                    // ---------------- bottom right: apply ----------------
+                    // ---------------- bottom right: set init + apply ----------------
+                    // Set Init is what "Apply" used to be, unconditionally
+                    // - it writes the whole layout to monitors.json (what
+                    // scripts/apply-monitors.sh replays at login) as well
+                    // as sending it live. Apply, to its right, sends the
+                    // exact same live hyprctl eval calls but never touches
+                    // monitors.json at all - for a change you only want
+                    // for the rest of this session (e.g. temporarily
+                    // swapping to a single TV output for the night)
+                    // without it becoming what boots next time.
+                    DashCard {
+                        id: setInitButton
+
+                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                        uiScale: root.uiScale
+
+                        property color blinkColor: Config.fgcolor
+                        border.color: root.dirty ? setInitButton.blinkColor : Config.fgcolordark
+
+                        SequentialAnimation {
+                            running: root.dirty
+                            loops: Animation.Infinite
+                            ColorAnimation { target: setInitButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
+                            ColorAnimation { target: setInitButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Set Init"
+                            color: root.dirty ? Config.fgcolor : Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: root.dirty
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.applyChanges(true)
+                            }
+                        }
+                    }
+
+                    Item { Layout.preferredWidth: Config.scaled(8, root.uiScale) }
+
                     DashCard {
                         id: applyButton
 
@@ -1763,7 +1844,7 @@ SettingsPanel {
                             enabled: root.dirty
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
-                                root.applyChanges()
+                                root.applyChanges(false)
                             }
                         }
                     }

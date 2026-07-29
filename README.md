@@ -143,6 +143,11 @@ Beyond a base Arch install:
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
 - Monitor layout (resolution, position, scale, on/off) is set from the
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
-  that file only defines the primary display. Changes are saved to
-  `~/.config/quickshell/monitors.json` (gitignored - machine-specific)
-  and replayed by `scripts/apply-monitors.sh` on every login.
+  that file only defines the primary display. Two buttons commit a
+  change: **Set Init** saves it to `~/.config/quickshell/monitors.json`
+  (gitignored - machine-specific) as well as sending it live - this is
+  what `scripts/apply-monitors.sh` replays on every login. **Apply**
+  sends the exact same change live but never touches `monitors.json` -
+  for something you only want for the rest of this session (e.g.
+  temporarily switching to a single TV output for the night) without it
+  becoming what boots next time.
