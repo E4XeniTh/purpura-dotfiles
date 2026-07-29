@@ -428,7 +428,16 @@ Scope {
 
     function refreshSolaar() {
         if (!Config.solaarEnabled) return
-        solaarProcess.running = false
+        // Skip instead of killing-and-restarting if a poll is already
+        // in flight - `solaar show` genuinely takes real seconds (it
+        // reads every HID++ feature table live off each device), and
+        // this is called both from the 1-minute timer AND every time
+        // Battery Settings is opened. Restarting unconditionally meant
+        // reopening the panel a couple of times in a row could kill the
+        // in-progress poll before it ever finished and produced a
+        // result, over and over - which looked like Solaar devices
+        // "never" showing up rather than just being slow.
+        if (solaarProcess.running) return
         solaarProcess.running = true
     }
 
