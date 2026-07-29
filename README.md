@@ -136,6 +136,10 @@ Beyond a base Arch install:
   entirely - `solaar show` is never invoked at all while it's `false`,
   not just run and ignored. Set it to `false` if solaar isn't installed
   or you just don't want it polled.
+- `Config.hiddenTrayApps` (default `[]`) hides matching tray icons, e.g.
+  `["solaar", "firefox"]` - matched case-insensitively as a substring
+  against each item's own id/title, since apps aren't consistent about
+  which of the two they actually set.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
 - Monitor layout (resolution, position, scale, on/off) is set from the
   dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -

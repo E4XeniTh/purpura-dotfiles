@@ -33,6 +33,14 @@ var notificationtimeout = 5000
 // same as any other value in this file.
 var solaarEnabled = true
 
+// Tray icons to hide, matched case-insensitively as a substring against
+// each item's own StatusNotifierItem id/title (whichever the app set -
+// naming isn't consistent across apps, e.g. solaar's tray icon sets id
+// "solaar", but plenty of others only ever set a title). Empty by
+// default - add whatever you don't want cluttering the bar, e.g.:
+//   var hiddenTrayApps = ["solaar", "firefox"]
+var hiddenTrayApps = []
+
 // Bar.qml's own base height, before Config.scaled()'s per-screen
 // uiScale is applied to it.
 var barheight = 48

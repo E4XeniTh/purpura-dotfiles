@@ -35,6 +35,19 @@ Rectangle {
         menuScreen = null
     }
 
+    // Case-insensitive substring match against whichever of id/title the
+    // app actually set (see Config.hiddenTrayApps) - naming isn't
+    // consistent enough across tray apps to require an exact match on
+    // just one field.
+    function isHiddenTrayItem(item) {
+        const idLower = (item.id ?? "").toLowerCase()
+        const titleLower = (item.title ?? "").toLowerCase()
+        return Config.hiddenTrayApps.some(name => {
+            const needle = name.toLowerCase()
+            return idLower.includes(needle) || titleLower.includes(needle)
+        })
+    }
+
     color: "transparent"
 
     property alias trayWidth: trayRow.width
@@ -70,7 +83,12 @@ Rectangle {
         spacing: 8
 
         Repeater {
-            model: SystemTray.items
+            // Filtering the model itself (not hiding delegates after
+            // the fact) so trayRow's own width - and implicitWidth
+            // above, which Bar.qml reads to decide how much space to
+            // reserve - shrinks to match, same as any other filtered
+            // list in this shell.
+            model: SystemTray.items.values.filter(item => !root.isHiddenTrayItem(item))
 
             delegate: Item {
                 id: trayItem
