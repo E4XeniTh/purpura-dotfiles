@@ -645,6 +645,16 @@ SettingsPanel {
         if (writeToDisk === undefined) writeToDisk = true
         if (!root.dirty) return
 
+        // Wrapped in try/finally - an uncaught exception partway through
+        // used to skip the pending* resets at the bottom entirely,
+        // leaving Apply/Set Init glowing (root.dirty stuck true) with no
+        // way to tell anything had gone wrong short of checking
+        // quickshell's own log. finally guarantees the staged edits
+        // always get cleared and the button always stops glowing, and
+        // the catch below logs whatever actually broke instead of
+        // failing silently.
+        try {
+
         // Commit any staged checkbox changes (see effectiveStrict.../
         // effectiveShowEmpty* above) into the real properties first -
         // everything below (and storeSnapshot's __-prefixed keys) reads
@@ -875,7 +885,7 @@ SettingsPanel {
         // batch, exactly as before) when nothing's newly enabled, so the
         // common geometry/workspace-pin-only Apply doesn't gain a
         // pointless delay.
-        const newlyEnabledMonitors = [...touched].filter(name => {
+        const newlyEnabledMonitors = Array.from(touched).filter(name => {
             const base = root.baseFor(name)
             const wasDisabled = !base || base.disabled
             return wasDisabled && root.enabledFor(name)
@@ -885,6 +895,8 @@ SettingsPanel {
             root.runApplyScript(monitorLines)
             root.pendingRestLines = restLines
             root.pendingRescues = rescues
+            root.pendingSettleMonitors = newlyEnabledMonitors
+            root.monitorSettleAttempts = 0
             monitorSettleTimer.restart()
         } else {
             const sendLines = monitorLines.concat(restLines)
@@ -915,22 +927,27 @@ SettingsPanel {
             root.dashboardRoot.detectBrightnessControllers()
         }
 
-        root.pendingEnabled = ({})
-        root.pendingWorkspaces = ({})
-        root.positionOverrides = ({})
-        root.edited = ({})
-        root.selectedDirty = false
-        // Reset back to undefined now that they've been committed into
-        // the real properties above - otherwise dirty (which checks
-        // these directly, not just selectedDirty, so a checkbox change
-        // survives switching monitors) would keep reporting true and
-        // the Apply button would never stop glowing after actually
-        // applying.
-        root.pendingStrictWorkspaceWidget = undefined
-        root.pendingShowEmptyWidget = undefined
-        root.pendingShowEmptyOsd = undefined
-        // preferredMode intentionally left as-is - Apply shouldn't flip
-        // the toggle back to "Manual" for the monitor you just applied.
+        } catch (e) {
+            console.warn("ScreenSettings: applyChanges() threw: " + e + (e && e.stack ? ("\n" + e.stack) : ""))
+        } finally {
+            root.pendingEnabled = ({})
+            root.pendingWorkspaces = ({})
+            root.positionOverrides = ({})
+            root.edited = ({})
+            root.selectedDirty = false
+            // Reset back to undefined now that they've been committed
+            // into the real properties above - otherwise dirty (which
+            // checks these directly, not just selectedDirty, so a
+            // checkbox change survives switching monitors) would keep
+            // reporting true and the Apply button would never stop
+            // glowing after actually applying.
+            root.pendingStrictWorkspaceWidget = undefined
+            root.pendingShowEmptyWidget = undefined
+            root.pendingShowEmptyOsd = undefined
+            // preferredMode intentionally left as-is - Apply shouldn't
+            // flip the toggle back to "Manual" for the monitor you just
+            // applied.
+        }
     }
 
     // ddcutil/brightnessctl detection deliberately does NOT run here
@@ -1029,25 +1046,75 @@ SettingsPanel {
     // when at least one touched monitor is transitioning from disabled
     // to enabled this Apply.
     property var pendingRestLines: []
+    // Names newlyEnabledMonitors flagged this Apply - polled below via
+    // monitorSettleQueryProcess until every one of them reports
+    // disabled: false, rather than trusting a single fixed delay. A
+    // blind timer either wastes time on a monitor that came up fast or
+    // (worse, and what actually reproduced live: enabling HDMI-A-1,
+    // making it primary and disabling DP-1 in one Apply, needing a
+    // second identical Apply before workspaces 1-5 actually landed on
+    // HDMI-A-1) isn't long enough for one that's genuinely slow to
+    // negotiate a mode - a fixed 400ms wasn't enough live.
+    property var pendingSettleMonitors: []
+    property int monitorSettleAttempts: 0
+
+    function checkMonitorsSettled() {
+        monitorSettleQueryProcess.running = false
+        monitorSettleQueryProcess.running = true
+    }
+
+    function dispatchPendingRestLines() {
+        const sendLines = root.pendingRestLines
+        root.pendingRestLines = []
+        root.pendingSettleMonitors = []
+        if (root.pendingRescues.length > 0) {
+            root.pendingSendLines = sendLines
+            clientsQueryProcess.running = false
+            clientsQueryProcess.running = true
+        } else {
+            root.runApplyScript(sendLines)
+        }
+    }
 
     Timer {
         id: monitorSettleTimer
         // Same category of DRM/Wayland-commit lag applySettleTimer
-        // already waits out after every Apply, just before the
-        // workspace_rule/move dispatches instead of after them - long
-        // enough for a just-enabled output to actually be live, short
-        // enough nobody notices the gap.
-        interval: 400
+        // already waits out after every Apply, just used as the poll
+        // cadence here (checkMonitorsSettled) instead of a one-shot
+        // delay before the workspace_rule/move dispatches.
+        interval: 250
         repeat: false
-        onTriggered: {
-            const sendLines = root.pendingRestLines
-            root.pendingRestLines = []
-            if (root.pendingRescues.length > 0) {
-                root.pendingSendLines = sendLines
-                clientsQueryProcess.running = false
-                clientsQueryProcess.running = true
-            } else {
-                root.runApplyScript(sendLines)
+        onTriggered: root.checkMonitorsSettled()
+    }
+
+    Process {
+        id: monitorSettleQueryProcess
+        command: ["hyprctl", "-j", "monitors", "all"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let ready = false
+                try {
+                    const parsed = JSON.parse(text)
+                    ready = root.pendingSettleMonitors.every(name => {
+                        const m = parsed.find(mm => mm.name === name)
+                        return !!m && !m.disabled
+                    })
+                } catch (e) {
+                    ready = false
+                }
+
+                root.monitorSettleAttempts++
+                // Cap at 8 tries (~2s including the poll interval below)
+                // rather than polling forever if a monitor never reports
+                // ready - dispatches anyway past that point as a best
+                // effort, matching the old behavior's worst case rather
+                // than hanging silently.
+                if (ready || root.monitorSettleAttempts >= 8) {
+                    root.dispatchPendingRestLines()
+                } else {
+                    monitorSettleTimer.restart()
+                }
             }
         }
     }
