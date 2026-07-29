@@ -36,6 +36,7 @@ hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
 hl.exec_cmd("solaar --window hide")
 hl.exec_cmd("hyprpaper")
 hl.exec_cmd("xembedsniproxy")
+hl.exec_cmd("hypridle")
 -- HYPRLAND_INSTANCE_SIGNATURE is what xdg-desktop-portal-hyprland needs
 -- to find this specific Hyprland instance's IPC socket - without it in
 -- the activation environment, screen sharing/picker (Discord, OBS, etc.)
