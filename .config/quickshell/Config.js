@@ -36,3 +36,18 @@ var barheight = 48
 function scaled(px, uiScale) {
     return Math.max(1, Math.round(px * uiScale))
 }
+
+// Icon-theme battery name for a given percentage/charging state, e.g.
+// "battery-040-charging" at 43% while charging - the icon theme buckets
+// in increments of 10 (battery-000 .. battery-100), not a per-percent
+// name, and appends "-charging" rather than having wholly separate
+// charging icon names. Used by BatteryControl.qml (bar widget) and
+// BatterySettings.qml instead of trusting UPower's own iconName, since
+// that's also the only source of an icon for Solaar/Bluetooth devices
+// (which UPower knows nothing about) - one shared scheme for all three.
+function batteryIconName(percentage, charging) {
+    const clamped = Math.max(0, Math.min(100, Math.round(percentage)))
+    const bucket = Math.floor(clamped / 10) * 10
+    const base = "battery-" + String(bucket).padStart(3, "0")
+    return charging ? base + "-charging" : base
+}

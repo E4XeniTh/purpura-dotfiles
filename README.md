@@ -12,8 +12,8 @@ out to be copied straight into place.
 
 | Component | What it does |
 |---|---|
-| **Bar** | Top bar: tray, clock (opens the dashboard), notification icon (opens the notification center) |
-| **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen), power/lock |
+| **Bar** | Top bar: tray, clock (opens the dashboard), volume/brightness/battery widgets, notification icon (opens the notification center) |
+| **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen/battery), power/lock |
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Lock screen** | Full-screen lock, authenticates via PAM |
 | **Power menu** | Shutdown / reboot / suspend / logout |
@@ -100,8 +100,8 @@ Beyond a base Arch install:
 - `xdg-desktop-portal-hyprland`
 - `pipewire`
 - `wireplumber`
-- `ddcutil`
-- `brightnessctl`
+- `ddcutil` - Screen Settings' brightness sliders and Bar.qml's brightness widget use this for external DDC/CI monitors
+- `brightnessctl` (optional) - used instead of `ddcutil` for a laptop's own built-in panel (`eDP-*`), which ddcutil can't reach at all; only needed if you actually have one
 - `playerctl`
 - `jq`
 - `curl`
@@ -109,8 +109,10 @@ Beyond a base Arch install:
 - `xembedsniproxy` - (useful if you emulate windows applications through Wayland)
 - `networkmanager` - provides `nmcli`, which Network Settings' Connections tab also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
+- `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
+- `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
-- A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*` (e.g. Papirus)
+- A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)
 
 **Keybind-launched apps** (swap freely — `local` vars at the top of `hyprland.lua`):
 

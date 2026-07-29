@@ -173,6 +173,32 @@ Scope {
                     anchors.leftMargin: Config.scaled(10 + 32, bar.uiScale)
                 }
 
+                // Hides itself entirely (BrightnessControl.qml's own
+                // visible/width/height) when the currently-targeted
+                // monitor has no brightness control at all - nothing
+                // here needs to react to that, the gap after
+                // volumeControl just doesn't open up.
+                BrightnessControl {
+                    id: brightnessControl
+                    uiScale: bar.uiScale
+                    dashboard: root.dashboard
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: volumeControl.right
+                    anchors.leftMargin: Config.scaled(10, bar.uiScale)
+                }
+
+                // Hides itself entirely (BatteryControl.qml's own
+                // visible/width/height) on a desktop with no real
+                // system battery - nothing here needs to react to that,
+                // the gap after brightnessControl just doesn't open up.
+                BatteryControl {
+                    id: batteryControl
+                    uiScale: bar.uiScale
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: brightnessControl.right
+                    anchors.leftMargin: Config.scaled(10, bar.uiScale)
+                }
+
                 Rectangle {
                     id: notificationButton
 

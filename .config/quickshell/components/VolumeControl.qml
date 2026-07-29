@@ -6,14 +6,14 @@ import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
 
 // Bar widget: mute icon + a horizontal "digital"/segmented volume bar
-// (a row of lit/unlit blocks, like a level meter, instead of a
-// continuous slider track) - click or drag anywhere on the segmented
-// area to set volume directly, scroll anywhere on the widget to nudge
-// it, click the icon to toggle mute. Same sink-selection precedence
-// VolumeOsd.qml uses (Dashboard's explicitly-picked sink overrides
-// Pipewire's own defaultAudioSink, which doesn't reliably emit a
-// change once quickshell is already running) - fed in from Bar.qml the
-// same way root.dashboard already is.
+// (DigitalBar.qml - a row of lit/unlit blocks, like a level meter,
+// instead of a continuous slider track) + a percentage readout - click
+// or drag anywhere on the segmented area to set volume directly,
+// scroll anywhere on the widget to nudge it, click the icon to toggle
+// mute. Same sink-selection precedence VolumeOsd.qml uses (Dashboard's
+// explicitly-picked sink overrides Pipewire's own defaultAudioSink,
+// which doesn't reliably emit a change once quickshell is already
+// running) - fed in from Bar.qml the same way root.dashboard already is.
 Rectangle {
     id: root
 
@@ -33,24 +33,9 @@ Rectangle {
     readonly property bool muted: (root.activeSink && root.activeSink.audio) ? root.activeSink.audio.muted : false
     readonly property real volume: (root.activeSink && root.activeSink.audio) ? root.activeSink.audio.volume : 0
 
-    // Segment count/size deliberately fixed (not content-driven) so
-    // segmentsBox below can be sized directly from these instead of
-    // measuring the Row it contains - anchoring that Row to fill a box
-    // whose own size came *from* the Row would be a binding cycle.
-    readonly property int segmentCount: 18
-    readonly property real segmentWidth: Config.scaled(4, root.uiScale)
-    readonly property real segmentSpacing: Config.scaled(2, root.uiScale)
-    readonly property real segmentAreaWidth: root.segmentCount * root.segmentWidth + (root.segmentCount - 1) * root.segmentSpacing
-    readonly property real segmentAreaHeight: Config.scaled(16, root.uiScale)
-
-    // Volume always shown as-is regardless of mute - only the icon
-    // reflects muted, same as any standard volume control - so
-    // unmuting doesn't look like the level was reset to zero.
-    readonly property int litSegments: Math.round(Math.max(0, Math.min(1, root.volume)) * root.segmentCount)
-
     function setVolumeFromX(mx) {
         if (!root.activeSink || !root.activeSink.audio) return
-        root.activeSink.audio.volume = Math.max(0, Math.min(1, mx / root.segmentAreaWidth))
+        root.activeSink.audio.volume = Math.max(0, Math.min(1, mx / bar.totalWidth))
     }
 
     color: "transparent"
@@ -99,25 +84,23 @@ Rectangle {
 
         Item {
             id: segmentsBox
-            width: root.segmentAreaWidth
-            height: root.segmentAreaHeight
+            width: bar.implicitWidth
+            height: bar.implicitHeight
             anchors.verticalCenter: parent.verticalCenter
 
-            Row {
-                anchors.fill: parent
-                spacing: root.segmentSpacing
-
-                Repeater {
-                    model: root.segmentCount
-
-                    Rectangle {
-                        required property int index
-                        width: root.segmentWidth
-                        height: segmentsBox.height
-                        radius: 0
-                        color: index < root.litSegments ? dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor : Config.fgcolordark
-                    }
-                }
+            // No anchors/explicit size on bar itself - it sizes to its
+            // own implicitWidth/Height (computed from segmentCount/
+            // segmentWidth/segmentSpacing, see DigitalBar.qml), which
+            // segmentsBox above mirrors. Anchoring bar to fill
+            // segmentsBox instead would be a binding cycle, since
+            // segmentsBox's own size comes *from* bar in the first
+            // place.
+            DigitalBar {
+                id: bar
+                uiScale: root.uiScale
+                value: root.volume
+                segmentCount: 18
+                litColor: dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
             }
 
             MouseArea {
@@ -130,6 +113,15 @@ Rectangle {
                     if (pressed) root.setVolumeFromX(mouse.x)
                 }
             }
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: Math.round(root.volume * 100) + "%"
+            color: Config.fgcolor
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(13, root.uiScale)
+            font.bold: true
         }
     }
 

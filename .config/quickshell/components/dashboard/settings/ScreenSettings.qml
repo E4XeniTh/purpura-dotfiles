@@ -54,26 +54,23 @@ SettingsPanel {
     // matter what QML-level focus() they had.
     wantsKeyboardFocus: true
 
-    // ddcutil detect is only worth re-running when the set of monitors
-    // ddcutil can actually see might have changed - once here at
-    // startup (this instance is created once, eagerly, when quickshell
-    // starts - see Dashboard.qml's dashWindow Variants), and again in
-    // applyChanges() below whenever an Apply actually changes a
-    // monitor's enabled/disabled state. Not on every panel open/close
-    // and not on every Apply in general - those don't change which
-    // physical displays exist.
-    //
-    // loadScreensStore() also needs to run eagerly here, not just on
-    // panel open (see onActiveChanged below) - seedDefaultWorkspacesIfFresh()
+    // Dashboard.qml's shared root Scope - ddcutil/brightnessctl
+    // detection and every monitor's live/pending brightness now live
+    // there instead of on this instance (brightness is a property of
+    // the physical monitor, not of whichever screen's dashboard is
+    // open, and Bar.qml's BrightnessControl widget needs to reach it
+    // too). See Dashboard.qml's own brightness section for what this
+    // actually holds.
+    property var dashboardRoot: null
+
+    // loadScreensStore() needs to run eagerly here, not just on panel
+    // open (see onActiveChanged below) - seedDefaultWorkspacesIfFresh()
     // (see effectivePrimaryName/screensStoreProcess further down) has to
     // fire the moment quickshell starts on a brand new setup, so the
     // primary monitor already shows all five workspaces preselected the
     // very first time Screen Settings gets opened, rather than only
     // after it's been opened once already.
-    Component.onCompleted: {
-        root.detectDdcDisplays()
-        root.loadScreensStore()
-    }
+    Component.onCompleted: root.loadScreensStore()
 
     // Raw hyprctl monitors, refreshed on open, on selecting a monitor,
     // and after Apply.
@@ -481,7 +478,7 @@ SettingsPanel {
 
     readonly property bool dirty: root.selectedDirty
         || Object.keys(root.pendingEnabled).length > 0
-        || Object.keys(root.pendingBrightness).length > 0
+        || (root.dashboardRoot ? Object.keys(root.dashboardRoot.pendingBrightness).length > 0 : false)
         || Object.keys(root.pendingWorkspaces).length > 0
         || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
 
@@ -845,9 +842,9 @@ SettingsPanel {
         // physically powered on) monitor needs a fresh ddcBusNumbers
         // entry to be reachable at all, but nothing else applied here
         // (position/resolution/brightness) changes which displays
-        // ddcutil can see.
-        if (Object.keys(root.pendingEnabled).length > 0) {
-            root.detectDdcDisplays()
+        // ddcutil/brightnessctl can see.
+        if (Object.keys(root.pendingEnabled).length > 0 && root.dashboardRoot) {
+            root.dashboardRoot.detectBrightnessControllers()
         }
 
         root.pendingEnabled = ({})
@@ -859,9 +856,10 @@ SettingsPanel {
         // the toggle back to "Manual" for the monitor you just applied.
     }
 
-    // ddcutil detection deliberately does NOT run here (i.e. not on
-    // every panel open) - see Component.onCompleted and applyChanges()
-    // below for the only two triggers.
+    // ddcutil/brightnessctl detection deliberately does NOT run here
+    // (i.e. not on every panel open) - see Dashboard.qml's own
+    // Component.onCompleted and applyChanges() below for the only two
+    // triggers.
     onActiveChanged: {
         if (root.active) {
             root.pendingEnabled = ({})
@@ -872,7 +870,7 @@ SettingsPanel {
             root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
-            root.pendingBrightness = ({})
+            if (root.dashboardRoot) root.dashboardRoot.pendingBrightness = ({})
             root.refreshMonitors()
             root.loadScreensStore()
         } else {
@@ -1192,203 +1190,25 @@ SettingsPanel {
         preload: false
     }
 
-    // ---------------- DDC/CI brightness ----------------
-
-    // Best-effort mapping from Hyprland's monitor name (e.g. "HDMI-A-1")
-    // to the I2C bus number ddcutil should talk to it over, built from
-    // `ddcutil detect`'s "I2C bus: /dev/i2c-N" and "DRM connector:"/
-    // "DRM_connector:" lines (both present in the same per-display block
-    // - the field name's separator on the latter, space or underscore,
-    // varies by ddcutil version, confirmed live). A monitor that doesn't
-    // support DDC/CI at all (e.g. a TV) shows up as "Invalid display"
-    // instead of "Display N" and is correctly never mapped.
-    //
-    // Targeted via `--bus N` rather than `--display N` - confirmed live,
-    // `--display N` makes ddcutil re-resolve which bus that display
-    // number currently refers to on every single invocation (effectively
-    // re-detecting), while `--bus N` talks to that I2C bus directly and
-    // skips it entirely (~0.5s vs several seconds per call).
-    property var ddcBusNumbers: ({})
-
-    // 0-100, queried live per monitor once ddcBusNumbers is known.
-    // Assumes VCP feature 0x10 (brightness) is reported on a 0-100
-    // scale, which is the case for the vast majority of DDC/CI panels.
-    property var liveBrightness: ({})
-
-    // Staged like pendingEnabled above (not like `edited`) - every
-    // card's slider is visible and draggable at once, regardless of
-    // which monitor is selected, so more than one can be adjusted
-    // before a single Apply.
-    property var pendingBrightness: ({})
-
+    // ---------------- DDC/CI + brightnessctl brightness ----------------
+    // All actual state/detection/apply now lives on Dashboard.qml's
+    // shared root Scope (see dashboardRoot above) - these are thin
+    // pass-throughs so the rest of this file (and MonitorCard's
+    // bindings below) didn't need to change shape.
     function setPendingBrightness(name, value) {
-        const updated = Object.assign({}, root.pendingBrightness)
-        updated[name] = value
-        root.pendingBrightness = updated
+        if (root.dashboardRoot) root.dashboardRoot.setPendingBrightness(name, value)
     }
 
     function brightnessFor(name) {
-        if (root.pendingBrightness[name] !== undefined) return root.pendingBrightness[name]
-        if (root.liveBrightness[name] !== undefined) return root.liveBrightness[name]
-        return 50
+        return root.dashboardRoot ? root.dashboardRoot.brightnessFor(name) : 50
     }
 
-    function detectDdcDisplays() {
-        ddcDetectProcess.running = false
-        ddcDetectProcess.running = true
-    }
-
-    // Queried one at a time, not all in parallel - ddcutil talks to
-    // real I2C hardware, and overlapping queries against the same/
-    // adjacent buses are a common source of ddcutil timeouts/errors.
-    property var ddcQueryQueue: []
-
-    function queueBrightnessQueries() {
-        root.ddcQueryQueue = Object.keys(root.ddcBusNumbers)
-        root.runNextBrightnessQuery()
-    }
-
-    function runNextBrightnessQuery() {
-        if (root.ddcQueryQueue.length === 0) return
-        const name = root.ddcQueryQueue[0]
-        ddcGetProcess.currentName = name
-        ddcGetProcess.command = ["ddcutil", "--bus", String(root.ddcBusNumbers[name]), "getvcp", "10", "--brief"]
-        ddcGetProcess.running = false
-        ddcGetProcess.running = true
+    function supportsBrightness(name) {
+        return root.dashboardRoot ? root.dashboardRoot.supportsBrightness(name) : false
     }
 
     function applyBrightness() {
-        const names = Object.keys(root.pendingBrightness)
-        if (names.length === 0) return
-
-        const commands = []
-        for (const name of names) {
-            const busNum = root.ddcBusNumbers[name]
-            if (busNum === undefined) continue
-            // --noverify skips ddcutil's default post-write readback
-            // that confirms the value actually took - roughly halves
-            // the round-trip, and we don't need it since the UI already
-            // optimistically assumes success (liveBrightness is updated
-            // below regardless).
-            commands.push(`ddcutil --bus ${busNum} --noverify setvcp 10 ${root.pendingBrightness[name]}`)
-        }
-
-        if (commands.length > 0) {
-            const updated = Object.assign({}, root.liveBrightness)
-            for (const name of names) {
-                updated[name] = root.pendingBrightness[name]
-            }
-            root.liveBrightness = updated
-
-            ddcApplyProcess.command = ["sh", "-c", commands.join(" ; ")]
-            ddcApplyProcess.running = false
-            ddcApplyProcess.running = true
-        }
-
-        root.pendingBrightness = ({})
-    }
-
-    Process {
-        id: ddcDetectProcess
-        command: ["ddcutil", "detect"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                // Each block (one per detected display) contains both an
-                // "I2C bus: /dev/i2c-N" line and a "DRM connector:"/
-                // "DRM_connector:" line (separator varies by ddcutil
-                // version, confirmed live) - captures the bus number
-                // when seen, then attaches it to the connector name once
-                // that line follows. "Invalid display" blocks (a monitor
-                // that doesn't support DDC/CI at all, e.g. a TV) are
-                // skipped entirely rather than mapped, since ddcutil can
-                // never actually talk to them anyway.
-                const map = {}
-                let currentBus = null
-                let skipBlock = false
-                for (const line of text.split("\n")) {
-                    if (/^Invalid display/.test(line)) {
-                        currentBus = null
-                        skipBlock = true
-                        continue
-                    }
-                    if (/^Display \d+/.test(line)) {
-                        currentBus = null
-                        skipBlock = false
-                        continue
-                    }
-                    if (skipBlock) continue
-
-                    const busMatch = line.match(/I2C bus:\s*\/dev\/i2c-(\d+)/)
-                    if (busMatch) {
-                        currentBus = parseInt(busMatch[1], 10)
-                        continue
-                    }
-                    const connectorMatch = line.match(/DRM[ _]connector:\s*card\d+-(.+)$/)
-                    if (connectorMatch && currentBus !== null) {
-                        map[connectorMatch[1].trim()] = currentBus
-                    }
-                }
-                root.ddcBusNumbers = map
-                root.queueBrightnessQueries()
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("ScreenSettings: ddcutil detect error(s) (brightness sliders may not work):\n" + text)
-                }
-            }
-        }
-    }
-
-    Process {
-        id: ddcGetProcess
-        property string currentName: ""
-        command: ["true"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const match = text.match(/VCP\s+10\s+C\s+(\d+)/)
-                if (match) {
-                    const updated = Object.assign({}, root.liveBrightness)
-                    updated[ddcGetProcess.currentName] = Math.max(0, Math.min(100, parseInt(match[1], 10)))
-                    root.liveBrightness = updated
-                }
-                root.ddcQueryQueue = root.ddcQueryQueue.slice(1)
-                root.runNextBrightnessQuery()
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("ScreenSettings: ddcutil getvcp error for " + ddcGetProcess.currentName + ":\n" + text)
-                }
-            }
-        }
-    }
-
-    Process {
-        id: ddcApplyProcess
-        command: ["true"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.log("ScreenSettings: ddcutil setvcp reply:\n" + text)
-                }
-            }
-        }
-
-        stderr: StdioCollector {
-            onStreamFinished: {
-                if (text.length > 0) {
-                    console.warn("ScreenSettings: ddcutil setvcp error(s):\n" + text)
-                }
-            }
-        }
+        if (root.dashboardRoot) root.dashboardRoot.applyBrightness()
     }
 
     Item {
@@ -1463,7 +1283,7 @@ SettingsPanel {
                         pendingEnabled: root.enabledFor(modelData.name)
                         isPrimary: root.primaryMonitor === modelData.name
                         brightness: root.brightnessFor(modelData.name)
-                        supportsDdc: root.ddcBusNumbers[modelData.name] !== undefined
+                        supportsBrightness: root.supportsBrightness(modelData.name)
 
                         // Steals keyboard focus away from any TextInput
                         // in the right-hand form before switching, and

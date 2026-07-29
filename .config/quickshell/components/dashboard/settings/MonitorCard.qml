@@ -13,10 +13,11 @@ import "../../../Config.js" as Config
 // primary (fgcolorlight border, overriding the enabled/disabled color -
 // see ScreenSettings.qml for what "primary" actually does).
 //
-// Below the icon/label row is a thin DDC/CI brightness slider (via
-// ddcutil) - also staged, not live: dragging it only stores a pending
-// value (brightnessEdited), actually sent to the monitor on Apply, same
-// as everything else here.
+// Below the icon/label row is a thin brightness slider (ddcutil for an
+// external DDC/CI display, brightnessctl for a laptop's own internal
+// panel - see Dashboard.qml) - also staged, not live: dragging it only
+// stores a pending value (brightnessEdited), actually sent to the
+// monitor on Apply, same as everything else here.
 DashCard {
     id: root
 
@@ -25,13 +26,14 @@ DashCard {
     required property bool selected
     required property bool isPrimary
     required property real brightness // 0-100
-    // False for a monitor ddcutil never mapped to an I2C bus at all
-    // (see ScreenSettings.qml's ddcBusNumbers) - e.g. a TV/monitor with
-    // no DDC/CI support, or ddcutil simply not installed. The
-    // brightness slider (and its separator) below is meaningless for
-    // one of these - dragging it would only ever fail silently on
-    // Apply, so it's hidden entirely rather than shown broken.
-    required property bool supportsDdc
+    // False for a monitor neither ddcutil nor brightnessctl can reach
+    // at all (see Dashboard.qml's ddcBusNumbers/hasBrightnessctlDevice)
+    // - e.g. a TV/monitor with no DDC/CI support, or neither tool
+    // installed. The brightness slider (and its separator) below is
+    // meaningless for one of these - dragging it would only ever fail
+    // silently on Apply, so it's hidden entirely rather than shown
+    // broken.
+    required property bool supportsBrightness
     property real uiScale: 1.0
 
     signal clicked()
@@ -105,7 +107,7 @@ DashCard {
         }
 
         Rectangle {
-            visible: root.supportsDdc
+            visible: root.supportsBrightness
             Layout.fillWidth: true
             Layout.preferredHeight: Config.scaled(1, root.uiScale)
             color: root.border.color
@@ -113,7 +115,7 @@ DashCard {
 
 
         DeviceSlider {
-            visible: root.supportsDdc
+            visible: root.supportsBrightness
             Layout.fillWidth: true
             // Thinner/smaller than the volume OSD's own slider - this
             // is a secondary control buried in a small list card.

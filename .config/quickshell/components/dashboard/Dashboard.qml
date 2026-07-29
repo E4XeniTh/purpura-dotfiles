@@ -49,6 +49,313 @@ Scope {
     property var audioSelectedSinkId: null
     property var audioSelectedSourceId: null
 
+    // Same reasoning again, for which monitor is currently selected in
+    // Screen Settings - Bar.qml's BrightnessControl widget needs to
+    // reach whichever monitor that is (it can be any connected display,
+    // not necessarily the bar's own primary-designated screen) to know
+    // what to actually adjust.
+    property string videoSelectedMonitor: ""
+
+    // ---------------- Monitor brightness (DDC/CI + brightnessctl) ----------------
+    // Lifted up here rather than living on each screen's own
+    // ScreenSettings instance - brightness is a property of the
+    // physical monitor, not of whichever screen's dashboard happens to
+    // be open, and a single shared detection also means ddcutil/
+    // brightnessctl only ever get probed once instead of once per
+    // connected screen. ScreenSettings.qml reaches these through its own
+    // dashboardRoot property (see how it's instantiated below).
+    //
+    // name -> I2C bus number, ddcutil-controllable monitors only (see
+    // ddcDetectProcess below for how this is built).
+    property var ddcBusNumbers: ({})
+    // True if `brightnessctl -m` found a usable backlight device at all
+    // - laptops report one for their internal panel, ddcutil can't see
+    // it (no DDC/CI over eDP), desktops with no backlight device get
+    // nothing here and brightnessctl is never used.
+    property bool hasBrightnessctlDevice: false
+    // 0-100, last known value per monitor name, from whichever of the
+    // two backends actually controls it.
+    property var liveBrightness: ({})
+    // Staged edits (Screen Settings' per-card sliders stage here until
+    // Apply; Bar.qml's BrightnessControl also writes here immediately
+    // so any open Screen Settings card reflects the live drag too,
+    // before its own debounced apply fires).
+    property var pendingBrightness: ({})
+
+    // eDP is the standard Linux/Wayland output name for a laptop's own
+    // built-in panel - the one case ddcutil structurally can't reach,
+    // which is exactly the case brightnessctl exists for.
+    function controlsViaBrightnessctl(name) {
+        return root.hasBrightnessctlDevice && /^eDP/i.test(name)
+    }
+
+    function brightnessFor(name) {
+        if (root.pendingBrightness[name] !== undefined) return root.pendingBrightness[name]
+        if (root.liveBrightness[name] !== undefined) return root.liveBrightness[name]
+        return 50
+    }
+
+    function supportsBrightness(name) {
+        return root.ddcBusNumbers[name] !== undefined || root.controlsViaBrightnessctl(name)
+    }
+
+    function setPendingBrightness(name, value) {
+        const updated = Object.assign({}, root.pendingBrightness)
+        updated[name] = value
+        root.pendingBrightness = updated
+    }
+
+    function detectBrightnessControllers() {
+        ddcDetectProcess.running = false
+        ddcDetectProcess.running = true
+        brightnessctlDetectProcess.running = false
+        brightnessctlDetectProcess.running = true
+    }
+
+    // Queried one at a time, not all in parallel - ddcutil talks to real
+    // I2C hardware, and overlapping queries against the same/adjacent
+    // buses are a common source of ddcutil timeouts/errors.
+    property var brightnessQueryQueue: []
+
+    function queueBrightnessQueries() {
+        const names = new Set(Object.keys(root.ddcBusNumbers))
+        if (root.hasBrightnessctlDevice) {
+            for (const s of Quickshell.screens) {
+                if (/^eDP/i.test(s.name)) names.add(s.name)
+            }
+        }
+        root.brightnessQueryQueue = Array.from(names)
+        root.runNextBrightnessQuery()
+    }
+
+    function runNextBrightnessQuery() {
+        if (root.brightnessQueryQueue.length === 0) return
+        const name = root.brightnessQueryQueue[0]
+        if (root.controlsViaBrightnessctl(name)) {
+            brightnessctlGetProcess.currentName = name
+            brightnessctlGetProcess.running = false
+            brightnessctlGetProcess.running = true
+        } else {
+            ddcGetProcess.currentName = name
+            ddcGetProcess.command = ["ddcutil", "--bus", String(root.ddcBusNumbers[name]), "getvcp", "10", "--brief"]
+            ddcGetProcess.running = false
+            ddcGetProcess.running = true
+        }
+    }
+
+    // Flushes pendingBrightness for just the given monitor names (Bar.qml's
+    // debounced widget calls this with a single name; Screen Settings'
+    // own Apply flushes every staged monitor at once via applyBrightness()
+    // below).
+    function applyBrightnessFor(names) {
+        const ddcCommands = []
+        const updatedLive = Object.assign({}, root.liveBrightness)
+        const updatedPending = Object.assign({}, root.pendingBrightness)
+
+        for (const name of names) {
+            const value = root.pendingBrightness[name]
+            if (value === undefined) continue
+
+            if (root.controlsViaBrightnessctl(name)) {
+                brightnessctlSetProcess.command = ["brightnessctl", "set", value + "%"]
+                brightnessctlSetProcess.running = false
+                brightnessctlSetProcess.running = true
+            } else if (root.ddcBusNumbers[name] !== undefined) {
+                // --noverify skips ddcutil's default post-write readback
+                // that confirms the value actually took - roughly halves
+                // the round-trip, and we don't need it since the UI
+                // already optimistically assumes success (liveBrightness
+                // is updated below regardless).
+                ddcCommands.push(`ddcutil --bus ${root.ddcBusNumbers[name]} --noverify setvcp 10 ${value}`)
+            }
+
+            updatedLive[name] = value
+            delete updatedPending[name]
+        }
+
+        root.liveBrightness = updatedLive
+        root.pendingBrightness = updatedPending
+
+        if (ddcCommands.length > 0) {
+            ddcApplyProcess.command = ["sh", "-c", ddcCommands.join(" ; ")]
+            ddcApplyProcess.running = false
+            ddcApplyProcess.running = true
+        }
+    }
+
+    // Screen Settings' own Apply button - flushes every monitor currently
+    // staged in pendingBrightness at once.
+    function applyBrightness() {
+        root.applyBrightnessFor(Object.keys(root.pendingBrightness))
+    }
+
+    Process {
+        id: ddcDetectProcess
+        command: ["ddcutil", "detect"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                // Each block (one per detected display) contains both an
+                // "I2C bus: /dev/i2c-N" line and a "DRM connector:"/
+                // "DRM_connector:" line (separator varies by ddcutil
+                // version, confirmed live) - captures the bus number
+                // when seen, then attaches it to the connector name once
+                // that line follows. "Invalid display" blocks (a monitor
+                // that doesn't support DDC/CI at all, e.g. a TV) are
+                // skipped entirely rather than mapped, since ddcutil can
+                // never actually talk to them anyway.
+                const map = {}
+                let currentBus = null
+                let skipBlock = false
+                for (const line of text.split("\n")) {
+                    if (/^Invalid display/.test(line)) {
+                        currentBus = null
+                        skipBlock = true
+                        continue
+                    }
+                    if (/^Display \d+/.test(line)) {
+                        currentBus = null
+                        skipBlock = false
+                        continue
+                    }
+                    if (skipBlock) continue
+
+                    const busMatch = line.match(/I2C bus:\s*\/dev\/i2c-(\d+)/)
+                    if (busMatch) {
+                        currentBus = parseInt(busMatch[1], 10)
+                        continue
+                    }
+                    const connectorMatch = line.match(/DRM[ _]connector:\s*card\d+-(.+)$/)
+                    if (connectorMatch && currentBus !== null) {
+                        map[connectorMatch[1].trim()] = currentBus
+                    }
+                }
+                root.ddcBusNumbers = map
+                root.queueBrightnessQueries()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: ddcutil detect error(s) (brightness sliders may not work):\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: ddcGetProcess
+        property string currentName: ""
+        command: ["true"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const match = text.match(/VCP\s+10\s+C\s+(\d+)/)
+                if (match) {
+                    const updated = Object.assign({}, root.liveBrightness)
+                    updated[ddcGetProcess.currentName] = Math.max(0, Math.min(100, parseInt(match[1], 10)))
+                    root.liveBrightness = updated
+                }
+                root.brightnessQueryQueue = root.brightnessQueryQueue.slice(1)
+                root.runNextBrightnessQuery()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: ddcutil getvcp error for " + ddcGetProcess.currentName + ":\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: ddcApplyProcess
+        command: ["true"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.log("Dashboard: ddcutil setvcp reply:\n" + text)
+                }
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: ddcutil setvcp error(s):\n" + text)
+                }
+            }
+        }
+    }
+
+    // `brightnessctl -m` machine-readable output is
+    // "<device>,<class>,<current>,<percent>%,<max>" - the percent field
+    // is already computed for us, no raw/max division needed the way
+    // ddcutil's getvcp reply requires.
+    Process {
+        id: brightnessctlDetectProcess
+        command: ["brightnessctl", "-m"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.hasBrightnessctlDevice = /^[^,]+,backlight,/m.test(text)
+                root.queueBrightnessQueries()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: brightnessctl detect error(s) (laptop panel brightness may not work):\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: brightnessctlGetProcess
+        property string currentName: ""
+        command: ["brightnessctl", "-m"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const match = text.match(/,backlight,\d+,(\d+)%,/)
+                if (match) {
+                    const updated = Object.assign({}, root.liveBrightness)
+                    updated[brightnessctlGetProcess.currentName] = Math.max(0, Math.min(100, parseInt(match[1], 10)))
+                    root.liveBrightness = updated
+                }
+                root.brightnessQueryQueue = root.brightnessQueryQueue.slice(1)
+                root.runNextBrightnessQuery()
+            }
+        }
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: brightnessctl get error:\n" + text)
+                }
+            }
+        }
+    }
+
+    Process {
+        id: brightnessctlSetProcess
+        command: ["true"]
+
+        stderr: StdioCollector {
+            onStreamFinished: {
+                if (text.length > 0) {
+                    console.warn("Dashboard: brightnessctl set error(s):\n" + text)
+                }
+            }
+        }
+    }
+
     function close() {
         open = false
         screen = null
@@ -62,6 +369,12 @@ Scope {
             screen = screen_
         }
     }
+
+    // Probes ddcutil/brightnessctl once, eagerly, rather than waiting
+    // for a Screen Settings panel to open - Bar.qml's BrightnessControl
+    // widget needs a live brightness reading from the moment the bar
+    // itself appears.
+    Component.onCompleted: root.detectBrightnessControllers()
 
     IpcHandler {
         target: "dashboard"
@@ -494,6 +807,8 @@ Scope {
                                                         dashWindow.toggleSettingsPanel("network")
                                                     } else if (index === 2) {
                                                         dashWindow.toggleSettingsPanel("bluetooth")
+                                                    } else if (index === 3) {
+                                                        dashWindow.toggleSettingsPanel("battery")
                                                     } else if (index === 4) {
                                                         dashWindow.toggleSettingsPanel("screen")
                                                     }
@@ -681,9 +996,26 @@ Scope {
                 anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
                 active: dashWindow.activeSettingsPanel === "screen"
                 primaryMonitor: root.primaryMonitor
+                dashboardRoot: root
                 onPanelClosed: dashWindow.onSettingsPanelClosed()
                 onIdentifyingChanged: root.identifying = screenSettings.identifying
                 onPrimarySelected: (name) => root.primaryMonitor = name
+                onSelectedNameChanged: root.videoSelectedMonitor = screenSettings.selectedName
+            }
+
+            // Battery levels, opened from the battery icon above (index
+            // 3 in systemicons' Repeater below - reserved for this
+            // ever since that row was first laid out). Same width as
+            // Audio/Bluetooth/Screen.
+            BatterySettings {
+                id: batterySettings
+
+                screen: dashWindow.screen
+                panelWidth: dashWidth
+                uiScale: dashWindow.uiScale
+                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
+                active: dashWindow.activeSettingsPanel === "battery"
+                onPanelClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Invisible, full-screen click catcher that closes the
