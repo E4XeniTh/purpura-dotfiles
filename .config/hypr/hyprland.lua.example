@@ -12,6 +12,7 @@
 --## LOCALS                                                                             #
 --#######################################################################################
 
+-- ~/.config/hypr/hyprland.lua
 local terminal = "kitty"
 local filemanager = "dolphin"
 local menu = "rofi -show drun"
@@ -85,6 +86,8 @@ hl.env("XDG_MENU_PREFIX", "arch-")
 hl.monitor({
     output = "auto"
 })
+
+--
 
 --#######################################################################################
 --## PERMISSIONS                                                                        #
@@ -176,21 +179,10 @@ hl.config({
 --## https://wiki.hypr.land/Configuring/Basics/Binds/                                   #
 --#######################################################################################
 
--- Discord push-to-talk on a side mouse button. A plain (press-only)
--- bind here only ever forwards a single synthetic click to Discord -
--- press and release bundled together the instant the button goes
--- down, not a real sustained hold - which reads as PTT toggling on
--- and immediately back off. Needs a *second* bind for the release
--- half of the same button, dispatching the same pass() at the same
--- window, so Discord actually receives two separate events (a press,
--- then later a release) instead of one bundled click - `{ release =
--- true }` is the Lua-API equivalent of a plain hyprland.conf `bindr`.
-hl.bind("mouse:276", hl.dsp.pass({ window = "initialclass:^(discord)$" }))
-hl.bind("mouse:276", hl.dsp.pass({ window = "initialclass:^(discord)$" }), { release = true })
+hl.bind("mouse:276", hl.dsp.pass({window = "class:^(Discord)$"}))
 
 hl.bind(mainMod .. " + return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
-hl.bind(mainMod .. " + backspace", hl.dsp.exec_cmd("~/.config/hypr/scripts/switchmon.sh"))
 hl.bind(mainMod .. " + delete", hl.dsp.global("caelestia:session"))
 
 hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(filemanager))
@@ -237,39 +229,20 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true 
 --## https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/                         #
 --#######################################################################################
 
--- SEND DISCORD AND ZAPZAP TO WORKSPACE 2
+-- Bottles/Windows apps start in floating mode. Better compatibility with non-fullscreen apps.
+
+
+
+-- FULLSCREEN: force tearing/immediate presentation.
+
 hl.window_rule({
+    name = "Wargaming-floating",
     match = {
-        class = "^(com.rtosta.zapzap|discord)$",
+        title = "^(Wargaming.net Game Center)$",
     },
-    workspace = "2",
+    float = 1,
 })
 
--- SEND AIMP TO WORKSPACE 3
-hl.window_rule({
-    match = {
-        class = "^(Aimp)$",
-    },
-    workspace = "3",
-})
-
--- FULLSCREEN: force tearing/immediate presentation. Generalized from a
--- World-of-Tanks-only rule - any fullscreen game/app can hit the same
--- glitchy-at-speed mouse input (camera drag, in-game sliders): Wine/
--- Proton titles under XWayland typically warp the cursor and measure
--- the delta each frame instead of using Wayland's relative-pointer
--- protocol, and that warp/measure loop races against the compositor's
--- normal (non-tearing) frame pacing - worse the faster the mouse moves,
--- barely noticeable moving slowly. `immediate` forces tearing regardless
--- of whether the app itself requests Hyprland's tearing_control
--- protocol (many don't - tearingHint stays 0). Requires
--- general.allow_tearing = true above.
---
--- fullscreen_state_internal is a bitmask, not a boolean: 1 = maximized
--- (META+S), 2 = fullscreen (META+F11), 3 = both at once. This needs 2 -
--- confirmed live that the lag only reproduces under real fullscreen
--- (META+F11), not maximized (META+S), which the first value (1) never
--- actually matched.
 hl.window_rule({
     name = "fullscreen-tearing",
     match = {
@@ -441,23 +414,23 @@ hl.animation({
 hl.animation({
     leaf = "workspaces",
     enabled = true,
-    speed = 1.94,
+    speed = 2.5,
     bezier = "almostLinear",
-    style = "fade",
+    style = "slide",
 })
 hl.animation({
     leaf = "workspacesIn",
     enabled = true,
-    speed = 1.21,
+    speed = 2.5,
     bezier = "almostLinear",
-    style = "fade",
+    style = "slide",
 })
 hl.animation({
     leaf = "workspacesOut",
     enabled = true,
-    speed = 1.94,
+    speed = 2.5,
     bezier = "almostLinear",
-    style = "fade",
+    style = "slide",
 })
 hl.animation({
     leaf = "zoomFactor",
