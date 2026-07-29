@@ -6,6 +6,7 @@
 # machine-specific (output names/resolutions differ per box), same
 # reasoning the old ~/.config/hypr/screens.json was never tracked either.
 .config/quickshell/monitors.json
+.config/quickshell/monitors.baseline.json
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf
