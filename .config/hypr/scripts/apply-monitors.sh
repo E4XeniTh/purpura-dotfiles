@@ -25,24 +25,9 @@
 # built through the settings panel survives a restart - hyprland.lua
 # itself only defines the primary display now.
 CONF="$HOME/.config/quickshell/monitors.json"
+BASELINE="$HOME/.config/quickshell/monitors.baseline.json"
 
 [ -f "$CONF" ] || exit 0
-
-# "Remember on boot" checkbox in Screen Settings (__rememberOnBoot,
-# same global-flag convention as __strictWorkspaceWidget etc. below) -
-# defaults to true so a monitors.json from before this checkbox existed
-# keeps replaying exactly as it always has. Explicitly false skips this
-# script entirely, leaving hyprland.lua's own static hl.monitor({...})
-# block as the only thing that runs - monitors.json itself is untouched
-# either way, still written on every Apply.
-#
-# `// true` alone doesn't work here - confirmed live that jq's `//`
-# falls back to the right-hand side for a literal `false` too, not just
-# null/missing, which would silently ignore the checkbox entirely. Only
-# `has()` actually distinguishes "key present and false" from "key
-# absent".
-REMEMBER_ON_BOOT=$(jq -r 'if has("__rememberOnBoot") then .__rememberOnBoot else true end' "$CONF" 2>/dev/null)
-[ "$REMEMBER_ON_BOOT" = "false" ] && exit 0
 
 # "__"-prefixed keys (__strictWorkspaceWidget, __showEmptyWidget,
 # __showEmptyOsd - the global bar/OSD toggles, plain booleans not
@@ -55,12 +40,46 @@ REMEMBER_ON_BOOT=$(jq -r 'if has("__rememberOnBoot") then .__rememberOnBoot else
 # at startup at all once these keys existed, despite Apply's own
 # hyprctl eval calls working fine (that path never goes through this
 # script or jq).
-jq -r '
-    to_entries[]
-    | select(.key | startswith("__") | not)
-    | . as $e
-    | $e.value.line // empty,
-      ( $e.value.workspaces // [] | .[] | "hl.workspace_rule({ workspace = \"" + (tostring) + "\", monitor = \"" + $e.key + "\" })" )
-' "$CONF" | while IFS= read -r line; do
-    [ -n "$line" ] && hyprctl eval "$line"
-done
+replay() {
+    jq -r '
+        to_entries[]
+        | select(.key | startswith("__") | not)
+        | . as $e
+        | $e.value.line // empty,
+          ( $e.value.workspaces // [] | .[] | "hl.workspace_rule({ workspace = \"" + (tostring) + "\", monitor = \"" + $e.key + "\" })" )
+    ' "$1" | while IFS= read -r line; do
+        [ -n "$line" ] && hyprctl eval "$line"
+    done
+}
+
+# "Remember on boot" checkbox in Screen Settings (__rememberOnBoot,
+# same global-flag convention as __strictWorkspaceWidget etc. above) -
+# defaults to true so a monitors.json from before this checkbox existed
+# keeps replaying exactly as it always has.
+#
+# `// true` alone doesn't work here - confirmed live that jq's `//`
+# falls back to the right-hand side for a literal `false` too, not just
+# null/missing, which would silently ignore the checkbox entirely. Only
+# `has()` actually distinguishes "key present and false" from "key
+# absent".
+REMEMBER_ON_BOOT=$(jq -r 'if has("__rememberOnBoot") then .__rememberOnBoot else true end' "$CONF" 2>/dev/null)
+
+if [ "$REMEMBER_ON_BOOT" = "false" ]; then
+    # Replay the last "remembered" everyday layout (monitors.baseline.json
+    # - only ever updated by an Apply made while this checkbox was on,
+    # see ScreenSettings.qml) instead of $CONF itself, which still holds
+    # whatever was most recently Applied - e.g. a nightly "swap to
+    # TV-only" change made specifically while this checkbox was off,
+    # which is exactly the kind of change this is meant to NOT carry
+    # into the next boot. Skipping replay entirely instead (the previous
+    # behavior) isn't right either - that leaves every monitor to
+    # Hyprland's own auto-placement, which has no idea any monitor has
+    # an actual intended position at all (hl.monitor({output="auto"})
+    # alone just lines everything up at y=0). No baseline yet (a
+    # brand-new setup that's never Applied with this checkbox on) simply
+    # replays nothing, same as the old skip-entirely behavior.
+    [ -f "$BASELINE" ] && replay "$BASELINE"
+    exit 0
+fi
+
+replay "$CONF"

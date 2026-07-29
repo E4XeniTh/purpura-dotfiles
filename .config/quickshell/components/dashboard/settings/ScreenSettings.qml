@@ -837,6 +837,20 @@ SettingsPanel {
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
+        // Also remembered as the "baseline" - the everyday layout to
+        // fall back to at the next boot when Remember on Boot is off
+        // (see apply-monitors.sh) - but only while it's actually on
+        // right now. A nightly "swap to TV-only" Apply made with the
+        // checkbox off is exactly the kind of change that should NOT
+        // become the new baseline - it's tonight-only, and the next
+        // boot should restore whatever the layout was before it,
+        // rather than either replaying tonight's temporary change or
+        // falling back to Hyprland's own dumb auto-placement (which
+        // doesn't know any monitor's actual intended position at all).
+        if (root.rememberOnBoot) {
+            baselineFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        }
+
         // Rescuing needs a fresh window list first - deferred through
         // clientsQueryProcess/runApplyScript() rather than sent
         // immediately, so the rescue dispatches land in the same script
@@ -1129,14 +1143,15 @@ SettingsPanel {
     property bool showEmptyWidget: false
     property bool showEmptyOsd: false
 
-    // Whether scripts/apply-monitors.sh replays monitors.json at all on
-    // login - default true (unlike the three above). Disabling this
-    // doesn't touch monitors.json itself (still written on every Apply,
-    // same as always) - it just makes the boot script skip straight
-    // past it and leave hyprland.lua's own static hl.monitor({...})
-    // block as the only thing that runs, for anyone who'd rather hand-
-    // edit that file directly than have this panel's saved layout win
-    // every boot.
+    // Whether scripts/apply-monitors.sh replays monitors.json itself at
+    // login, or falls back to monitors.baseline.json instead - default
+    // true (unlike the three above). The baseline is a separate saved
+    // layout, only ever updated by an Apply made while this was on (see
+    // applyChanges()/baselineFile below) - so a one-off Apply made with
+    // this switched off (e.g. temporarily going TV-only for the night)
+    // doesn't become what boots next time; the baseline (your last
+    // "for real" layout) does instead. Doesn't touch monitors.json
+    // itself either way - still written on every Apply, same as always.
     property bool rememberOnBoot: true
 
     // Staged like `edited`/pendingWorkspaces above now, not written
@@ -1238,6 +1253,16 @@ SettingsPanel {
         // Write-only from here (screensStoreProcess above is what reads
         // it back, and apply-monitors.sh is what replays it at login) -
         // no need to preload/read it back through this FileView too.
+        preload: false
+    }
+
+    // The "everyday" layout - only ever updated by an Apply made while
+    // Remember on Boot is on (see applyChanges() above). Read back by
+    // apply-monitors.sh, not by anything here, on the same write-only
+    // reasoning as monitorsFile.
+    FileView {
+        id: baselineFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.baseline.json"
         preload: false
     }
 

@@ -147,6 +147,9 @@ Beyond a base Arch install:
   `~/.config/quickshell/monitors.json` (gitignored - machine-specific)
   and replayed by `scripts/apply-monitors.sh` on every login. Screen
   Settings' "Remember on boot" checkbox (on by default) controls
-  whether that replay happens at all - turn it off to have
-  `hyprland.lua`'s own static monitor line win every boot instead,
-  without touching `monitors.json` itself.
+  *which* saved layout gets replayed: on, it's whatever you last
+  Applied; off, it's `monitors.baseline.json` instead - your last
+  Apply made *with the checkbox on*, i.e. your everyday layout - so a
+  one-off change made with it switched off (e.g. temporarily swapping
+  to a single TV output for the night) doesn't stick around as what
+  boots next time.
