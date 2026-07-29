@@ -518,7 +518,12 @@ Scope {
                 // once a refresh cycle. A genuinely unplugged receiver
                 // just means this list goes stale until it's reconnected
                 // and a poll actually sees it again.
-                if (devices.length > 0) root.solaarDevices = devices
+                //
+                //if (devices.length > 0) root.solaarDevices = devices
+                //
+                // TEMPORARILY OMMITED AND USED PREVIOUS MODE. - toknica
+
+                root.solaarDevices = devices
             }
         }
 
