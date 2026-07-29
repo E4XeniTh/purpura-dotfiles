@@ -72,7 +72,7 @@ Scope {
 
             anchors.bottom: true
             margins.bottom: screen.height / 8
-
+            mask: Region {}
             // Centered by default (no left/right anchor at all) - only
             // shifted right-of-center when VolumeOsd is ALSO up right
             // now, so the pair sits side by side (volume left,
