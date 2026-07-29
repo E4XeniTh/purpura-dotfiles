@@ -18,13 +18,6 @@ Row {
 
     spacing: 6
 
-    // Fed in from Bar.qml - lets screensStore below prefer
-    // dashboard.liveScreensStore (updated live by ScreenSettings on
-    // every Apply, including "Apply" specifically, which never writes
-    // monitors.json at all) over this file's own independent polling,
-    // which stays as a fallback for whenever dashboard isn't set.
-    property var dashboard: null
-
     // Every connected screen, left-to-right by x - ties (side-by-side
     // monitors stacked vertically instead) broken by whichever is
     // closest to y = 0, so a monitor placed above the reference point
@@ -181,17 +174,13 @@ Row {
         root.loadScreensStore()
     }
 
-    // Which workspace numbers (1-5) are actually pinned to each monitor
-    // via Screen Settings - prefers dashboard.liveScreensStore (see its
-    // own declaration in Dashboard.qml) when available, since that's
-    // updated the instant an Apply/Set Init actually happens, live in
-    // this same quickshell process, rather than needing this file's own
-    // independent monitors.json polling (localScreensStore below) to
-    // eventually catch up - which an "Apply" never even would, since it
-    // deliberately never writes monitors.json at all. localScreensStore
-    // stays as the fallback for whenever dashboard isn't set.
-    readonly property var screensStore: root.dashboard ? root.dashboard.liveScreensStore : root.localScreensStore
-    property var localScreensStore: ({})
+    // Which workspace numbers (1-5) are actually pinned to each
+    // monitor via Screen Settings - read straight from the same
+    // monitors.json ScreenSettings.qml writes, rather than depending on
+    // that panel being open/instantiated, so the number label below can
+    // tell "a real pin" apart from whatever spare workspace number
+    // Hyprland happened to assign a monitor with nothing pinned to it.
+    property var screensStore: ({})
 
     function loadScreensStore() {
         screensStoreProcess.running = false
@@ -217,9 +206,9 @@ Row {
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
-                    root.localScreensStore = JSON.parse(text)
+                    root.screensStore = JSON.parse(text)
                 } catch (e) {
-                    root.localScreensStore = {}
+                    root.screensStore = {}
                 }
             }
         }

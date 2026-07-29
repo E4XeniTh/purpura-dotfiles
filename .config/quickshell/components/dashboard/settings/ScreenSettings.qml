@@ -481,15 +481,6 @@ SettingsPanel {
         || (root.dashboardRoot ? Object.keys(root.dashboardRoot.pendingBrightness).length > 0 : false)
         || Object.keys(root.pendingWorkspaces).length > 0
         || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
-        // Checked directly (not just via selectedDirty) for the same
-        // reason edited/pendingWorkspaces are above - these persist
-        // across selectMonitor() now, so relying solely on selectedDirty
-        // (which selectMonitor() does reset) would make the Apply
-        // button stop glowing after switching monitors despite a
-        // checkbox change still being staged.
-        || root.pendingStrictWorkspaceWidget !== undefined
-        || root.pendingShowEmptyWidget !== undefined
-        || root.pendingShowEmptyOsd !== undefined
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -527,13 +518,9 @@ SettingsPanel {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        // Deliberately NOT resetting pendingStrictWorkspaceWidget/
-        // pendingShowEmptyWidget/pendingShowEmptyOsd here - they're
-        // global (not per-monitor) settings, so a checkbox toggle
-        // should survive switching to a different monitor's view the
-        // same way edited/pendingWorkspaces already do, rather than
-        // being silently discarded. Still reset on an actual panel
-        // close/reopen (see onActiveChanged below), same as those.
+        root.pendingStrictWorkspaceWidget = undefined
+        root.pendingShowEmptyWidget = undefined
+        root.pendingShowEmptyOsd = undefined
         root.refreshMonitors()
     }
 
@@ -635,25 +622,8 @@ SettingsPanel {
         return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${state.scale}" })`
     }
 
-    // writeToDisk (default true - the Set Init button always passes true
-    // explicitly, Apply always passes false) controls whether this Apply
-    // gets written to monitors.json at all, i.e. whether it's part of
-    // what scripts/apply-monitors.sh replays at the next login. Nothing
-    // else about this function changes either way - both buttons run
-    // the exact same live hyprctl eval calls/fail-safes below.
-    function applyChanges(writeToDisk) {
-        if (writeToDisk === undefined) writeToDisk = true
+    function applyChanges() {
         if (!root.dirty) return
-
-        // Wrapped in try/finally - an uncaught exception partway through
-        // used to skip the pending* resets at the bottom entirely,
-        // leaving Apply/Set Init glowing (root.dirty stuck true) with no
-        // way to tell anything had gone wrong short of checking
-        // quickshell's own log. finally guarantees the staged edits
-        // always get cleared and the button always stops glowing, and
-        // the catch below logs whatever actually broke instead of
-        // failing silently.
-        try {
 
         // Commit any staged checkbox changes (see effectiveStrict.../
         // effectiveShowEmpty* above) into the real properties first -
@@ -716,16 +686,11 @@ SettingsPanel {
         // and stage an x/y override for it.
         root.resolveOriginFailsafe(touched)
 
-        // Split into monitorLines (enable/disable/geometry) and restLines
-        // (workspace pins/focus/rescues) rather than one flat sendLines
-        // array - see the newlyEnabledMonitors check below for why.
-        const monitorLines = []
+        const sendLines = []
         for (const name of touched) {
             const line = root.buildMonitorLine(name)
-            if (line) monitorLines.push(line)
+            if (line) sendLines.push(line)
         }
-
-        const restLines = []
 
         // Workspace-button toggles resend that monitor's whole current
         // workspace list (not just the number just clicked) - same
@@ -751,8 +716,8 @@ SettingsPanel {
         // submap function).
         for (const name of Object.keys(root.pendingWorkspaces)) {
             for (const num of root.workspacesFor(name)) {
-                restLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
-                restLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
+                sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
+                sendLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
             }
         }
 
@@ -772,8 +737,8 @@ SettingsPanel {
         for (const name of root.freshSpareMonitors) {
             const num = root.workspacesFor(name)[0]
             if (num === undefined) continue
-            restLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
-            restLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
         }
 
         // Monitors that just went from having no real (1-5) workspace at
@@ -793,8 +758,8 @@ SettingsPanel {
             newlyManaged.push({ monitor: name, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
         }
         for (const entry of newlyManaged) {
-            restLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
-            restLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
+            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
         }
 
         // Any of those same monitors that also had a real window open
@@ -853,66 +818,21 @@ SettingsPanel {
             }
         }
 
-        // Kept in memory either way, so this session's own UI (a
-        // reselected/disabled monitor's remembered geometry, etc.)
-        // reflects whichever button was actually used - only the disk
-        // write itself is conditional.
         root.screensStore = storeSnapshot
-        if (writeToDisk) {
-            monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
-        }
+        monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
-        // A monitor going from disabled -> enabled this Apply isn't
-        // necessarily a live Hyprland output yet just because hyprctl
-        // eval replied "ok" to the hl.monitor(...) line above - bringing
-        // a newly-connected (or freshly re-enabled) display online is an
-        // async DRM/Wayland commit, same category of lag applySettleTimer
-        // already exists for elsewhere in this file. A workspace_rule/
-        // move dispatch sent in the very same immediate batch can
-        // silently no-op if Hyprland doesn't yet consider that output
-        // ready - reported live as "Apply doesn't autoset workspaces the
-        // way Set Init does" for enabling HDMI-A-1/disabling DP-1/
-        // switching primary in one Apply. Set Init and Apply build byte-
-        // identical hyprctl lines (verified directly, not assumed) - this
-        // was never about writeToDisk, it's that whichever button
-        // happened to be tested against an already-warm monitor (already
-        // toggled on earlier the same session) "worked", and the same
-        // race would eventually hit either button on a genuinely cold
-        // enable. Only monitor enable/disable lines go out immediately;
-        // everything else (workspace pins/moves, spare/rescue focus)
-        // waits for monitorSettleTimer once at least one touched monitor
-        // is newly coming online this Apply. Skipped (immediate, single
-        // batch, exactly as before) when nothing's newly enabled, so the
-        // common geometry/workspace-pin-only Apply doesn't gain a
-        // pointless delay.
-        const newlyEnabledMonitors = Array.from(touched).filter(name => {
-            const base = root.baseFor(name)
-            const wasDisabled = !base || base.disabled
-            return wasDisabled && root.enabledFor(name)
-        })
-
-        if (newlyEnabledMonitors.length > 0 && monitorLines.length > 0) {
-            root.runApplyScript(monitorLines)
-            root.pendingRestLines = restLines
+        // Rescuing needs a fresh window list first - deferred through
+        // clientsQueryProcess/runApplyScript() rather than sent
+        // immediately, so the rescue dispatches land in the same script
+        // (and thus the same capture/restore-wrapped run) instead of a
+        // separate, later Apply.
+        if (rescues.length > 0) {
+            root.pendingSendLines = sendLines
             root.pendingRescues = rescues
-            root.pendingSettleMonitors = newlyEnabledMonitors
-            root.monitorSettleAttempts = 0
-            monitorSettleTimer.restart()
+            clientsQueryProcess.running = false
+            clientsQueryProcess.running = true
         } else {
-            const sendLines = monitorLines.concat(restLines)
-            // Rescuing needs a fresh window list first - deferred through
-            // clientsQueryProcess/runApplyScript() rather than sent
-            // immediately, so the rescue dispatches land in the same
-            // script (and thus the same capture/restore-wrapped run)
-            // instead of a separate, later Apply.
-            if (rescues.length > 0) {
-                root.pendingSendLines = sendLines
-                root.pendingRescues = rescues
-                clientsQueryProcess.running = false
-                clientsQueryProcess.running = true
-            } else {
-                root.runApplyScript(sendLines)
-            }
+            root.runApplyScript(sendLines)
         }
 
         root.applyBrightness()
@@ -927,27 +847,13 @@ SettingsPanel {
             root.dashboardRoot.detectBrightnessControllers()
         }
 
-        } catch (e) {
-            console.warn("ScreenSettings: applyChanges() threw: " + e + (e && e.stack ? ("\n" + e.stack) : ""))
-        } finally {
-            root.pendingEnabled = ({})
-            root.pendingWorkspaces = ({})
-            root.positionOverrides = ({})
-            root.edited = ({})
-            root.selectedDirty = false
-            // Reset back to undefined now that they've been committed
-            // into the real properties above - otherwise dirty (which
-            // checks these directly, not just selectedDirty, so a
-            // checkbox change survives switching monitors) would keep
-            // reporting true and the Apply button would never stop
-            // glowing after actually applying.
-            root.pendingStrictWorkspaceWidget = undefined
-            root.pendingShowEmptyWidget = undefined
-            root.pendingShowEmptyOsd = undefined
-            // preferredMode intentionally left as-is - Apply shouldn't
-            // flip the toggle back to "Manual" for the monitor you just
-            // applied.
-        }
+        root.pendingEnabled = ({})
+        root.pendingWorkspaces = ({})
+        root.positionOverrides = ({})
+        root.edited = ({})
+        root.selectedDirty = false
+        // preferredMode intentionally left as-is - Apply shouldn't flip
+        // the toggle back to "Manual" for the monitor you just applied.
     }
 
     // ddcutil/brightnessctl detection deliberately does NOT run here
@@ -1038,85 +944,6 @@ SettingsPanel {
         interval: 300
         repeat: false
         onTriggered: root.refreshMonitors()
-    }
-
-    // Holds applyChanges()'s workspace-pin/spare/rescue-focus lines while
-    // waiting for a newly-enabled monitor to actually come online - see
-    // newlyEnabledMonitors in applyChanges(). Only actually populated
-    // when at least one touched monitor is transitioning from disabled
-    // to enabled this Apply.
-    property var pendingRestLines: []
-    // Names newlyEnabledMonitors flagged this Apply - polled below via
-    // monitorSettleQueryProcess until every one of them reports
-    // disabled: false, rather than trusting a single fixed delay. A
-    // blind timer either wastes time on a monitor that came up fast or
-    // (worse, and what actually reproduced live: enabling HDMI-A-1,
-    // making it primary and disabling DP-1 in one Apply, needing a
-    // second identical Apply before workspaces 1-5 actually landed on
-    // HDMI-A-1) isn't long enough for one that's genuinely slow to
-    // negotiate a mode - a fixed 400ms wasn't enough live.
-    property var pendingSettleMonitors: []
-    property int monitorSettleAttempts: 0
-
-    function checkMonitorsSettled() {
-        monitorSettleQueryProcess.running = false
-        monitorSettleQueryProcess.running = true
-    }
-
-    function dispatchPendingRestLines() {
-        const sendLines = root.pendingRestLines
-        root.pendingRestLines = []
-        root.pendingSettleMonitors = []
-        if (root.pendingRescues.length > 0) {
-            root.pendingSendLines = sendLines
-            clientsQueryProcess.running = false
-            clientsQueryProcess.running = true
-        } else {
-            root.runApplyScript(sendLines)
-        }
-    }
-
-    Timer {
-        id: monitorSettleTimer
-        // Same category of DRM/Wayland-commit lag applySettleTimer
-        // already waits out after every Apply, just used as the poll
-        // cadence here (checkMonitorsSettled) instead of a one-shot
-        // delay before the workspace_rule/move dispatches.
-        interval: 250
-        repeat: false
-        onTriggered: root.checkMonitorsSettled()
-    }
-
-    Process {
-        id: monitorSettleQueryProcess
-        command: ["hyprctl", "-j", "monitors", "all"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                let ready = false
-                try {
-                    const parsed = JSON.parse(text)
-                    ready = root.pendingSettleMonitors.every(name => {
-                        const m = parsed.find(mm => mm.name === name)
-                        return !!m && !m.disabled
-                    })
-                } catch (e) {
-                    ready = false
-                }
-
-                root.monitorSettleAttempts++
-                // Cap at 8 tries (~2s including the poll interval below)
-                // rather than polling forever if a monitor never reports
-                // ready - dispatches anyway past that point as a best
-                // effort, matching the old behavior's worst case rather
-                // than hanging silently.
-                if (ready || root.monitorSettleAttempts >= 8) {
-                    root.dispatchPendingRestLines()
-                } else {
-                    monitorSettleTimer.restart()
-                }
-            }
-        }
     }
 
     // Carries applyChanges()'s already-built sendLines and rescues
@@ -1905,53 +1732,7 @@ SettingsPanel {
 
                     Item { Layout.fillWidth: true }
 
-                    // ---------------- bottom right: set init + apply ----------------
-                    // Set Init is what "Apply" used to be, unconditionally
-                    // - it writes the whole layout to monitors.json (what
-                    // scripts/apply-monitors.sh replays at login) as well
-                    // as sending it live. Apply, to its right, sends the
-                    // exact same live hyprctl eval calls but never touches
-                    // monitors.json at all - for a change you only want
-                    // for the rest of this session (e.g. temporarily
-                    // swapping to a single TV output for the night)
-                    // without it becoming what boots next time.
-                    DashCard {
-                        id: setInitButton
-
-                        Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
-                        uiScale: root.uiScale
-
-                        property color blinkColor: Config.fgcolor
-                        border.color: root.dirty ? setInitButton.blinkColor : Config.fgcolordark
-
-                        SequentialAnimation {
-                            running: root.dirty
-                            loops: Animation.Infinite
-                            ColorAnimation { target: setInitButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
-                            ColorAnimation { target: setInitButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Set Init"
-                            color: root.dirty ? Config.fgcolor : Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.dirty
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.applyChanges(true)
-                            }
-                        }
-                    }
-
-                    Item { Layout.preferredWidth: Config.scaled(8, root.uiScale) }
-
+                    // ---------------- bottom right: apply ----------------
                     DashCard {
                         id: applyButton
 
@@ -1982,7 +1763,7 @@ SettingsPanel {
                             enabled: root.dirty
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
-                                root.applyChanges(false)
+                                root.applyChanges()
                             }
                         }
                     }

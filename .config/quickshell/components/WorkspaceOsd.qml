@@ -22,19 +22,12 @@ import "../Config.js" as Config
 Scope {
     id: root
 
-    // Fed in from shell.qml - lets screensStore below prefer
-    // dashboard.liveScreensStore (updated live by ScreenSettings on
-    // every Apply, including "Apply" specifically, which never writes
-    // monitors.json at all) over this file's own independent polling,
-    // which stays as a fallback for whenever dashboard isn't set.
-    property var dashboard: null
-
-    // Holds both per-monitor pinned workspaces and the "__showEmptyOsd"
-    // global toggle (see ScreenSettings.qml's toggleShowEmptyOsd()) -
-    // read once here (rather than per-screen inside osdWindow below) and
-    // shared by every screen's own instance.
-    readonly property var screensStore: root.dashboard ? root.dashboard.liveScreensStore : root.localScreensStore
-    property var localScreensStore: ({})
+    // Read once here (rather than per-screen inside osdWindow below) and
+    // shared by every screen's own instance - same monitors.json
+    // ScreenSettings.qml writes, holding both per-monitor pinned
+    // workspaces and the "__showEmptyOsd" global toggle (see
+    // ScreenSettings.qml's toggleShowEmptyOsd()).
+    property var screensStore: ({})
 
     function loadScreensStore() {
         screensStoreProcess.running = false
@@ -48,9 +41,9 @@ Scope {
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
-                    root.localScreensStore = JSON.parse(text)
+                    root.screensStore = JSON.parse(text)
                 } catch (e) {
-                    root.localScreensStore = {}
+                    root.screensStore = {}
                 }
             }
         }
