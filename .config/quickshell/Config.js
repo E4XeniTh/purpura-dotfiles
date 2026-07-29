@@ -39,7 +39,7 @@ var solaarEnabled = true
 // "solaar", but plenty of others only ever set a title). Empty by
 // default - add whatever you don't want cluttering the bar, e.g.:
 //   var hiddenTrayApps = ["solaar", "firefox"]
-var hiddenTrayApps = []
+var hiddenTrayApps = ["solaar"]
 
 // Bar.qml's own base height, before Config.scaled()'s per-screen
 // uiScale is applied to it.
