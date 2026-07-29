@@ -55,22 +55,15 @@ Scope {
 	}
 
 	property bool shouldShowOsd: false
-	// Set from the hover MouseArea below, so the OSD doesn't disappear out
-	// from under the mouse while its mute button/slider are being used.
-	property bool hovered: false
+
+	property alias volumelazyloader: volumelazyloader.item
 
 	Timer {
 		id: hideTimer
-		interval: 2500
+		interval: 1500
 
-		// Single-shot, so while hovered this just keeps re-arming itself
-		// instead of actually hiding - it'll hide ~1s after hover ends.
 		onTriggered: {
-			if (root.hovered) {
-				hideTimer.restart()
-			} else {
 				root.shouldShowOsd = false
-			}
 		}
 	}
 
@@ -78,6 +71,7 @@ Scope {
 	// PanelWindow.visible could be set instead of using a loader, but using
 	// a loader will reduce the memory overhead when the window isn't open.
 	LazyLoader {
+        id: volumelazyloader
 		active: root.shouldShowOsd
 
 		PanelWindow {
@@ -86,6 +80,8 @@ Scope {
 
 			anchors.bottom: true
 			margins.bottom: screen.height / 8
+			anchors.right: brightnesslazyloader.active ? 1 : 0
+			margins.right: brightnesslazyloader.active ? screen.width / 2 : ""
 			exclusiveZone: 0
 
 			implicitWidth: 500
@@ -103,14 +99,6 @@ Scope {
 				radius: 0
 				border.width: 2
 				border.color: Config.fgcolor
-
-				MouseArea {
-					anchors.fill: parent
-					hoverEnabled: true
-					acceptedButtons: Qt.NoButton
-					onEntered: root.hovered = true
-					onExited: root.hovered = false
-				}
 
 				// Read-only - guarded by a Loader (not just visible:false)
 				// since the row below dereferences activeSink.audio
@@ -131,8 +119,8 @@ Scope {
 						readonly property real volume: root.activeSink && root.activeSink.audio ? root.activeSink.audio.volume : 0
 
 						Item {
-							Layout.preferredWidth: 36
-							Layout.preferredHeight: 36
+							Layout.preferredWidth: 48
+							Layout.preferredHeight: 48
 
 							IconImage {
 								id: volIcon
@@ -155,7 +143,7 @@ Scope {
 
 							DigitalBar {
 								id: bar
-								uiScale: 1.4
+								uiScale: 1.5
 								targetWidth: parent.width
 								segmentCount: 30
 								value: volumeRow.volume
@@ -166,11 +154,11 @@ Scope {
 
 						Text {
 							Layout.preferredWidth: 60
-							horizontalAlignment: Text.AlignRight
+							horizontalAlignment: Text.AlignHCenter
 							text: Math.round(volumeRow.volume * 100) + "%"
 							color: Config.fgcolor
 							font.family: Config.fontfamily
-							font.pixelSize: 18
+							font.pixelSize: 24
 							font.bold: true
 						}
 					}

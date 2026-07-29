@@ -87,7 +87,6 @@ SettingsPanel {
         for (const d of root.solaarDevices) {
             list.push({ kind: "device", name: d.name, percentage: d.percentage, charging: d.charging })
         }
-        list.push({ kind: "separator" })
         for (const d of root.bluetoothBatteryDevices) {
             list.push({ kind: "device", name: d.name, percentage: d.battery, charging: false })
         }
@@ -212,7 +211,13 @@ SettingsPanel {
                         ColorOverlay {
                             anchors.fill: rowIcon
                             source: rowIcon
-                            color: Config.fgcolor
+                            color: modelData.percentage < 0.11 && !modelData.charging ? Config.fgcolorred : Config.fgcolor
+                            SequentialAnimation on color {
+                                running: modelData.charging
+                                loops: Animation.Infinite
+                                ColorAnimation { to: Config.fgcolorlight; duration: 500 }
+                                ColorAnimation { to: Config.fgcolor; duration: 500 }
+                            }
                         }
                     }
 
@@ -225,7 +230,7 @@ SettingsPanel {
                     // to fill a wide panel instead.
                     Text {
                         Layout.fillWidth: true
-                        text: modelData.name + ":"
+                        text: modelData.name
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(14, root.uiScale)
@@ -245,7 +250,7 @@ SettingsPanel {
                     // breathe between fgcolor/fgcolorlight while
                     // actually charging.
                     Item {
-                        Layout.preferredWidth: Config.scaled(120, root.uiScale)
+                        Layout.preferredWidth: Config.scaled(350, root.uiScale)
                         Layout.preferredHeight: bar.implicitHeight
 
                         DigitalBar {
@@ -266,8 +271,8 @@ SettingsPanel {
                             SequentialAnimation on color {
                                 running: modelData.charging
                                 loops: Animation.Infinite
-                                ColorAnimation { to: Config.fgcolorlight; duration: 1800 }
-                                ColorAnimation { to: Config.fgcolor; duration: 1800 }
+                                ColorAnimation { to: Config.fgcolorlight; duration: 500 }
+                                ColorAnimation { to: Config.fgcolor; duration: 500 }
                             }
                         }
                     }

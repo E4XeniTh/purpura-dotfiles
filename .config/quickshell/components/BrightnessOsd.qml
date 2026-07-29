@@ -40,22 +40,15 @@ Scope {
     }
 
     property bool shouldShowOsd: false
-    // Set from the hover MouseArea below, so the OSD doesn't disappear out
-    // from under the mouse while it's being looked at.
-    property bool hovered: false
+
+    property alias brightnesslazyloader: brightnesslazyloader.item
 
     Timer {
         id: hideTimer
-        interval: 2500
+        interval: 1500
 
-        // Single-shot, so while hovered this just keeps re-arming itself
-        // instead of actually hiding - it'll hide ~1s after hover ends.
         onTriggered: {
-            if (root.hovered) {
-                hideTimer.restart()
-            } else {
                 root.shouldShowOsd = false
-            }
         }
     }
 
@@ -63,6 +56,7 @@ Scope {
     // PanelWindow.visible could be set instead of using a loader, but using
     // a loader will reduce the memory overhead when the window isn't open.
     LazyLoader {
+        id: brightnesslazyloader
         active: root.shouldShowOsd
 
         PanelWindow {
@@ -71,6 +65,7 @@ Scope {
 
             anchors.bottom: true
             margins.bottom: screen.height / 8
+            margins.left: volumeslazyloader.active ? screen.height / 2 : ""
             exclusiveZone: 0
 
             implicitWidth: 500
@@ -101,8 +96,8 @@ Scope {
                     spacing: 16
 
                     Item {
-                        Layout.preferredWidth: 36
-                        Layout.preferredHeight: 36
+                        Layout.preferredWidth: 48
+                        Layout.preferredHeight: 48
 
                         IconImage {
                             id: brightIcon
@@ -123,7 +118,7 @@ Scope {
 
                         DigitalBar {
                             id: bar
-                            uiScale: 1.4
+                            uiScale: 1.5
                             targetWidth: parent.width
                             segmentCount: 30
                             value: root.currentBrightness / 100
@@ -133,11 +128,11 @@ Scope {
 
                     Text {
                         Layout.preferredWidth: 60
-                        horizontalAlignment: Text.AlignRight
+                        horizontalAlignment: Text.AlignHCenter
                         text: Math.round(root.currentBrightness) + "%"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 18
+                        font.pixelSize: 24
                         font.bold: true
                     }
                 }
