@@ -25,5 +25,9 @@ Scope {
     selectedSinkId: dashboard.audioSelectedSinkId
   }
 
+  BrightnessOsd {
+    dashboard: dashboard
+  }
+
   WorkspaceOsd {}
 }

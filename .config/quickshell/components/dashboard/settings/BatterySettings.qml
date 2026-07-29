@@ -216,13 +216,15 @@ SettingsPanel {
                         }
                     }
 
-                    // Wider than the bar widgets' own compact labels -
-                    // full device names (e.g. "G703 LIGHTSPEED Wireless
-                    // Gaming Mouse w/ HERO") need the room, at the
-                    // bar's expense (see DigitalBar below, which simply
-                    // fills whatever's left in this RowLayout).
+                    // Fills whatever space the fixed-width bar next to
+                    // it doesn't need, instead of a small fixed width of
+                    // its own - full device names (e.g. "G703
+                    // LIGHTSPEED Wireless Gaming Mouse w/ HERO") need
+                    // that room, which grows with the panel instead of
+                    // being capped alongside a bar that used to balloon
+                    // to fill a wide panel instead.
                     Text {
-                        Layout.preferredWidth: Config.scaled(170, root.uiScale)
+                        Layout.fillWidth: true
                         text: modelData.name + ":"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
@@ -231,17 +233,19 @@ SettingsPanel {
                         elide: Text.ElideRight
                     }
 
-                    // The "long" bar - fills whatever space is left
-                    // between the label and the percentage instead of
-                    // the compact bar widgets' own fixed segment count/
-                    // width (see DigitalBar.qml's targetWidth). Red
-                    // below 11% (and not charging - a device that's
+                    // The "long" bar - a fixed width regardless of
+                    // panel size now (see DigitalBar.qml's targetWidth),
+                    // rather than filling whatever's left next to the
+                    // label - that meant it grew to dominate the row on
+                    // a wide panel, squeezing the label down to its
+                    // elided minimum instead of the other way around.
+                    // Red below 11% (and not charging - a device that's
                     // just started charging while still low isn't in
                     // the same kind of trouble), otherwise a slow
                     // breathe between fgcolor/fgcolorlight while
                     // actually charging.
                     Item {
-                        Layout.fillWidth: true
+                        Layout.preferredWidth: Config.scaled(120, root.uiScale)
                         Layout.preferredHeight: bar.implicitHeight
 
                         DigitalBar {

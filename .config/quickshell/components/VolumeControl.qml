@@ -100,7 +100,8 @@ Rectangle {
                 uiScale: root.uiScale
                 value: root.volume
                 segmentCount: 18
-                litColor: dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
+                // Same red-on-mute treatment as VolumeOsd.qml/DeviceSlider.qml.
+                litColor: root.muted ? Config.fgcolorred : (dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor)
             }
 
             MouseArea {

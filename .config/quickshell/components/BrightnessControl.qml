@@ -15,10 +15,14 @@ import "../Config.js" as Config
 // resolution/position and has nothing to do with what the bar itself
 // should control. Actually applying a change is debounced by 330ms (see
 // applyTimer below): every drag/scroll tick updates the on-screen value
-// and Screen Settings' own slider (if open) immediately via
-// setPendingBrightness, but the real ddcutil/brightnessctl call only
-// fires once dragging/scrolling has paused - a slider drag alone would
-// otherwise fire dozens of ddcutil invocations a second.
+// immediately via setBarBrightness, but the real ddcutil/brightnessctl
+// call only fires once dragging/scrolling has paused - a slider drag
+// alone would otherwise fire dozens of ddcutil invocations a second.
+// Deliberately uses its own barBrightnessOverride staging rather than
+// Screen Settings' pendingBrightness (setPendingBrightness/brightnessFor)
+// - sharing one meant dragging Screen Settings' own per-monitor slider
+// made this widget immediately show the not-yet-applied value as if it
+// had already taken effect.
 Rectangle {
     id: root
 
@@ -36,19 +40,19 @@ Rectangle {
     readonly property bool detecting: !root.detectionDone
 
     readonly property bool controllable: !!(root.detectionDone && root.targetMonitor.length > 0 && root.dashboard.supportsBrightness(root.targetMonitor))
-    readonly property real brightness: root.controllable ? root.dashboard.brightnessFor(root.targetMonitor) : 0
+    readonly property real brightness: root.controllable ? root.dashboard.barBrightnessFor(root.targetMonitor) : 0
 
     function setBrightnessFromX(mx) {
         if (!root.controllable) return
         const value = Math.round(Math.max(0, Math.min(1, mx / bar.totalWidth)) * 100)
-        root.dashboard.setPendingBrightness(root.targetMonitor, value)
+        root.dashboard.setBarBrightness(root.targetMonitor, value)
         applyTimer.restart()
     }
 
     function nudgeBrightness(delta) {
         if (!root.controllable) return
         const value = Math.round(Math.max(0, Math.min(100, root.brightness + delta)))
-        root.dashboard.setPendingBrightness(root.targetMonitor, value)
+        root.dashboard.setBarBrightness(root.targetMonitor, value)
         applyTimer.restart()
     }
 

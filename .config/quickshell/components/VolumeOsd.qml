@@ -1,7 +1,9 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
+import Quickshell.Widgets
 import Quickshell.Services.Pipewire
-import "dashboard/settings"
+import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
 
 Scope {
@@ -90,8 +92,10 @@ Scope {
 			implicitHeight: 84
 			color: "transparent"
 
-			// No click mask (unlike before) - the mute button and slider
-			// below need real mouse input to reach them.
+			// Purely a display now - no click mask needed since nothing
+			// inside accepts mouse input for muting/dragging anymore (see
+			// the icon/DigitalBar/percentage row below), only hover-to-
+			// stay-open like before.
 
 			Rectangle {
 				anchors.fill: parent
@@ -103,29 +107,72 @@ Scope {
 				MouseArea {
 					anchors.fill: parent
 					hoverEnabled: true
+					acceptedButtons: Qt.NoButton
 					onEntered: root.hovered = true
 					onExited: root.hovered = false
 				}
 
-				// Reuses the same device card the audio settings panel
-				// uses, so muting/dragging volume here behaves identically
-				// - guarded by a Loader (not just visible:false) since
-				// DeviceCard dereferences .device directly and
-				// activeSink can briefly be null.
+				// Read-only - guarded by a Loader (not just visible:false)
+				// since the row below dereferences activeSink.audio
+				// directly and activeSink can briefly be null.
 				Loader {
 					anchors {
 						fill: parent
-						margins: 0
+						margins: 20
 					}
 					active: root.activeSink !== null
 
-					DeviceCard {
+					RowLayout {
+						id: volumeRow
 						anchors.fill: parent
-						color: "transparent"
-						border.width: 0
-						device: root.activeSink
-						isPrimary: true
-						centered: true
+						spacing: 16
+
+						readonly property bool muted: root.activeSink && root.activeSink.audio ? root.activeSink.audio.muted : false
+						readonly property real volume: root.activeSink && root.activeSink.audio ? root.activeSink.audio.volume : 0
+
+						Item {
+							Layout.preferredWidth: 36
+							Layout.preferredHeight: 36
+
+							IconImage {
+								id: volIcon
+								anchors.fill: parent
+								source: Quickshell.iconPath(volumeRow.muted || volumeRow.volume <= 0
+									? "audio-volume-muted-symbolic"
+									: (volumeRow.volume < 0.5 ? "audio-volume-medium-symbolic" : "audio-volume-high-symbolic"))
+							}
+
+							ColorOverlay {
+								anchors.fill: volIcon
+								source: volIcon
+								color: Config.fgcolor
+							}
+						}
+
+						Item {
+							Layout.fillWidth: true
+							Layout.preferredHeight: bar.implicitHeight
+
+							DigitalBar {
+								id: bar
+								uiScale: 1.4
+								targetWidth: parent.width
+								segmentCount: 30
+								value: volumeRow.volume
+								// Same red-on-mute treatment as VolumeControl.qml/DeviceSlider.qml.
+								litColor: volumeRow.muted ? Config.fgcolorred : Config.fgcolor
+							}
+						}
+
+						Text {
+							Layout.preferredWidth: 60
+							horizontalAlignment: Text.AlignRight
+							text: Math.round(volumeRow.volume * 100) + "%"
+							color: Config.fgcolor
+							font.family: Config.fontfamily
+							font.pixelSize: 18
+							font.bold: true
+						}
 					}
 				}
 			}

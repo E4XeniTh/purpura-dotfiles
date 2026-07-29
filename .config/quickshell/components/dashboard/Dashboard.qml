@@ -69,11 +69,34 @@ Scope {
     // 0-100, last known value per monitor name, from whichever of the
     // two backends actually controls it.
     property var liveBrightness: ({})
-    // Staged edits (Screen Settings' per-card sliders stage here until
-    // Apply; Bar.qml's BrightnessControl also writes here immediately
-    // so any open Screen Settings card reflects the live drag too,
-    // before its own debounced apply fires).
+    // Staged edits - Screen Settings' per-card sliders write here,
+    // read back through brightnessFor()/supportsBrightness() below, and
+    // stay purely local until Apply actually flushes them. Deliberately
+    // NOT shared with Bar.qml's BrightnessControl (see
+    // barBrightnessOverride below) - it used to be, and dragging Screen
+    // Settings' own slider made the bar widget immediately show the
+    // not-yet-applied value as if it had already taken effect, even
+    // though nothing had actually been sent to the monitor yet.
     property var pendingBrightness: ({})
+
+    // BrightnessControl's own equivalent of pendingBrightness above -
+    // kept entirely separate so dragging/scrolling the bar widget (which
+    // debounces into a real apply a moment later, see applyBrightnessFor)
+    // never gets confused with Screen Settings' still-unapplied staged
+    // edits, and vice versa.
+    property var barBrightnessOverride: ({})
+
+    function barBrightnessFor(name) {
+        if (root.barBrightnessOverride[name] !== undefined) return root.barBrightnessOverride[name]
+        if (root.liveBrightness[name] !== undefined) return root.liveBrightness[name]
+        return 50
+    }
+
+    function setBarBrightness(name, value) {
+        const updated = Object.assign({}, root.barBrightnessOverride)
+        updated[name] = value
+        root.barBrightnessOverride = updated
+    }
 
     // Whether the two detect Processes below have completed at least
     // once since the last detectBrightnessControllers() call - false
@@ -150,17 +173,24 @@ Scope {
         }
     }
 
-    // Flushes pendingBrightness for just the given monitor names (Bar.qml's
-    // debounced widget calls this with a single name; Screen Settings'
-    // own Apply flushes every staged monitor at once via applyBrightness()
-    // below).
+    // Flushes whichever of pendingBrightness/barBrightnessOverride has a
+    // staged value for each given monitor name (Bar.qml's debounced
+    // widget calls this with a single name, reading from
+    // barBrightnessOverride; Screen Settings' own Apply flushes every
+    // monitor staged in pendingBrightness at once via applyBrightness()
+    // below) - both are cleared for a name the moment it's actually
+    // applied, since liveBrightness is the one shared, authoritative
+    // value both consumers fall back to afterwards.
     function applyBrightnessFor(names) {
         const ddcCommands = []
         const updatedLive = Object.assign({}, root.liveBrightness)
         const updatedPending = Object.assign({}, root.pendingBrightness)
+        const updatedBarOverride = Object.assign({}, root.barBrightnessOverride)
 
         for (const name of names) {
-            const value = root.pendingBrightness[name]
+            const value = root.pendingBrightness[name] !== undefined
+                ? root.pendingBrightness[name]
+                : root.barBrightnessOverride[name]
             if (value === undefined) continue
 
             if (root.controlsViaBrightnessctl(name)) {
@@ -178,10 +208,12 @@ Scope {
 
             updatedLive[name] = value
             delete updatedPending[name]
+            delete updatedBarOverride[name]
         }
 
         root.liveBrightness = updatedLive
         root.pendingBrightness = updatedPending
+        root.barBrightnessOverride = updatedBarOverride
 
         if (ddcCommands.length > 0) {
             ddcApplyProcess.command = ["sh", "-c", ddcCommands.join(" ; ")]
