@@ -481,6 +481,16 @@ SettingsPanel {
         || (root.dashboardRoot ? Object.keys(root.dashboardRoot.pendingBrightness).length > 0 : false)
         || Object.keys(root.pendingWorkspaces).length > 0
         || Object.keys(root.edited).some(name => Object.keys(root.edited[name]).length > 0)
+        // Checked directly (not just via selectedDirty) for the same
+        // reason edited/pendingWorkspaces are above - these persist
+        // across selectMonitor() now, so relying solely on selectedDirty
+        // (which selectMonitor() does reset) would make the Apply
+        // button stop glowing after switching monitors despite a
+        // checkbox change still being staged.
+        || root.pendingStrictWorkspaceWidget !== undefined
+        || root.pendingShowEmptyWidget !== undefined
+        || root.pendingShowEmptyOsd !== undefined
+        || root.pendingRememberOnBoot !== undefined
 
     function setEdited(key, value) {
         const updated = Object.assign({}, root.edited)
@@ -518,10 +528,13 @@ SettingsPanel {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        root.pendingStrictWorkspaceWidget = undefined
-        root.pendingShowEmptyWidget = undefined
-        root.pendingShowEmptyOsd = undefined
-        root.pendingRememberOnBoot = undefined
+        // Deliberately NOT resetting pendingStrictWorkspaceWidget/
+        // pendingShowEmptyWidget/pendingShowEmptyOsd/pendingRememberOnBoot
+        // here - they're global (not per-monitor) settings, so a checkbox
+        // toggle should survive switching to a different monitor's view
+        // the same way edited/pendingWorkspaces already do, rather than
+        // being silently discarded. Still reset on an actual panel
+        // close/reopen (see onActiveChanged below), same as those.
         root.refreshMonitors()
     }
 
