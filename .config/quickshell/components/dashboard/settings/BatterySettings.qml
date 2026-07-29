@@ -123,23 +123,14 @@ SettingsPanel {
         bottomPadding: Config.scaled(16, root.uiScale)
         leftPadding: Config.scaled(16, root.uiScale)
         rightPadding: Config.scaled(16, root.uiScale)
-        spacing: Config.scaled(10, root.uiScale)
+        spacing: Config.scaled(24, root.uiScale)
 
         readonly property real contentWidth: width - leftPadding - rightPadding
-        readonly property real rowHeight: Config.scaled(40, root.uiScale)
+        readonly property real rowHeight: Config.scaled(32, root.uiScale)
         // Same cap as Audio/Bluetooth/Network/Screen Settings' own
         // lists - keeps this panel from growing without bound with a
         // lot of peripherals connected.
         readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
-
-        Text {
-            visible: root.hasAnyBattery
-            text: "Battery"
-            color: Config.fgcolor
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(14, root.uiScale)
-            font.bold: true
-        }
 
         // Same fixed-height empty-state swap BluetoothSettings.qml uses
         // for "No Bluetooth receiver detected." - a plain centered
@@ -189,37 +180,7 @@ SettingsPanel {
                     // Fixed-size icon instead of a width fraction of the
                     // row - same reasoning ControllerCard.qml/
                     // AudioSettings' own hint icons use.
-                    Item {
-                        Layout.preferredWidth: Config.scaled(24, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(24, root.uiScale)
 
-                        IconImage {
-                            id: rowIcon
-                            anchors.fill: parent
-                            // Same battery-NNN[-charging] icon scheme
-                            // BatteryControl.qml's bar widget uses -
-                            // Solaar/Bluetooth devices have no icon of
-                            // their own to fall back on the way UPower
-                            // provides one for the system battery, so
-                            // this is the one scheme that covers all
-                            // three sections uniformly.
-                            source: Quickshell.iconPath(
-                                Config.batteryIconName(modelData.percentage * 100, modelData.charging),
-                                "battery-missing-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: rowIcon
-                            source: rowIcon
-                            color: modelData.percentage < 0.11 && !modelData.charging ? Config.fgcolorred : Config.fgcolor
-                            SequentialAnimation on color {
-                                running: modelData.charging
-                                loops: Animation.Infinite
-                                ColorAnimation { to: Config.fgcolorlight; duration: 500 }
-                                ColorAnimation { to: Config.fgcolor; duration: 500 }
-                            }
-                        }
-                    }
 
                     // Fills whatever space the fixed-width bar next to
                     // it doesn't need, instead of a small fixed width of
@@ -233,7 +194,7 @@ SettingsPanel {
                         text: modelData.name
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.pixelSize: Config.scaled(18, root.uiScale)
                         font.bold: true
                         elide: Text.ElideRight
                     }
@@ -255,9 +216,9 @@ SettingsPanel {
 
                         DigitalBar {
                             id: bar
-                            uiScale: root.uiScale
+                            uiScale: root.uiScale * 1.25
                             targetWidth: parent.width
-                            segmentCount: 28
+                            segmentCount: 35
                             value: modelData.percentage
                             litColor: modelData.percentage < 0.11 && !modelData.charging
                                 ? Config.fgcolorred
@@ -278,12 +239,12 @@ SettingsPanel {
                     }
 
                     Text {
-                        Layout.preferredWidth: Config.scaled(40, root.uiScale)
+                        Layout.preferredWidth: Config.scaled(64, root.uiScale)
                         horizontalAlignment: Text.AlignRight
                         text: Math.round(modelData.percentage * 100) + "%"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.pixelSize: Config.scaled(18, root.uiScale)
                         font.bold: true
                     }
                 }

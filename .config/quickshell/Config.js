@@ -19,7 +19,7 @@ var fgcolorlight = Qt.lighter(fgcolor, 1.55)
 // currently active/selected.
 var fgcolordarklight = Qt.darker(fgcolorlight, 1.3)
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
-var fgcolorred = "#e00030"
+var fgcolorred = "#ff0000"
 
 var fontfamily = "Hack"
 
