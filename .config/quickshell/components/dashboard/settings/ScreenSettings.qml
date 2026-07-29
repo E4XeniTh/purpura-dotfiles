@@ -706,11 +706,16 @@ SettingsPanel {
         // and stage an x/y override for it.
         root.resolveOriginFailsafe(touched)
 
-        const sendLines = []
+        // Split into monitorLines (enable/disable/geometry) and restLines
+        // (workspace pins/focus/rescues) rather than one flat sendLines
+        // array - see the newlyEnabledMonitors check below for why.
+        const monitorLines = []
         for (const name of touched) {
             const line = root.buildMonitorLine(name)
-            if (line) sendLines.push(line)
+            if (line) monitorLines.push(line)
         }
+
+        const restLines = []
 
         // Workspace-button toggles resend that monitor's whole current
         // workspace list (not just the number just clicked) - same
@@ -736,8 +741,8 @@ SettingsPanel {
         // submap function).
         for (const name of Object.keys(root.pendingWorkspaces)) {
             for (const num of root.workspacesFor(name)) {
-                sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
-                sendLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
+                restLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
+                restLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
             }
         }
 
@@ -757,8 +762,8 @@ SettingsPanel {
         for (const name of root.freshSpareMonitors) {
             const num = root.workspacesFor(name)[0]
             if (num === undefined) continue
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
+            restLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
+            restLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
         }
 
         // Monitors that just went from having no real (1-5) workspace at
@@ -778,8 +783,8 @@ SettingsPanel {
             newlyManaged.push({ monitor: name, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
         }
         for (const entry of newlyManaged) {
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
+            restLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
+            restLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
         }
 
         // Any of those same monitors that also had a real window open
@@ -847,18 +852,55 @@ SettingsPanel {
             monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
         }
 
-        // Rescuing needs a fresh window list first - deferred through
-        // clientsQueryProcess/runApplyScript() rather than sent
-        // immediately, so the rescue dispatches land in the same script
-        // (and thus the same capture/restore-wrapped run) instead of a
-        // separate, later Apply.
-        if (rescues.length > 0) {
-            root.pendingSendLines = sendLines
+        // A monitor going from disabled -> enabled this Apply isn't
+        // necessarily a live Hyprland output yet just because hyprctl
+        // eval replied "ok" to the hl.monitor(...) line above - bringing
+        // a newly-connected (or freshly re-enabled) display online is an
+        // async DRM/Wayland commit, same category of lag applySettleTimer
+        // already exists for elsewhere in this file. A workspace_rule/
+        // move dispatch sent in the very same immediate batch can
+        // silently no-op if Hyprland doesn't yet consider that output
+        // ready - reported live as "Apply doesn't autoset workspaces the
+        // way Set Init does" for enabling HDMI-A-1/disabling DP-1/
+        // switching primary in one Apply. Set Init and Apply build byte-
+        // identical hyprctl lines (verified directly, not assumed) - this
+        // was never about writeToDisk, it's that whichever button
+        // happened to be tested against an already-warm monitor (already
+        // toggled on earlier the same session) "worked", and the same
+        // race would eventually hit either button on a genuinely cold
+        // enable. Only monitor enable/disable lines go out immediately;
+        // everything else (workspace pins/moves, spare/rescue focus)
+        // waits for monitorSettleTimer once at least one touched monitor
+        // is newly coming online this Apply. Skipped (immediate, single
+        // batch, exactly as before) when nothing's newly enabled, so the
+        // common geometry/workspace-pin-only Apply doesn't gain a
+        // pointless delay.
+        const newlyEnabledMonitors = [...touched].filter(name => {
+            const base = root.baseFor(name)
+            const wasDisabled = !base || base.disabled
+            return wasDisabled && root.enabledFor(name)
+        })
+
+        if (newlyEnabledMonitors.length > 0 && monitorLines.length > 0) {
+            root.runApplyScript(monitorLines)
+            root.pendingRestLines = restLines
             root.pendingRescues = rescues
-            clientsQueryProcess.running = false
-            clientsQueryProcess.running = true
+            monitorSettleTimer.restart()
         } else {
-            root.runApplyScript(sendLines)
+            const sendLines = monitorLines.concat(restLines)
+            // Rescuing needs a fresh window list first - deferred through
+            // clientsQueryProcess/runApplyScript() rather than sent
+            // immediately, so the rescue dispatches land in the same
+            // script (and thus the same capture/restore-wrapped run)
+            // instead of a separate, later Apply.
+            if (rescues.length > 0) {
+                root.pendingSendLines = sendLines
+                root.pendingRescues = rescues
+                clientsQueryProcess.running = false
+                clientsQueryProcess.running = true
+            } else {
+                root.runApplyScript(sendLines)
+            }
         }
 
         root.applyBrightness()
@@ -979,6 +1021,35 @@ SettingsPanel {
         interval: 300
         repeat: false
         onTriggered: root.refreshMonitors()
+    }
+
+    // Holds applyChanges()'s workspace-pin/spare/rescue-focus lines while
+    // waiting for a newly-enabled monitor to actually come online - see
+    // newlyEnabledMonitors in applyChanges(). Only actually populated
+    // when at least one touched monitor is transitioning from disabled
+    // to enabled this Apply.
+    property var pendingRestLines: []
+
+    Timer {
+        id: monitorSettleTimer
+        // Same category of DRM/Wayland-commit lag applySettleTimer
+        // already waits out after every Apply, just before the
+        // workspace_rule/move dispatches instead of after them - long
+        // enough for a just-enabled output to actually be live, short
+        // enough nobody notices the gap.
+        interval: 400
+        repeat: false
+        onTriggered: {
+            const sendLines = root.pendingRestLines
+            root.pendingRestLines = []
+            if (root.pendingRescues.length > 0) {
+                root.pendingSendLines = sendLines
+                clientsQueryProcess.running = false
+                clientsQueryProcess.running = true
+            } else {
+                root.runApplyScript(sendLines)
+            }
+        }
     }
 
     // Carries applyChanges()'s already-built sendLines and rescues
