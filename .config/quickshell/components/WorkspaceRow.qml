@@ -198,43 +198,50 @@ Row {
     // update live - re-requested on every Hyprland event so the little
     // per-window rectangles track real opens/closes/moves/resizes
     // instead of a one-off snapshot from whenever quickshell started.
-    //
-    // Also re-polls monitors.json here rather than waiting for the
-    // Timer's own 4s interval - Screen Settings' Apply always fires at
-    // least one Hyprland event of its own (a monitor/workspace dispatch,
-    // see ScreenSettings.qml), so this piggybacks on that instead of
-    // needing its own cross-component signal. Numbers/icons on other
-    // monitors' workspaces sometimes not rendering right after a fresh
-    // config or enabling/disabling a monitor was this same lag - a real
-    // monitor.json write just hadn't been picked up by this poll yet.
     Connections {
         target: Hyprland
         function onRawEvent(event) {
             Hyprland.refreshToplevels()
-            root.loadScreensStore()
             renderSettleTimer.restart()
         }
     }
     Component.onCompleted: {
         Hyprland.refreshToplevels()
-        root.loadScreensStore()
         // Seed the very first render immediately - no reason to wait out
         // a settle delay before anything has been drawn at all.
         root.settledEntries = root.rowEntries
     }
 
-    // Which workspace numbers (1-5) are actually pinned to each
-    // monitor via Screen Settings - read straight from the same
-    // monitors.json ScreenSettings.qml writes, rather than depending on
-    // that panel being open/instantiated, so the number label below can
-    // tell "a real pin" apart from whatever spare workspace number
-    // Hyprland happened to assign a monitor with nothing pinned to it.
-    property var screensStore: ({})
-
-    function loadScreensStore() {
-        screensStoreProcess.running = false
-        screensStoreProcess.running = true
+    // Which workspace numbers (1-5) are actually pinned to each monitor
+    // via Screen Settings - read straight off the same monitors.json
+    // ScreenSettings.qml writes, via screensStoreFile's watchChanges
+    // below (real OS-level file watching, not polling) - lets the
+    // number label below tell "a real pin" apart from whatever spare
+    // workspace number Hyprland happened to assign a monitor with
+    // nothing pinned to it, and updates the instant Apply writes the
+    // file rather than waiting on a poll interval or Hyprland's own
+    // raw-event stream (a checkbox-only Apply's workspace_rule/move
+    // dispatches are all no-ops when nothing physically changed, so no
+    // raw event necessarily fires at all - reported live as "Show Empty"/
+    // "Only managed workspaces" not visibly taking effect until
+    // switching workspaces or clicking elsewhere happened to force some
+    // other refresh first).
+    FileView {
+        id: screensStoreFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
+        watchChanges: true
+        onFileChanged: reload()
     }
+
+    readonly property var screensStore: {
+        try {
+            return JSON.parse(screensStoreFile.text())
+        } catch (e) {
+            return {}
+        }
+    }
+
+    onScreensStoreChanged: renderSettleTimer.restart()
 
     function isPinned(workspace) {
         if (!workspace.monitor) return false
@@ -244,35 +251,9 @@ Row {
 
     // Global toggle from the same file, stored under a non-monitor-name
     // key (see ScreenSettings.qml's toggleStrictWorkspaceWidget) - reuses
-    // the polling already happening for isPinned() above rather than
-    // needing its own separate read.
+    // the same screensStoreFile read above rather than needing its own
+    // separate one.
     readonly property bool strictWorkspaceWidget: !!root.screensStore.__strictWorkspaceWidget
-
-    Process {
-        id: screensStoreProcess
-        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    root.screensStore = JSON.parse(text)
-                } catch (e) {
-                    root.screensStore = {}
-                }
-            }
-        }
-    }
-
-    // Nothing pushes a change notification when monitors.json is
-    // rewritten (only ScreenSettings.qml's own Apply button touches
-    // it), so this just polls - same interval Network Settings uses
-    // for its own ZeroTier/nmcli refresh.
-    Timer {
-        interval: 4000
-        repeat: true
-        running: true
-        onTriggered: root.loadScreensStore()
-    }
 
     Repeater {
         model: root.settledEntries

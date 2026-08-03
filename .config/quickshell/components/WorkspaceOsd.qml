@@ -26,40 +26,31 @@ Scope {
     // shared by every screen's own instance - same monitors.json
     // ScreenSettings.qml writes, holding both per-monitor pinned
     // workspaces and the "__showEmptyOsd" global toggle (see
-    // ScreenSettings.qml's toggleShowEmptyOsd()).
-    property var screensStore: ({})
-
-    function loadScreensStore() {
-        screensStoreProcess.running = false
-        screensStoreProcess.running = true
+    // ScreenSettings.qml's toggleShowEmptyOsd()). Backed by watchChanges
+    // (real OS-level file watching), not polling - updates the instant
+    // Apply writes the file rather than waiting on a poll interval or
+    // Hyprland's own raw-event stream (a checkbox-only Apply's
+    // workspace_rule/move dispatches are all no-ops when nothing
+    // physically changed, so no raw event necessarily fires at all -
+    // reported live as "Show Empty in OSD" not visibly taking effect
+    // until switching workspaces or clicking elsewhere happened to force
+    // some other refresh first).
+    FileView {
+        id: screensStoreFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
+        watchChanges: true
+        onFileChanged: reload()
     }
 
-    Process {
-        id: screensStoreProcess
-        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    root.screensStore = JSON.parse(text)
-                } catch (e) {
-                    root.screensStore = {}
-                }
-            }
+    readonly property var screensStore: {
+        try {
+            return JSON.parse(screensStoreFile.text())
+        } catch (e) {
+            return {}
         }
     }
 
-    Component.onCompleted: root.loadScreensStore()
-
-    // Nothing pushes a change notification when monitors.json is
-    // rewritten (only ScreenSettings.qml's own Apply/toggle calls touch
-    // it) - polls instead, same interval used elsewhere for this file.
-    Timer {
-        interval: 4000
-        repeat: true
-        running: true
-        onTriggered: root.loadScreensStore()
-    }
+    onScreensStoreChanged: renderSettleTimer.restart()
 
     // A single Apply dispatches many sequential hyprctl eval calls (see
     // ScreenSettings.qml), each firing a live Hyprland raw event the
@@ -69,15 +60,15 @@ Scope {
     // for a frame, which is what read live as boxes jittering or a
     // workspace appearing to blink in and back out during a workspace/
     // display swap. settleTick increments once the burst of raw events
-    // from one Apply actually stops, and each osdWindow only copies its
-    // live computation into what it actually renders when settleTick
-    // changes - see monitorWorkspaces/liveMonitorWorkspaces below.
+    // from one Apply actually stops (or screensStore itself changes, see
+    // above), and each osdWindow only copies its live computation into
+    // what it actually renders when settleTick changes - see
+    // monitorWorkspaces/liveMonitorWorkspaces below.
     property int settleTick: 0
 
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            root.loadScreensStore()
             renderSettleTimer.restart()
         }
     }
