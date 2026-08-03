@@ -18,6 +18,21 @@ Row {
 
     spacing: 4
 
+    // Fed in from Bar.qml - Dashboard.qml's shared root Scope, whose
+    // workspacesChanged signal (emitted by every screen's ScreenSettings
+    // instance right after Apply) nudges loadScreensStore()/
+    // renderSettleTimer below to run immediately instead of waiting on
+    // Hyprland's own raw-event stream or the periodic poll.
+    property var dashboard: null
+
+    Connections {
+        target: root.dashboard
+        function onWorkspacesChanged() {
+            root.loadScreensStore()
+            renderSettleTimer.restart()
+        }
+    }
+
     // Every connected screen, left-to-right by x - ties (side-by-side
     // monitors stacked vertically instead) broken by whichever is
     // closest to y = 0, so a monitor placed above the reference point

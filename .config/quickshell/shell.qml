@@ -33,5 +33,5 @@ Scope {
     volumeOsd: volumeOsd
   }
 
-  WorkspaceOsd {}
+  WorkspaceOsd { dashboard: dashboard }
 }

@@ -49,6 +49,20 @@ Scope {
     property var audioSelectedSinkId: null
     property var audioSelectedSourceId: null
 
+    // Emitted by every screen's ScreenSettings instance (via
+    // dashboardRoot below) right after Apply writes monitors.json -
+    // WorkspaceRow.qml/WorkspaceOsd.qml each listen for this (see their
+    // own dashboard property) and reload their own screensStore
+    // immediately, rather than waiting on Hyprland's raw-event stream
+    // (which a checkbox-only Apply may never actually produce, since the
+    // workspace_rule/move dispatches it still sends are all no-ops if
+    // nothing physically changed) or their own periodic poll. Purely a
+    // "go reload now" nudge - no data rides along with it, unlike the
+    // liveScreensStore relay attempted (then reverted) earlier this
+    // session, which tried to replace the file entirely rather than just
+    // prompting an existing file-read to happen sooner.
+    signal workspacesChanged()
+
     // ---------------- Monitor brightness (DDC/CI + brightnessctl) ----------------
     // Lifted up here rather than living on each screen's own
     // ScreenSettings instance - brightness is a property of the
