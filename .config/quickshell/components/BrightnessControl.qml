@@ -29,7 +29,15 @@ Rectangle {
     property real uiScale: 1.0
     property var dashboard: null
 
-    readonly property string targetMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
+    // effectivePrimaryMonitor(), not root.dashboard.primaryMonitor
+    // directly - the latter defaults to a hardcoded output name that
+    // isn't persisted to disk, so on a laptop that's never had its
+    // eDP-1 panel explicitly set as primary it pointed at a monitor
+    // that doesn't exist at all, leaving this widget hidden forever
+    // once detection finished (see Dashboard.qml's own comment on
+    // effectivePrimaryMonitor for the same failure mode Bar.qml already
+    // guards against for the bar's own visibility).
+    readonly property string targetMonitor: root.dashboard ? root.dashboard.effectivePrimaryMonitor() : ""
 
     // False until both the ddcutil and brightnessctl detect Processes
     // (Dashboard.qml) have completed at least once - supportsBrightness()

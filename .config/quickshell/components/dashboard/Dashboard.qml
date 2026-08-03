@@ -41,6 +41,23 @@ Scope {
     property bool identifying: false
     property string primaryMonitor: "DP-1"
 
+    // primaryMonitor defaults to a hardcoded output name and isn't
+    // persisted to disk, so on a machine that's never had its primary
+    // explicitly set (double-click a display in Screen Settings) it can
+    // easily point at a name nothing is actually connected to - a
+    // laptop with only eDP-1 is exactly this case, since "DP-1" doesn't
+    // exist on it at all. Same "resolve to whichever screen is actually
+    // there" fallback Bar.qml's own effectivePrimaryName already uses
+    // for the bar's own visibility - BrightnessControl.qml reads this
+    // instead of root.primaryMonitor directly for the same reason,
+    // otherwise it silently targets a monitor that can never report
+    // brightness support and just stays hidden forever on such a
+    // machine.
+    function effectivePrimaryMonitor() {
+        if (root.primaryMonitor && Quickshell.screens.some(s => s.name === root.primaryMonitor)) return root.primaryMonitor
+        return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
+    }
+
     // Same reasoning, for the currently-selected audio sink/source (see
     // AudioSettings.qml) - VolumeOsd.qml (instantiated separately in
     // shell.qml) needs to know which device was last explicitly picked
@@ -110,11 +127,18 @@ Scope {
     property bool brightnessctlDetectDone: false
     readonly property bool brightnessDetectionDone: root.ddcDetectDone && root.brightnessctlDetectDone
 
-    // eDP is the standard Linux/Wayland output name for a laptop's own
-    // built-in panel - the one case ddcutil structurally can't reach,
-    // which is exactly the case brightnessctl exists for.
+    // eDP/LVDS/DSI are the standard Linux DRM connector types for a
+    // laptop's own built-in panel (eDP by far the most common on modern
+    // hardware, LVDS/DSI covering older/rarer ones) - external monitors
+    // are never connected through any of these, only through cabled
+    // types like DP-*/HDMI-A-*. This is the one case ddcutil
+    // structurally can't reach at all (no DDC/CI channel over an
+    // internal panel's connection the way there is over an external
+    // monitor's cable), which is exactly the case brightnessctl exists
+    // for - broadened from eDP-only, which still left some real laptop
+    // panels unmatched.
     function controlsViaBrightnessctl(name) {
-        return root.hasBrightnessctlDevice && /^eDP/i.test(name)
+        return root.hasBrightnessctlDevice && /^(eDP|LVDS|DSI)/i.test(name)
     }
 
     function brightnessFor(name) {
@@ -123,8 +147,14 @@ Scope {
         return 50
     }
 
+    // brightnessctl checked first, ddcutil only as the fallback - a
+    // monitor is either the laptop's own internal panel (brightnessctl,
+    // never visible to ddcutil at all) or an external one (ddcutil,
+    // never something brightnessctl's single backlight device
+    // controls), so this is never actually ambiguous in practice, but
+    // brightnessctl is the cheaper/more direct path when it does apply.
     function supportsBrightness(name) {
-        return root.ddcBusNumbers[name] !== undefined || root.controlsViaBrightnessctl(name)
+        return root.controlsViaBrightnessctl(name) || root.ddcBusNumbers[name] !== undefined
     }
 
     function setPendingBrightness(name, value) {
@@ -1116,6 +1146,7 @@ Scope {
                     networkSettings.forceHide()
                     bluetoothSettings.forceHide()
                     screenSettings.forceHide()
+                    batterySettings.forceHide()
                 }
             }
 
