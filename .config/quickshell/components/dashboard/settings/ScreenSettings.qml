@@ -715,14 +715,41 @@ SettingsPanel {
             workspaceLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
         }
 
+        // Every workspace number that belongs to ANY active monitor after
+        // this Apply - used right below to tell "this old workspace was
+        // truly orphaned" apart from "this old workspace still exists,
+        // just reassigned to a different monitor". Reassigning a pinned
+        // workspace elsewhere (e.g. moving workspace 2 from DP-2 to
+        // DP-1 while Discord's open on it) already gets its windows
+        // carried along for free by the ordinary workspace_rule/move
+        // pair above, which moves the whole workspace (and everything on
+        // it) as a unit - the same thing happens when a monitor gets
+        // disabled and its pinned numbers get recaptured onto the
+        // primary. Individually rescuing windows off that same old
+        // workspace id here would fight that move instead of
+        // complementing it - both dispatches would target windows
+        // sitting on "workspace 2", one relocating them as part of the
+        // whole workspace to DP-1, the other yanking them individually
+        // onto DP-2's own new filler workspace - reported live as
+        // Discord left behind on an unmanaged filler after explicitly
+        // reassigning its workspace elsewhere, or after disabling the
+        // monitor it was on entirely.
+        const allResolvedNumbers = new Set()
+        for (const name of activeNames) {
+            for (const num of resolved[name] || []) allResolvedNumbers.add(num)
+        }
+
         // Any of those same monitors that also had a real window open on
         // their old (live, pre-Apply) active workspace gets that window
         // rescued onto the new one too, via clientsQueryProcess below,
         // rather than left stranded on the now-orphaned workspace only
-        // reachable through WorkspaceRow.
+        // reachable through WorkspaceRow - but only when that old
+        // workspace is genuinely orphaned (see allResolvedNumbers above),
+        // not merely reassigned to a different monitor.
         const rescues = []
         for (const entry of newlyManaged) {
             if (entry.oldWorkspace === undefined || entry.oldWorkspace === entry.newWorkspace) continue
+            if (allResolvedNumbers.has(entry.oldWorkspace)) continue
             rescues.push({ monitor: entry.monitor, oldWorkspace: entry.oldWorkspace, newWorkspace: entry.newWorkspace })
         }
 

@@ -206,14 +206,37 @@ Scope {
                 // nothing has actually changed yet) has no prior value to
                 // slide *from* - skip showing then, only on real switches.
                 if (!osdWindow.hyprMonitor || osdWindow.activeId < 0) return
-                // monitorWorkspaces' pinnedNumbers filter can leave this
-                // monitor with nothing at all to show (e.g. nothing
-                // pinned to it yet and showEmptyOsd is off) - popping up
-                // an empty box row would just be a floating border for no
-                // reason, so skip entirely rather than show it.
-                if (osdWindow.monitorWorkspaces.length === 0) return
+                // pinnedNumbers can leave this monitor with nothing at
+                // all to show (e.g. nothing pinned to it yet and
+                // showEmptyOsd is off) - popping up an empty box row
+                // would just be a floating border for no reason, so skip
+                // entirely rather than show it. Checked against
+                // liveMonitorWorkspaces here, NOT the debounced
+                // monitorWorkspaces the Repeater actually renders -
+                // activeId changes the instant Hyprland's own event
+                // fires, while monitorWorkspaces only catches up once
+                // renderSettleTimer's ~120ms window elapses. Using the
+                // debounced value here raced the two: switching every
+                // workspace off a monitor (e.g. reassigning them all to
+                // a different monitor via Screen Settings) could still
+                // read the *stale*, pre-Apply monitorWorkspaces at the
+                // exact moment activeId flipped to the new (genuinely
+                // empty) state, popping up an OSD that then rendered
+                // nothing once monitorWorkspaces actually caught up -
+                // reported live as an empty bordered box appearing on a
+                // monitor with no managed workspaces left.
+                if (osdWindow.liveMonitorWorkspaces.length === 0) return
                 osdWindow.reallyVisible = true
                 hideTimer.restart()
+            }
+
+            // Safety net for the same race from the other direction: if
+            // the debounced list settles to empty while already showing
+            // (rather than exactly at the activeId-changed instant above),
+            // hide immediately rather than leave an empty box lingering
+            // for the rest of hideTimer's interval.
+            onMonitorWorkspacesChanged: {
+                if (osdWindow.monitorWorkspaces.length === 0) osdWindow.reallyVisible = false
             }
 
             Timer {
