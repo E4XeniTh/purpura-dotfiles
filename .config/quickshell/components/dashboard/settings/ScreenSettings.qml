@@ -248,9 +248,24 @@ SettingsPanel {
     // the return value belongs to EXACTLY one entry - the hard
     // exclusivity invariant this whole rewrite exists to guarantee.
     function resolveWorkspaceAssignment() {
+        // Numbers past 5 (the explicit-pin range - see the workspace
+        // buttons below) are stripped from every monitor's remembered
+        // list right up front, before anything else runs - they're never
+        // durable state, only ever recomputed fresh by step 3 below,
+        // whenever some monitor genuinely still needs an auto-assigned
+        // filler this Apply. Skipping this used to let them accumulate
+        // forever: orphan-recapture (step 2) moves a disabled monitor's
+        // numbers onto the primary one at a time, and if that primary
+        // already had a real 1-5 pin of its own, it never had a reason
+        // to reconsider whether it still needed a *previous* auto-spare
+        // it had picked up the same way earlier - reported live as a
+        // monitor ending up with e.g. "workspaces": [1, 6, 7] after
+        // several enable/disable cycles of some other display, with no
+        // way to ever release 6 or 7 again (no button exists for
+        // anything past 5) even though nothing needed either any more.
         const desired = {}
         for (const m of root.monitors) {
-            desired[m.name] = root.workspacesFor(m.name).slice()
+            desired[m.name] = root.workspacesFor(m.name).filter(num => num <= 5)
         }
 
         const activeNames = root.monitors.filter(m => root.enabledFor(m.name)).map(m => m.name)
