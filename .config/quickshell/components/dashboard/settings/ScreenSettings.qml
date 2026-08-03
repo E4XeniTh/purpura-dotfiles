@@ -538,15 +538,32 @@ SettingsPanel {
         const refresh = e.refresh !== undefined
             ? e.refresh
             : (remembered.refreshRate !== undefined ? remembered.refreshRate : remembered.refresh)
-        const x = override ? override.x : (e.x !== undefined ? e.x : remembered.x)
-        const y = override ? override.y : (e.y !== undefined ? e.y : remembered.y)
+        // storedX/storedY: what this monitor's position "really" is
+        // (its own edited/remembered value), ignoring positionOverrides
+        // entirely - x/y below are what gets actually sent live this
+        // Apply (with the override applied, when resolveOriginFailsafe
+        // staged one) and are what buildMonitorLine() uses; storedX/
+        // storedY are what applyChanges() persists into monitors.json
+        // instead. Without this split, a monitor forced to (0, 0) live
+        // because it was the only one enabled (e.g. swapping to a lone
+        // TV for the night) had that forced position permanently
+        // overwrite its real, deliberately-offset one (e.g. a TV
+        // physically stacked above the desk monitor at y = -1080) -
+        // reported live as needing to retype the TV's real position by
+        // hand every time it was used alongside the other monitor
+        // again, since the override had already clobbered what was
+        // remembered for it.
+        const storedX = e.x !== undefined ? e.x : remembered.x
+        const storedY = e.y !== undefined ? e.y : remembered.y
+        const x = override ? override.x : storedX
+        const y = override ? override.y : storedY
         const rawScale = e.scale !== undefined ? e.scale : remembered.scale
         const scale = rawScale > 0 ? rawScale : 1
 
         if (!root.enabledFor(name)) {
             return {
                 disabled: true,
-                width, height, refresh, x, y, scale,
+                width, height, refresh, x, y, scale, storedX, storedY,
                 mode: stored ? stored.mode : "manual",
                 usesExplicitMode: false,
                 usesExplicitPosition: false
@@ -567,7 +584,7 @@ SettingsPanel {
 
         return {
             disabled: false,
-            width, height, refresh, x, y, scale,
+            width, height, refresh, x, y, scale, storedX, storedY,
             mode: root.preferredModes[name] ? "preferred" : "manual",
             usesExplicitMode,
             usesExplicitPosition
@@ -777,8 +794,16 @@ SettingsPanel {
                     width: state.width,
                     height: state.height,
                     refresh: state.refresh,
-                    x: state.x,
-                    y: state.y,
+                    // storedX/storedY, not x/y - see effectiveStateFor()
+                    // for why: x/y include resolveOriginFailsafe's
+                    // one-Apply-only position override (e.g. forcing a
+                    // lone enabled monitor to (0, 0)), which should take
+                    // effect live (that's what buildMonitorLine()'s line
+                    // above already used) without permanently
+                    // overwriting this monitor's real, remembered
+                    // position on disk.
+                    x: state.storedX,
+                    y: state.storedY,
                     scale: state.scale,
                     mode: state.mode,
                     workspaces: resolved[m.name] || [],
