@@ -16,7 +16,7 @@ import "../Config.js" as Config
 Row {
     id: root
 
-    spacing: 6
+    spacing: 4
 
     // Every connected screen, left-to-right by x - ties (side-by-side
     // monitors stacked vertically instead) broken by whichever is
@@ -495,10 +495,10 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with).
-            //MouseArea {
-            //    anchors.fill: parent
-            //    onClicked: wsBox.modelData.activate()
-            //}
+            MouseArea {
+                anchors.fill: parent
+                onClicked: wsBox.modelData.activate()
+            }
         }
     }
 }

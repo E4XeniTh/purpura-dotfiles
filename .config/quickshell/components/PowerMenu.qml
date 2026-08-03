@@ -273,7 +273,7 @@ PanelWindow {
 
                         onClicked: {
                             root.open = false
-                            Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl suspend"])
+                            Quickshell.execDetached(["systemctl", "suspend"])
                         }
                     }
                 }

@@ -102,6 +102,7 @@ Rectangle {
                 segmentCount: 18
                 // Same red-on-mute treatment as VolumeOsd.qml/DeviceSlider.qml.
                 litColor: root.muted ? Config.fgcolorred : (dragArea.containsMouse ? Config.fgcolorlight : Config.fgcolor)
+                unlitColor: root.muted ? Qt.darker(Config.fgcolorred, 2.5) : Config.fgcolordark
             }
 
             MouseArea {

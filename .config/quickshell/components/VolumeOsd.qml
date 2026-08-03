@@ -163,6 +163,7 @@ Scope {
 								value: volumeRow.volume
 								// Same red-on-mute treatment as VolumeControl.qml/DeviceSlider.qml.
 								litColor: volumeRow.muted ? Config.fgcolorred : Config.fgcolor
+								unlitColor: volumeRow.muted ? Qt.darker(Config.fgcolorred, 2.5) : Config.fgcolordark
 							}
 						}
 
