@@ -595,15 +595,6 @@ SettingsPanel {
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
 
-        // Baseline "before" state for the focus-kick/rescue diff below -
-        // the last Apply's persisted result (root.screensStore), never
-        // root.pendingWorkspaces (this Apply's in-progress UI edits).
-        const previousWorkspaces = {}
-        for (const m of root.monitors) {
-            const stored = root.screensStore[m.name]
-            previousWorkspaces[m.name] = (stored && stored.workspaces) ? stored.workspaces.slice() : []
-        }
-
         // The one authoritative, from-scratch, collision-free mapping -
         // see resolveWorkspaceAssignment() above for why this replaced
         // four separate incremental fixups.
@@ -663,32 +654,49 @@ SettingsPanel {
             }
         }
 
-        // Monitors that had nothing at all before this Apply (per
-        // previousWorkspaces above) but do now - forced onto their new
-        // lowest workspace immediately (focus monitor, then workspace)
-        // rather than left showing whatever they had before until
-        // someone manually switches away from it. Same window-rescue
-        // treatment as before for any real window still sitting on that
-        // monitor's old (live, pre-Apply) active workspace.
-        const newlyManaged = activeNames
-            .filter(name => previousWorkspaces[name].length === 0 && (resolved[name] || []).length > 0)
-            .map(name => ({ monitor: name, newWorkspace: resolved[name].reduce((a, b) => Math.min(a, b)) }))
+        // Monitors whose CURRENT LIVE active workspace (root.baseFor(name),
+        // the last hyprctl fetch this panel did) isn't part of its newly
+        // resolved set at all - forced onto their new lowest workspace
+        // immediately (focus monitor, then workspace) rather than left
+        // showing whatever they were on until someone manually switches
+        // away from it. Deliberately keyed off LIVE reality, not
+        // monitors.json's previously-persisted list - an earlier version
+        // used "the persisted list was empty" as the trigger instead,
+        // which silently never fired for a monitor whose monitors.json
+        // still remembered some stale entry from long before (e.g. an old
+        // auto-assigned spare number that had nothing to do with this
+        // Apply) even though its actual live workspace was never part of
+        // this Apply's newly-resolved set either - reported live as a
+        // monitor given fresh workspace pins not getting switched off
+        // its old unmanaged workspace at all, only fixable by hand.
+        const newlyManaged = []
+        for (const name of activeNames) {
+            const targets = resolved[name] || []
+            if (targets.length === 0) continue
+            const base = root.baseFor(name)
+            const currentLive = (base && base.activeWorkspace) ? base.activeWorkspace.id : undefined
+            if (currentLive !== undefined && targets.includes(currentLive)) continue
+            newlyManaged.push({
+                monitor: name,
+                oldWorkspace: currentLive,
+                newWorkspace: targets.reduce((a, b) => Math.min(a, b))
+            })
+        }
 
         for (const entry of newlyManaged) {
             workspaceLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
             workspaceLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
         }
 
-        // root.baseFor(name) is the last hyprctl monitors read this
-        // panel did - not re-fetched fresh here, same acceptable
-        // staleness tradeoff already made elsewhere in this file (e.g.
-        // resolveOriginFailsafe's anyAtOrigin check).
+        // Any of those same monitors that also had a real window open on
+        // their old (live, pre-Apply) active workspace gets that window
+        // rescued onto the new one too, via clientsQueryProcess below,
+        // rather than left stranded on the now-orphaned workspace only
+        // reachable through WorkspaceRow.
         const rescues = []
         for (const entry of newlyManaged) {
-            const base = root.baseFor(entry.monitor)
-            const oldId = (base && base.activeWorkspace) ? base.activeWorkspace.id : undefined
-            if (oldId === undefined || oldId === entry.newWorkspace) continue
-            rescues.push({ monitor: entry.monitor, oldWorkspace: oldId, newWorkspace: entry.newWorkspace })
+            if (entry.oldWorkspace === undefined || entry.oldWorkspace === entry.newWorkspace) continue
+            rescues.push({ monitor: entry.monitor, oldWorkspace: entry.oldWorkspace, newWorkspace: entry.newWorkspace })
         }
 
         // monitors.json persists the *whole* layout, not just what
