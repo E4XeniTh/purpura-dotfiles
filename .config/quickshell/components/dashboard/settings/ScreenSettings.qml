@@ -326,23 +326,35 @@ SettingsPanel {
             }
         }
 
-        // 3. Any active monitor left with nothing at all gets the
-        // lowest positive integer nobody else - active OR
-        // inactive-but-remembered - is using, so it's never immediately
-        // stolen back out from under a monitor that gets re-enabled
-        // later. No more ">5 reserved for real pins" distinction - every
-        // number is equally real now, so this can (and normally will)
-        // land within 1-5 if those aren't all already claimed elsewhere.
-        const globallyUsed = new Set()
-        for (const name in desired) {
-            for (const num of desired[name]) globallyUsed.add(num)
-        }
+        // 3. Any active monitor left with nothing at all gets the lowest
+        // positive integer no other ACTIVE monitor is using -
+        // claimedByActive already covers anything just recaptured in
+        // step 2, so this stays accurate without rebuilding it. NOT
+        // reserving whatever a disabled/inactive monitor still remembers
+        // - an earlier version of this function used a set built from
+        // every monitor (active or not) here instead, on the theory that
+        // it'd avoid a re-enabled monitor's number getting stolen out
+        // from under it. That created a worse, permanent problem in
+        // practice: a monitor that just stays disabled (a second display
+        // only turned on occasionally, say) would forever keep whatever
+        // it last remembered off-limits, pushing every other monitor's
+        // auto-assigned spare higher and higher (6, 7, 8...) even though
+        // 1-5 are sitting completely unused - reported live as always
+        // seeing spare workspaces 6 and 7 in the OSD despite nothing
+        // active actually claiming 1-5. If that monitor is later
+        // re-enabled and collides with whoever took its old number in
+        // the meantime, step 1 above already resolves that
+        // deterministically on that later Apply - not worth permanently
+        // reserving against. No more ">5 reserved for real pins"
+        // distinction either - every number is equally real now, so this
+        // can (and normally will) land within 1-5 if those aren't all
+        // already claimed by another active monitor.
         let nextSpare = 1
         for (const name of activeNames) {
             if (desired[name].length > 0) continue
-            while (globallyUsed.has(nextSpare)) nextSpare++
+            while (claimedByActive.has(nextSpare)) nextSpare++
             desired[name] = [nextSpare]
-            globallyUsed.add(nextSpare)
+            claimedByActive.add(nextSpare)
         }
 
         for (const name in desired) {
