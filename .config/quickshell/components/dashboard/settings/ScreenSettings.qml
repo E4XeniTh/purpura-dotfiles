@@ -790,17 +790,6 @@ SettingsPanel {
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
-        // Nudges WorkspaceRow.qml/WorkspaceOsd.qml to reload monitors.json
-        // right now - see Dashboard.qml's own workspacesChanged signal
-        // declaration for why this can't just rely on Hyprland's raw-
-        // event stream (a checkbox-only Apply's workspace_rule/move
-        // dispatches are all no-ops when nothing physically changed, so
-        // no raw event necessarily fires at all) - reported live as the
-        // checkboxes above not visibly affecting either widget until
-        // switching workspaces or clicking elsewhere forced some other
-        // refresh to happen first.
-        if (root.dashboardRoot) root.dashboardRoot.workspacesChanged()
-
         // Monitor enable/disable/geometry lines go out first. If any
         // touched monitor is transitioning disabled -> enabled this
         // Apply, the workspace rule/move/focus/rescue lines wait for it

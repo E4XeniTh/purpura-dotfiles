@@ -107,7 +107,6 @@ Scope {
                 // button specifically.
                 WorkspaceRow {
                     id: workspaceRow
-                    dashboard: root.dashboard
                     height: clockCard.height
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left

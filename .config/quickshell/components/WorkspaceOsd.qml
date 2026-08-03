@@ -29,21 +29,6 @@ Scope {
     // ScreenSettings.qml's toggleShowEmptyOsd()).
     property var screensStore: ({})
 
-    // Fed in from shell.qml - Dashboard.qml's shared root Scope, whose
-    // workspacesChanged signal (emitted by every screen's ScreenSettings
-    // instance right after Apply) nudges loadScreensStore()/
-    // renderSettleTimer below to run immediately instead of waiting on
-    // Hyprland's own raw-event stream or the periodic poll.
-    property var dashboard: null
-
-    Connections {
-        target: root.dashboard
-        function onWorkspacesChanged() {
-            root.loadScreensStore()
-            renderSettleTimer.restart()
-        }
-    }
-
     function loadScreensStore() {
         screensStoreProcess.running = false
         screensStoreProcess.running = true
