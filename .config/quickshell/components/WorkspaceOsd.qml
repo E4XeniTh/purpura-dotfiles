@@ -107,36 +107,51 @@ Scope {
 
             readonly property bool showEmptyOsd: !!root.screensStore.__showEmptyOsd
 
+            // Every workspace number actually pinned to *this* monitor
+            // per monitors.json (ScreenSettings.qml's
+            // resolveWorkspaceAssignment()), straight off screensStore -
+            // used both to filter the real Hyprland.workspaces list below
+            // and to build showEmptyOsd's placeholders. Used to be a
+            // hardcoded `id <= 5` cutoff instead - a leftover from when
+            // anything past 5 was, by definition, an ephemeral auto-
+            // assigned spare never meant to show here. That's no longer
+            // true (a monitor with nothing explicitly pinned can now get
+            // a real, fully-managed spare workspace above 5 once 1-5 are
+            // all claimed elsewhere) - reported live as the OSD still
+            // showing a workspace that was never actually part of this
+            // monitor's managed set, and a genuinely-managed spare above
+            // 5 never showing up at all.
+            readonly property var pinnedNumbers: {
+                if (!osdWindow.hyprMonitor) return []
+                const stored = root.screensStore[osdWindow.hyprMonitor.name]
+                return (stored && stored.workspaces) ? stored.workspaces : []
+            }
+
             // Every workspace currently assigned to *this* monitor, sorted
             // by id - re-evaluates live off Hyprland.workspaces (an
             // ObjectModel, same reactive-list pattern as
-            // Networking.devices/Pipewire.nodes elsewhere in this shell).
-            // Excludes anything past 5 - workspaces 1-5 are the pinned
-            // range (see Screen Settings' workspace buttons); a monitor
-            // with nothing explicitly pinned gets the next free number
-            // from Hyprland instead (e.g. 6 on a third monitor once 1-3
-            // and 4-5 are taken), which isn't meant to show up here.
+            // Networking.devices/Pipewire.nodes elsewhere in this shell),
+            // filtered down to only those actually pinned (see
+            // pinnedNumbers above).
             //
-            // When showEmptyOsd is on, any workspace 1-5 pinned to this
-            // monitor (monitors.json) but not existing in Hyprland yet
-            // (nobody's switched to it this session) is added as a bare
-            // placeholder ({ id }) - the delegate below only ever reads
-            // .id off each entry, so nothing more is needed. It'll never
-            // match activeId (a real workspace has to be switched to for
-            // that), so the sliding highlight simply never lands on one.
+            // When showEmptyOsd is on, any pinned number not existing in
+            // Hyprland yet (nobody's switched to it this session) is
+            // added as a bare placeholder ({ id }) - the delegate below
+            // only ever reads .id off each entry, so nothing more is
+            // needed. It'll never match activeId (a real workspace has to
+            // be switched to for that), so the sliding highlight simply
+            // never lands on one.
             //
             // This is the "live" computation - see monitorWorkspaces
             // below for what the Repeater actually renders.
             readonly property var liveMonitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
                 let list = Hyprland.workspaces.values
-                    .filter(w => w.monitor === osdWindow.hyprMonitor && w.id <= 5)
+                    .filter(w => w.monitor === osdWindow.hyprMonitor && osdWindow.pinnedNumbers.includes(w.id))
 
                 if (osdWindow.showEmptyOsd) {
                     const existing = new Set(list.map(w => w.id))
-                    const stored = root.screensStore[osdWindow.hyprMonitor.name]
-                    const pinned = (stored && stored.workspaces) ? stored.workspaces : []
-                    for (const num of pinned) {
+                    for (const num of osdWindow.pinnedNumbers) {
                         if (existing.has(num)) continue
                         list = list.concat([{ id: num }])
                     }
@@ -185,11 +200,11 @@ Scope {
                 // nothing has actually changed yet) has no prior value to
                 // slide *from* - skip showing then, only on real switches.
                 if (!osdWindow.hyprMonitor || osdWindow.activeId < 0) return
-                // monitorWorkspaces' hardcoded id<=5 filter can leave this
-                // monitor with nothing at all to show (e.g. every real
-                // workspace here is >5 and showEmptyOsd is off) - popping
-                // up an empty box row would just be a floating border for
-                // no reason, so skip entirely rather than show it.
+                // monitorWorkspaces' pinnedNumbers filter can leave this
+                // monitor with nothing at all to show (e.g. nothing
+                // pinned to it yet and showEmptyOsd is off) - popping up
+                // an empty box row would just be a floating border for no
+                // reason, so skip entirely rather than show it.
                 if (osdWindow.monitorWorkspaces.length === 0) return
                 osdWindow.reallyVisible = true
                 hideTimer.restart()

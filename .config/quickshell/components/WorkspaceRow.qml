@@ -112,12 +112,22 @@ Row {
         }
 
         // strictWorkspaceWidget (Screen Settings' toggle, above Identify)
-        // drops anything past id 5 entirely when on - the "unmanaged"
-        // spare numbers Hyprland hands a monitor with nothing pinned to
-        // it, same range excluded from WorkspaceOsd.qml already.
+        // drops any workspace not actually pinned to its monitor
+        // (isPinned() below, straight off monitors.json's per-monitor
+        // "workspaces" list) when on. Used to be a hardcoded `id <= 5`
+        // cutoff - a leftover from when anything past 5 was, by
+        // definition, an ephemeral auto-assigned spare. That's no longer
+        // true (resolveWorkspaceAssignment() in ScreenSettings.qml can
+        // now hand a monitor a real, fully-managed spare workspace above
+        // 5 once 1-5 are all claimed elsewhere), and the cutoff was
+        // never actually checking "is this managed" in the first place -
+        // a genuinely stray/unmanaged workspace with an id <= 5 (created
+        // by hand, or left over from before a reassignment) slipped
+        // straight through it untouched, which is what read live as
+        // "only managed workspaces" not actually hiding an unmanaged one.
         let workspaces = Array.from(byId.values())
         if (root.strictWorkspaceWidget) {
-            workspaces = workspaces.filter(w => w.id <= 5)
+            workspaces = workspaces.filter(w => root.isPinned(w))
         }
 
         workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
@@ -460,13 +470,15 @@ Row {
             // higher than the Repeater's default stacking) so it stays
             // legible regardless of how many window/icon rectangles are
             // packed underneath it. Hidden entirely - not just dimmed -
-            // for a workspace number past 5 or one that was never
-            // actually pinned to this monitor through Screen Settings
-            // (see isPinned()/screensStore above), e.g. the spare
-            // number 6+ Hyprland assigns a monitor with nothing pinned
-            // to it once 1-5 are already claimed elsewhere - the box
-            // and its window grid still show either way, just without
-            // a number that would otherwise look like a deliberate pin.
+            // for a workspace that was never actually pinned to this
+            // monitor through Screen Settings (see isPinned()/
+            // screensStore above) - the box and its window grid still
+            // show either way, just without a number that would
+            // otherwise look like a deliberate pin. No numeric cutoff
+            // any more - a monitor's auto-assigned spare (see
+            // resolveWorkspaceAssignment() in ScreenSettings.qml) is a
+            // real, fully-managed workspace now even past id 5, so it
+            // gets a number too as long as isPinned() confirms it.
             Text {
                 anchors {
                     bottom: parent.bottom
@@ -476,7 +488,7 @@ Row {
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignBottom
                 z: 10
-                visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
+                visible: root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
                 color: Config.fgcolor
                 opacity: 0.75
