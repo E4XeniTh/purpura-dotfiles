@@ -112,22 +112,28 @@ Row {
         }
 
         // strictWorkspaceWidget (Screen Settings' toggle, above Identify)
-        // drops any workspace not actually pinned to its monitor
-        // (isPinned() below, straight off monitors.json's per-monitor
-        // "workspaces" list) when on. Used to be a hardcoded `id <= 5`
-        // cutoff - a leftover from when anything past 5 was, by
-        // definition, an ephemeral auto-assigned spare. That's no longer
-        // true (resolveWorkspaceAssignment() in ScreenSettings.qml can
-        // now hand a monitor a real, fully-managed spare workspace above
-        // 5 once 1-5 are all claimed elsewhere), and the cutoff was
-        // never actually checking "is this managed" in the first place -
-        // a genuinely stray/unmanaged workspace with an id <= 5 (created
-        // by hand, or left over from before a reassignment) slipped
-        // straight through it untouched, which is what read live as
-        // "only managed workspaces" not actually hiding an unmanaged one.
+        // drops anything that isn't an explicit 1-5 pin actually
+        // belonging to its own monitor when on - two conditions, both
+        // needed: id <= 5 (only the button-driven range counts as a
+        // deliberate pin; resolveWorkspaceAssignment() in
+        // ScreenSettings.qml never lets anything past 5 be anything
+        // other than an auto-assigned filler for a monitor nothing was
+        // explicitly chosen for, and "managed" here means "I picked
+        // this", not "this monitor happens to be functional") and
+        // isPinned() (straight off monitors.json's per-monitor
+        // "workspaces" list - catches a genuinely stray/misattributed
+        // workspace with an id <= 5 that isn't actually pinned to its
+        // own monitor, e.g. left over from before a reassignment).
+        // Dropping either check broke this one way or the other: id <= 5
+        // alone let an auto-filled spare above 5 through, which is what
+        // read live as this checkbox "doing nothing" for a monitor with
+        // nothing explicitly chosen; isPinned() alone let an auto-filled
+        // spare through too, since it's still technically present in
+        // monitors.json (fully exclusive/real, just never something a
+        // button produced).
         let workspaces = Array.from(byId.values())
         if (root.strictWorkspaceWidget) {
-            workspaces = workspaces.filter(w => root.isPinned(w))
+            workspaces = workspaces.filter(w => w.id <= 5 && root.isPinned(w))
         }
 
         workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
@@ -470,15 +476,15 @@ Row {
             // higher than the Repeater's default stacking) so it stays
             // legible regardless of how many window/icon rectangles are
             // packed underneath it. Hidden entirely - not just dimmed -
-            // for a workspace that was never actually pinned to this
-            // monitor through Screen Settings (see isPinned()/
-            // screensStore above) - the box and its window grid still
-            // show either way, just without a number that would
-            // otherwise look like a deliberate pin. No numeric cutoff
-            // any more - a monitor's auto-assigned spare (see
-            // resolveWorkspaceAssignment() in ScreenSettings.qml) is a
-            // real, fully-managed workspace now even past id 5, so it
-            // gets a number too as long as isPinned() confirms it.
+            // for a workspace number past 5 (always an auto-assigned
+            // filler for a monitor nothing was explicitly chosen for -
+            // see resolveWorkspaceAssignment() in ScreenSettings.qml,
+            // never something the 1-5 buttons themselves produce) or one
+            // that was never actually pinned to this monitor through
+            // Screen Settings (see isPinned()/screensStore above) - the
+            // box and its window grid still show either way, just
+            // without a number that would otherwise look like a
+            // deliberate pin.
             Text {
                 anchors {
                     bottom: parent.bottom
@@ -488,7 +494,7 @@ Row {
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignBottom
                 z: 10
-                visible: root.isPinned(wsBox.modelData)
+                visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
                 text: String(wsBox.modelData.id)
                 color: Config.fgcolor
                 opacity: 0.75

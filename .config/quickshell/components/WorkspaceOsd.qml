@@ -107,24 +107,30 @@ Scope {
 
             readonly property bool showEmptyOsd: !!root.screensStore.__showEmptyOsd
 
-            // Every workspace number actually pinned to *this* monitor
-            // per monitors.json (ScreenSettings.qml's
-            // resolveWorkspaceAssignment()), straight off screensStore -
+            // Every workspace number actually, deliberately pinned to
+            // *this* monitor per monitors.json (i.e. chosen via the 1-5
+            // buttons in Screen Settings) - straight off screensStore,
             // used both to filter the real Hyprland.workspaces list below
-            // and to build showEmptyOsd's placeholders. Used to be a
-            // hardcoded `id <= 5` cutoff instead - a leftover from when
-            // anything past 5 was, by definition, an ephemeral auto-
-            // assigned spare never meant to show here. That's no longer
-            // true (a monitor with nothing explicitly pinned can now get
-            // a real, fully-managed spare workspace above 5 once 1-5 are
-            // all claimed elsewhere) - reported live as the OSD still
-            // showing a workspace that was never actually part of this
-            // monitor's managed set, and a genuinely-managed spare above
-            // 5 never showing up at all.
+            // and to build showEmptyOsd's placeholders. Explicitly capped
+            // at id <= 5: resolveWorkspaceAssignment() in
+            // ScreenSettings.qml never lets anything past 5 be anything
+            // other than an auto-assigned filler for a monitor nothing
+            // was explicitly chosen for, and this OSD is meant to show
+            // deliberate pins, not "whatever number this monitor happens
+            // to be functioning on" - a monitor with nothing chosen
+            // showing its filler workspace here would just be visual
+            // noise nobody asked for. isPinned membership is still
+            // checked separately from the id cutoff (not "any id <= 5
+            // this monitor happens to be showing") so a genuinely stray/
+            // misattributed workspace with an id <= 5 doesn't slip
+            // through either - dropping either check broke this one way
+            // or the other, reported live as the OSD always showing a
+            // monitor's auto-filled spare even with nothing pinned.
             readonly property var pinnedNumbers: {
                 if (!osdWindow.hyprMonitor) return []
                 const stored = root.screensStore[osdWindow.hyprMonitor.name]
-                return (stored && stored.workspaces) ? stored.workspaces : []
+                const workspaces = (stored && stored.workspaces) ? stored.workspaces : []
+                return workspaces.filter(num => num <= 5)
             }
 
             // Every workspace currently assigned to *this* monitor, sorted
