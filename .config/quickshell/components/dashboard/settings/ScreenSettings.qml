@@ -166,16 +166,14 @@ SettingsPanel {
         root.preferredModes = updated
     }
 
-    // Workspace numbers (1-5) pinned to each monitor, keyed by name -
-    // staged across multiple monitors like pendingEnabled (not discarded
-    // when a different monitor is selected), applied and persisted into
-    // monitors.json's per-monitor "workspaces" array on Apply. A
-    // workspace can only ever be *reassigned* to a different monitor
-    // through the buttons below (see toggleWorkspace()), never fully
-    // unbound - every workspace 1-5 always belongs to exactly one
-    // monitor (see seedDefaultWorkspacesIfFresh() and
-    // resolveDisabledMonitorWorkspaces() for how that stays true on a
-    // fresh setup or when a monitor gets disabled).
+    // Workspace numbers (1-5) explicitly pinned via the buttons below,
+    // keyed by name - staged across multiple monitors like pendingEnabled
+    // (not discarded when a different monitor is selected), only ever
+    // written through toggleWorkspace(). This is raw UI staging state,
+    // not the guaranteed-exclusive result - resolveWorkspaceAssignment()
+    // (called fresh from applyChanges(), never mutating this property)
+    // is what actually guarantees every workspace belongs to exactly one
+    // monitor on a fresh setup or once a monitor gets disabled.
     property var pendingWorkspaces: ({})
 
     function workspacesFor(name) {
@@ -226,61 +224,55 @@ SettingsPanel {
         return ""
     }
 
-    // Fail-safe run at the top of every applyChanges(), before anything
-    // else that reads workspacesFor() - a monitor being disabled this
-    // Apply (pendingEnabled, right-click enable/disable, distinct from
-    // toggleWorkspace()'s per-workspace reassignment) would otherwise
-    // leave whatever workspaces it owned pinned to a monitor nobody can
-    // switch to anymore, unreachable until it's re-enabled. Moved to the
-    // primary monitor instead - guaranteed enabled (see
-    // resolveOriginFailsafe below) so always a safe place to land them.
-    function resolveDisabledMonitorWorkspaces() {
-        const updated = Object.assign({}, root.pendingWorkspaces)
-        let changed = false
-
+    // Single, pure, from-scratch resolver - replaces what used to be
+    // four separate incremental fixups (resolveDisabledMonitorWorkspaces/
+    // resolveWorkspaceCollisions/stripSpareWorkspaces/
+    // resolveEmptyWorkspaceFailsafe), each of which only patched its own
+    // slice of root.pendingWorkspaces in sequence. That was the actual
+    // source of this feature's whole history of "still doesn't work"
+    // reports: an edge case falling between two passes (one fixup
+    // assuming a monitor was already handled by another, an order
+    // dependency, a case none of the four individually anticipated).
+    // This instead recomputes the ENTIRE exclusive workspace-to-monitor
+    // mapping in one deterministic pass every single Apply, with no
+    // shared mutable state threaded through several functions - and,
+    // critically, it never writes to root.pendingWorkspaces at all
+    // (that's UI staging state bound to the 1-5 buttons; mutating it
+    // mid-Apply used to make button state visibly change as a side
+    // effect of clicking Apply). Called once from applyChanges() and
+    // used purely to build the dispatch lines and monitors.json
+    // snapshot.
+    //
+    // Returns { name -> sorted [nums] } for every monitor in
+    // root.monitors, active or not. Every number appearing anywhere in
+    // the return value belongs to EXACTLY one entry - the hard
+    // exclusivity invariant this whole rewrite exists to guarantee.
+    function resolveWorkspaceAssignment() {
+        const desired = {}
         for (const m of root.monitors) {
-            if (root.enabledFor(m.name)) continue
-            if (m.name === root.primaryMonitor) continue
-
-            const current = root.workspacesFor(m.name)
-            if (current.length === 0) continue
-
-            const primaryList = (updated[root.primaryMonitor] !== undefined
-                ? updated[root.primaryMonitor]
-                : root.workspacesFor(root.primaryMonitor)).slice()
-            for (const num of current) {
-                if (!primaryList.includes(num)) primaryList.push(num)
-            }
-
-            updated[root.primaryMonitor] = primaryList
-            updated[m.name] = []
-            changed = true
+            desired[m.name] = root.workspacesFor(m.name).slice()
         }
 
-        if (changed) root.pendingWorkspaces = updated
-    }
+        const activeNames = root.monitors.filter(m => root.enabledFor(m.name)).map(m => m.name)
+        const activeSet = new Set(activeNames)
 
-    // Fail-safe run at the top of every applyChanges(): toggleWorkspace()
-    // already reassigns (rather than duplicates) a workspace pinned
-    // elsewhere for clicks made through this session, but a monitors.json
-    // left over from before that existed, or edited by hand, could still
-    // have the same workspace number pinned to two monitors. If so, keep
-    // it only on whichever of those monitors sits closest to (0, 0) and
-    // drop it from the rest, rather than sending
-    // Hyprland a workspace_rule for the same workspace pointed at
-    // several outputs.
-    function resolveWorkspaceCollisions() {
+        // 1. Collisions among ACTIVE monitors only - toggleWorkspace()
+        // already reassigns (rather than duplicates) for clicks made
+        // this session, but monitors.json left over from before that
+        // existed, or edited by hand, could still have the same number
+        // desired by two enabled monitors. Kept on whichever sits
+        // closest to (0, 0) - deterministic, no iteration-order
+        // dependency - dropped from the rest. A disabled monitor's own
+        // stale desire for that number is left alone here (harmless,
+        // unreachable while it's inactive); see step 2 for what happens
+        // to ITS numbers instead.
         const owners = {}
-        for (const m of root.monitors) {
-            for (const num of root.workspacesFor(m.name)) {
+        for (const name of activeNames) {
+            for (const num of desired[name]) {
                 if (!owners[num]) owners[num] = []
-                owners[num].push(m.name)
+                owners[num].push(name)
             }
         }
-
-        const updated = Object.assign({}, root.pendingWorkspaces)
-        let changed = false
-
         for (const numStr in owners) {
             const names = owners[numStr]
             if (names.length <= 1) continue
@@ -296,107 +288,67 @@ SettingsPanel {
                     keepName = name
                 }
             }
-
             for (const name of names) {
                 if (name === keepName) continue
-                const list = (updated[name] !== undefined ? updated[name] : root.workspacesFor(name)).slice()
-                const idx = list.indexOf(num)
-                if (idx >= 0) {
-                    list.splice(idx, 1)
-                    updated[name] = list
-                    changed = true
+                desired[name] = desired[name].filter(n => n !== num)
+            }
+        }
+
+        // 2. A number an INACTIVE monitor still remembers isn't
+        // reachable while it's disabled/disconnected - recapture it
+        // onto the primary monitor (guaranteed active, see
+        // resolveOriginFailsafe) unless an active monitor has already
+        // explicitly claimed it. Removed from the inactive monitor's own
+        // desired list once recaptured - leaving it there was a real bug
+        // caught by testing this against a standalone simulation before
+        // ever touching Hyprland: a disabled monitor would keep
+        // "remembering" numbers that had already been handed to another
+        // monitor, so re-enabling it later would immediately re-collide
+        // with whoever it had been given to instead of landing on a
+        // clean, unclaimed number of its own.
+        const claimedByActive = new Set()
+        for (const name of activeNames) {
+            for (const num of desired[name]) claimedByActive.add(num)
+        }
+        if (root.primaryMonitor && activeSet.has(root.primaryMonitor)) {
+            for (const m of root.monitors) {
+                if (activeSet.has(m.name)) continue
+                const orphaned = desired[m.name].filter(num => !claimedByActive.has(num))
+                if (orphaned.length === 0) continue
+
+                const primaryList = desired[root.primaryMonitor].slice()
+                for (const num of orphaned) {
+                    if (!primaryList.includes(num)) primaryList.push(num)
+                    claimedByActive.add(num)
                 }
+                desired[root.primaryMonitor] = primaryList
+                desired[m.name] = desired[m.name].filter(num => !orphaned.includes(num))
             }
         }
 
-        if (changed) root.pendingWorkspaces = updated
-    }
-
-    // Numbers > 5 only ever end up in a monitor's pinned list through
-    // resolveEmptyWorkspaceFailsafe() below - never through the 1-5
-    // pin buttons - so they're derived/ephemeral, not a real saved
-    // choice. Run before that fail-safe (and before
-    // resolveWorkspaceCollisions(), so a stale spare can't count as a
-    // "collision" against anything): without this, a spare handed to a
-    // monitor while it had nothing else pinned (e.g. mid-reset) stuck
-    // around forever afterwards even once the monitor was later given
-    // real 1-5 pins, since toggleWorkspace() only ever appends to
-    // whatever was already stored - reported live as a monitor ending
-    // up with more workspaces pinned than were ever clicked, one of
-    // them an unreachable number with no button to remove it.
-    function stripSpareWorkspaces() {
-        const updated = Object.assign({}, root.pendingWorkspaces)
-        let changed = false
-
-        for (const m of root.monitors) {
-            const current = root.workspacesFor(m.name)
-            const stripped = current.filter(num => num <= 5)
-            if (stripped.length !== current.length) {
-                updated[m.name] = stripped
-                changed = true
-            }
+        // 3. Any active monitor left with nothing at all gets the
+        // lowest positive integer nobody else - active OR
+        // inactive-but-remembered - is using, so it's never immediately
+        // stolen back out from under a monitor that gets re-enabled
+        // later. No more ">5 reserved for real pins" distinction - every
+        // number is equally real now, so this can (and normally will)
+        // land within 1-5 if those aren't all already claimed elsewhere.
+        const globallyUsed = new Set()
+        for (const name in desired) {
+            for (const num of desired[name]) globallyUsed.add(num)
+        }
+        let nextSpare = 1
+        for (const name of activeNames) {
+            if (desired[name].length > 0) continue
+            while (globallyUsed.has(nextSpare)) nextSpare++
+            desired[name] = [nextSpare]
+            globallyUsed.add(nextSpare)
         }
 
-        if (changed) root.pendingWorkspaces = updated
-    }
-
-    // Fail-safe for a monitor that ends up with zero workspaces pinned
-    // to it after this Apply (e.g. every one of its 1-5 pins just got
-    // toggled off, or reassigned to another monitor - since
-    // seedDefaultWorkspacesIfFresh() pins all five to the primary
-    // monitor on a fresh install, every *other* monitor starts out
-    // exactly this "unmanaged" from the very first Apply onward, not
-    // just after some later edit) - without anything bound to it, that
-    // monitor is unreachable via workspace switching until Hyprland
-    // happens to hand it a spare number on its own, and even then that
-    // assignment never makes it into monitors.json/apply-monitors.sh,
-    // so it doesn't survive a restart. Gives it the lowest number > 5
-    // that no other monitor already uses (1-5 stays reserved for
-    // deliberate pins), so an enabled monitor is never left stuck on
-    // whatever it happened to be showing before this Apply.
-    //
-    // Runs unconditionally now (previously skipped for a monitor with
-    // no prior real monitors.json entry at all - reverted after this
-    // read live as DP-2 staying stuck on a workspace 1-5 had just
-    // reassigned away to DP-1, only fixable by disabling and
-    // re-enabling DP-2 by hand): assigning it a rule AND actually
-    // moving it there (see the moveworkspacetomonitor dispatch below,
-    // which fires for every monitor in pendingWorkspaces - this
-    // included) is exactly what makes an unmanaged monitor immediately
-    // reachable instead of silently correct-on-paper-only until
-    // something else forces Hyprland to reassign it.
-    //
-    // Populated fresh by resolveEmptyWorkspaceFailsafe() every time it
-    // runs, with whichever monitor names it just handed a brand new
-    // spare number this Apply - read afterward in applyChanges() to
-    // force those specific monitors onto their new workspace
-    // immediately (see the focus dispatch pair there), since a spare
-    // number that's never existed before has nothing for
-    // moveworkspacetomonitor to actually relocate.
-    property var freshSpareMonitors: []
-
-    function resolveEmptyWorkspaceFailsafe() {
-        const used = new Set()
-        for (const m of root.monitors) {
-            for (const num of root.workspacesFor(m.name)) used.add(num)
+        for (const name in desired) {
+            desired[name] = desired[name].slice().sort((a, b) => a - b)
         }
-
-        const updated = Object.assign({}, root.pendingWorkspaces)
-        const fresh = []
-        let nextSpare = 6
-
-        for (const m of root.monitors) {
-            if (!root.enabledFor(m.name)) continue
-            if (root.workspacesFor(m.name).length > 0) continue
-
-            while (used.has(nextSpare)) nextSpare++
-            used.add(nextSpare)
-            updated[m.name] = [nextSpare]
-            fresh.push(m.name)
-        }
-
-        root.pendingWorkspaces = updated
-        root.freshSpareMonitors = fresh
+        return desired
     }
 
     // One-shot x/y override applied only during applyChanges() (see
@@ -625,6 +577,16 @@ SettingsPanel {
     function applyChanges() {
         if (!root.dirty) return
 
+        // Wrapped in try/finally - an uncaught exception partway
+        // through used to skip the pending* resets at the bottom
+        // entirely, leaving Apply glowing (root.dirty stuck true) with
+        // no way to tell anything had gone wrong short of checking
+        // quickshell's own log. finally guarantees the staged edits
+        // always get cleared and the button always stops glowing, and
+        // the catch below logs whatever actually broke instead of
+        // failing silently.
+        try {
+
         // Commit any staged checkbox changes (see effectiveStrict.../
         // effectiveShowEmpty* above) into the real properties first -
         // everything below (and storeSnapshot's __-prefixed keys) reads
@@ -633,46 +595,31 @@ SettingsPanel {
         if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
         if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
 
-        // Snapshot which monitors have no real (1-5) workspace at all in
-        // the last-applied config, before any of this Apply's own
-        // fail-safes below touch pendingWorkspaces - used after
-        // sendLines is built to detect one that's about to gain its
-        // first real pin this Apply (see the rescues array further
-        // down), so whatever it's currently showing can be rescued
-        // rather than left stranded on an now-orphaned unmanaged
-        // workspace.
-        const wasUnmanaged = new Set()
+        // Baseline "before" state for the focus-kick/rescue diff below -
+        // the last Apply's persisted result (root.screensStore), never
+        // root.pendingWorkspaces (this Apply's in-progress UI edits).
+        const previousWorkspaces = {}
         for (const m of root.monitors) {
             const stored = root.screensStore[m.name]
-            const storedList = (stored && stored.workspaces) ? stored.workspaces : []
-            if (!storedList.some(n => n <= 5)) wasUnmanaged.add(m.name)
+            previousWorkspaces[m.name] = (stored && stored.workspaces) ? stored.workspaces.slice() : []
         }
 
-        // Move any workspace a monitor being disabled this Apply still
-        // owns over to the primary monitor first - see
-        // resolveDisabledMonitorWorkspaces() above.
-        root.resolveDisabledMonitorWorkspaces()
+        // The one authoritative, from-scratch, collision-free mapping -
+        // see resolveWorkspaceAssignment() above for why this replaced
+        // four separate incremental fixups.
+        const resolved = root.resolveWorkspaceAssignment()
+        const activeNames = root.monitors.filter(m => root.enabledFor(m.name)).map(m => m.name)
 
-        // Drop any leftover fail-safe spare (> 5) a monitor no longer
-        // needs before anything else below reads pendingWorkspaces/
-        // workspacesFor() - see stripSpareWorkspaces() above.
-        root.stripSpareWorkspaces()
-
-        // Resolve any workspace pinned to more than one monitor before
-        // anything else below reads pendingWorkspaces/workspacesFor().
-        root.resolveWorkspaceCollisions()
-
-        // Then make sure nothing was left with zero workspaces at all.
-        root.resolveEmptyWorkspaceFailsafe()
-
-        // Only touched monitors are actually sent live - any monitor
-        // with a staged geometry edit (root.edited, now persisting
-        // across monitor switches - see its declaration above), any
-        // right-clicked enable/disable toggle, plus whichever monitor
-        // is currently selected if selectedDirty (covers
-        // togglePreferredMode(), which doesn't touch root.edited at
-        // all) - not every monitor every time, which used to trigger
-        // Hyprland's layout reflow for displays nobody asked to change.
+        // Only touched monitors get their geometry/enable line resent -
+        // any monitor with a staged geometry edit (root.edited, now
+        // persisting across monitor switches - see its declaration
+        // above), any right-clicked enable/disable toggle, plus
+        // whichever monitor is currently selected if selectedDirty
+        // (covers togglePreferredMode(), which doesn't touch
+        // root.edited at all) - not every monitor every time, which
+        // used to trigger Hyprland's layout reflow for displays nobody
+        // asked to change. (Workspace bindings below are NOT gated this
+        // way - see the always-resend comment further down.)
         const touched = new Set(Object.keys(root.pendingEnabled))
         for (const name of Object.keys(root.edited)) {
             if (Object.keys(root.edited[name]).length > 0) touched.add(name)
@@ -686,87 +633,52 @@ SettingsPanel {
         // and stage an x/y override for it.
         root.resolveOriginFailsafe(touched)
 
-        const sendLines = []
+        const monitorLines = []
         for (const name of touched) {
             const line = root.buildMonitorLine(name)
-            if (line) sendLines.push(line)
+            if (line) monitorLines.push(line)
         }
 
-        // Workspace-button toggles resend that monitor's whole current
-        // workspace list (not just the number just clicked) - same
-        // "touched monitor gets its full effective state resent"
-        // approach buildMonitorLine already uses. Each one also gets an
-        // hl.dispatch(hl.dsp.workspace.move(...)) call alongside its
-        // workspace_rule - the rule alone only steers where a workspace
-        // goes at *creation* (or whenever Hyprland next reassigns it on
-        // its own), not one that's already live and sitting on its old
-        // monitor with real windows open (e.g. rebinding workspace 2 to
-        // DP-1 while Discord's still open on it over on DP-2 - reported
-        // live as the pin appearing to do nothing at all). Harmless
-        // no-op if that workspace doesn't exist yet.
-        //
-        // This is the hl.dsp.* equivalent of plain `hyprctl dispatch
-        // moveworkspacetomonitor <ws> <monitor>` - confirmed against
-        // hyprlang2lua's own dispatcher table (the same converter used
-        // to build hyprland.lua from a stock hyprland.conf in the first
-        // place). hl.dsp.workspace.move({...}) alone only builds the
-        // dispatcher descriptor - hl.dispatch(...) is what actually
-        // fires it, same as this hyprland.lua's own keybinds do for any
-        // dynamically-built dispatcher (see e.g. its focus-last-monitor
-        // submap function).
-        for (const name of Object.keys(root.pendingWorkspaces)) {
-            for (const num of root.workspacesFor(name)) {
-                sendLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
-                sendLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
+        // Every active monitor's FULL resolved workspace list is resent
+        // in full on EVERY Apply - not just the ones this Apply's UI
+        // edits touched, and not just a diff against what was there
+        // before. This is deliberately more than the strict minimum:
+        // resending an already-correct workspace_rule/move is a cheap,
+        // idempotent no-op, and always fully re-asserting the entire
+        // exclusive mapping is what actually guarantees Hyprland's live
+        // rule table can never silently drift out of sync with
+        // monitors.json, regardless of what specifically changed this
+        // time - the previous, more "targeted" incremental approach is
+        // exactly what kept leaving edge cases unhandled. Each
+        // workspace_rule is paired with an explicit
+        // hl.dispatch(hl.dsp.workspace.move(...)) - the rule alone only
+        // steers where a workspace goes at *creation*, not one that's
+        // already live and sitting on a different monitor with real
+        // windows open.
+        const workspaceLines = []
+        for (const name of activeNames) {
+            for (const num of resolved[name] || []) {
+                workspaceLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
+                workspaceLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
             }
         }
 
-        // Monitors that just got a fresh spare (> 5) from
-        // resolveEmptyWorkspaceFailsafe() above need forcing onto it
-        // right now, not just a workspace_rule for whenever Hyprland
-        // next reassigns them on its own - that spare number has never
-        // existed before, so the moveworkspacetomonitor dispatch above
-        // has nothing real to relocate for it. Focusing the monitor
-        // first, then the workspace, creates it fresh there
-        // specifically rather than wherever happens to be focused right
-        // now - this is what actually fixes a monitor staying stuck on
-        // whatever it showed before this Apply once its old workspace
-        // got reassigned elsewhere (reported live: DP-2 stuck showing
-        // workspace 2 after it was reassigned entirely to DP-1, only
-        // fixable by disabling and re-enabling DP-2 by hand).
-        for (const name of root.freshSpareMonitors) {
-            const num = root.workspacesFor(name)[0]
-            if (num === undefined) continue
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${name}" }))`)
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`)
-        }
+        // Monitors that had nothing at all before this Apply (per
+        // previousWorkspaces above) but do now - forced onto their new
+        // lowest workspace immediately (focus monitor, then workspace)
+        // rather than left showing whatever they had before until
+        // someone manually switches away from it. Same window-rescue
+        // treatment as before for any real window still sitting on that
+        // monitor's old (live, pre-Apply) active workspace.
+        const newlyManaged = activeNames
+            .filter(name => previousWorkspaces[name].length === 0 && (resolved[name] || []).length > 0)
+            .map(name => ({ monitor: name, newWorkspace: resolved[name].reduce((a, b) => Math.min(a, b)) }))
 
-        // Monitors that just went from having no real (1-5) workspace at
-        // all (wasUnmanaged, snapshotted before this function's own
-        // fail-safes ran) to having one or more this Apply - always
-        // switched onto the lowest-numbered one just assigned (e.g.
-        // workspace 4 if both 4 and 5 got pinned in the same Apply),
-        // exactly the same "force it, don't just leave a rule for
-        // whenever Hyprland gets around to it" reasoning
-        // freshSpareMonitors above uses - otherwise the monitor keeps
-        // showing its old unmanaged workspace (with or without windows
-        // open on it) until someone manually switches away from it.
-        const newlyManaged = []
-        for (const name of wasUnmanaged) {
-            const managed = root.workspacesFor(name).filter(n => n <= 5)
-            if (managed.length === 0) continue
-            newlyManaged.push({ monitor: name, newWorkspace: managed.reduce((a, b) => Math.min(a, b)) })
-        }
         for (const entry of newlyManaged) {
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
-            sendLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
+            workspaceLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
+            workspaceLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
         }
 
-        // Any of those same monitors that also had a real window open
-        // on their old (live, pre-Apply) active workspace gets that
-        // window rescued onto the new one too, via clientsQueryProcess
-        // below, rather than left stranded on the now-orphaned
-        // workspace only reachable through WorkspaceRow.
         // root.baseFor(name) is the last hyprctl monitors read this
         // panel did - not re-fetched fresh here, same acceptable
         // staleness tradeoff already made elsewhere in this file (e.g.
@@ -785,15 +697,10 @@ SettingsPanel {
         // defines DP-1) - and doubles as the remembered per-monitor
         // state, so re-enabling a monitor later shows exactly what it
         // was just set to (or, if untouched, whatever it already
-        // remembered).
-        //
-        // The "__"-prefixed global flags (committed from pending* just
-        // above, if this Apply changed any) live in this same file under
-        // non-monitor-name keys - carried over
-        // explicitly here since this rebuild only otherwise iterates
-        // root.monitors, and would silently drop them on every Apply
-        // for anything else (a resolution change, enabling a display,
-        // etc.) otherwise.
+        // remembered). Every entry's "workspaces" comes straight from
+        // resolved[name] - the same already-exclusive mapping that was
+        // just dispatched live, so the file on disk and Hyprland's live
+        // state can never disagree with each other.
         const storeSnapshot = {
             __strictWorkspaceWidget: root.strictWorkspaceWidget,
             __showEmptyWidget: root.showEmptyWidget,
@@ -812,7 +719,7 @@ SettingsPanel {
                     y: state.y,
                     scale: state.scale,
                     mode: state.mode,
-                    workspaces: root.workspacesFor(m.name),
+                    workspaces: resolved[m.name] || [],
                     line
                 }
             }
@@ -821,18 +728,47 @@ SettingsPanel {
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
 
-        // Rescuing needs a fresh window list first - deferred through
-        // clientsQueryProcess/runApplyScript() rather than sent
-        // immediately, so the rescue dispatches land in the same script
-        // (and thus the same capture/restore-wrapped run) instead of a
-        // separate, later Apply.
-        if (rescues.length > 0) {
-            root.pendingSendLines = sendLines
+        // Monitor enable/disable/geometry lines go out first. If any
+        // touched monitor is transitioning disabled -> enabled this
+        // Apply, the workspace rule/move/focus/rescue lines wait for it
+        // to actually report ready (a poll, not a blind delay - see
+        // monitorSettleTimer/monitorSettleQueryProcess below) rather
+        // than racing an async DRM/Wayland commit: hyprctl eval
+        // replying "ok" to the enable line doesn't mean Hyprland has
+        // actually finished bringing a newly-connected/re-enabled
+        // output online yet, and a workspace move sent in the same
+        // immediate batch can silently no-op if it isn't. Skipped
+        // (immediate, single batch) when nothing's newly enabling -
+        // the common geometry/workspace-pin-only Apply doesn't gain a
+        // pointless wait.
+        const newlyEnabledMonitors = Array.from(touched).filter(name => {
+            const base = root.baseFor(name)
+            const wasDisabled = !base || base.disabled
+            return wasDisabled && root.enabledFor(name)
+        })
+
+        if (newlyEnabledMonitors.length > 0 && monitorLines.length > 0) {
+            root.runApplyScript(monitorLines)
+            root.pendingWorkspaceLines = workspaceLines
             root.pendingRescues = rescues
-            clientsQueryProcess.running = false
-            clientsQueryProcess.running = true
+            root.pendingSettleMonitors = newlyEnabledMonitors
+            root.monitorSettleAttempts = 0
+            monitorSettleTimer.restart()
         } else {
-            root.runApplyScript(sendLines)
+            const sendLines = monitorLines.concat(workspaceLines)
+            // Rescuing needs a fresh window list first - deferred
+            // through clientsQueryProcess/runApplyScript() rather than
+            // sent immediately, so the rescue dispatches land in the
+            // same script (and thus the same capture/restore-wrapped
+            // run) instead of a separate, later Apply.
+            if (rescues.length > 0) {
+                root.pendingSendLines = sendLines
+                root.pendingRescues = rescues
+                clientsQueryProcess.running = false
+                clientsQueryProcess.running = true
+            } else {
+                root.runApplyScript(sendLines)
+            }
         }
 
         root.applyBrightness()
@@ -847,13 +783,18 @@ SettingsPanel {
             root.dashboardRoot.detectBrightnessControllers()
         }
 
-        root.pendingEnabled = ({})
-        root.pendingWorkspaces = ({})
-        root.positionOverrides = ({})
-        root.edited = ({})
-        root.selectedDirty = false
-        // preferredMode intentionally left as-is - Apply shouldn't flip
-        // the toggle back to "Manual" for the monitor you just applied.
+        } catch (e) {
+            console.warn("ScreenSettings: applyChanges() threw: " + e + (e && e.stack ? ("\n" + e.stack) : ""))
+        } finally {
+            root.pendingEnabled = ({})
+            root.pendingWorkspaces = ({})
+            root.positionOverrides = ({})
+            root.edited = ({})
+            root.selectedDirty = false
+            // preferredMode intentionally left as-is - Apply shouldn't
+            // flip the toggle back to "Manual" for the monitor you just
+            // applied.
+        }
     }
 
     // ddcutil/brightnessctl detection deliberately does NOT run here
@@ -944,6 +885,78 @@ SettingsPanel {
         interval: 300
         repeat: false
         onTriggered: root.refreshMonitors()
+    }
+
+    // Holds applyChanges()'s workspace_rule/move/focus/rescue-focus
+    // lines while waiting for a newly-enabled monitor to actually come
+    // online - see newlyEnabledMonitors in applyChanges(). Only
+    // populated when at least one touched monitor is transitioning from
+    // disabled to enabled this Apply.
+    property var pendingWorkspaceLines: []
+    // Names newlyEnabledMonitors flagged this Apply - polled below via
+    // monitorSettleQueryProcess until every one of them reports
+    // disabled: false, rather than trusting a fixed delay (a blind
+    // timer either wastes time on a monitor that comes up fast, or
+    // isn't long enough for one that's genuinely slow to negotiate a
+    // mode).
+    property var pendingSettleMonitors: []
+    property int monitorSettleAttempts: 0
+
+    function checkMonitorsSettled() {
+        monitorSettleQueryProcess.running = false
+        monitorSettleQueryProcess.running = true
+    }
+
+    function dispatchPendingWorkspaceLines() {
+        const sendLines = root.pendingWorkspaceLines
+        root.pendingWorkspaceLines = []
+        root.pendingSettleMonitors = []
+        if (root.pendingRescues.length > 0) {
+            root.pendingSendLines = sendLines
+            clientsQueryProcess.running = false
+            clientsQueryProcess.running = true
+        } else {
+            root.runApplyScript(sendLines)
+        }
+    }
+
+    Timer {
+        id: monitorSettleTimer
+        // Poll cadence (via checkMonitorsSettled), not a one-shot delay.
+        interval: 250
+        repeat: false
+        onTriggered: root.checkMonitorsSettled()
+    }
+
+    Process {
+        id: monitorSettleQueryProcess
+        command: ["hyprctl", "-j", "monitors", "all"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let ready = false
+                try {
+                    const parsed = JSON.parse(text)
+                    ready = root.pendingSettleMonitors.every(name => {
+                        const m = parsed.find(mm => mm.name === name)
+                        return !!m && !m.disabled
+                    })
+                } catch (e) {
+                    ready = false
+                }
+
+                root.monitorSettleAttempts++
+                // Cap at 8 tries (~2s including the poll interval above)
+                // rather than polling forever if a monitor never reports
+                // ready - dispatches anyway past that point as a best
+                // effort.
+                if (ready || root.monitorSettleAttempts >= 8) {
+                    root.dispatchPendingWorkspaceLines()
+                } else {
+                    monitorSettleTimer.restart()
+                }
+            }
+        }
     }
 
     // Carries applyChanges()'s already-built sendLines and rescues
@@ -1089,9 +1102,9 @@ SettingsPanel {
     // in this panel now (see pendingStrictWorkspaceWidget etc. below).
     //
     // strictWorkspaceWidget: whether WorkspaceRow.qml's bar widget shows
-    // workspaces past id 5 at all - the "unmanaged" spare numbers
-    // Hyprland hands a monitor with nothing explicitly pinned to it (see
-    // resolveEmptyWorkspaceFailsafe above).
+    // workspaces past id 5 at all - the auto-assigned spare numbers a
+    // monitor with nothing explicitly pinned to it gets (see
+    // resolveWorkspaceAssignment() above, step 3).
     //
     // showEmptyWidget/showEmptyOsd: whether workspaces 1-5 pinned to a
     // monitor but not currently existing in Hyprland (nobody's switched
@@ -1504,10 +1517,10 @@ SettingsPanel {
                             required property int modelData
 
                             // Every workspace 1-5 always belongs to
-                            // exactly one monitor (see
-                            // seedDefaultWorkspacesIfFresh()/
-                            // resolveDisabledMonitorWorkspaces() below,
-                            // and toggleWorkspace()'s no-op-if-already-
+                            // exactly one monitor once Apply resolves it
+                            // (see seedDefaultWorkspacesIfFresh()/
+                            // resolveWorkspaceAssignment() above, and
+                            // toggleWorkspace()'s no-op-if-already-
                             // bound guard) - so only two states are ever
                             // meaningful here: bound to the monitor
                             // currently selected in this panel (fgcolor),

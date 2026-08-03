@@ -61,6 +61,34 @@ Scope {
         onTriggered: root.loadScreensStore()
     }
 
+    // A single Apply dispatches many sequential hyprctl eval calls (see
+    // ScreenSettings.qml), each firing a live Hyprland raw event the
+    // instant it lands - without coalescing, each osdWindow's
+    // monitorWorkspaces below (a live reactive binding) would recompute
+    // and render every one of those intermediate, mid-transition states
+    // for a frame, which is what read live as boxes jittering or a
+    // workspace appearing to blink in and back out during a workspace/
+    // display swap. settleTick increments once the burst of raw events
+    // from one Apply actually stops, and each osdWindow only copies its
+    // live computation into what it actually renders when settleTick
+    // changes - see monitorWorkspaces/liveMonitorWorkspaces below.
+    property int settleTick: 0
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            root.loadScreensStore()
+            renderSettleTimer.restart()
+        }
+    }
+
+    Timer {
+        id: renderSettleTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.settleTick++
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -96,7 +124,10 @@ Scope {
             // .id off each entry, so nothing more is needed. It'll never
             // match activeId (a real workspace has to be switched to for
             // that), so the sliding highlight simply never lands on one.
-            readonly property var monitorWorkspaces: {
+            //
+            // This is the "live" computation - see monitorWorkspaces
+            // below for what the Repeater actually renders.
+            readonly property var liveMonitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
                 let list = Hyprland.workspaces.values
                     .filter(w => w.monitor === osdWindow.hyprMonitor && w.id <= 5)
@@ -112,6 +143,28 @@ Scope {
                 }
 
                 return list.slice().sort((a, b) => a.id - b.id)
+            }
+
+            // What the Repeater below actually renders - a debounced
+            // snapshot of liveMonitorWorkspaces, copied over only when
+            // root.settleTick changes (see its own declaration above),
+            // not a plain reactive binding - otherwise every intermediate
+            // state Hyprland passes through mid-Apply would flash on
+            // screen as its own frame.
+            property var monitorWorkspaces: []
+
+            Connections {
+                target: root
+                function onSettleTickChanged() {
+                    osdWindow.monitorWorkspaces = osdWindow.liveMonitorWorkspaces
+                }
+            }
+
+            Component.onCompleted: {
+                // Seed the very first render immediately - no reason to
+                // wait out a settle delay before anything has been drawn
+                // at all.
+                osdWindow.monitorWorkspaces = osdWindow.liveMonitorWorkspaces
             }
 
             readonly property int activeId: (osdWindow.hyprMonitor && osdWindow.hyprMonitor.activeWorkspace)

@@ -133,6 +133,11 @@ Row {
     // owning monitor changes between one entry and the next, so the Row
     // below can draw a small divider between each monitor's group of
     // workspace boxes instead of one continuous, ungrouped run of them.
+    //
+    // This is the "live" computation - re-evaluates the instant any
+    // dependency changes (Hyprland.workspaces, screensStore, etc).
+    // Deliberately NOT what the Repeater below renders directly - see
+    // settledEntries.
     readonly property var rowEntries: {
         const list = []
         let lastMonitorName = null
@@ -145,6 +150,30 @@ Row {
             lastMonitorName = monName
         }
         return list
+    }
+
+    // What the Repeater below actually renders - a debounced snapshot of
+    // rowEntries, not rowEntries itself. A single Apply dispatches many
+    // sequential hyprctl eval calls (one monitor line, then a
+    // workspace_rule + move pair per workspace, then focus dispatches -
+    // see ScreenSettings.qml), and Hyprland fires a raw event after each
+    // one lands, live, immediately - rowEntries being a plain reactive
+    // binding meant every one of those intermediate, mid-transition
+    // states got rendered for a frame before the next one arrived
+    // (reported live as boxes jittering/repositioning during a
+    // workspace/display swap, and a workspace appearing to blink in and
+    // back out - most likely a workspace object's own .monitor
+    // momentarily reporting null or its old owner while Hyprland was
+    // still mid-reassignment). renderSettleTimer coalesces the burst of
+    // raw events from one Apply into a single render of the FINAL state
+    // once they stop, rather than one render per intermediate event.
+    property var settledEntries: []
+
+    Timer {
+        id: renderSettleTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.settledEntries = root.rowEntries
     }
 
     // A toplevel's lastIpcObject (the only place its at/size/class live
@@ -167,11 +196,15 @@ Row {
         function onRawEvent(event) {
             Hyprland.refreshToplevels()
             root.loadScreensStore()
+            renderSettleTimer.restart()
         }
     }
     Component.onCompleted: {
         Hyprland.refreshToplevels()
         root.loadScreensStore()
+        // Seed the very first render immediately - no reason to wait out
+        // a settle delay before anything has been drawn at all.
+        root.settledEntries = root.rowEntries
     }
 
     // Which workspace numbers (1-5) are actually pinned to each
@@ -226,7 +259,7 @@ Row {
     }
 
     Repeater {
-        model: root.rowEntries
+        model: root.settledEntries
 
         Loader {
             id: entryLoader
