@@ -13,6 +13,7 @@ Scope {
     lockScreen: lockScreen
   }
   Notification { id: notification }
+  Clipboard { id: clipboard }
 
   Bar {
     locked: lockScreen.locked

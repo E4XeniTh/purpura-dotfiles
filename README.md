@@ -110,6 +110,7 @@ Beyond a base Arch install:
 - `networkmanager` - provides `nmcli`, which Network Settings' Connections tab also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
+- `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `wipe`
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)
