@@ -665,7 +665,6 @@ Scope {
             // needed for Ctrl+C to do anything - without permanently
             // grabbing it away from the clipboard panel the way
             // Exclusive (LockScreen/PowerMenu's own choice) would.
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
             Component.onCompleted: outerBox.forceActiveFocus()
 
