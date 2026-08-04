@@ -151,9 +151,9 @@ Scope {
                 }
                 root.lastListText = listCollector.text
 
-                clipModel.clear()
-
                 const lines = listCollector.text.split("\n").filter(l => l.length > 0)
+                const parsedEntries = []
+                const newIds = new Set()
 
                 for (const line of lines) {
                     const tab = line.indexOf("\t")
@@ -176,12 +176,44 @@ Scope {
                     // rather than showing it as its own history entry.
                     if (preview.indexOf('<meta http-equiv="content-type" content="text/html; charset=utf-8">') !== -1) continue
 
-                    clipModel.append({
+                    parsedEntries.push({
                         entryId: entryId,
                         preview: preview,
                         isImage: isImage,
                         imagePath: isImage ? ("/tmp/quickshell-clip-" + entryId + ".img") : ""
                     })
+                    newIds.add(entryId)
+                }
+
+                // Diffed against the CURRENT clipModel instead of a blind
+                // clear()+rebuild - deleting one entry (or copying a new
+                // one) used to tear down and recreate every delegate,
+                // which meant every image entry's thumbnail flickered
+                // out and back in even though its own entry never
+                // actually changed.
+                //
+                // Pass 1: drop rows whose entry no longer exists, back
+                // to front so removing one never shifts the index of a
+                // row still waiting to be checked.
+                for (let i = clipModel.count - 1; i >= 0; i--) {
+                    if (!newIds.has(clipModel.get(i).entryId)) {
+                        clipModel.remove(i)
+                    }
+                }
+
+                // Pass 2: what's left in clipModel is now exactly a
+                // subsequence of parsedEntries in the same relative
+                // order (pass 1 only ever removed things) - so walking
+                // both in lockstep and inserting wherever they don't
+                // match is enough to thread in every genuinely new entry
+                // at its correct position, leaving every already-present
+                // row (and its delegate/decoded thumbnail) completely
+                // untouched.
+                for (let i = 0; i < parsedEntries.length; i++) {
+                    const existing = i < clipModel.count ? clipModel.get(i) : null
+                    if (!existing || existing.entryId !== parsedEntries[i].entryId) {
+                        clipModel.insert(i, parsedEntries[i])
+                    }
                 }
 
                 if (root.pendingDeleteClose) {
@@ -597,16 +629,53 @@ Scope {
         active: root.open && root.previewedEntryId !== ""
 
         PanelWindow {
+            id: previewWindow
+
             anchors { bottom: true; right: true }
             // 10 (screen gap, matching clipWindow's own) + 400
             // (clipWindow's width) + 10 (gap between the two panels).
             margins { bottom: 10; right: 420 }
 
-            // Fixed square - not tied to the clipboard panel's own
-            // (variable) height.
-            implicitWidth: 500
-            implicitHeight: 500
+            // 400 max in both cases; images are always exactly that
+            // square, text instead shrinks to fit its own content (down
+            // to whatever a short entry actually needs) and only ever
+            // grows up to this cap, past which it wraps/scrolls instead
+            // of the window growing further.
+            readonly property int paneMaxSize: 400
+            // Total inset from the window edge to the actual
+            // Image/Flickable content: 10px margin from outerBox to the
+            // inner nested box, then another 10px from that box to the
+            // content itself - twice, once per side (left+right, or
+            // top+bottom).
+            readonly property int panePadding: 40
+            // Natural (unwrapped) width the text would take with no
+            // width constraint at all - NoWrap means this never depends
+            // on any width WE assign it, so it's safe to size the real,
+            // visible TextEdit's width from this without a binding loop.
+            readonly property real textNaturalWidth: naturalWidthMeasure.contentWidth
+            readonly property real textContentWidth: Math.min(paneMaxSize - panePadding, textNaturalWidth)
+
+            implicitWidth: root.previewedIsImage
+                ? paneMaxSize
+                : Math.min(paneMaxSize, textContentWidth + panePadding)
+            implicitHeight: root.previewedIsImage
+                ? paneMaxSize
+                : Math.min(paneMaxSize, previewTextItem.contentHeight + panePadding)
             color: "transparent"
+
+            // Invisible - exists purely so textNaturalWidth above has
+            // something to measure against that isn't the real,
+            // eventually-wrapped TextEdit (which would be circular: its
+            // own width already depends on this pane's size).
+            Text {
+                id: naturalWidthMeasure
+                visible: false
+                text: root.previewText
+                textFormat: Text.PlainText
+                wrapMode: Text.NoWrap
+                font.family: Config.fontfamily
+                font.pixelSize: 13
+            }
 
             // Overlay for the same reason as clipWindow above - stay
             // above the invisible click-catcher.
@@ -665,16 +734,20 @@ Scope {
                         anchors.margins: 10
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
-                        // Vertical-only - contentWidth pinned to the
-                        // Flickable's own width (matching previewTextItem
-                        // wrapping to that same width below) means there's
-                        // never anything to scroll sideways.
+                        // Vertical-only - previewTextItem's own width is
+                        // already capped to fit (see textContentWidth
+                        // above), so there's never anything to scroll
+                        // sideways.
                         contentWidth: width
                         contentHeight: previewTextItem.contentHeight
 
                         TextEdit {
                             id: previewTextItem
-                            width: parent.width
+                            // Bound to the pane's own computed target,
+                            // not parent.width - the pane's size is
+                            // DERIVED from this text, so binding back to
+                            // the parent it's sizing would be circular.
+                            width: previewWindow.textContentWidth
                             text: root.previewText
                             textFormat: TextEdit.PlainText
                             wrapMode: TextEdit.WordWrap
