@@ -519,6 +519,29 @@ Scope {
                                             root.previewOrSelectEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
                                         }
                                     }
+                                    // MouseArea only ever emits ONE
+                                    // clicked() for the first press of a
+                                    // double-click pair - the second
+                                    // press completes a doubleClicked()
+                                    // gesture INSTEAD of a second
+                                    // clicked(), so previewOrSelectEntry()
+                                    // above never got a chance to see
+                                    // "this entry is already previewed"
+                                    // and select it: a genuine fast
+                                    // double-click opened the preview on
+                                    // the first click, then the second
+                                    // click's event never reached
+                                    // onClicked at all - looking exactly
+                                    // like focus got lost until an
+                                    // unrelated third click (after moving
+                                    // the mouse, which is what stopped Qt
+                                    // from treating it as part of the same
+                                    // double-click) finally selected it.
+                                    onDoubleClicked: (mouse) => {
+                                        if (mouse.button === Qt.LeftButton) {
+                                            root.selectEntry(entryDelegate.entryId)
+                                        }
+                                    }
                                 }
 
                                 // Decoded once per delegate instance - the
