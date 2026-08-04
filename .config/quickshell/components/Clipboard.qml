@@ -110,7 +110,12 @@ Scope {
             margins { bottom: 10; right: 10 }
 
             implicitWidth: 400
-            implicitHeight: Math.max(contentCol.implicitHeight, 1)
+            // +20 = the 10px top + 10px bottom margins contentCol below
+            // sits inside - without it, panelBox/mainRect were exactly
+            // contentCol's own height with only a bottom margin applied,
+            // so contentCol's top edge landed 10px above mainRect's top
+            // and mainRect's clip:true cut the title row off.
+            implicitHeight: Math.max(contentCol.implicitHeight + 20, 1)
             color: "transparent"
 
             Component.onCompleted: root.refresh()
@@ -125,7 +130,7 @@ Scope {
                 anchors.bottom: parent.bottom
 
                 width: contentCol.width
-                height: contentCol.implicitHeight
+                height: contentCol.implicitHeight + 20
 
                 color: "transparent"
 
@@ -274,7 +279,7 @@ Scope {
                     },
                     State {
                         name: "open"
-                        PropertyChanges { target: panelBox; width: 400; height: contentCol.implicitHeight }
+                        PropertyChanges { target: panelBox; width: 400; height: contentCol.implicitHeight + 20 }
                     }
                 ]
 
