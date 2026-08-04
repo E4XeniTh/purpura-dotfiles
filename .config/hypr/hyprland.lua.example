@@ -13,12 +13,14 @@
 --#######################################################################################
 
 -- ~/.config/hypr/hyprland.lua
+
+local mainMod = "SUPER" -- "META" key is main modifier
+
 local terminal = "kitty"
 local filemanager = "dolphin"
 local menu = "rofi -show drun"
 local browser = "flatpak run net.waterfox.waterfox"
 local noteapp = "obsidian"
-local mainMod = "SUPER" -- "META" key is main modifier
 
 --#######################################################################################
 --## AUTOSTART                                                                          #
@@ -84,9 +86,8 @@ hl.env("XDG_MENU_PREFIX", "arch-")
 -- this by scripts/apply-monitors.sh in the autostart block below - see
 -- that file for the currently-saved layout (DP-1 on, DP-2/HDMI-A-1 off,
 -- matching what used to be hardcoded here).
-hl.monitor({
-    output = "auto"
-})
+
+hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
 --
 
@@ -180,21 +181,26 @@ hl.config({
 --## https://wiki.hypr.land/Configuring/Basics/Binds/                                   #
 --#######################################################################################
 
-hl.bind("mouse:276", hl.dsp.pass({window = "class:^(Discord)$"}))
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag())
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize())
 
 hl.bind(mainMod .. " + return", hl.dsp.exec_cmd(terminal))
 hl.bind(mainMod .. " + Q", hl.dsp.window.close())
-hl.bind(mainMod .. " + delete", hl.dsp.global("caelestia:session"))
-
-hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(filemanager))
-hl.bind(mainMod .. " + W", hl.dsp.window.float({ action = "toggle" }))
-hl.bind(mainMod .. " + S", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }))
+hl.bind(mainMod .. " + S", hl.dsp.window.float({ action = "toggle" }))
+hl.bind(mainMod .. " + W", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }))
 hl.bind(mainMod .. " + F11", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }))
+
+
 hl.bind(mainMod .. " + space", hl.dsp.exec_cmd(menu))
+
 hl.bind(mainMod .. " + F", hl.dsp.exec_cmd(browser))
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(filemanager))
+hl.bind(mainMod .. " + O", hl.dsp.exec_cmd(noteapp))
+
+
 hl.bind(mainMod .. " + L", hl.dsp.global("quickshell:lockscreen"))
 hl.bind(mainMod .. " + delete", hl.dsp.global("quickshell:powermenu"))
-hl.bind(mainMod .. " + O", hl.dsp.exec_cmd(noteapp))
+
 
 hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }))
 hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }))
@@ -208,8 +214,6 @@ hl.bind(mainMod .. " + CTRL + 3", hl.dsp.window.move({ workspace = 3, follow = f
 hl.bind(mainMod .. " + CTRL + 4", hl.dsp.window.move({ workspace = 4, follow = false }))
 hl.bind(mainMod .. " + CTRL + 5", hl.dsp.window.move({ workspace = 5, follow = false }))
 
-hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag())
-hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize())
 
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 2%+"), { locked = true, repeating = true })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"), { locked = true, repeating = true })
@@ -229,12 +233,6 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true 
 --## https://wiki.hypr.land/Configuring/Basics/Window-Rules/                            #
 --## https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/                         #
 --#######################################################################################
-
--- Bottles/Windows apps start in floating mode. Better compatibility with non-fullscreen apps.
-
-
-
--- FULLSCREEN: force tearing/immediate presentation.
 
 hl.window_rule({
     name = "Wargaming-floating",
@@ -296,6 +294,20 @@ hl.window_rule({
     no_focus = true,
 })
 
+
+-- Inhibits for OBS and AIMP
+hl.window_rule({
+    name  = "obs-idle-inhibit",
+    match = { class = "^(com\\.obsproject\\.Studio)$" },
+               idle_inhibit = "always",
+})
+
+hl.window_rule({
+    name  = "aimp-idle-inhibit",
+    match = { class = "^(Aimp)$" },
+               idle_inhibit = "always",
+})
+
 -- Allow blur in Purpura Quickshell Lockscreen
 hl.layer_rule({
     match = { namespace = "lockscreen" },
@@ -308,6 +320,8 @@ hl.layer_rule({
     blur = true,
 })
 
+
+-- Dim around rofi
 hl.layer_rule({
     match        = { namespace = "rofi" },
     blur         = false,
@@ -327,7 +341,6 @@ hl.curve("easeInOutCubic", { type = "bezier", points = { { 0.65, 0.05 }, { 0.36,
 hl.curve("linear", { type = "bezier", points = { { 0, 0 }, { 1, 1 } } })
 hl.curve("almostLinear", { type = "bezier", points = { { 0.5, 0.5 }, { 0.75, 1 } } })
 hl.curve("quick", { type = "bezier", points = { { 0.15, 0 }, { 0.1, 1 } } })
-
 
 -- ANIMATIONS
 hl.animation({
@@ -444,10 +457,4 @@ hl.gesture({
     fingers = 3,
     direction = "horizontal",
     action = "workspace",
-})
-
-hl.device({
-    name = "logitech-g703-lightspeed-wireless-gaming-mouse-w/-hero",
-    sensitivity = 0,
-    accel_profile = "flat",
 })
