@@ -39,7 +39,6 @@ Scope {
             root.previewedIsImage = false
             root.previewedImagePath = ""
             root.previewText = ""
-            root.previewPaneReady = false
         }
     }
 
@@ -81,27 +80,6 @@ Scope {
     property string previewedImagePath: ""
     property string previewText: ""
 
-    // Mapping the preview pane's own second Wayland surface turned out
-    // to disrupt pointer-event delivery to the clipboard panel's own
-    // window - clicking an entry to preview it (which maps that surface
-    // immediately) left the list's hover highlight frozen until the
-    // mouse was physically moved again, since the compositor's pointer
-    // focus/motion tracking for the ORIGINAL window got reset the moment
-    // the new one appeared. previewPaneReady only flips true after
-    // previewPaneRevealTimer elapses with no second click on the same
-    // entry in the meantime - so a genuine fast double-click (or a
-    // second deliberate click) selects the entry via
-    // previewOrSelectEntry() below before the disruptive window ever
-    // gets created at all, and hover tracking is never touched.
-    property bool previewPaneReady: false
-
-    Timer {
-        id: previewPaneRevealTimer
-        interval: 300
-        repeat: false
-        onTriggered: root.previewPaneReady = true
-    }
-
     // Set right when a delete is fired, consumed (and always cleared)
     // the next time the list actually refreshes - lets that refresh know
     // "this particular emptiness, if it happens, came from a delete" so
@@ -129,12 +107,6 @@ Scope {
         root.previewedImagePath = imagePath
         root.previewText = ""
 
-        // The border highlight + blur/"Copy" overlay above are plain
-        // Item-level state, so they show immediately - only the pane
-        // WINDOW itself is deferred (see previewPaneReady above).
-        root.previewPaneReady = false
-        previewPaneRevealTimer.restart()
-
         if (!isImage) {
             previewTextProcess.command = ["cliphist", "decode", entryId]
             previewTextProcess.running = true
@@ -159,8 +131,6 @@ Scope {
         // ends up closing too (see pendingDeleteClose below).
         if (root.previewedEntryId === entryId) {
             root.previewedEntryId = ""
-            root.previewPaneReady = false
-            previewPaneRevealTimer.stop()
         }
 
         root.pendingDeleteClose = true
@@ -549,29 +519,6 @@ Scope {
                                             root.previewOrSelectEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
                                         }
                                     }
-                                    // MouseArea only ever emits ONE
-                                    // clicked() for the first press of a
-                                    // double-click pair - the second
-                                    // press completes a doubleClicked()
-                                    // gesture INSTEAD of a second
-                                    // clicked(), so previewOrSelectEntry()
-                                    // above never got a chance to see
-                                    // "this entry is already previewed"
-                                    // and select it: a genuine fast
-                                    // double-click opened the preview on
-                                    // the first click, then the second
-                                    // click's event never reached
-                                    // onClicked at all - looking exactly
-                                    // like focus got lost until an
-                                    // unrelated third click (after moving
-                                    // the mouse, which is what stopped Qt
-                                    // from treating it as part of the same
-                                    // double-click) finally selected it.
-                                    onDoubleClicked: (mouse) => {
-                                        if (mouse.button === Qt.LeftButton) {
-                                            root.selectEntry(entryDelegate.entryId)
-                                        }
-                                    }
                                 }
 
                                 // Decoded once per delegate instance - the
@@ -679,7 +626,7 @@ Scope {
     // needing every one of those paths to separately remember to clear
     // previewedEntryId.
     LazyLoader {
-        active: root.open && root.previewedEntryId !== "" && root.previewPaneReady
+        active: root.open && root.previewedEntryId !== ""
 
         PanelWindow {
             id: previewWindow
