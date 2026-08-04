@@ -100,6 +100,14 @@ Scope {
                     const preview = line.substring(tab + 1).replace(/^\.\.\.\s*/, "")
                     const isImage = /binary data/i.test(preview)
 
+                    // A browser's "copy image" often populates a
+                    // text/html clipboard mime alongside the actual
+                    // image data, whose body opens with exactly this
+                    // meta tag - it's not real content, just a duplicate
+                    // artifact of the same copy, so skip it entirely
+                    // rather than showing it as its own history entry.
+                    if (preview.indexOf('<meta http-equiv="content-type" content="text/html; charset=utf-8">') !== -1) continue
+
                     clipModel.append({
                         entryId: entryId,
                         preview: preview,
