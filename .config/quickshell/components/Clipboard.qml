@@ -558,6 +558,13 @@ Scope {
             implicitHeight: 500
             color: "transparent"
 
+            // OnDemand (not None) so the previewTextItem TextEdit below
+            // can actually receive real keyboard focus when clicked -
+            // needed for Ctrl+C to do anything - without permanently
+            // grabbing it away from the clipboard panel the way
+            // Exclusive (LockScreen/PowerMenu's own choice) would.
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
             Rectangle {
                 id: outerBox
                 anchors.fill: parent
@@ -597,15 +604,22 @@ Scope {
                         anchors.margins: 10
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
-                        contentWidth: width
-                        contentHeight: previewTextItem.implicitHeight
+                        // No wrapping below, so a line only ever needs
+                        // horizontal scroll if it's genuinely wider than
+                        // the pane - Math.max keeps a short/narrow entry
+                        // from being draggable past its own bounds, since
+                        // content{Width,Height} would otherwise be
+                        // smaller than the Flickable itself.
+                        contentWidth: Math.max(width, previewTextItem.contentWidth)
+                        contentHeight: Math.max(height, previewTextItem.contentHeight)
 
-                        Text {
+                        TextEdit {
                             id: previewTextItem
-                            width: parent.width
                             text: root.previewText
-                            textFormat: Text.PlainText
-                            wrapMode: Text.WordWrap
+                            textFormat: TextEdit.PlainText
+                            wrapMode: TextEdit.NoWrap
+                            readOnly: true
+                            selectByMouse: true
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: 13
