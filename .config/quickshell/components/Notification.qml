@@ -217,7 +217,7 @@ Scope {
                             text: "Clear all"
                             color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 12
+                            font.pixelSize: 14
 
                             MouseArea {
                                 id: clearAllMouseArea
@@ -235,7 +235,7 @@ Scope {
                         "
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 12
+                        font.pixelSize: 14
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }

@@ -365,7 +365,7 @@ Scope {
                                 text: "Clear all"
                                 color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
                                 font.family: Config.fontfamily
-                                font.pixelSize: 12
+                                font.pixelSize: 14
 
                                 MouseArea {
                                     id: clearAllMouseArea
@@ -480,7 +480,7 @@ Scope {
                                         textFormat: Text.PlainText
                                         color: Config.fgcolor
                                         font.family: Config.fontfamily
-                                        font.pixelSize: 13
+                                        font.pixelSize: 14
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 4
                                         elide: Text.ElideRight
@@ -653,7 +653,7 @@ Scope {
                 textFormat: Text.PlainText
                 wrapMode: Text.NoWrap
                 font.family: Config.fontfamily
-                font.pixelSize: 13
+                font.pixelSize: 14
             }
 
             // Overlay for the same reason as clipWindow above.
@@ -732,7 +732,7 @@ Scope {
                             selectByMouse: true
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 13
+                            font.pixelSize: 14
                         }
                     }
                 }
