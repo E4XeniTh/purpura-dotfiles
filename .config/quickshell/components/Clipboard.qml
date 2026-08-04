@@ -42,42 +42,6 @@ Scope {
         }
     }
 
-    // Click-outside-to-close, without a full-screen invisible catcher
-    // window that would have to consume (and so swallow) every outside
-    // click just to notice one happened. Both panel windows request
-    // WlrKeyboardFocus.OnDemand and their own focused Item reports its
-    // activeFocus back into these two flags (PanelWindow itself has no
-    // "active"/window-activation concept at all - wlr-layer-shell only
-    // has keyboard-interactivity, no separate activation state the way
-    // an xdg-toplevel gets - but activeFocus on the item WITHIN it still
-    // genuinely tracks whether this surface currently holds real
-    // keyboard focus). Hyprland hands an on-demand layer surface that
-    // focus while it's actually being interacted with and takes it back
-    // the moment focus legitimately moves to some other real window, so
-    // "we lost focus and neither of our own two windows has it now"
-    // already means "the user clicked something else" on its own, with
-    // that other window's own click still reaching it completely
-    // normally - nothing here ever intercepts it.
-    property bool clipWindowActive: false
-    property bool previewWindowActive: false
-
-    // Debounced rather than closing the instant either window's active
-    // flips false - clicking from the clipboard panel INTO the preview
-    // pane (two separate windows) hands focus from one to the other,
-    // and without this they'd be seen one tick apart as "both inactive"
-    // in between, closing everything just for switching which of our
-    // own two panels you clicked into.
-    Timer {
-        id: closeCheckTimer
-        interval: 50
-        repeat: false
-        onTriggered: {
-            if (root.open && !root.clipWindowActive && !root.previewWindowActive) {
-                root.open = false
-            }
-        }
-    }
-
     IpcHandler {
         target: "clipboard"
         function toggle(): void { root.open = !root.open }
@@ -284,6 +248,13 @@ Scope {
             implicitHeight: Math.max(contentCol.implicitHeight + 20, 1)
             color: "transparent"
 
+            // Overlay (not the unset default, which is Top - same as
+            // Bar.qml) so this renders above the invisible click-catcher
+            // below, which itself needs Top to see clicks over regular
+            // windows at all - same layering Dashboard.qml uses for its
+            // own real window vs. its own click-catcher.
+            WlrLayershell.namespace: "clipboard"
+            WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
             Component.onCompleted: {
@@ -309,24 +280,6 @@ Scope {
 
                 focus: true
                 Keys.onEscapePressed: root.open = false
-
-                // activeFocus (a plain Item property, always present) -
-                // not PanelWindow's own "active", which doesn't exist at
-                // all: wlr-layer-shell has no window-activation concept
-                // the way an xdg-toplevel does, only keyboard-interactivity.
-                // activeFocus still correctly tracks real keyboard focus
-                // moving to/away from this surface, since that's exactly
-                // what OnDemand keyboard-interactivity governs.
-                onActiveFocusChanged: {
-                    root.clipWindowActive = activeFocus
-                    // Only ever check on LOSING focus, never on gaining
-                    // it - otherwise the very first time this becomes
-                    // focused (which can be the only change since window
-                    // creation, if previewWindowActive still reads false
-                    // at that instant) would trip the check and close
-                    // the panel the moment it opens.
-                    if (!activeFocus) closeCheckTimer.restart()
-                }
 
                 // Anchored to the window's bottom (not top, like
                 // Notification's own top-right panel) so it grows upward
@@ -599,6 +552,41 @@ Scope {
         }
     }
 
+    // Invisible, full-screen click catcher that closes the clipboard
+    // (and, via the existing onOpenChanged reset, the preview pane with
+    // it) on an outside click - including a click on another window, not
+    // just bare desktop. Same pattern as Dashboard.qml's own
+    // "dashboard-catcher": per the wlr-layer-shell spec, Background/
+    // Bottom render below regular windows while Top/Overlay render above
+    // them, so this needs WlrLayer.Top to actually see clicks over a
+    // normal window - Bottom would only ever catch clicks on bare
+    // desktop. It still sits below clipWindow/the preview pane's own
+    // WlrLayer.Overlay, so clicking either of those two is unaffected.
+    LazyLoader {
+        active: root.open
+
+        PanelWindow {
+            WlrLayershell.namespace: "clipboard-catcher"
+            WlrLayershell.layer: WlrLayer.Top
+
+            exclusiveZone: -1
+
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+
+            color: "transparent"
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: root.open = false
+            }
+        }
+    }
+
     // Full-content preview pane, to the left of the clipboard panel -
     // gated on root.open too (not just previewedEntryId), so closing the
     // clipboard for any reason (selecting an entry, re-pressing META + V,
@@ -620,6 +608,11 @@ Scope {
             implicitHeight: 500
             color: "transparent"
 
+            // Overlay for the same reason as clipWindow above - stay
+            // above the invisible click-catcher.
+            WlrLayershell.namespace: "clipboard-preview"
+            WlrLayershell.layer: WlrLayer.Overlay
+
             // OnDemand (not None) so the previewTextItem TextEdit below
             // can actually receive real keyboard focus when clicked -
             // needed for Ctrl+C to do anything - without permanently
@@ -634,11 +627,6 @@ Scope {
 
                 focus: true
                 Keys.onEscapePressed: root.open = false
-
-                onActiveFocusChanged: {
-                    root.previewWindowActive = activeFocus
-                    if (!activeFocus) closeCheckTimer.restart()
-                }
 
                 anchors.fill: parent
                 color: Config.fillcolor
