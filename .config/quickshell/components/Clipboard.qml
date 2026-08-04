@@ -62,8 +62,14 @@ Scope {
         root.open = false
     }
 
-    function deleteEntry(entryId) {
-        deleteProcess.command = ["cliphist", "delete", entryId]
+    // cliphist's own documented usage is `cliphist list | picker | cliphist
+    // delete` - it reads whole "id\tpreview" lines from stdin and pulls the
+    // id off the front of each one, rather than reliably taking a bare id
+    // as a positional argument. Piping entryId+preview back in that same
+    // shape (via printf, so nothing here is shell-interpolated) is what
+    // actually matches how it's meant to be driven.
+    function deleteEntry(entryId, preview) {
+        deleteProcess.command = ["bash", "-c", 'printf "%s\\t%s\\n" "$1" "$2" | cliphist delete', "clipboard-delete", entryId, preview]
         deleteProcess.running = true
     }
 
@@ -252,6 +258,9 @@ Scope {
                                 // right only, not bottom, so its actual
                                 // height never fights this binding the
                                 // way panelBox's did before that fix).
+                                // An image entry's 80px-tall thumbnail
+                                // (+16 margin) lands this at 96 - exactly
+                                // two base (48px) text-entry rows tall.
                                 height: Math.max(48, contentRow.implicitHeight + 16)
                                 color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                                 border.width: 2
@@ -271,8 +280,8 @@ Scope {
                                     Image {
                                         id: thumb
                                         visible: entryDelegate.isImage
-                                        Layout.preferredWidth: 32
-                                        Layout.preferredHeight: 32
+                                        Layout.preferredWidth: 80
+                                        Layout.preferredHeight: 80
                                         Layout.alignment: Qt.AlignTop
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
@@ -280,9 +289,27 @@ Scope {
                                     }
 
                                     Text {
+                                        // No label at all for image
+                                        // entries - the thumbnail already
+                                        // says everything there is to say.
+                                        visible: !entryDelegate.isImage
                                         Layout.fillWidth: true
                                         Layout.alignment: Qt.AlignTop
-                                        text: entryDelegate.isImage ? "Image" : entryDelegate.preview
+                                        text: entryDelegate.preview
+                                        // Some clipboard entries (e.g. a
+                                        // browser's "copy image" also
+                                        // populating a text/html mime
+                                        // alongside the actual image) are
+                                        // literal HTML/XML source. Text's
+                                        // default AutoText would sniff
+                                        // that and try to actually RENDER
+                                        // it as rich text/markup (an <img>
+                                        // tag inside becomes a real,
+                                        // usually-broken embedded image
+                                        // request) instead of showing it -
+                                        // forcing PlainText always shows
+                                        // the raw characters as-is.
+                                        textFormat: Text.PlainText
                                         color: Config.fgcolor
                                         font.family: Config.fontfamily
                                         font.pixelSize: 13
@@ -299,7 +326,7 @@ Scope {
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) {
-                                            root.deleteEntry(entryDelegate.entryId)
+                                            root.deleteEntry(entryDelegate.entryId, entryDelegate.preview)
                                         } else {
                                             root.selectEntry(entryDelegate.entryId)
                                         }
