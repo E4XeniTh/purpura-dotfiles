@@ -44,15 +44,20 @@ Scope {
 
     // Click-outside-to-close, without a full-screen invisible catcher
     // window that would have to consume (and so swallow) every outside
-    // click just to notice one happened. Both panel windows below
-    // request WlrKeyboardFocus.OnDemand and report their own Window.active
-    // back into these two flags - Hyprland hands an on-demand layer
-    // surface keyboard focus while it's actually being interacted with
-    // and takes it back the moment focus legitimately moves to some
-    // other real window, so "we lost focus and neither of our own two
-    // windows has it now" already means "the user clicked something
-    // else" on its own, with that other window's own click still
-    // reaching it completely normally - nothing here ever intercepts it.
+    // click just to notice one happened. Both panel windows request
+    // WlrKeyboardFocus.OnDemand and their own focused Item reports its
+    // activeFocus back into these two flags (PanelWindow itself has no
+    // "active"/window-activation concept at all - wlr-layer-shell only
+    // has keyboard-interactivity, no separate activation state the way
+    // an xdg-toplevel gets - but activeFocus on the item WITHIN it still
+    // genuinely tracks whether this surface currently holds real
+    // keyboard focus). Hyprland hands an on-demand layer surface that
+    // focus while it's actually being interacted with and takes it back
+    // the moment focus legitimately moves to some other real window, so
+    // "we lost focus and neither of our own two windows has it now"
+    // already means "the user clicked something else" on its own, with
+    // that other window's own click still reaching it completely
+    // normally - nothing here ever intercepts it.
     property bool clipWindowActive: false
     property bool previewWindowActive: false
 
@@ -281,17 +286,6 @@ Scope {
 
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-            onActiveChanged: {
-                root.clipWindowActive = active
-                // Only ever check on LOSING focus, never on gaining it -
-                // otherwise the very first time this becomes active
-                // (which can itself be the only activeChanged firing
-                // since window creation, if previewWindowActive still
-                // happens to read false at that instant) would trip the
-                // check and close the panel the moment it opens.
-                if (!active) closeCheckTimer.restart()
-            }
-
             Component.onCompleted: {
                 root.refresh()
                 panelBox.forceActiveFocus()
@@ -315,6 +309,24 @@ Scope {
 
                 focus: true
                 Keys.onEscapePressed: root.open = false
+
+                // activeFocus (a plain Item property, always present) -
+                // not PanelWindow's own "active", which doesn't exist at
+                // all: wlr-layer-shell has no window-activation concept
+                // the way an xdg-toplevel does, only keyboard-interactivity.
+                // activeFocus still correctly tracks real keyboard focus
+                // moving to/away from this surface, since that's exactly
+                // what OnDemand keyboard-interactivity governs.
+                onActiveFocusChanged: {
+                    root.clipWindowActive = activeFocus
+                    // Only ever check on LOSING focus, never on gaining
+                    // it - otherwise the very first time this becomes
+                    // focused (which can be the only change since window
+                    // creation, if previewWindowActive still reads false
+                    // at that instant) would trip the check and close
+                    // the panel the moment it opens.
+                    if (!activeFocus) closeCheckTimer.restart()
+                }
 
                 // Anchored to the window's bottom (not top, like
                 // Notification's own top-right panel) so it grows upward
@@ -615,11 +627,6 @@ Scope {
             // Exclusive (LockScreen/PowerMenu's own choice) would.
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-            onActiveChanged: {
-                root.previewWindowActive = active
-                if (!active) closeCheckTimer.restart()
-            }
-
             Component.onCompleted: outerBox.forceActiveFocus()
 
             Rectangle {
@@ -627,6 +634,11 @@ Scope {
 
                 focus: true
                 Keys.onEscapePressed: root.open = false
+
+                onActiveFocusChanged: {
+                    root.previewWindowActive = activeFocus
+                    if (!activeFocus) closeCheckTimer.restart()
+                }
 
                 anchors.fill: parent
                 color: Config.fillcolor
