@@ -26,6 +26,22 @@ Scope {
 
     property bool open: false
 
+    // The LazyLoader gate below (root.open && previewedEntryId !== "")
+    // only ever hides the preview WINDOW when the clipboard closes - it
+    // never actually clears previewedEntryId itself, so without this the
+    // very next open (via any path: the shortcut, IpcHandler, selecting
+    // an entry) immediately re-satisfied that same gate and reopened the
+    // preview on the same entry, looking exactly like it had never
+    // closed at all.
+    onOpenChanged: {
+        if (!root.open) {
+            root.previewedEntryId = ""
+            root.previewedIsImage = false
+            root.previewedImagePath = ""
+            root.previewText = ""
+        }
+    }
+
     IpcHandler {
         target: "clipboard"
         function toggle(): void { root.open = !root.open }
@@ -538,49 +554,62 @@ Scope {
 
             // Fixed square - not tied to the clipboard panel's own
             // (variable) height.
-            implicitWidth: 300
-            implicitHeight: 300
+            implicitWidth: 500
+            implicitHeight: 500
             color: "transparent"
 
             Rectangle {
+                id: outerBox
                 anchors.fill: parent
                 color: Config.fillcolor
                 border.width: 2
-                border.color: Config.fgcolorlight
+                border.color: Config.fgcolor
 
-                Image {
-                    visible: root.previewedIsImage
+                // Inner container holding the actual copied contents -
+                // its own fillcolor background + lighter inner border
+                // gives the double-border "nested card" look already
+                // used elsewhere in this shell (e.g. DashCard.qml).
+                Rectangle {
                     anchors.fill: parent
                     anchors.margins: 10
-                    source: root.previewedIsImage ? ("file://" + root.previewedImagePath) : ""
-                    // Scale to fill as much of the square as possible
-                    // without cropping or distorting - including
-                    // upscaling an image that's smaller than the pane,
-                    // which plain PreserveAspectFit already does on its
-                    // own (Image always scales to its target size here).
-                    fillMode: Image.PreserveAspectFit
-                    asynchronous: true
-                    cache: false
-                }
+                    color: Config.fillcolor
+                    border.width: 2
+                    border.color: Config.fgcolorlight
 
-                Flickable {
-                    visible: !root.previewedIsImage
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    contentWidth: width
-                    contentHeight: previewTextItem.implicitHeight
+                    Image {
+                        visible: root.previewedIsImage
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        source: root.previewedIsImage ? ("file://" + root.previewedImagePath) : ""
+                        // Scale to fill as much of the square as possible
+                        // without cropping or distorting - including
+                        // upscaling an image that's smaller than the pane,
+                        // which plain PreserveAspectFit already does on its
+                        // own (Image always scales to its target size here).
+                        fillMode: Image.PreserveAspectFit
+                        asynchronous: true
+                        cache: false
+                    }
 
-                    Text {
-                        id: previewTextItem
-                        width: parent.width
-                        text: root.previewText
-                        textFormat: Text.PlainText
-                        wrapMode: Text.WordWrap
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: 13
+                    Flickable {
+                        visible: !root.previewedIsImage
+                        anchors.fill: parent
+                        anchors.margins: 10
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        contentWidth: width
+                        contentHeight: previewTextItem.implicitHeight
+
+                        Text {
+                            id: previewTextItem
+                            width: parent.width
+                            text: root.previewText
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: 13
+                        }
                     }
                 }
             }
