@@ -487,6 +487,12 @@ Scope {
                                 // isPreviewed check, so only the one
                                 // that's actually selected shows either.
                                 FastBlur {
+                                    // Explicit, not relying on plain
+                                    // declaration order - keeps this
+                                    // pinned below entryMouseArea (z: 1)
+                                    // regardless of how this delegate
+                                    // gets reordered/edited later.
+                                    z: 0
                                     anchors.fill: contentRow
                                     source: contentRow
                                     radius: 48
@@ -494,6 +500,7 @@ Scope {
                                 }
 
                                 Text {
+                                    z: 0
                                     anchors {
                                         right: parent.right
                                         verticalCenter: parent.verticalCenter
@@ -509,6 +516,7 @@ Scope {
 
                                 MouseArea {
                                     id: entryMouseArea
+                                    z: 1
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
