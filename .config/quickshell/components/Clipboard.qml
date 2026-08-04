@@ -176,6 +176,14 @@ Scope {
                     // rather than showing it as its own history entry.
                     if (preview.indexOf('<meta http-equiv="content-type" content="text/html; charset=utf-8">') !== -1) continue
 
+                    // A file manager's "copy" (as opposed to copying its
+                    // actual bytes) typically populates a text/uri-list
+                    // clipboard mime holding a bare file:// path - not
+                    // something useful to select for re-pasting as text,
+                    // so skip it entirely rather than showing it as its
+                    // own history entry.
+                    if (preview.indexOf("file://") !== -1) continue
+
                     parsedEntries.push({
                         entryId: entryId,
                         preview: preview,
@@ -281,10 +289,7 @@ Scope {
             color: "transparent"
 
             // Overlay (not the unset default, which is Top - same as
-            // Bar.qml) so this renders above the invisible click-catcher
-            // below, which itself needs Top to see clicks over regular
-            // windows at all - same layering Dashboard.qml uses for its
-            // own real window vs. its own click-catcher.
+            // Bar.qml) so this renders above regular windows.
             WlrLayershell.namespace: "clipboard"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
@@ -593,41 +598,6 @@ Scope {
         }
     }
 
-    // Invisible, full-screen click catcher that closes the clipboard
-    // (and, via the existing onOpenChanged reset, the preview pane with
-    // it) on an outside click - including a click on another window, not
-    // just bare desktop. Same pattern as Dashboard.qml's own
-    // "dashboard-catcher": per the wlr-layer-shell spec, Background/
-    // Bottom render below regular windows while Top/Overlay render above
-    // them, so this needs WlrLayer.Top to actually see clicks over a
-    // normal window - Bottom would only ever catch clicks on bare
-    // desktop. It still sits below clipWindow/the preview pane's own
-    // WlrLayer.Overlay, so clicking either of those two is unaffected.
-    LazyLoader {
-        active: root.open
-
-        PanelWindow {
-            WlrLayershell.namespace: "clipboard-catcher"
-            WlrLayershell.layer: WlrLayer.Top
-
-            exclusiveZone: -1
-
-            anchors {
-                top: true
-                bottom: true
-                left: true
-                right: true
-            }
-
-            color: "transparent"
-
-            MouseArea {
-                anchors.fill: parent
-                onClicked: root.open = false
-            }
-        }
-    }
-
     // Full-content preview pane, to the left of the clipboard panel -
     // gated on root.open too (not just previewedEntryId), so closing the
     // clipboard for any reason (selecting an entry, re-pressing META + V,
@@ -686,8 +656,7 @@ Scope {
                 font.pixelSize: 13
             }
 
-            // Overlay for the same reason as clipWindow above - stay
-            // above the invisible click-catcher.
+            // Overlay for the same reason as clipWindow above.
             WlrLayershell.namespace: "clipboard-preview"
             WlrLayershell.layer: WlrLayer.Overlay
 
