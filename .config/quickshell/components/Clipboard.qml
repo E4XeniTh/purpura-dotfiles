@@ -269,7 +269,7 @@ Scope {
             id: clipWindow
 
             anchors { bottom: true; right: true }
-            margins { bottom: 10; right: 10 }
+            margins { bottom: 3; right: 10 }
 
             implicitWidth: 400
             // +20 = the 10px top + 10px bottom margins contentCol below
@@ -378,6 +378,7 @@ Scope {
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: 12
+                            font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                         }
 
@@ -410,9 +411,9 @@ Scope {
                                 // An image entry's 80px-tall thumbnail
                                 // (+16 margin) lands this at 96 - exactly
                                 // two base (48px) text-entry rows tall.
-                                height: Math.max(48, contentRow.implicitHeight + 16)
+                                height: Math.max(64, contentRow.implicitHeight + 16)
                                 color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                border.width: entryDelegate.isPreviewed ? 3 : 2
+                                border.width: 2
                                 border.color: entryDelegate.isPreviewed ? Config.fgcolorlight : Config.fgcolor
 
                                 RowLayout {

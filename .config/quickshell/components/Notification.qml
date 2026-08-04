@@ -231,10 +231,12 @@ Scope {
                     Text {
                         Layout.fillWidth: true
                         visible: historyModel.count === 0
-                        text: "No notifications"
+                        text: "No notifications
+                        "
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: 12
+                        font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
 
