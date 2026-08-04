@@ -46,6 +46,12 @@ Scope {
         id: clipModel
     }
 
+    // Raw `cliphist list` text from the last successful refresh - lets
+    // the poll Timer below skip rebuilding clipModel (and re-triggering
+    // every image entry's thumbnail decode) on ticks where nothing
+    // actually changed, not just on ticks where something did.
+    property string lastListText: ""
+
     function refresh() {
         listProcess.running = true
     }
@@ -56,6 +62,11 @@ Scope {
         root.open = false
     }
 
+    function deleteEntry(entryId) {
+        deleteProcess.command = ["cliphist", "delete", entryId]
+        deleteProcess.running = true
+    }
+
     Process {
         id: listProcess
         command: ["cliphist", "list"]
@@ -63,6 +74,9 @@ Scope {
         stdout: StdioCollector {
             id: listCollector
             onStreamFinished: {
+                if (listCollector.text === root.lastListText) return
+                root.lastListText = listCollector.text
+
                 clipModel.clear()
 
                 const lines = listCollector.text.split("\n").filter(l => l.length > 0)
@@ -72,7 +86,12 @@ Scope {
                     if (tab === -1) continue
 
                     const entryId = line.substring(0, tab)
-                    const preview = line.substring(tab + 1)
+                    // cliphist's own preview occasionally arrives already
+                    // prefixed with "..." (a middle-of-entry fragment) -
+                    // strip it so the preview always reads from the real
+                    // start of the copied text, and only our own Text's
+                    // elide (end-anchored) ever adds a "..." back.
+                    const preview = line.substring(tab + 1).replace(/^\.\.\.\s*/, "")
                     const isImage = /binary data/i.test(preview)
 
                     clipModel.append({
@@ -91,6 +110,11 @@ Scope {
     // happens at a time.
     Process {
         id: selectProcess
+    }
+
+    Process {
+        id: deleteProcess
+        onExited: (exitCode, exitStatus) => root.refresh()
     }
 
     Process {
@@ -119,6 +143,19 @@ Scope {
             color: "transparent"
 
             Component.onCompleted: root.refresh()
+
+            // Cliphist has no push-based "history changed" signal to
+            // hook into, so this is a plain poll - cheap since refresh()
+            // now skips rebuilding clipModel entirely when the raw list
+            // text hasn't actually changed since last time. Lives inside
+            // the LazyLoader like everything else here, so it only ever
+            // runs while the panel is actually open.
+            Timer {
+                interval: 1000
+                running: true
+                repeat: true
+                onTriggered: root.refresh()
+            }
 
             Rectangle {
                 id: panelBox
@@ -210,14 +247,25 @@ Scope {
                                 required property string imagePath
 
                                 width: clipList.width
-                                height: 48
+                                // 16 = 8px top + 8px bottom margin around
+                                // contentRow below (anchored top/left/
+                                // right only, not bottom, so its actual
+                                // height never fights this binding the
+                                // way panelBox's did before that fix).
+                                height: Math.max(48, contentRow.implicitHeight + 16)
                                 color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                                 border.width: 2
                                 border.color: Config.fgcolor
 
                                 RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 8
+                                    id: contentRow
+
+                                    anchors {
+                                        top: parent.top
+                                        left: parent.left
+                                        right: parent.right
+                                        margins: 8
+                                    }
                                     spacing: 8
 
                                     Image {
@@ -225,6 +273,7 @@ Scope {
                                         visible: entryDelegate.isImage
                                         Layout.preferredWidth: 32
                                         Layout.preferredHeight: 32
+                                        Layout.alignment: Qt.AlignTop
                                         fillMode: Image.PreserveAspectCrop
                                         asynchronous: true
                                         cache: false
@@ -232,10 +281,13 @@ Scope {
 
                                     Text {
                                         Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignTop
                                         text: entryDelegate.isImage ? "Image" : entryDelegate.preview
                                         color: Config.fgcolor
                                         font.family: Config.fontfamily
                                         font.pixelSize: 13
+                                        wrapMode: Text.WordWrap
+                                        maximumLineCount: 4
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -244,7 +296,14 @@ Scope {
                                     id: entryMouseArea
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: root.selectEntry(entryDelegate.entryId)
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) {
+                                            root.deleteEntry(entryDelegate.entryId)
+                                        } else {
+                                            root.selectEntry(entryDelegate.entryId)
+                                        }
+                                    }
                                 }
 
                                 // Decoded once per delegate instance - the
