@@ -42,6 +42,37 @@ Scope {
         }
     }
 
+    // Click-outside-to-close, without a full-screen invisible catcher
+    // window that would have to consume (and so swallow) every outside
+    // click just to notice one happened. Both panel windows below
+    // request WlrKeyboardFocus.OnDemand and report their own Window.active
+    // back into these two flags - Hyprland hands an on-demand layer
+    // surface keyboard focus while it's actually being interacted with
+    // and takes it back the moment focus legitimately moves to some
+    // other real window, so "we lost focus and neither of our own two
+    // windows has it now" already means "the user clicked something
+    // else" on its own, with that other window's own click still
+    // reaching it completely normally - nothing here ever intercepts it.
+    property bool clipWindowActive: false
+    property bool previewWindowActive: false
+
+    // Debounced rather than closing the instant either window's active
+    // flips false - clicking from the clipboard panel INTO the preview
+    // pane (two separate windows) hands focus from one to the other,
+    // and without this they'd be seen one tick apart as "both inactive"
+    // in between, closing everything just for switching which of our
+    // own two panels you clicked into.
+    Timer {
+        id: closeCheckTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            if (root.open && !root.clipWindowActive && !root.previewWindowActive) {
+                root.open = false
+            }
+        }
+    }
+
     IpcHandler {
         target: "clipboard"
         function toggle(): void { root.open = !root.open }
@@ -248,7 +279,23 @@ Scope {
             implicitHeight: Math.max(contentCol.implicitHeight + 20, 1)
             color: "transparent"
 
-            Component.onCompleted: root.refresh()
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
+            onActiveChanged: {
+                root.clipWindowActive = active
+                // Only ever check on LOSING focus, never on gaining it -
+                // otherwise the very first time this becomes active
+                // (which can itself be the only activeChanged firing
+                // since window creation, if previewWindowActive still
+                // happens to read false at that instant) would trip the
+                // check and close the panel the moment it opens.
+                if (!active) closeCheckTimer.restart()
+            }
+
+            Component.onCompleted: {
+                root.refresh()
+                panelBox.forceActiveFocus()
+            }
 
             // Cliphist has no push-based "history changed" signal to
             // hook into, so this is a plain poll - cheap since refresh()
@@ -265,6 +312,9 @@ Scope {
 
             Rectangle {
                 id: panelBox
+
+                focus: true
+                Keys.onEscapePressed: root.open = false
 
                 // Anchored to the window's bottom (not top, like
                 // Notification's own top-right panel) so it grows upward
@@ -565,8 +615,19 @@ Scope {
             // Exclusive (LockScreen/PowerMenu's own choice) would.
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
+            onActiveChanged: {
+                root.previewWindowActive = active
+                if (!active) closeCheckTimer.restart()
+            }
+
+            Component.onCompleted: outerBox.forceActiveFocus()
+
             Rectangle {
                 id: outerBox
+
+                focus: true
+                Keys.onEscapePressed: root.open = false
+
                 anchors.fill: parent
                 color: Config.fillcolor
                 border.width: 2
@@ -604,20 +665,19 @@ Scope {
                         anchors.margins: 10
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
-                        // No wrapping below, so a line only ever needs
-                        // horizontal scroll if it's genuinely wider than
-                        // the pane - Math.max keeps a short/narrow entry
-                        // from being draggable past its own bounds, since
-                        // content{Width,Height} would otherwise be
-                        // smaller than the Flickable itself.
-                        contentWidth: Math.max(width, previewTextItem.contentWidth)
-                        contentHeight: Math.max(height, previewTextItem.contentHeight)
+                        // Vertical-only - contentWidth pinned to the
+                        // Flickable's own width (matching previewTextItem
+                        // wrapping to that same width below) means there's
+                        // never anything to scroll sideways.
+                        contentWidth: width
+                        contentHeight: previewTextItem.contentHeight
 
                         TextEdit {
                             id: previewTextItem
+                            width: parent.width
                             text: root.previewText
                             textFormat: TextEdit.PlainText
-                            wrapMode: TextEdit.NoWrap
+                            wrapMode: TextEdit.WordWrap
                             readOnly: true
                             selectByMouse: true
                             color: Config.fgcolor
