@@ -64,6 +64,13 @@ Scope {
     property string previewedImagePath: ""
     property string previewText: ""
 
+    // Set right when a delete is fired, consumed (and always cleared)
+    // the next time the list actually refreshes - lets that refresh know
+    // "this particular emptiness, if it happens, came from a delete" so
+    // it only auto-closes the clipboard for that reason, never just
+    // because the panel happened to open onto an already-empty history.
+    property bool pendingDeleteClose: false
+
     function refresh() {
         listProcess.running = true
     }
@@ -103,6 +110,14 @@ Scope {
     // shape (via printf, so nothing here is shell-interpolated) is what
     // actually matches how it's meant to be driven.
     function deleteEntry(entryId, preview) {
+        // Deleting the entry currently open in the preview pane closes
+        // just the pane, independent of whether the clipboard itself
+        // ends up closing too (see pendingDeleteClose below).
+        if (root.previewedEntryId === entryId) {
+            root.previewedEntryId = ""
+        }
+
+        root.pendingDeleteClose = true
         deleteProcess.command = ["bash", "-c", 'printf "%s\\t%s\\n" "$1" "$2" | cliphist delete', "clipboard-delete", entryId, preview]
         deleteProcess.running = true
     }
@@ -114,7 +129,10 @@ Scope {
         stdout: StdioCollector {
             id: listCollector
             onStreamFinished: {
-                if (listCollector.text === root.lastListText) return
+                if (listCollector.text === root.lastListText) {
+                    root.pendingDeleteClose = false
+                    return
+                }
                 root.lastListText = listCollector.text
 
                 clipModel.clear()
@@ -149,6 +167,11 @@ Scope {
                         imagePath: isImage ? ("/tmp/quickshell-clip-" + entryId + ".img") : ""
                     })
                 }
+
+                if (root.pendingDeleteClose) {
+                    root.pendingDeleteClose = false
+                    if (clipModel.count === 0) root.open = false
+                }
             }
         }
     }
@@ -168,7 +191,10 @@ Scope {
     Process {
         id: wipeProcess
         command: ["cliphist", "wipe"]
-        onExited: (exitCode, exitStatus) => root.refresh()
+        onExited: (exitCode, exitStatus) => {
+            root.refresh()
+            root.open = false
+        }
     }
 
     // Fetches the FULL text of whichever entry is currently being
@@ -329,8 +355,16 @@ Scope {
                                 RowLayout {
                                     id: contentRow
 
+                                    // verticalCenter (not top) so a short
+                                    // single-line entry sits centered in
+                                    // its row instead of stuck at the
+                                    // top-left with dead space below it -
+                                    // a tall wrapped entry still just
+                                    // grows the whole row height to match
+                                    // (see entryDelegate.height above), so
+                                    // centering here never clips anything.
                                     anchors {
-                                        top: parent.top
+                                        verticalCenter: parent.verticalCenter
                                         left: parent.left
                                         right: parent.right
                                         margins: 8
@@ -397,9 +431,13 @@ Scope {
                                 }
 
                                 Text {
-                                    anchors.centerIn: parent
+                                    anchors {
+                                        right: parent.right
+                                        verticalCenter: parent.verticalCenter
+                                        rightMargin: 12
+                                    }
                                     visible: entryDelegate.isPreviewed
-                                    text: "Previewing - 🖱️ Copy"
+                                    text: "Copy 🖱️"
                                     color: Config.fgcolorlight
                                     font.family: Config.fontfamily
                                     font.pixelSize: 16
@@ -488,9 +526,7 @@ Scope {
     // clipboard for any reason (selecting an entry, re-pressing META + V,
     // an IpcHandler hide()) always takes this down with it instead of
     // needing every one of those paths to separately remember to clear
-    // previewedEntryId. Only ever exists while clipWindow (the main
-    // panel, declared above) does, so referencing clipWindow.height below
-    // is always safe.
+    // previewedEntryId.
     LazyLoader {
         active: root.open && root.previewedEntryId !== ""
 
@@ -500,11 +536,10 @@ Scope {
             // (clipWindow's width) + 10 (gap between the two panels).
             margins { bottom: 10; right: 420 }
 
-            // Square, sized to whatever height the clipboard panel
-            // itself currently is - both the initial and the max size,
-            // i.e. this pane never grows/shrinks on its own.
-            implicitWidth: clipWindow.height
-            implicitHeight: clipWindow.height
+            // Fixed square - not tied to the clipboard panel's own
+            // (variable) height.
+            implicitWidth: 300
+            implicitHeight: 300
             color: "transparent"
 
             Rectangle {
