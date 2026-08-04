@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import QtQuick
 import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 
 import "../Config.js" as Config
 
@@ -52,8 +53,41 @@ Scope {
     // actually changed, not just on ticks where something did.
     property string lastListText: ""
 
+    // Which entry (if any) is currently shown highlighted+blurred in the
+    // list, with its full contents open in the side preview pane. Gated
+    // together with root.open (see the preview pane's LazyLoader below)
+    // so closing the clipboard for any reason also always closes the
+    // preview pane with it, instead of needing every place root.open can
+    // become false to separately remember to reset this too.
+    property string previewedEntryId: ""
+    property bool previewedIsImage: false
+    property string previewedImagePath: ""
+    property string previewText: ""
+
     function refresh() {
         listProcess.running = true
+    }
+
+    // First click on an entry previews it; clicking a DIFFERENT entry
+    // just swaps which one is previewed; a second click on the SAME
+    // (already-previewing) entry is what actually selects it - so a
+    // quick double-click still copies+closes in one motion, same as a
+    // single click used to.
+    function previewOrSelectEntry(entryId, isImage, imagePath) {
+        if (root.previewedEntryId === entryId) {
+            root.selectEntry(entryId)
+            return
+        }
+
+        root.previewedEntryId = entryId
+        root.previewedIsImage = isImage
+        root.previewedImagePath = imagePath
+        root.previewText = ""
+
+        if (!isImage) {
+            previewTextProcess.command = ["cliphist", "decode", entryId]
+            previewTextProcess.running = true
+        }
     }
 
     function selectEntry(entryId) {
@@ -137,6 +171,20 @@ Scope {
         onExited: (exitCode, exitStatus) => root.refresh()
     }
 
+    // Fetches the FULL text of whichever entry is currently being
+    // previewed - cliphist list's own preview is capped at ~100 chars,
+    // nowhere near enough for the preview pane's "full contents" job.
+    // Not needed for image entries, which reuse the thumbnail's already-
+    // decoded /tmp file directly instead.
+    Process {
+        id: previewTextProcess
+
+        stdout: StdioCollector {
+            id: previewTextCollector
+            onStreamFinished: root.previewText = previewTextCollector.text
+        }
+    }
+
     // Only mounted while open, same reasoning as VolumeOsd/BrightnessOsd -
     // no point keeping the panel's render tree alive for something
     // nobody's looking at.
@@ -144,6 +192,8 @@ Scope {
         active: root.open
 
         PanelWindow {
+            id: clipWindow
+
             anchors { bottom: true; right: true }
             margins { bottom: 10; right: 10 }
 
@@ -260,6 +310,8 @@ Scope {
                                 required property bool isImage
                                 required property string imagePath
 
+                                readonly property bool isPreviewed: root.previewedEntryId === entryDelegate.entryId
+
                                 width: clipList.width
                                 // 16 = 8px top + 8px bottom margin around
                                 // contentRow below (anchored top/left/
@@ -271,8 +323,8 @@ Scope {
                                 // two base (48px) text-entry rows tall.
                                 height: Math.max(48, contentRow.implicitHeight + 16)
                                 color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                border.width: 2
-                                border.color: Config.fgcolor
+                                border.width: entryDelegate.isPreviewed ? 3 : 2
+                                border.color: entryDelegate.isPreviewed ? Config.fgcolorlight : Config.fgcolor
 
                                 RowLayout {
                                     id: contentRow
@@ -291,7 +343,12 @@ Scope {
                                         Layout.preferredWidth: 80
                                         Layout.preferredHeight: 80
                                         Layout.alignment: Qt.AlignTop
-                                        fillMode: Image.PreserveAspectCrop
+                                        // Fit the whole image within the
+                                        // thumbnail bounds instead of
+                                        // cropping it to fill - letterboxed
+                                        // is preferable to silently losing
+                                        // part of the picture.
+                                        fillMode: Image.PreserveAspectFit
                                         asynchronous: true
                                         cache: false
                                     }
@@ -327,6 +384,28 @@ Scope {
                                     }
                                 }
 
+                                // Blur + "Previewing" overlay only ever
+                                // covers THIS entry's own row - every
+                                // other delegate keeps its own independent
+                                // isPreviewed check, so only the one
+                                // that's actually selected shows either.
+                                FastBlur {
+                                    anchors.fill: contentRow
+                                    source: contentRow
+                                    radius: 48
+                                    visible: entryDelegate.isPreviewed
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: entryDelegate.isPreviewed
+                                    text: "Previewing - 🖱️ Copy"
+                                    color: Config.fgcolorlight
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: 16
+                                    font.bold: true
+                                }
+
                                 MouseArea {
                                     id: entryMouseArea
                                     anchors.fill: parent
@@ -336,7 +415,7 @@ Scope {
                                         if (mouse.button === Qt.RightButton) {
                                             root.deleteEntry(entryDelegate.entryId, entryDelegate.preview)
                                         } else {
-                                            root.selectEntry(entryDelegate.entryId)
+                                            root.previewOrSelectEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
                                         }
                                     }
                                 }
@@ -399,6 +478,75 @@ Scope {
                     interval: 300
                     repeat: false
                     onTriggered: panelBox.state = "open"
+                }
+            }
+        }
+    }
+
+    // Full-content preview pane, to the left of the clipboard panel -
+    // gated on root.open too (not just previewedEntryId), so closing the
+    // clipboard for any reason (selecting an entry, re-pressing META + V,
+    // an IpcHandler hide()) always takes this down with it instead of
+    // needing every one of those paths to separately remember to clear
+    // previewedEntryId. Only ever exists while clipWindow (the main
+    // panel, declared above) does, so referencing clipWindow.height below
+    // is always safe.
+    LazyLoader {
+        active: root.open && root.previewedEntryId !== ""
+
+        PanelWindow {
+            anchors { bottom: true; right: true }
+            // 10 (screen gap, matching clipWindow's own) + 400
+            // (clipWindow's width) + 10 (gap between the two panels).
+            margins { bottom: 10; right: 420 }
+
+            // Square, sized to whatever height the clipboard panel
+            // itself currently is - both the initial and the max size,
+            // i.e. this pane never grows/shrinks on its own.
+            implicitWidth: clipWindow.height
+            implicitHeight: clipWindow.height
+            color: "transparent"
+
+            Rectangle {
+                anchors.fill: parent
+                color: Config.fillcolor
+                border.width: 2
+                border.color: Config.fgcolorlight
+
+                Image {
+                    visible: root.previewedIsImage
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    source: root.previewedIsImage ? ("file://" + root.previewedImagePath) : ""
+                    // Scale to fill as much of the square as possible
+                    // without cropping or distorting - including
+                    // upscaling an image that's smaller than the pane,
+                    // which plain PreserveAspectFit already does on its
+                    // own (Image always scales to its target size here).
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
+                }
+
+                Flickable {
+                    visible: !root.previewedIsImage
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    contentWidth: width
+                    contentHeight: previewTextItem.implicitHeight
+
+                    Text {
+                        id: previewTextItem
+                        width: parent.width
+                        text: root.previewText
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: 13
+                    }
                 }
             }
         }
