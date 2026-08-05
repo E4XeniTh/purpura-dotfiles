@@ -292,12 +292,8 @@ Scope {
             // Bar.qml) so this renders above regular windows.
             WlrLayershell.namespace: "clipboard"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-            Component.onCompleted: {
-                root.refresh()
-                panelBox.forceActiveFocus()
-            }
+            Component.onCompleted: root.refresh()
 
             // Cliphist has no push-based "history changed" signal to
             // hook into, so this is a plain poll - cheap since refresh()
@@ -314,9 +310,6 @@ Scope {
 
             Rectangle {
                 id: panelBox
-
-                focus: true
-                Keys.onEscapePressed: root.open = false
 
                 // Anchored to the window's bottom (not top, like
                 // Notification's own top-right panel) so it grows upward
@@ -661,19 +654,12 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             // WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
-            // OnDemand (not None) so the previewTextItem TextEdit below
-            // can actually receive real keyboard focus when clicked -
-            // needed for Ctrl+C to do anything - without permanently
-            // grabbing it away from the clipboard panel the way
-            // Exclusive (LockScreen/PowerMenu's own choice) would.
-
             Component.onCompleted: outerBox.forceActiveFocus()
 
             Rectangle {
                 id: outerBox
 
                 focus: true
-                Keys.onEscapePressed: root.open = false
 
                 anchors.fill: parent
                 color: Config.fillcolor

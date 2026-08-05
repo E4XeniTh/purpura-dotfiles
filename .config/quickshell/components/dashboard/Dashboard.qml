@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Io
+import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
@@ -613,6 +614,15 @@ Scope {
             root.screen = Quickshell.screens[0]
         }
         function hide(): void { root.close() }
+    }
+
+    GlobalShortcut {
+        name: "dashboard"
+        onPressed: {
+            // Same "no click position, always the primary screen" logic
+            // as IpcHandler's own toggle() above.
+            root.toggle(Quickshell.screens[0])
+        }
     }
 
     Variants {

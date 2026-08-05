@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Services.Notifications
 import QtQuick
 import QtQuick.Layouts
@@ -138,6 +139,13 @@ Scope {
         function toggle() : void { root.centerOpen = !root.centerOpen }
         function show() : void { root.centerOpen = true }
         function hide() : void { root.centerOpen = false }
+    }
+
+    GlobalShortcut {
+        name: "notifications"
+        onPressed: {
+            root.centerOpen = !root.centerOpen
+        }
     }
 
     PanelWindow {
