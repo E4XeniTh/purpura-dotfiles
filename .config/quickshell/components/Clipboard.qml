@@ -659,6 +659,7 @@ Scope {
             // Overlay for the same reason as clipWindow above.
             WlrLayershell.namespace: "clipboard-preview"
             WlrLayershell.layer: WlrLayer.Overlay
+            // WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
             // OnDemand (not None) so the previewTextItem TextEdit below
             // can actually receive real keyboard focus when clicked -
