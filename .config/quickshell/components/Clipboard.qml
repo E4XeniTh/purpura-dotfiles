@@ -34,12 +34,28 @@ Scope {
     // preview on the same entry, looking exactly like it had never
     // closed at all.
     onOpenChanged: {
-        if (!root.open) {
+        if (root.open) {
+            autoCloseTimer.restart()
+        } else {
             root.previewedEntryId = ""
             root.previewedIsImage = false
             root.previewedImagePath = ""
             root.previewText = ""
+            autoCloseTimer.stop()
         }
+    }
+
+    // Auto-close after 5s with the mouse over neither the clipboard
+    // panel nor the preview pane - HoverHandler on each (below) restarts
+    // this to a fresh 5s every time the mouse leaves either one, and
+    // stops it while the mouse is present in either, so it only ever
+    // fires after 5 full uninterrupted seconds of no mouse activity in
+    // either window.
+    Timer {
+        id: autoCloseTimer
+        interval: 5000
+        repeat: false
+        onTriggered: root.open = false
     }
 
     IpcHandler {
@@ -329,6 +345,19 @@ Scope {
                     border.width: 2
                     border.color: Config.fgcolor
                     clip: true
+
+                    // Purely observational - doesn't grab/consume
+                    // anything the way a MouseArea would, so it coexists
+                    // fine with every entry's own MouseArea underneath.
+                    HoverHandler {
+                        onHoveredChanged: {
+                            if (hovered) {
+                                autoCloseTimer.stop()
+                            } else {
+                                autoCloseTimer.restart()
+                            }
+                        }
+                    }
 
                     ColumnLayout {
                         id: contentCol
@@ -665,6 +694,20 @@ Scope {
                 color: Config.fillcolor
                 border.width: 2
                 border.color: Config.fgcolor
+
+                // Same shared autoCloseTimer as the main panel's own
+                // HoverHandler - reading a long previewed entry without
+                // touching the mouse shouldn't let the clipboard idle-
+                // close out from under it.
+                HoverHandler {
+                    onHoveredChanged: {
+                        if (hovered) {
+                            autoCloseTimer.stop()
+                        } else {
+                            autoCloseTimer.restart()
+                        }
+                    }
+                }
 
                 // Inner container holding the actual copied contents -
                 // its own fillcolor background + lighter inner border

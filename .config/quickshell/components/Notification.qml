@@ -134,6 +134,26 @@ Scope {
 
     property bool centerOpen: false
 
+    onCenterOpenChanged: {
+        if (root.centerOpen) {
+            autoCloseTimer.restart()
+        } else {
+            autoCloseTimer.stop()
+        }
+    }
+
+    // Auto-close after 5s with the mouse not over the panel -
+    // HoverHandler on mainRect (below) restarts this to a fresh 5s every
+    // time the mouse leaves, and stops it while the mouse is present, so
+    // it only ever fires after 5 full uninterrupted seconds of no mouse
+    // activity in the panel.
+    Timer {
+        id: autoCloseTimer
+        interval: 5000
+        repeat: false
+        onTriggered: root.centerOpen = false
+    }
+
     IpcHandler {
         target: "notificationpanel"
         function toggle() : void { root.centerOpen = !root.centerOpen }
@@ -185,6 +205,19 @@ Scope {
                 border.width: 2
                 border.color: Config.fgcolor
                 clip: true
+
+                // Purely observational - doesn't grab/consume anything
+                // the way a MouseArea would, so it coexists fine with
+                // every entry's own MouseArea underneath.
+                HoverHandler {
+                    onHoveredChanged: {
+                        if (hovered) {
+                            autoCloseTimer.stop()
+                        } else {
+                            autoCloseTimer.restart()
+                        }
+                    }
+                }
 
                 ColumnLayout {
                     id: centerCol
