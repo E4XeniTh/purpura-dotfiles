@@ -209,6 +209,7 @@ hl.bind(mainMod .. " + delete", hl.dsp.global("quickshell:powermenu"))
 hl.bind(mainMod .. " + V", hl.dsp.global("quickshell:clipboard"))
 hl.bind(mainMod .. " + N", hl.dsp.global("quickshell:notifications"))
 hl.bind(mainMod .. " + M", hl.dsp.global("quickshell:dashboard"))
+hl.bind(mainMod .. " + Print", hl.dsp.global("quickshell:screenshot"))
 
 hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }))
 hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }))

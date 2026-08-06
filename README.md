@@ -15,6 +15,8 @@ out to be copied straight into place.
 | **Bar** | Top bar: tray, clock (opens the dashboard), volume/brightness/battery widgets, notification icon (opens the notification center) |
 | **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen/battery), power/lock |
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
+| **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
+| **Screenshot picker** | Custom region/window/monitor picker (META + Print) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | Full-screen lock, authenticates via PAM |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -33,6 +35,8 @@ qs ipc call dashboard toggle           # opens on the primary screen
 qs ipc call powermenu toggle
 qs ipc call lockscreen lock            # lock only - no IPC unlock, see LockScreen.qml
 qs ipc call trayMenu hide              # no toggle/show - see Tray.qml
+qs ipc call clipboard toggle           # show / hide also work
+qs ipc call screenshot show            # toggle / hide also work, see Screenshot.qml
 ```
 
 ## Install
@@ -111,6 +115,7 @@ Beyond a base Arch install:
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
+- `grim` - the custom screenshot picker (`components/Screenshot.qml`, META + Print) shells out to it directly for every capture (freezing the backdrop, and the final region/window/monitor grab); `wl-clipboard` above also covers the `wl-copy` it pipes the result into
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)

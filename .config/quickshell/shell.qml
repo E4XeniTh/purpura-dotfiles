@@ -14,6 +14,7 @@ Scope {
   }
   Notification { id: notification }
   Clipboard { id: clipboard }
+  Screenshot { id: screenshot }
 
   Bar {
     locked: lockScreen.locked
