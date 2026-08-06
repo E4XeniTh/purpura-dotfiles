@@ -188,7 +188,7 @@ Rectangle {
                         target: menuBox
 
                         width: 160
-                        height: 2
+                        height: 3
                     }
                 },
 
@@ -213,7 +213,7 @@ Rectangle {
 
                         properties: "width,height"
 
-                        duration: 100
+                        duration: 200
 
                         easing.type: Easing.OutCubic
 
@@ -329,7 +329,7 @@ Rectangle {
 
             // Must match the transition's duration below, so phase 1
             // (width) fully finishes before phase 2 (height) starts.
-            interval: 150
+            interval: 200
             repeat: false
 
             onTriggered: {

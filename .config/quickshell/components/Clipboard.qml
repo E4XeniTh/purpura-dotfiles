@@ -301,7 +301,7 @@ Scope {
             // contentCol's own height with only a bottom margin applied,
             // so contentCol's top edge landed 10px above mainRect's top
             // and mainRect's clip:true cut the title row off.
-            implicitHeight: Math.max(contentCol.implicitHeight + 20, 1)
+            implicitHeight: Math.max(contentCol.implicitHeight + 20, 2)
             color: "transparent"
 
             // Overlay (not the unset default, which is Top - same as
