@@ -60,26 +60,6 @@ Scope {
 
     PanelWindow {
         visible: !root.centerOpen
-
-        // Explicit, unlike everywhere else in this file - this is the
-        // one PanelWindow in the whole shell that had neither, left on
-        // Quickshell's own default layer. Bar.qml sits at the very top
-        // of every screen with no explicit layer either, and being
-        // created after this one in shell.qml, was very likely stacking
-        // above it in that same default layer - which would explain
-        // clicks on a toast (anchored top-right, right where the bar
-        // also spans) never reaching it while the same MouseArea code a
-        // few hundred lines down, in the history panel, works fine
-        // (that one almost never has to compete with the bar for the
-        // same on-screen pixels at the same time). Overlay is what
-        // Clipboard/Screenshot already use for exactly this reason -
-        // it's the layer wlr-layer-shell itself reserves for
-        // notifications/OSDs, specifically so they're guaranteed above
-        // ordinary UI chrome like a bar.
-        WlrLayershell.namespace: "notification-toast"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusiveZone: -1
-
         anchors { top: true; right: true }
         margins { top: 10; right: 10 }
 
@@ -224,14 +204,6 @@ Scope {
     }
 
     PanelWindow {
-        // Same Overlay treatment as the toast window above, for
-        // consistency - this one's rarely fighting the bar for the same
-        // pixels in practice, but there's no reason for it to be the
-        // odd one out on the default layer either.
-        WlrLayershell.namespace: "notification-center"
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.exclusiveZone: -1
-
         margins { top: 4; right: 10 }
         anchors { top: true; right: true }
         visible: root.centerOpen
