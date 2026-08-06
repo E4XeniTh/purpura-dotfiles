@@ -571,8 +571,8 @@ Scope {
                 Text {
                     id: instructionText
                     anchors.centerIn: parent
-                    text: "[LMB] Region  -  [RMB] Window  -  [ESC] Cancel  -  [ENTER] Monitor" +
-                        (Quickshell.screens.length > 1 ? "  -  [CTRL+ENTER] All Monitors" : "")
+                    text: "[LMB] Region  -  [RMB] Window  -  [ENTER] Monitor" +
+                        (Quickshell.screens.length > 1 ? "  -  [CTRL+ENTER] All Monitors" : "") + "  -  [ESC] Cancel"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: 14
