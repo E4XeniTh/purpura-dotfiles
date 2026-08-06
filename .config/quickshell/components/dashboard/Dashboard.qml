@@ -708,7 +708,7 @@ Scope {
                 anchors.horizontalCenter: parent.horizontalCenter
 
                 width: 0
-                height: 4
+                height: 2
 
                 // Fully opaque - each section below sits on top of this in
                 // its own DashCard.

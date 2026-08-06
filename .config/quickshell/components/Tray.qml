@@ -213,7 +213,7 @@ Rectangle {
 
                         properties: "width,height"
 
-                        duration: 300
+                        duration: 100
 
                         easing.type: Easing.OutCubic
 
@@ -329,7 +329,7 @@ Rectangle {
 
             // Must match the transition's duration below, so phase 1
             // (width) fully finishes before phase 2 (height) starts.
-            interval: 300
+            interval: 150
             repeat: false
 
             onTriggered: {
