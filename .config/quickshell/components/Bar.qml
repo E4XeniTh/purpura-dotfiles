@@ -93,6 +93,22 @@ Scope {
                 radius: 0
                 border.width: Config.scaled(2, bar.uiScale)
                 border.color: Config.fgcolor
+
+                // Left-clicking anywhere on the bar closes an open tray
+                // menu - a TapHandler rather than a MouseArea so it
+                // doesn't compete with (or block) the clock/notification/
+                // tray sub-widgets' own MouseAreas for the click; it just
+                // passively observes the same event they get, the same
+                // coexistence pattern HoverHandler already uses elsewhere
+                // in this shell. Right-clicks are left alone entirely
+                // (TapHandler's own default acceptedButtons is
+                // Qt.LeftButton only) specifically so right-clicking a
+                // tray icon to OPEN its menu can never race this into
+                // closing that same menu right back.
+                TapHandler {
+                    onTapped: trayItem.closeMenu()
+                }
+
                 Tray {
                     id: trayItem
                     border.width: Config.scaled(2, bar.uiScale)
