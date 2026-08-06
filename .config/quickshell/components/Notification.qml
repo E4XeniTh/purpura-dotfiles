@@ -69,8 +69,13 @@ Scope {
     // notification that just times out unclicked is left in history
     // untouched, that's the whole point of it being there.
     function removeHistoryByNotificationId(notifId) {
+        // Number(...) both sides - ListModel's dynamic-role storage and
+        // the live Notification.id property aren't guaranteed to come
+        // back as the exact same JS numeric subtype, and === doesn't
+        // coerce.
+        const target = Number(notifId)
         for (let i = 0; i < historyModel.count; i++) {
-            if (historyModel.get(i).notificationId === notifId) {
+            if (Number(historyModel.get(i).notificationId) === target) {
                 historyModel.remove(i)
                 break
             }
@@ -171,15 +176,25 @@ Scope {
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: (mouse) => {
+                            // Captured BEFORE dismiss()/invoke() - both can
+                            // trigger trackedNotifications to drop this
+                            // notification synchronously, which can destroy
+                            // this very delegate (card) as a direct result,
+                            // same call stack, before the next line ever
+                            // runs. Reading card.modelData.id AFTER either
+                            // call (the original bug here) risked reading
+                            // off an already-invalidated card/modelData,
+                            // silently no-oping the history removal below.
+                            const notifId = card.modelData.id
                             if (mouse.button === Qt.RightButton) {
                                 card.modelData.dismiss()
-                                root.removeHistoryByNotificationId(card.modelData.id)
+                                root.removeHistoryByNotificationId(notifId)
                                 return
                             }
                             const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
                             if (defaultAction) defaultAction.invoke()
                             card.modelData.dismiss()
-                            root.removeHistoryByNotificationId(card.modelData.id)
+                            root.removeHistoryByNotificationId(notifId)
                             root.centerOpen = false
                         }
                     }
