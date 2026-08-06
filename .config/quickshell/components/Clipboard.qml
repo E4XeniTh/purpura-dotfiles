@@ -107,16 +107,15 @@ Scope {
         listProcess.running = true
     }
 
-    // First click on an entry previews it; clicking a DIFFERENT entry
-    // just swaps which one is previewed; a second click on the SAME
-    // (already-previewing) entry is what actually selects it - so a
-    // quick double-click still copies+closes in one motion, same as a
-    // single click used to.
-    function previewOrSelectEntry(entryId, isImage, imagePath) {
-        if (root.previewedEntryId === entryId) {
-            root.selectEntry(entryId)
-            return
-        }
+    // Hovering an entry (see entryMouseArea's onEntered below) previews
+    // it - moving the mouse off that entry deliberately does NOT clear
+    // the preview, only hovering a DIFFERENT one changes it, so the pane
+    // doesn't flicker shut while the mouse crosses the gap between the
+    // list and the preview pane itself (e.g. to select some of its
+    // text). Left click no longer previews at all - it just copies
+    // immediately (see selectEntry, called straight from onClicked).
+    function previewEntry(entryId, isImage, imagePath) {
+        if (root.previewedEntryId === entryId) return
 
         root.previewedEntryId = entryId
         root.previewedIsImage = isImage
@@ -509,11 +508,14 @@ Scope {
                                     }
                                 }
 
-                                // Blur + "Previewing" overlay only ever
-                                // covers THIS entry's own row - every
-                                // other delegate keeps its own independent
-                                // isPreviewed check, so only the one
-                                // that's actually selected shows either.
+                                // Blur only ever covers THIS entry's own
+                                // row - every other delegate keeps its own
+                                // independent isPreviewed check, so only
+                                // the one currently hovered shows it. No
+                                // "click to copy" label anymore - left
+                                // click just copies immediately now (see
+                                // entryMouseArea below), there's nothing
+                                // left for a label to explain.
                                 FastBlur {
                                     // Explicit, not relying on plain
                                     // declaration order - keeps this
@@ -527,32 +529,24 @@ Scope {
                                     visible: entryDelegate.isPreviewed
                                 }
 
-                                Text {
-                                    z: 0
-                                    anchors {
-                                        right: parent.right
-                                        verticalCenter: parent.verticalCenter
-                                        rightMargin: 12
-                                    }
-                                    visible: entryDelegate.isPreviewed
-                                    text: "Copy 🖱️"
-                                    color: Config.fgcolorlight
-                                    font.family: Config.fontfamily
-                                    font.pixelSize: 16
-                                    font.bold: true
-                                }
-
                                 MouseArea {
                                     id: entryMouseArea
                                     z: 1
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                    // Hovering previews (see
+                                    // root.previewEntry) - clicking no
+                                    // longer previews at all, left click
+                                    // copies+closes immediately, right
+                                    // click deletes, same as every other
+                                    // list in this shell.
+                                    onEntered: root.previewEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) {
                                             root.deleteEntry(entryDelegate.entryId, entryDelegate.preview)
                                         } else {
-                                            root.previewOrSelectEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
+                                            root.selectEntry(entryDelegate.entryId)
                                         }
                                     }
                                 }
@@ -678,10 +672,17 @@ Scope {
                 font.pixelSize: 14
             }
 
-            // Overlay for the same reason as clipWindow above.
+            // Overlay for the same reason as clipWindow above. Exclusive
+            // (not OnDemand) so Up/Down (see outerBox's Keys handlers
+            // below) reach this surface reliably the whole time a
+            // preview is open, regardless of whether the mouse is
+            // actually sitting over this pane or still back over the
+            // entry list hovering around - OnDemand's focus grant is
+            // compositor-arbitrated on interaction, not guaranteed to
+            // land here just because this window exists.
             WlrLayershell.namespace: "clipboard-preview"
             WlrLayershell.layer: WlrLayer.Overlay
-            // WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
             Component.onCompleted: outerBox.forceActiveFocus()
 
@@ -694,6 +695,22 @@ Scope {
                 color: Config.fillcolor
                 border.width: 2
                 border.color: Config.fgcolor
+
+                // Only meaningful for a text preview - an image preview
+                // has nothing to scroll. Clamped to the Flickable's own
+                // real scroll range both directions rather than just
+                // nudging contentY blindly, so repeated presses at
+                // either end can't push it out of bounds.
+                Keys.onUpPressed: {
+                    if (root.previewedIsImage) return
+                    const maxY = Math.max(0, previewFlickable.contentHeight - previewFlickable.height)
+                    previewFlickable.contentY = Math.max(0, Math.min(maxY, previewFlickable.contentY - 40))
+                }
+                Keys.onDownPressed: {
+                    if (root.previewedIsImage) return
+                    const maxY = Math.max(0, previewFlickable.contentHeight - previewFlickable.height)
+                    previewFlickable.contentY = Math.max(0, Math.min(maxY, previewFlickable.contentY + 40))
+                }
 
                 // Same shared autoCloseTimer as the main panel's own
                 // HoverHandler - reading a long previewed entry without
@@ -736,6 +753,7 @@ Scope {
                     }
 
                     Flickable {
+                        id: previewFlickable
                         visible: !root.previewedIsImage
                         anchors.fill: parent
                         anchors.margins: 10
