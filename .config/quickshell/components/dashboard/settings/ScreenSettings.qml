@@ -753,6 +753,31 @@ SettingsPanel {
             rescues.push({ monitor: entry.monitor, oldWorkspace: entry.oldWorkspace, newWorkspace: entry.newWorkspace })
         }
 
+        // A monitor being newly DISABLED this Apply never goes through
+        // newlyManaged above at all - that loop only ever looks at
+        // monitors still ACTIVE after this Apply. If its old (live,
+        // pre-Apply) workspace was genuinely unmanaged, left alone here
+        // Hyprland's own default disable-a-monitor behavior takes over
+        // instead, which knows nothing about this panel's managed
+        // numbers - it just shoves the orphaned workspace (and every
+        // window on it) onto whatever monitor absorbs it, creating a
+        // brand new unmanaged workspace there too - reported live as
+        // windows from a disabled monitor's unmanaged workspace landing
+        // on another fresh unmanaged workspace on the primary, even
+        // though all 5 real workspaces were managed and available.
+        // Rescued onto the lowest managed number still available
+        // anywhere post-Apply instead, same mechanism as the loop above.
+        for (const name of Object.keys(root.pendingEnabled)) {
+            if (root.pendingEnabled[name] !== false) continue
+            const base = root.baseFor(name)
+            if (!base || base.disabled) continue
+            const oldWorkspace = base.activeWorkspace ? base.activeWorkspace.id : undefined
+            if (oldWorkspace === undefined || allResolvedNumbers.has(oldWorkspace)) continue
+            if (allResolvedNumbers.size === 0) continue
+            const newWorkspace = Array.from(allResolvedNumbers).reduce((a, b) => Math.min(a, b))
+            rescues.push({ monitor: name, oldWorkspace, newWorkspace })
+        }
+
         // monitors.json persists the *whole* layout, not just what
         // changed this time, since apply-monitors.sh replays every
         // entry's "line" from scratch at login (hyprland.lua only
