@@ -673,14 +673,6 @@ Scope {
             }
 
             // Overlay for the same reason as clipWindow above.
-            // WlrLayershell.keyboardFocus intentionally left unset here -
-            // Exclusive (tried first) broke hovering between entries in
-            // the MAIN clip list entirely (the same failure mode this
-            // shell already hit once with Screenshot.qml: granting one
-            // surface real keyboard focus disrupted pointer-event
-            // delivery to a different, sibling surface). See the
-            // Keys.onUpPressed/onDownPressed comment below for what that
-            // costs.
             WlrLayershell.namespace: "clipboard-preview"
             WlrLayershell.layer: WlrLayer.Overlay
 
@@ -695,29 +687,6 @@ Scope {
                 color: Config.fillcolor
                 border.width: 2
                 border.color: Config.fgcolor
-
-                // Only meaningful for a text preview - an image preview
-                // has nothing to scroll. Clamped to the Flickable's own
-                // real scroll range both directions rather than just
-                // nudging contentY blindly, so repeated presses at
-                // either end can't push it out of bounds. NOTE: with no
-                // WlrKeyboardFocus mode set above, this window never
-                // actually holds real Wayland keyboard focus, so these
-                // handlers are effectively dead until that's resolved -
-                // left in place (harmless either way) rather than pulled
-                // back out, since the actual fix is choosing how to grant
-                // this surface focus WITHOUT breaking the main list's
-                // hover, not removing the scroll logic itself.
-                Keys.onUpPressed: {
-                    if (root.previewedIsImage) return
-                    const maxY = Math.max(0, previewFlickable.contentHeight - previewFlickable.height)
-                    previewFlickable.contentY = Math.max(0, Math.min(maxY, previewFlickable.contentY - 40))
-                }
-                Keys.onDownPressed: {
-                    if (root.previewedIsImage) return
-                    const maxY = Math.max(0, previewFlickable.contentHeight - previewFlickable.height)
-                    previewFlickable.contentY = Math.max(0, Math.min(maxY, previewFlickable.contentY + 40))
-                }
 
                 // Same shared autoCloseTimer as the main panel's own
                 // HoverHandler - reading a long previewed entry without
@@ -760,7 +729,6 @@ Scope {
                     }
 
                     Flickable {
-                        id: previewFlickable
                         visible: !root.previewedIsImage
                         anchors.fill: parent
                         anchors.margins: 10
