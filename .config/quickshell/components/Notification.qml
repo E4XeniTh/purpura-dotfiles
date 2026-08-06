@@ -23,8 +23,13 @@ Scope {
             // keeping a reference to `n` itself - once it's dismissed
             // (timeout or click) the live Notification object is no
             // longer guaranteed to be valid, but history needs to
-            // outlive that.
+            // outlive that. notificationId is kept specifically so a
+            // toast click can find and remove its OWN history row later
+            // (see removeHistoryByNotificationId) - ids are only unique
+            // among currently-tracked notifications, not globally, but
+            // that's exactly the same lifetime this needs it for.
             historyModel.insert(0, {
+                notificationId: n.id,
                 summary: n.summary,
                 body: n.body,
                 appIcon: n.appIcon,
@@ -55,6 +60,21 @@ Scope {
 
     function removeHistoryEntry(index) {
         historyModel.remove(index)
+        if (historyModel.count === 0) root.centerOpen = false
+    }
+
+    // Clicking a toast (either button, see cardMouseArea below) counts
+    // as having dealt with it, so its history row goes away too instead
+    // of sitting there duplicating what the popup already handled - a
+    // notification that just times out unclicked is left in history
+    // untouched, that's the whole point of it being there.
+    function removeHistoryByNotificationId(notifId) {
+        for (let i = 0; i < historyModel.count; i++) {
+            if (historyModel.get(i).notificationId === notifId) {
+                historyModel.remove(i)
+                break
+            }
+        }
         if (historyModel.count === 0) root.centerOpen = false
     }
 
@@ -153,11 +173,13 @@ Scope {
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) {
                                 card.modelData.dismiss()
+                                root.removeHistoryByNotificationId(card.modelData.id)
                                 return
                             }
                             const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
                             if (defaultAction) defaultAction.invoke()
                             card.modelData.dismiss()
+                            root.removeHistoryByNotificationId(card.modelData.id)
                             root.centerOpen = false
                         }
                     }
