@@ -353,11 +353,6 @@ Scope {
 
             visible: root.active
 
-            // Arbitrary but consistent - matches Lock/PowerMenu's own
-            // "only one screen ever holds exclusive focus" convention,
-            // just picking screens[0] rather than a user-configured
-            // primaryMonitor (this picker has no such setting).
-            readonly property bool isPrimary: modelData.name === (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
             readonly property var thisMonitor: root.monitorByName(modelData.name)
             readonly property real monX: thisMonitor ? thisMonitor.x : 0
             readonly property real monY: thisMonitor ? thisMonitor.y : 0
@@ -365,7 +360,19 @@ Scope {
             WlrLayershell.namespace: "screenshot"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.exclusiveZone: -1
-            WlrLayershell.keyboardFocus: overlayWin.isPrimary ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            // Unlike Lock/PowerMenu (pick exactly one screen, done),
+            // this picker is mouse-driven across the whole multi-monitor
+            // layout, so every screen's surface needs to be a genuinely
+            // equal, independently interactive target - pinning
+            // keyboard-interactivity to a single "primary" screen
+            // (Exclusive there, None everywhere else) turned out to
+            // leave every OTHER screen's surface unable to receive real
+            // pointer button events at all, not just keyboard input:
+            // left/right click only worked on that one screen. OnDemand
+            // on every screen lets Hyprland grant each surface real
+            // interactivity as the user actually engages with it,
+            // whichever monitor that happens to be.
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
 
             anchors { top: true; bottom: true; left: true; right: true }
             color: "transparent"
@@ -626,7 +633,7 @@ Scope {
 
             FocusScope {
                 anchors.fill: parent
-                focus: overlayWin.isPrimary
+                focus: true
 
                 Keys.onEscapePressed: root.cancel()
                 Keys.onReturnPressed: (event) => {
@@ -644,9 +651,13 @@ Scope {
                     }
                 }
 
-                Component.onCompleted: {
-                    if (overlayWin.isPrimary) forceActiveFocus()
-                }
+                // Every screen requests focus for its own FocusScope -
+                // with OnDemand keyboard-interactivity (see above) the
+                // compositor is the one actually arbitrating which
+                // surface's keyboard events go where, so there's no
+                // longer a single "the primary one always wins" case to
+                // special-case here.
+                Component.onCompleted: forceActiveFocus()
             }
         }
     }
