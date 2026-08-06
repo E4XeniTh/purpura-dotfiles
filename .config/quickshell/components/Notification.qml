@@ -109,7 +109,7 @@ Scope {
     PanelWindow {
         visible: !root.centerOpen
         anchors { top: true; right: true }
-        margins { top: 10; right: 10 }
+        margins { top: 4; right: 10 }
 
         implicitWidth: 380
         implicitHeight: Math.max(1, column.implicitHeight)
