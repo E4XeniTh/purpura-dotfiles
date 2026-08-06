@@ -205,25 +205,9 @@ Rectangle {
 
             ]
 
-            // Scoped to the actual horizontal->open state change only -
-            // an unscoped Transition here also animates EVERY later
-            // change to the "open" state's own height binding
-            // (entryColumn.height, which moves every time this switches
-            // to a DIFFERENT app's menu without closing first - they
-            // rarely have the same number of items), not just the
-            // initial open. That's what was producing a border-color
-            // flash: a Rectangle's border briefly fills its whole area
-            // once an animated resize shrinks it small enough that
-            // there's no room left for the fill color to show between
-            // the strokes. Swapping menus now resizes instantly instead
-            // of animating through that, while the deliberate open
-            // sequence below is untouched.
             transitions: [
 
                 Transition {
-
-                    from: "horizontal"
-                    to: "open"
 
                     NumberAnimation {
 

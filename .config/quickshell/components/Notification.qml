@@ -489,24 +489,9 @@ Scope {
 
             ]
 
-            // Scoped to the actual spread->open state change only - an
-            // unscoped Transition here also animates EVERY later change
-            // to the "open" state's own height binding
-            // (centerCol.implicitHeight, which moves every time a
-            // history row is removed), not just the initial open.
-            // That's what was producing a border-color flash: a
-            // Rectangle's border briefly fills its whole area once an
-            // animated resize shrinks it small enough that there's no
-            // room left for the fill color to show between the strokes.
-            // Content-driven size changes now happen instantly instead
-            // of animating through that, while the deliberate open
-            // sequence below is untouched.
             transitions: [
 
                 Transition {
-
-                    from: "spread"
-                    to: "open"
 
                     NumberAnimation {
 
