@@ -16,12 +16,13 @@ import "../Config.js" as Config
 //   - hover a window + right-click: captures that window
 //   - left-click-drag: captures the dragged region
 //   - Enter: captures the whole monitor the mouse is currently on
-// Escape cancels. All three ultimately just run `grim -g/-o ... - |
-// wl-copy` using the EXACT geometry this overlay already computed for
-// its own on-screen highlight - never a second, independently re-derived
-// guess at "which window"/"which output" (the way handing capture off to
-// hyprshot's own picking logic would risk disagreeing with what was
-// actually highlighted).
+// Escape cancels. Region/window use `grim -g ... - | wl-copy` against
+// the EXACT geometry this overlay already computed for its own on-screen
+// highlight - never a second, independently re-derived guess at "which
+// window" (the way handing capture off to hyprshot's own picking logic
+// would risk disagreeing with what was actually highlighted). Monitor
+// capture skips grim entirely and just wl-copies the frozen backdrop PNG
+// straight off disk, since that's already exactly the right image.
 Scope {
     id: root
 
@@ -179,20 +180,31 @@ Scope {
     }
 
     Process {
-        // Command set fresh per capture by the three functions below -
-        // a single reused Process, since only one capture ever happens
-        // per picker session (any of the three closes it immediately).
+        // Command set fresh per capture by the functions below - a
+        // single reused Process, since only one capture ever happens per
+        // picker session (any of them closes it immediately). Cleanup
+        // (temp files + state reset) waits for this to actually exit
+        // rather than firing right after it's started, so it can never
+        // race a capture that's reading one of those same temp files
+        // (see captureMonitorUnderMouse).
         id: captureProcess
+        onExited: (exitCode, exitStatus) => {
+            root.opening = false
+            root.hoveredClient = null
+            root.dragging = false
+            cleanupProcess.running = true
+        }
     }
 
     // Setting root.active = false only requests the overlay's layer
     // surfaces unmap - that's an async round-trip to the compositor, not
     // something that's actually happened by the time this same JS tick
-    // returns. Running grim immediately after (as the three capture
-    // functions used to) raced that unmap and grabbed the dim/instruction
-    // bar still on screen. Hiding first, then waiting a beat before
-    // actually invoking grim, gives the compositor time to genuinely
-    // drop the overlay from the frame grim reads.
+    // returns. Running grim immediately after raced that unmap and
+    // grabbed the dim/instruction bar still on screen. Hiding first,
+    // then waiting a beat before actually invoking grim, gives the
+    // compositor time to genuinely drop the overlay from the frame grim
+    // reads. Only the region/window paths need this - they're the only
+    // ones asking grim for a fresh live frame at all.
     property var pendingCaptureCommand: null
 
     Timer {
@@ -205,14 +217,10 @@ Scope {
                 captureProcess.running = true
                 root.pendingCaptureCommand = null
             }
-            root.opening = false
-            root.hoveredClient = null
-            root.dragging = false
-            cleanupProcess.running = true
         }
     }
 
-    function startCapture(command) {
+    function startLiveCapture(command) {
         root.pendingCaptureCommand = command
         root.active = false
         captureDelay.start()
@@ -220,7 +228,7 @@ Scope {
 
     function captureRegion(x, y, w, h) {
         const geom = Math.round(x) + "," + Math.round(y) + " " + Math.round(w) + "x" + Math.round(h)
-        root.startCapture(["bash", "-c", 'grim -g "$1" - | wl-copy', "screenshot-region", geom])
+        root.startLiveCapture(["bash", "-c", 'grim -g "$1" - | wl-copy && notify-send "Screenshot" "Screenshot copied to clipboard"', "screenshot-region", geom])
     }
 
     function captureClient(client) {
@@ -230,7 +238,14 @@ Scope {
     function captureMonitorUnderMouse() {
         const mon = root.monitorAt(root.mouseGlobalX, root.mouseGlobalY)
         if (mon) {
-            root.startCapture(["bash", "-c", 'grim -o "$1" - | wl-copy', "screenshot-output", mon.name])
+            // Enter grabs the WHOLE monitor - exactly the frame begin()
+            // already froze to disk before this overlay ever existed, so
+            // there's nothing to hide or re-capture live: hand that
+            // exact file to wl-copy directly. No compositor round-trip,
+            // no unmap race, no delay needed for this path at all.
+            root.active = false
+            captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot" "Screenshot copied to clipboard"', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
+            captureProcess.running = true
         } else {
             root.cancel()
         }
@@ -407,7 +422,7 @@ Scope {
                     ctx.setLineDash([6, 4])
                     ctx.lineDashOffset = -dashPhase
                     ctx.lineWidth = 2
-                    ctx.strokeStyle = Config.fgcolor
+                    ctx.strokeStyle = Config.fgcolorlight
                     ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
                 }
 
