@@ -23,13 +23,11 @@ Scope {
             // keeping a reference to `n` itself - once it's dismissed
             // (timeout or click) the live Notification object is no
             // longer guaranteed to be valid, but history needs to
-            // outlive that. notificationId is kept specifically so a
-            // toast click can find and remove its OWN history row later
-            // (see removeHistoryByNotificationId) - ids are only unique
-            // among currently-tracked notifications, not globally, but
-            // that's exactly the same lifetime this needs it for.
+            // outlive that. notificationId is kept specifically so this
+            // row can be found again below.
+            const notifId = n.id
             historyModel.insert(0, {
-                notificationId: n.id,
+                notificationId: notifId,
                 summary: n.summary,
                 body: n.body,
                 appIcon: n.appIcon,
@@ -40,6 +38,31 @@ Scope {
             while (historyModel.count > 50) {
                 historyModel.remove(historyModel.count - 1)
             }
+
+            // Removing the history row from INSIDE a MouseArea click
+            // handler (two earlier attempts, both still reportedly not
+            // working) meant replicating "was this actually a genuine
+            // user dismissal" per call site, and depending on exactly
+            // when card.modelData was read relative to dismiss()/
+            // invoke() possibly tearing it down. Listening to the
+            // notification's OWN closed(reason) signal instead is
+            // authoritative and single-sourced: dismiss() (right click,
+            // left click, and whatever invoke() does for a non-resident
+            // notification) reports Dismissed here no matter which of
+            // those actually fired it or in what order; expire() (the
+            // auto-timeout Timer below, switched from dismiss() to
+            // expire() specifically for this) reports Expired instead,
+            // which deliberately leaves the history row alone - a
+            // notification nobody interacted with is exactly what
+            // history is for. Disconnects itself after firing once,
+            // since a Notification only ever closes a single time.
+            function onClosed(reason) {
+                n.closed.disconnect(onClosed)
+                if (reason === NotificationCloseReason.Dismissed) {
+                    root.removeHistoryByNotificationId(notifId)
+                }
+            }
+            n.closed.connect(onClosed)
         }
     }
 
@@ -106,7 +129,14 @@ Scope {
                     Timer {
                         running: card.modelData.urgency !== NotificationUrgency.Critical
                         interval: Config.notificationtimeout
-                        onTriggered: card.modelData.dismiss()
+                        // expire(), not dismiss() - reports
+                        // NotificationCloseReason.Expired via closed(),
+                        // which onNotification's listener (above)
+                        // deliberately does NOT treat as a reason to
+                        // clear the history row. dismiss() is reserved
+                        // for an actual user action (see cardMouseArea
+                        // below), which DOES clear it.
+                        onTriggered: card.modelData.expire()
                     }
 
                     Layout.fillWidth: true
@@ -169,32 +199,23 @@ Scope {
                     // be alive and tracked, which is exactly what
                     // history's own snapshot-only entries deliberately
                     // don't keep a live reference to (see onNotification
-                    // above).
+                    // above). Neither branch removes the history row
+                    // directly anymore - dismiss() below triggers
+                    // closed(Dismissed), which onNotification's own
+                    // listener reacts to on its own (see there for why).
                     MouseArea {
                         id: cardMouseArea
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onClicked: (mouse) => {
-                            // Captured BEFORE dismiss()/invoke() - both can
-                            // trigger trackedNotifications to drop this
-                            // notification synchronously, which can destroy
-                            // this very delegate (card) as a direct result,
-                            // same call stack, before the next line ever
-                            // runs. Reading card.modelData.id AFTER either
-                            // call (the original bug here) risked reading
-                            // off an already-invalidated card/modelData,
-                            // silently no-oping the history removal below.
-                            const notifId = card.modelData.id
                             if (mouse.button === Qt.RightButton) {
                                 card.modelData.dismiss()
-                                root.removeHistoryByNotificationId(notifId)
                                 return
                             }
                             const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
                             if (defaultAction) defaultAction.invoke()
                             card.modelData.dismiss()
-                            root.removeHistoryByNotificationId(notifId)
                             root.centerOpen = false
                         }
                     }
