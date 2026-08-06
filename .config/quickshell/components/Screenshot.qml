@@ -101,8 +101,14 @@ Scope {
         root.hoveredClient = null
         root.dragging = false
 
+        // One frozen file per screen, PLUS one more combining every
+        // screen (plain `grim` with no -o composites the whole layout
+        // in one shot) - Ctrl+Enter reads that "all" file directly
+        // later, exactly the same way Enter reads a single-screen file,
+        // instead of asking grim for a second, separate live capture
+        // that has to race the overlay's own unmap all over again.
         const names = Quickshell.screens.map(s => s.name)
-        freezeProcess.command = ["bash", "-c", 'for name in "$@"; do grim -o "$name" "/tmp/quickshell-screenshot-freeze-$name.png"; done', "screenshot-freeze", ...names]
+        freezeProcess.command = ["bash", "-c", 'for name in "$@"; do grim -o "$name" "/tmp/quickshell-screenshot-freeze-$name.png"; done; grim "/tmp/quickshell-screenshot-freeze-all.png"', "screenshot-freeze", ...names]
         freezeProcess.running = true
     }
 
@@ -280,31 +286,60 @@ Scope {
         root.captureRegion(client.at[0], client.at[1], client.size[0], client.size[1])
     }
 
-    function captureMonitorUnderMouse() {
-        const mon = root.monitorAt(root.mouseGlobalX, root.mouseGlobalY)
-        if (mon) {
-            // Enter grabs the WHOLE monitor - exactly the frame begin()
-            // already froze to disk before this overlay ever existed, so
-            // there's nothing to hide or re-capture live: hand that
-            // exact file to wl-copy directly. No compositor round-trip,
-            // no unmap race, no delay needed for this path at all.
-            root.active = false
-            captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
-            captureProcess.running = true
-        } else {
-            root.cancel()
+    // Enter needs "whichever monitor the mouse is over RIGHT NOW" - going
+    // through hyprctl's own live cursor tracking instead of this overlay's
+    // own root.mouseGlobalX/Y (each screen's own MouseArea only updates
+    // that from ITS OWN pointer events, and evidently doesn't reliably
+    // keep up across every screen at once here) so this is always
+    // correct regardless of that.
+    Process {
+        id: cursorPosProcess
+        command: ["hyprctl", "cursorpos"]
+
+        stdout: StdioCollector {
+            id: cursorPosCollector
+            onStreamFinished: {
+                const parts = cursorPosCollector.text.trim().split(",")
+                const gx = parseFloat(parts[0])
+                const gy = parseFloat(parts[1])
+                if (isNaN(gx) || isNaN(gy)) {
+                    root.cancel()
+                    return
+                }
+
+                const mon = root.monitorAt(gx, gy)
+                if (mon) {
+                    // Enter grabs the WHOLE monitor - exactly the frame
+                    // begin() already froze to disk before this overlay
+                    // ever existed, so there's nothing to hide or
+                    // re-capture live: hand that exact file to wl-copy
+                    // directly. No compositor round-trip, no unmap race,
+                    // no delay needed for this path at all.
+                    root.active = false
+                    captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
+                    captureProcess.running = true
+                } else {
+                    root.cancel()
+                }
+            }
         }
     }
 
-    // Ctrl+Enter grabs every monitor combined into one image. Plain grim
-    // with no -o/-g already captures the full multi-monitor layout,
-    // correctly positioned, in one shot - no need to hand-stitch the
-    // frozen per-monitor PNGs with ImageMagick or any other extra
-    // dependency. This does need a fresh live frame like region/window
-    // (it's compositing the real desktop, not one pre-frozen file), so
-    // it goes through the same hide-then-delay path as those two.
+    function captureMonitorUnderMouse() {
+        cursorPosProcess.running = true
+    }
+
+    // Ctrl+Enter grabs every monitor combined into one image - begin()
+    // already froze exactly this (the whole layout, composited by grim
+    // itself, no ImageMagick or other extra dependency needed) to disk
+    // before this overlay ever existed. Same deal as
+    // captureMonitorUnderMouse: read that file straight off disk rather
+    // than asking grim for a second, separate LIVE capture, which was
+    // racing (and losing to) the overlay's own async unmap.
     function captureAllMonitors() {
-        root.startLiveCapture(["bash", "-c", 'grim - | wl-copy && notify-send "Screenshot copied to clipboard."', "screenshot-all"])
+        root.active = false
+        captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-all", "/tmp/quickshell-screenshot-freeze-all.png"]
+        captureProcess.running = true
     }
 
     Variants {
@@ -361,6 +396,15 @@ Scope {
             readonly property real holeY: dragHoleHere ? (root.dragRectY - monY) : (hoverHoleHere ? root.hoveredClient.at[1] - monY : 0)
             readonly property real holeW: dragHoleHere ? root.dragRectW : (hoverHoleHere ? root.hoveredClient.size[0] : 0)
             readonly property real holeH: dragHoleHere ? root.dragRectH : (hoverHoleHere ? root.hoveredClient.size[1] : 0)
+
+            // Same root.mouseGlobalX/Y window-hover already relies on,
+            // just checked against the hint's own resolved rect instead
+            // of a client/monitor rect.
+            readonly property real localMouseX: root.mouseGlobalX - monX
+            readonly property real localMouseY: root.mouseGlobalY - monY
+            readonly property bool hintHoveredHere: instructionBar &&
+                localMouseX >= instructionBar.x && localMouseX < instructionBar.x + instructionBar.width &&
+                localMouseY >= instructionBar.y && localMouseY < instructionBar.y + instructionBar.height
 
             // Dim everything (full cover) unless a window on THIS screen
             // is currently hovered, in which case four strips frame a
@@ -495,11 +539,14 @@ Scope {
             // icon, since there's no standard Unicode glyph that
             // distinguishes a left-click from a right-click the way a
             // single generic mouse emoji can't. Fades out (opacity, not
-            // visible - visible:false would drop the HoverHandler's own
-            // hit-test area, flickering it back on the instant the mouse
-            // "left" an invisible rect) while dragging or while the
-            // mouse is directly over it, so it never blocks the view of
-            // whatever's underneath.
+            // visible) while dragging or while the mouse is over it, so
+            // it never blocks the view of whatever's underneath. Hover
+            // is a plain rect-contains-point check against
+            // root.mouseGlobalX/Y - the same state window-hover already
+            // uses successfully - rather than a second, independent
+            // HoverHandler, which never actually detected anything here
+            // (most likely shadowed by the full-fill MouseArea below,
+            // which sits on top of this Rectangle in stacking order).
             Rectangle {
                 id: instructionBar
                 anchors {
@@ -512,11 +559,7 @@ Scope {
                 color: Config.fillcolor
                 border.width: 2
                 border.color: Config.fgcolor
-                opacity: (root.dragging || instructionHover.hovered) ? 0 : 1
-
-                HoverHandler {
-                    id: instructionHover
-                }
+                opacity: (root.dragging || overlayWin.hintHoveredHere) ? 0 : 1
 
                 Text {
                     id: instructionText
