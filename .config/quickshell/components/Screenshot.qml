@@ -7,15 +7,16 @@ import QtQuick.Layouts
 
 import "../Config.js" as Config
 
-// Custom interactive screenshot picker - META + Print opens it (bound via
-// hyprland.lua's `hl.bind(mainMod .. " + Print", hl.dsp.global("quickshell:screenshot"))`).
+// Custom interactive screenshot picker - META + X opens it (bound via
+// hyprland.lua's `hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"))`).
 // Freezes every connected screen into a temp PNG first (grim -o <name>),
 // so the picker is always selecting against a static snapshot rather
-// than a live-updating desktop, then dims everything and offers three
+// than a live-updating desktop, then dims everything and offers four
 // capture modes:
-//   - hover a window + right-click: captures that window
+//   - hover a window (or the bar) + right-click: captures that surface
 //   - left-click-drag: captures the dragged region
 //   - Enter: captures the whole monitor the mouse is currently on
+//   - Ctrl+Enter: captures every monitor combined into one image
 // Escape cancels. Region/window use `grim -g ... - | wl-copy` against
 // the EXACT geometry this overlay already computed for its own on-screen
 // highlight - never a second, independently re-derived guess at "which
@@ -160,6 +161,50 @@ Scope {
                     return c.workspace && mon.activeWorkspace && c.workspace.id === mon.activeWorkspace.id
                 })
 
+                layersProcess.running = true
+            }
+        }
+    }
+
+    // The bar (namespace "bar", see Bar.qml) is a layer-shell surface,
+    // not a toplevel window, so it never shows up in `hyprctl clients
+    // -j` at all - this is the only way to find it. Folded straight
+    // into root.clients as a plain {at, size} entry so every existing
+    // hover/hole/capture codepath (which only ever reads those two
+    // fields) treats it exactly like any other selectable window, no
+    // special-casing needed anywhere else.
+    Process {
+        id: layersProcess
+        command: ["hyprctl", "layers", "-j"]
+
+        stdout: StdioCollector {
+            id: layersCollector
+            onStreamFinished: {
+                let parsed = {}
+                try {
+                    parsed = JSON.parse(layersCollector.text)
+                } catch (e) {
+                    parsed = {}
+                }
+
+                const barEntries = []
+                for (const monName in parsed) {
+                    const mon = root.monitorByName(monName)
+                    if (!mon) continue
+                    const levels = (parsed[monName] && parsed[monName].levels) || {}
+                    for (const levelKey in levels) {
+                        for (const layer of levels[levelKey]) {
+                            if (layer.namespace === "bar") {
+                                barEntries.push({
+                                    at: [mon.x + layer.x, mon.y + layer.y],
+                                    size: [layer.w, layer.h]
+                                })
+                            }
+                        }
+                    }
+                }
+
+                root.clients = root.clients.concat(barEntries)
                 root.opening = false
                 root.active = true
             }
@@ -228,7 +273,7 @@ Scope {
 
     function captureRegion(x, y, w, h) {
         const geom = Math.round(x) + "," + Math.round(y) + " " + Math.round(w) + "x" + Math.round(h)
-        root.startLiveCapture(["bash", "-c", 'grim -g "$1" - | wl-copy && notify-send "Screenshot" "Screenshot copied to clipboard"', "screenshot-region", geom])
+        root.startLiveCapture(["bash", "-c", 'grim -g "$1" - | wl-copy && notify-send "Screenshot copied to clipboard."', "screenshot-region", geom])
     }
 
     function captureClient(client) {
@@ -244,11 +289,22 @@ Scope {
             // exact file to wl-copy directly. No compositor round-trip,
             // no unmap race, no delay needed for this path at all.
             root.active = false
-            captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot" "Screenshot copied to clipboard"', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
+            captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
             captureProcess.running = true
         } else {
             root.cancel()
         }
+    }
+
+    // Ctrl+Enter grabs every monitor combined into one image. Plain grim
+    // with no -o/-g already captures the full multi-monitor layout,
+    // correctly positioned, in one shot - no need to hand-stitch the
+    // frozen per-monitor PNGs with ImageMagick or any other extra
+    // dependency. This does need a fresh live frame like region/window
+    // (it's compositing the real desktop, not one pre-frozen file), so
+    // it goes through the same hide-then-delay path as those two.
+    function captureAllMonitors() {
+        root.startLiveCapture(["bash", "-c", 'grim - | wl-copy && notify-send "Screenshot copied to clipboard."', "screenshot-all"])
     }
 
     Variants {
@@ -438,8 +494,14 @@ Scope {
             // Top instruction bar - LMB/RMB spelled out rather than an
             // icon, since there's no standard Unicode glyph that
             // distinguishes a left-click from a right-click the way a
-            // single generic mouse emoji can't.
+            // single generic mouse emoji can't. Fades out (opacity, not
+            // visible - visible:false would drop the HoverHandler's own
+            // hit-test area, flickering it back on the instant the mouse
+            // "left" an invisible rect) while dragging or while the
+            // mouse is directly over it, so it never blocks the view of
+            // whatever's underneath.
             Rectangle {
+                id: instructionBar
                 anchors {
                     top: parent.top
                     horizontalCenter: parent.horizontalCenter
@@ -450,11 +512,16 @@ Scope {
                 color: Config.fillcolor
                 border.width: 2
                 border.color: Config.fgcolor
+                opacity: (root.dragging || instructionHover.hovered) ? 0 : 1
+
+                HoverHandler {
+                    id: instructionHover
+                }
 
                 Text {
                     id: instructionText
                     anchors.centerIn: parent
-                    text: "[LMB] Region  -  [RMB] Window  -  [ESC] Cancel  -  [ENTER] Monitor"
+                    text: "[LMB] Region  -  [RMB] Window  -  [ESC] Cancel  -  [ENTER] Monitor  -  [CTRL+ENTER] All Monitors"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: 14
@@ -519,8 +586,20 @@ Scope {
                 focus: overlayWin.isPrimary
 
                 Keys.onEscapePressed: root.cancel()
-                Keys.onReturnPressed: root.captureMonitorUnderMouse()
-                Keys.onEnterPressed: root.captureMonitorUnderMouse()
+                Keys.onReturnPressed: (event) => {
+                    if (event.modifiers & Qt.ControlModifier) {
+                        root.captureAllMonitors()
+                    } else {
+                        root.captureMonitorUnderMouse()
+                    }
+                }
+                Keys.onEnterPressed: (event) => {
+                    if (event.modifiers & Qt.ControlModifier) {
+                        root.captureAllMonitors()
+                    } else {
+                        root.captureMonitorUnderMouse()
+                    }
+                }
 
                 Component.onCompleted: {
                     if (overlayWin.isPrimary) forceActiveFocus()

@@ -16,7 +16,7 @@ out to be copied straight into place.
 | **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen/battery), power/lock |
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
-| **Screenshot picker** | Custom region/window/monitor picker (META + Print) - freezes the screen, dims it, and captures straight to the clipboard via grim |
+| **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | Full-screen lock, authenticates via PAM |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -115,7 +115,7 @@ Beyond a base Arch install:
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
-- `grim` - the custom screenshot picker (`components/Screenshot.qml`, META + Print) shells out to it directly for every capture (freezing the backdrop, and the final region/window grab - monitor capture skips it and copies the frozen backdrop straight off disk); `wl-clipboard` above also covers the `wl-copy` it pipes the result into
+- `grim` - the custom screenshot picker (`components/Screenshot.qml`, META + X) shells out to it directly for every capture (freezing the backdrop, and the final region/window/all-monitors grab - single-monitor capture skips it and copies the frozen backdrop straight off disk); `wl-clipboard` above also covers the `wl-copy` it pipes the result into
 - `libnotify` - provides `notify-send`, which the screenshot picker calls after every successful capture ("Screenshot copied to clipboard"); routes through this shell's own `NotificationServer` (`components/Notification.qml`) like any other app notification, no separate daemon needed
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)

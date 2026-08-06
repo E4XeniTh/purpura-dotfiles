@@ -88,7 +88,7 @@ Scope {
                     // Grows for wrapped multi-line bodies instead of
                     // clipping them to a fixed 60px card.
                     Layout.preferredHeight: Math.max(60, toastContentColumn.implicitHeight + 20)
-                    color: Config.fillcolor
+                    color: cardMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.width: 2
                     border.color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
 
@@ -134,9 +134,32 @@ Scope {
                         }
                     }
 
+                    // Right click: dismiss only. Left click: "give
+                    // attention" like a real desktop notification would
+                    // (invoke the sender-registered default action - e.g.
+                    // Discord focusing the sender - if it has one), then
+                    // dismiss either way and close the center panel. Only
+                    // works here, not from a history row below: the
+                    // default action requires the original sender still
+                    // be alive and tracked, which is exactly what
+                    // history's own snapshot-only entries deliberately
+                    // don't keep a live reference to (see onNotification
+                    // above).
                     MouseArea {
+                        id: cardMouseArea
                         anchors.fill: parent
-                        onClicked: card.modelData.dismiss()
+                        hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: (mouse) => {
+                            if (mouse.button === Qt.RightButton) {
+                                card.modelData.dismiss()
+                                return
+                            }
+                            const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
+                            if (defaultAction) defaultAction.invoke()
+                            card.modelData.dismiss()
+                            root.centerOpen = false
+                        }
                     }
 
                 }
@@ -308,7 +331,7 @@ Scope {
                             // Grows for wrapped multi-line bodies instead
                             // of clipping them to a fixed 60px card.
                             height: Math.max(60, historyContentColumn.implicitHeight + 20)
-                            color: Config.fillcolor
+                            color: historyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
                             border.width: 2
                             border.color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
 
@@ -353,9 +376,21 @@ Scope {
                                 }
                             }
 
+                            // No live Notification object survives into
+                            // history (see onNotification above), so
+                            // there's no default action left to invoke
+                            // here - left click can only remove + close,
+                            // not "give attention" the way a still-live
+                            // toast card (above) can.
                             MouseArea {
+                                id: historyMouseArea
                                 anchors.fill: parent
-                                onClicked: root.removeHistoryEntry(index)
+                                hoverEnabled: true
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: (mouse) => {
+                                    root.removeHistoryEntry(index)
+                                    if (mouse.button === Qt.LeftButton) root.centerOpen = false
+                                }
                             }
                         }
                     }

@@ -65,6 +65,13 @@ Scope {
             // screen's own resolution instead of assuming a fixed one.
             readonly property real uiScale: Math.max(0.6, Math.min(1.8, modelData.width * 0.42 / 800))
 
+            // Explicit (every other panel in this shell sets one too) so
+            // Screenshot.qml can find this exact surface via `hyprctl
+            // layers -j` and make it right-click-selectable like a
+            // window - it never shows up in `hyprctl clients -j` at all,
+            // being a layer-shell surface rather than a toplevel window.
+            WlrLayershell.namespace: "bar"
+
             anchors {
                 top: true
                 left: true
