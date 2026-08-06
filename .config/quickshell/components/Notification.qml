@@ -46,6 +46,18 @@ Scope {
         id: historyModel
     }
 
+    // Closes the panel on "Clear all" / on deleting the last remaining
+    // entry, matching Clipboard.qml's own close-when-empty behavior.
+    function clearAllHistory() {
+        historyModel.clear()
+        root.centerOpen = false
+    }
+
+    function removeHistoryEntry(index) {
+        historyModel.remove(index)
+        if (historyModel.count === 0) root.centerOpen = false
+    }
+
     PanelWindow {
         visible: !root.centerOpen
         anchors { top: true; right: true }
@@ -264,7 +276,7 @@ Scope {
                                 id: clearAllMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: historyModel.clear()
+                                onClicked: root.clearAllHistory()
                             }
                         }
                     }
@@ -343,7 +355,7 @@ Scope {
 
                             MouseArea {
                                 anchors.fill: parent
-                                onClicked: historyModel.remove(index)
+                                onClicked: root.removeHistoryEntry(index)
                             }
                         }
                     }

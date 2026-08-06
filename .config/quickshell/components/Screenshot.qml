@@ -185,11 +185,42 @@ Scope {
         id: captureProcess
     }
 
+    // Setting root.active = false only requests the overlay's layer
+    // surfaces unmap - that's an async round-trip to the compositor, not
+    // something that's actually happened by the time this same JS tick
+    // returns. Running grim immediately after (as the three capture
+    // functions used to) raced that unmap and grabbed the dim/instruction
+    // bar still on screen. Hiding first, then waiting a beat before
+    // actually invoking grim, gives the compositor time to genuinely
+    // drop the overlay from the frame grim reads.
+    property var pendingCaptureCommand: null
+
+    Timer {
+        id: captureDelay
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (root.pendingCaptureCommand) {
+                captureProcess.command = root.pendingCaptureCommand
+                captureProcess.running = true
+                root.pendingCaptureCommand = null
+            }
+            root.opening = false
+            root.hoveredClient = null
+            root.dragging = false
+            cleanupProcess.running = true
+        }
+    }
+
+    function startCapture(command) {
+        root.pendingCaptureCommand = command
+        root.active = false
+        captureDelay.start()
+    }
+
     function captureRegion(x, y, w, h) {
         const geom = Math.round(x) + "," + Math.round(y) + " " + Math.round(w) + "x" + Math.round(h)
-        captureProcess.command = ["bash", "-c", 'grim -g "$1" - | wl-copy', "screenshot-region", geom]
-        captureProcess.running = true
-        root.cancel()
+        root.startCapture(["bash", "-c", 'grim -g "$1" - | wl-copy', "screenshot-region", geom])
     }
 
     function captureClient(client) {
@@ -199,10 +230,10 @@ Scope {
     function captureMonitorUnderMouse() {
         const mon = root.monitorAt(root.mouseGlobalX, root.mouseGlobalY)
         if (mon) {
-            captureProcess.command = ["bash", "-c", 'grim -o "$1" - | wl-copy', "screenshot-output", mon.name]
-            captureProcess.running = true
+            root.startCapture(["bash", "-c", 'grim -o "$1" - | wl-copy', "screenshot-output", mon.name])
+        } else {
+            root.cancel()
         }
-        root.cancel()
     }
 
     Variants {
@@ -245,13 +276,20 @@ Scope {
                 fillMode: Image.Stretch
             }
 
-            readonly property bool hasHoleHere: root.hoveredClient !== null && !root.dragging &&
+            // A drag in progress punches its own hole (the region being
+            // selected undims exactly like a hovered window does);
+            // otherwise a hovered window on THIS screen punches one.
+            readonly property bool dragHoleHere: root.dragging && root.dragScreenName === modelData.name &&
+                root.dragRectW > 0 && root.dragRectH > 0
+            readonly property bool hoverHoleHere: !root.dragging && root.hoveredClient !== null &&
                 root.hoveredClient.at[0] >= monX && root.hoveredClient.at[0] < monX + width &&
                 root.hoveredClient.at[1] >= monY && root.hoveredClient.at[1] < monY + height
-            readonly property real holeX: hasHoleHere ? root.hoveredClient.at[0] - monX : 0
-            readonly property real holeY: hasHoleHere ? root.hoveredClient.at[1] - monY : 0
-            readonly property real holeW: hasHoleHere ? root.hoveredClient.size[0] : 0
-            readonly property real holeH: hasHoleHere ? root.hoveredClient.size[1] : 0
+            readonly property bool hasHoleHere: dragHoleHere || hoverHoleHere
+
+            readonly property real holeX: dragHoleHere ? (root.dragRectX - monX) : (hoverHoleHere ? root.hoveredClient.at[0] - monX : 0)
+            readonly property real holeY: dragHoleHere ? (root.dragRectY - monY) : (hoverHoleHere ? root.hoveredClient.at[1] - monY : 0)
+            readonly property real holeW: dragHoleHere ? root.dragRectW : (hoverHoleHere ? root.hoveredClient.size[0] : 0)
+            readonly property real holeH: dragHoleHere ? root.dragRectH : (hoverHoleHere ? root.hoveredClient.size[1] : 0)
 
             // Dim everything (full cover) unless a window on THIS screen
             // is currently hovered, in which case four strips frame a
@@ -307,7 +345,7 @@ Scope {
                 property real ry: overlayWin.holeY
                 property real rw: overlayWin.holeW
                 property real rh: overlayWin.holeH
-                property bool show: overlayWin.hasHoleHere
+                property bool show: overlayWin.hoverHoleHere
                 property real dashPhase: 0
 
                 visible: show
