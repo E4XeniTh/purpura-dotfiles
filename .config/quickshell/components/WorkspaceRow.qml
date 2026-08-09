@@ -268,21 +268,24 @@ Row {
 
     Component {
         id: separatorComponent
-
-        Rectangle {
-            width: 2
-            height: root.height * 0.6
-            // y rather than anchors.verticalCenter: a Loader with an
-            // explicit height stretches a non-fill-anchored child to
-            // match it (confirmed live - giving entryLoader
-            // height: root.height to fix this separator sitting at the
-            // top instead made it stretch to full height, overriding
-            // this Rectangle's own 60%). Computing y directly against
-            // root.height sidesteps the Loader's size entirely - Row
-            // only manages its children's x, never y, so this is the
-            // only positioning that actually applies.
-            y: (root.height - height) / 2
-            color: Config.fgcolor
+        Row {
+            Rectangle { width: 15; height: 1 ; color: "transparent"}
+            Rectangle {
+                width: 2
+                height: root.height * 0.6
+                // y rather than anchors.verticalCenter: a Loader with an
+                // explicit height stretches a non-fill-anchored child to
+                // match it (confirmed live - giving entryLoader
+                // height: root.height to fix this separator sitting at the
+                // top instead made it stretch to full height, overriding
+                // this Rectangle's own 60%). Computing y directly against
+                // root.height sidesteps the Loader's size entirely - Row
+                // only manages its children's x, never y, so this is the
+                // only positioning that actually applies.
+                y: (root.height - height) / 2
+                color: Config.fgcolor
+            }
+            Rectangle { width: 15; height: 1 ; color: "transparent"}
         }
     }
 
