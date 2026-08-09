@@ -1394,13 +1394,27 @@ SettingsPanel {
                             contentWrapper.forceActiveFocus()
                             root.selectMonitor(modelData.name)
                         }
-                        // Fail-safes: the primary monitor can't be
-                        // disabled (it's always the one thing the bar
-                        // lives on), and a disabled monitor can't be
-                        // made primary in the first place.
+                        // Fail-safes: disabling the current primary
+                        // first hands primary off to whichever OTHER
+                        // monitor is still enabled (first match in
+                        // root.monitors order) - the bar/dashboard
+                        // always need exactly one enabled monitor to
+                        // live on, so this can't just leave primary
+                        // pointing at something about to go dark. If
+                        // this is the only enabled monitor left, there's
+                        // no other one to hand it to, so disabling is
+                        // refused outright rather than leaving nothing
+                        // enabled at all. A disabled monitor still can't
+                        // be made primary in the first place (see
+                        // onMakePrimary below).
                         onToggleEnabled: {
-                            if (modelData.name === root.primaryMonitor) return
-                            root.setPendingEnabled(modelData.name, !root.enabledFor(modelData.name))
+                            const enabling = !root.enabledFor(modelData.name)
+                            if (!enabling && modelData.name === root.primaryMonitor) {
+                                const nextPrimary = root.monitors.find(m => m.name !== modelData.name && root.enabledFor(m.name))
+                                if (!nextPrimary) return
+                                root.primarySelected(nextPrimary.name)
+                            }
+                            root.setPendingEnabled(modelData.name, enabling)
                         }
                         onMakePrimary: {
                             if (root.enabledFor(modelData.name)) {
