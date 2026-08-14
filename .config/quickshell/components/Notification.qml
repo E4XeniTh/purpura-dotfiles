@@ -10,6 +10,14 @@ import "../Config.js" as Config
 
 Scope {
     id: root
+
+    // Right-click on Bar.qml's notification button toggles this - true
+    // mutes POPUPS specifically (see onNotification below), history
+    // keeps recording regardless, same as how a real "do not disturb"
+    // toggle is expected to behave (mute the interruption, still log
+    // it for later).
+    property bool notificationsDisabled: false
+
     NotificationServer {
         id: server
         actionsSupported: true
@@ -63,6 +71,17 @@ Scope {
                 }
             }
             n.closed.connect(onClosed)
+
+            // Muting popups reuses the exact same Expired-vs-Dismissed
+            // distinction above instead of a separate suppression path -
+            // expire() (not dismiss()) drops it out of
+            // server.trackedNotifications (so the toast Repeater below
+            // never actually renders a card for it) without touching
+            // history, since onClosed only clears history on a genuine
+            // Dismissed.
+            if (root.notificationsDisabled) {
+                n.expire()
+            }
         }
     }
 

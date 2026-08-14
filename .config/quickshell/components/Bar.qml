@@ -241,7 +241,14 @@ Scope {
                         id: notifmouseArea
                         hoverEnabled: true
                         anchors.fill: parent
-                        onClicked: {
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: (mouse) => {
+                            if (mouse.button === Qt.RightButton) {
+                                if (root.notification) {
+                                    root.notification.notificationsDisabled = !root.notification.notificationsDisabled
+                                }
+                                return
+                            }
                             if (root.notification) {
                                 root.notification.centerOpen = !root.notification.centerOpen
                             }
@@ -251,18 +258,33 @@ Scope {
                     IconImage {
                         id: notifIcon
 
-                        // Previously had no anchors at all, so it sat
-                        // at the button's top-left corner instead of
-                        // centered in it.
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(32, bar.uiScale)
-                        source: Quickshell.iconPath("notifications-symbolic")
+                        // anchors.fill + margins (not centerIn +
+                        // implicitSize) - those two sizes were each
+                        // independently Config.scaled()/rounded, which
+                        // can round to a gap that isn't evenly divisible
+                        // by 2 at some uiScale values, landing the icon
+                        // a pixel off-center on one side. Filling with a
+                        // single shared margin computes the gap once, on
+                        // all four sides at once, so it can't disagree
+                        // with itself.
+                        anchors.fill: parent
+                        anchors.margins: Config.scaled(3, bar.uiScale)
+                        source: Quickshell.iconPath(
+                            (root.notification && root.notification.notificationsDisabled)
+                                ? "notifications-disabled-symbolic"
+                                : "notifications-symbolic")
                     }
 
                     ColorOverlay {
                         anchors.fill: notifIcon
                         source: notifIcon
-                        color: Config.fgcolor
+                        // Red while muted - the same "this is off/blocked"
+                        // signal as the disabled-bell icon itself, layered
+                        // on top of it rather than replacing the icon
+                        // swap, per the request.
+                        color: (root.notification && root.notification.notificationsDisabled)
+                            ? Config.fgcolorred
+                            : Config.fgcolor
                     }
                 }
             }
