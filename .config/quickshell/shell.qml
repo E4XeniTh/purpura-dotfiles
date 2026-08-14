@@ -36,5 +36,5 @@ Scope {
   }
 
   WorkspaceOsd {}
-  FullscreenHintOsd {}
+  FullscreenHintOsd { dashboard: dashboard }
 }

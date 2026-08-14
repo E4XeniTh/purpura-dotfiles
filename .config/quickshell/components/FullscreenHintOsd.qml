@@ -19,8 +19,16 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Fed in from shell.qml - watched below so the hint disappears the
+    // instant Dashboard actually opens instead of leaving it sitting on
+    // screen for however long was left on hideTimer, e.g. someone
+    // opening Dashboard well before the 2s auto-hide would otherwise
+    // fire.
+    property var dashboard: null
+
     property string hintMonitorName: ""
     property int showToken: 0
+    property int hideToken: 0
 
     Connections {
         target: Hyprland
@@ -30,6 +38,13 @@ Scope {
             if (!mon) return
             root.hintMonitorName = mon.name
             root.showToken++
+        }
+    }
+
+    Connections {
+        target: root.dashboard
+        function onOpenChanged() {
+            if (root.dashboard.open) root.hideToken++
         }
     }
 
@@ -55,11 +70,15 @@ Scope {
                     hintWindow.shouldShow = true
                     hideTimer.restart()
                 }
+                function onHideTokenChanged() {
+                    hintWindow.shouldShow = false
+                    hideTimer.stop()
+                }
             }
 
             Timer {
                 id: hideTimer
-                interval: 4000
+                interval: 2000
                 repeat: false
                 onTriggered: hintWindow.shouldShow = false
             }
@@ -72,9 +91,11 @@ Scope {
 
             // Top-anchored only (no left/right) - centers horizontally
             // the same way VolumeOsd/WorkspaceOsd do with no explicit
-            // horizontal anchor of their own.
+            // horizontal anchor of their own. Margin/height match
+            // Bar.qml exactly, so this sits flush in the bar's own
+            // spot instead of floating lower on the screen.
             anchors.top: true
-            margins.top: Config.scaled(20, hintWindow.uiScale)
+            margins.top: Config.scaled(10, hintWindow.uiScale)
             exclusiveZone: 0
             color: "transparent"
 
@@ -83,7 +104,7 @@ Scope {
             mask: Region {}
 
             implicitWidth: hintText.implicitWidth + Config.scaled(32, hintWindow.uiScale)
-            implicitHeight: hintText.implicitHeight + Config.scaled(16, hintWindow.uiScale)
+            implicitHeight: Config.scaled(Config.barheight, hintWindow.uiScale)
 
             Rectangle {
                 anchors.fill: parent
@@ -98,7 +119,7 @@ Scope {
                     text: "[META + D] Toggle Dashboard"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(16, hintWindow.uiScale)
+                    font.pixelSize: Config.scaled(26, hintWindow.uiScale)
                     font.bold: true
                 }
             }
