@@ -44,8 +44,16 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name !== "fullscreen" || event.data !== "1") return
-            fullscreenCheckProcess.running = true
+            if (event.name !== "fullscreen") return
+            if (event.data === "1") {
+                fullscreenCheckProcess.running = true
+            } else if (event.data === "0") {
+                // Exiting fullscreen (any window, any monitor) hides
+                // immediately rather than leaving the hint to linger
+                // for whatever's left of hideTimer - there's nothing
+                // fullscreen left for it to be a reminder about.
+                root.hideToken++
+            }
         }
     }
 
@@ -125,9 +133,17 @@ Scope {
             // horizontal anchor of their own. Margin/height match
             // Bar.qml exactly, so this sits flush in the bar's own
             // spot instead of floating lower on the screen.
+            //
+            // exclusiveZone: -1 (not 0) - 0 only means "I don't reserve
+            // space myself", it does NOT opt out of being pushed by
+            // OTHER surfaces' reserved zones. Bar.qml reserves its own
+            // height along the top edge, so at 0 this was still getting
+            // shoved down below it. -1 ignores every exclusive zone
+            // entirely and just overlays at the requested margin,
+            // same as Screenshot.qml's own overlay.
             anchors.top: true
             margins.top: Config.scaled(10, hintWindow.uiScale)
-            exclusiveZone: 0
+            exclusiveZone: -1
             color: "transparent"
 
             // Purely informational - never wants mouse input, same
