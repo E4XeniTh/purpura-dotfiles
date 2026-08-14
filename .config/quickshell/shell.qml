@@ -36,4 +36,5 @@ Scope {
   }
 
   WorkspaceOsd {}
+  FullscreenHintOsd {}
 }
