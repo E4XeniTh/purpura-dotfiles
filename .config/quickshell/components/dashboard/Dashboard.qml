@@ -6,7 +6,6 @@ import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../"
-import "settings"
 import "../../Config.js" as Config
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
@@ -25,11 +24,12 @@ Scope {
     property bool open: false
     property var screen: null
 
-    // Set from shell.qml, so the power/lock buttons below can call these
-    // directly instead of round-tripping through `qs ipc call` to talk to
-    // another component in the very same process.
+    // Set from shell.qml, so the power/lock/settings buttons below can
+    // call these directly instead of round-tripping through `qs ipc
+    // call` to talk to another component in the very same process.
     property var powerMenu: null
     property var lockScreen: null
+    property var settingsScreen: null
 
     // Shared across every screen's dashWindow (see below) - each one is
     // its own instance of everything nested inside it, including its own
@@ -444,12 +444,15 @@ Scope {
 
     // ---------------- Solaar (Logitech Unifying/Bolt peripherals) ----------------
     // Lifted up here rather than living on BatterySettings.qml directly
-    // - each screen's dashWindow has its own BatterySettings instance,
-    // and a full `solaar show` walks every HID++ feature on every
-    // paired peripheral (seconds, not milliseconds), so one shared poll
-    // beats one per screen. Also started at Quickshell startup instead
-    // of waiting for the panel to ever be opened, so devices don't
-    // still be showing empty the first time someone actually looks.
+    // - a full `solaar show` walks every HID++ feature on every paired
+    // peripheral (seconds, not milliseconds), so one shared poll beats
+    // one per BatterySettings instance wherever it ends up embedded
+    // (BatterySettings.qml itself is currently unused by Dashboard.qml -
+    // removed from the dashboard's own button row, kept on disk for a
+    // future main-bar battery widget). Also started at Quickshell
+    // startup instead of waiting for the panel to ever be opened, so
+    // devices don't still be showing empty the first time someone
+    // actually looks.
     //
     // refreshSolaar() is the single choke point Config.solaarEnabled
     // gates - Component.onCompleted below and solaarRefreshTimer both
@@ -644,37 +647,6 @@ Scope {
             // and multiplied by this. Clamped so a tiny or huge monitor
             // doesn't make text illegibly small or comically large.
             property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
-
-            // Mutually-exclusive sub-panels (audio/bluetooth settings):
-            // "" or the name of whichever one is active. Each
-            // panel below binds active: activeSettingsPanel === "<name>",
-            // so switching names closes the current one and opens the new
-            // one - but not simultaneously. Since SettingsPanel.qml only
-            // flips reallyVisible/hides once its own close animation
-            // finishes (see its closed() signal), toggleSettingsPanel()
-            // holds the requested target in pendingSettingsPanel until
-            // then instead of assigning activeSettingsPanel directly.
-            property string activeSettingsPanel: ""
-            property string pendingSettingsPanel: ""
-
-            function toggleSettingsPanel(name) {
-                if (activeSettingsPanel === name) {
-                    activeSettingsPanel = ""
-                    pendingSettingsPanel = ""
-                } else if (activeSettingsPanel === "") {
-                    activeSettingsPanel = name
-                } else {
-                    pendingSettingsPanel = name
-                    activeSettingsPanel = ""
-                }
-            }
-
-            function onSettingsPanelClosed() {
-                if (pendingSettingsPanel !== "") {
-                    activeSettingsPanel = pendingSettingsPanel
-                    pendingSettingsPanel = ""
-                }
-            }
 
             visible: root.open && root.screen === modelData
 
@@ -908,12 +880,20 @@ Scope {
 
                             // Empty filler - absorbs whatever height the
                             // fixed-size siblings above/below don't use.
+                            // Only 3 gaps now (greeting/avatar/filler/
+                            // powerrow) since systemicons and its own
+                            // gap are gone - see powerrow below.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - systemicons.height - parent.spacing * 4
+                                height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - parent.spacing * 3
                             }
 
+                            // Power/Lock/Settings - three square buttons,
+                            // evenly spaced. Settings dims every screen
+                            // (like LockScreen) and opens the fullscreen
+                            // tabbed Sound/Network/Bluetooth/Display
+                            // screen - see SettingsScreen.qml.
                             Rectangle {
                                 id: powerrow
                                 width: parent.width
@@ -922,18 +902,18 @@ Scope {
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: powerrow.width / 11
+                                    spacing: Config.scaled(16, dashWindow.uiScale)
 
                                     DashCard {
                                         uiScale: dashWindow.uiScale
-                                        width: powerrow.width / 2.2
+                                        width: powerrow.height
                                         height: powerrow.height
                                         color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             id: powerIcon
                                             anchors.centerIn: parent
-                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
+                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
@@ -958,14 +938,14 @@ Scope {
 
                                     DashCard {
                                         uiScale: dashWindow.uiScale
-                                        width: powerrow.width / 2.2
+                                        width: powerrow.height
                                         height: powerrow.height
                                         color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             id: lockIcon
                                             anchors.centerIn: parent
-                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
+                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-lock-screen-symbolic")
                                         }
 
@@ -987,66 +967,34 @@ Scope {
                                             }
                                         }
                                     }
-                                }
-                            }
-                            Item {}
 
-                            Rectangle {
-                                id: systemicons
-                                width: parent.width
-                                height: Config.scaled(32, dashWindow.uiScale)
-                                color: "transparent"
+                                    DashCard {
+                                        uiScale: dashWindow.uiScale
+                                        width: powerrow.height
+                                        height: powerrow.height
+                                        color: mouseAreaSettings.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: Config.scaled(6, dashWindow.uiScale)
+                                        IconImage {
+                                            id: settingsIcon
+                                            anchors.centerIn: parent
+                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
+                                            source: Quickshell.iconPath("preferences-system-symbolic")
+                                        }
 
-                                    Repeater {
-                                        model: ["audio-volume-high-symbolic", "network-wired-symbolic", "network-bluetooth", "battery-100-symbolic", "video-display-symbolic", ""]
+                                        ColorOverlay {
+                                            anchors.fill: settingsIcon
+                                            source: settingsIcon
+                                            color: Config.fgcolor
+                                        }
 
-                                        delegate: DashCard {
-                                            required property string modelData
-                                            required property int index
-                                            uiScale: dashWindow.uiScale
-
-                                            width: systemicons.height
-                                            height: systemicons.height
-                                            color: iconMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-
-                                            IconImage {
-                                                id: systemIcon
-                                                anchors.centerIn: parent
-                                                implicitSize: Config.scaled(20, dashWindow.uiScale)
-                                                visible: modelData.length > 0
-                                                source: modelData.length > 0 ? Quickshell.iconPath(modelData) : ""
-                                            }
-
-                                            ColorOverlay {
-                                                anchors.fill: systemIcon
-                                                source: systemIcon
-                                                visible: systemIcon.visible
-                                                color: Config.fgcolor
-                                            }
-
-                                            // The last icon is reserved for the same
-                                            // settings-button treatment later, but it
-                                            // hover-highlights already like the rest.
-                                            MouseArea {
-                                                id: iconMouseArea
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                onClicked: {
-                                                    if (index === 0) {
-                                                        dashWindow.toggleSettingsPanel("audio")
-                                                    } else if (index === 1) {
-                                                        dashWindow.toggleSettingsPanel("network")
-                                                    } else if (index === 2) {
-                                                        dashWindow.toggleSettingsPanel("bluetooth")
-                                                    } else if (index === 3) {
-                                                        dashWindow.toggleSettingsPanel("battery")
-                                                    } else if (index === 4) {
-                                                        dashWindow.toggleSettingsPanel("screen")
-                                                    }
+                                        MouseArea {
+                                            id: mouseAreaSettings
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: {
+                                                root.close()
+                                                if (root.settingsScreen) {
+                                                    root.settingsScreen.open = true
                                                 }
                                             }
                                         }
@@ -1144,19 +1092,6 @@ Scope {
 
                     dashBox.state = "horizontal"
                     dashOpenTimer.start()
-                } else {
-                    // Snap-hide rather than let each panel play its own
-                    // close animation - dashWindow itself has no closing
-                    // animation, so a lingering sub-panel would look like
-                    // an orphaned floating box once the dashboard above it
-                    // has already vanished.
-                    dashWindow.activeSettingsPanel = ""
-                    dashWindow.pendingSettingsPanel = ""
-                    audioSettings.forceHide()
-                    networkSettings.forceHide()
-                    bluetoothSettings.forceHide()
-                    screenSettings.forceHide()
-                    batterySettings.forceHide()
                 }
             }
 
@@ -1171,87 +1106,6 @@ Scope {
                 onTriggered: {
                     dashBox.state = "open"
                 }
-            }
-
-            // Audio settings, opened from the audio icon above. Anchored
-            // directly below dashBox's own border (same width, same
-            // screen) so it reads as an extension of the dashboard rather
-            // than an unrelated popup.
-            AudioSettings {
-                id: audioSettings
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "audio"
-                onPanelClosed: dashWindow.onSettingsPanelClosed()
-                selectedSinkId: root.audioSelectedSinkId
-                selectedSourceId: root.audioSelectedSourceId
-                onSinkSelected: (id) => root.audioSelectedSinkId = id
-                onSourceSelected: (id) => root.audioSelectedSourceId = id
-            }
-
-            // Network settings, opened from the network icon above. Same
-            // width as AudioSettings.
-            NetworkSettings {
-                id: networkSettings
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "network"
-                onPanelClosed: dashWindow.onSettingsPanelClosed()
-            }
-
-            // Bluetooth settings, opened from the bluetooth icon above.
-            // Same width as AudioSettings.
-            BluetoothSettings {
-                id: bluetoothSettings
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "bluetooth"
-                onPanelClosed: dashWindow.onSettingsPanelClosed()
-            }
-
-            // Screen settings, opened from the screen icon above. Same
-            // width as Audio/Bluetooth. identifying/primaryMonitor are
-            // mirrored up to root (see its own property comment) since
-            // this ScreenSettings instance is local to this one screen's
-            // dashWindow, but both need to affect every screen.
-            ScreenSettings {
-                id: screenSettings
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "screen"
-                primaryMonitor: root.primaryMonitor
-                dashboardRoot: root
-                onPanelClosed: dashWindow.onSettingsPanelClosed()
-                onIdentifyingChanged: root.identifying = screenSettings.identifying
-                onPrimarySelected: (name) => root.primaryMonitor = name
-            }
-
-            // Battery levels, opened from the battery icon above (index
-            // 3 in systemicons' Repeater below - reserved for this
-            // ever since that row was first laid out). Same width as
-            // Audio/Bluetooth/Screen.
-            BatterySettings {
-                id: batterySettings
-
-                screen: dashWindow.screen
-                panelWidth: dashWidth
-                uiScale: dashWindow.uiScale
-                anchorTop: dashWindow.margins.top + dashWindow.height + Config.scaled(8, dashWindow.uiScale)
-                active: dashWindow.activeSettingsPanel === "battery"
-                dashboardRoot: root
-                onPanelClosed: dashWindow.onSettingsPanelClosed()
             }
 
             // Invisible, full-screen click catcher that closes the

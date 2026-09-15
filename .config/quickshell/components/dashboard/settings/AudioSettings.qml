@@ -6,14 +6,20 @@ import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
-// Playback/recording device list + volume sliders, opened from Dashboard's
-// audio icon. Instantiated inside dashWindow (see Dashboard.qml), which
-// also drives `active` through its settings-panel coordinator so this
-// closes seamlessly if another panel (weather, bluetooth, ...) opens.
-SettingsPanel {
+// Playback/recording device list + volume sliders - one tab of
+// SettingsScreen.qml's fullscreen tabbed panel (see there for the
+// tab bar/coordinator). Embeddable Item instead of a standalone
+// SettingsPanel popup: panelWidth/uiScale/active are plain properties
+// fed in from the tab host instead of coming from a PanelWindow.
+Item {
     id: root
 
-    namespaceName: "audioSettings"
+    property real panelWidth: 800
+    property real uiScale: 1.0
+    property bool active: false
+
+    width: root.panelWidth
+    height: soundContent.height
 
     // All hardware (non-stream) audio nodes, split by direction. Bound via
     // PwObjectTracker below so .audio.volume/.muted are valid to use - see

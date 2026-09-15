@@ -6,8 +6,12 @@ import "../"
 import "../../../Config.js" as Config
 
 // Monitor list (left, 35%) + resolution/position/scale editor (right,
-// 65%). Instantiated inside dashWindow (see Dashboard.qml), which drives
-// `active` through its settings-panel coordinator.
+// 65%) - one tab ("Display") of SettingsScreen.qml's fullscreen tabbed
+// panel (see there for the tab bar/coordinator, and for where the
+// typed-input keyboard focus this used to request itself now comes
+// from). Embeddable Item instead of a standalone SettingsPanel popup:
+// panelWidth/uiScale/active are plain properties fed in from the tab
+// host instead of coming from a PanelWindow.
 //
 // Reads via `hyprctl -j monitors all` (includes currently-disabled
 // monitors, unlike the plain `monitors` request) and writes via
@@ -43,16 +47,15 @@ import "../../../Config.js" as Config
 // scripts/apply-monitors.sh needs to replay the whole layout at login -
 // one combined file instead of the previous monitors.conf/screens.json
 // split, since this panel was the only thing reading or writing either.
-SettingsPanel {
+Item {
     id: root
 
-    namespaceName: "screenSettings"
+    property real panelWidth: 800
+    property real uiScale: 1.0
+    property bool active: false
 
-    // Layer-shell surfaces default to no keyboard input at all (see
-    // SettingsPanel.qml) - without this, the resolution/position/scale
-    // fields below could never actually receive typed input at all, no
-    // matter what QML-level focus() they had.
-    wantsKeyboardFocus: true
+    width: root.panelWidth
+    height: contentWrapper.height
 
     // Dashboard.qml's shared root Scope - ddcutil/brightnessctl
     // detection and every monitor's live/pending brightness now live

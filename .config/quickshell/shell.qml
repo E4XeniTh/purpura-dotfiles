@@ -7,10 +7,12 @@ import "components/dashboard"
 Scope {
   PowerMenu { id: powerMenu; dashboard: dashboard }
   LockScreen { id: lockScreen; dashboard: dashboard }
+  SettingsScreen { id: settingsScreen; dashboard: dashboard }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu
     lockScreen: lockScreen
+    settingsScreen: settingsScreen
   }
   Notification { id: notification }
   Clipboard { id: clipboard }

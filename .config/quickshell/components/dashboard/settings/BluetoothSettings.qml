@@ -8,19 +8,26 @@ import "../"
 import "../../../Config.js" as Config
 
 // Bluetooth controllers (left, 30%) + paired/unpaired devices (right,
-// 70%), split by a vertical line. Instantiated inside dashWindow (see
-// Dashboard.qml), which drives `active` through its settings-panel
-// coordinator so this closes seamlessly if another panel opens.
+// 70%), split by a vertical line - one tab of SettingsScreen.qml's
+// fullscreen tabbed panel (see there for the tab bar/coordinator).
+// Embeddable Item instead of a standalone SettingsPanel popup:
+// panelWidth/uiScale/active are plain properties fed in from the tab
+// host instead of coming from a PanelWindow.
 //
 // Note: pairing goes through BlueZ's pair() directly - Quickshell's
 // bluetooth module doesn't implement a pairing agent (org.bluez.Agent1),
 // so devices needing "Just Works" pairing succeed fine, but ones that
 // actually require a PIN/passkey prompt have nothing here to answer that
 // request yet. Revisit once an agent exists.
-SettingsPanel {
+Item {
     id: root
 
-    namespaceName: "bluetoothSettings"
+    property real panelWidth: 800
+    property real uiScale: 1.0
+    property bool active: false
+
+    width: root.panelWidth
+    height: contentWrapper.height
 
     // No controller at all (no onboard/USB Bluetooth radio, or BlueZ
     // isn't running) - the whole two-column layout below assumes at

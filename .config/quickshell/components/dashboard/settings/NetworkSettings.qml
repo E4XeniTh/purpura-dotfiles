@@ -8,11 +8,13 @@ import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
-// Network devices/connections/wifi, opened from Dashboard's network icon.
-// One ListView whose model swaps between three tabs, picked via a
-// vertical icon-tab strip on the left instead of Bluetooth's two
-// side-by-side lists. Instantiated inside dashWindow (see Dashboard.qml),
-// which drives `active` through its settings-panel coordinator.
+// Network devices/connections/wifi - one tab of SettingsScreen.qml's
+// fullscreen tabbed panel (see there for the tab bar/coordinator). One
+// ListView whose model swaps between three tabs, picked via a vertical
+// icon-tab strip on the left instead of Bluetooth's two side-by-side
+// lists. Embeddable Item instead of a standalone SettingsPanel popup:
+// panelWidth/uiScale/active are plain properties fed in from the tab
+// host instead of coming from a PanelWindow.
 //
 // Backed by Quickshell.Networking (NetworkManager only) - confirmed
 // against Quickshell's own source that only Wifi and Ethernet device
@@ -20,10 +22,15 @@ import "../../../Config.js" as Config
 // types (tun/VPN/bridge/etc, e.g. a ZeroTier interface) are silently
 // ignored at the backend level and will never appear here, regardless of
 // anything done in this file.
-SettingsPanel {
+Item {
     id: root
 
-    namespaceName: "networkSettings"
+    property real panelWidth: 800
+    property real uiScale: 1.0
+    property bool active: false
+
+    width: root.panelWidth
+    height: contentWrapper.height
 
     // 0 = Devices, 1 = Connections, 2 = WiFi.
     property int currentTab: 0
