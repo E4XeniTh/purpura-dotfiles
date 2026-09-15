@@ -26,8 +26,12 @@ Item {
     property real uiScale: 1.0
     property bool active: false
 
-    width: root.panelWidth
-    height: contentWrapper.height
+    // Sized by whatever container SettingsScreen.qml gives this tab -
+    // not self-measured from content anymore, so the two lists below
+    // stretch to fill it and the hint row stays pinned to the true
+    // bottom instead of trailing right behind however many devices
+    // happen to be paired/found.
+    anchors.fill: parent
 
     // No controller at all (no onboard/USB Bluetooth radio, or BlueZ
     // isn't running) - the whole two-column layout below assumes at
@@ -62,27 +66,15 @@ Item {
         }
     }
 
-    // SettingsPanel sizes itself off this outer Item's height via
-    // childrenRect, which only reliably tracks plain Column/Row
-    // positioners - contentRow below is a RowLayout, and Layout types'
-    // settled size lives in their own implicitHeight, not in a generic
-    // childrenRect measurement of their children. Binding this wrapper's
-    // height explicitly to the tallest side (plus real top+bottom
-    // padding, which contentRow never had before) is what the panel
-    // actually measures now.
+    // Fills the whole tab (root is anchors.fill'd by its container).
+    // contentRow fills everything above the hint row - both lists
+    // stretch to use whatever's left instead of capping at a fixed
+    // height, so the hint row always sits at the true bottom of the
+    // tab regardless of how many devices are paired/found.
     Item {
         id: contentWrapper
 
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-        }
-        height: root.noAdapter
-            ? Config.scaled(200, root.uiScale)
-            : contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, deviceList.height)
-                + hintSeparator.anchors.topMargin + hintSeparator.height
-                + hintRow.anchors.topMargin + hintRow.height
+        anchors.fill: parent
 
         Text {
             anchors.centerIn: parent
@@ -103,6 +95,8 @@ Item {
                 left: parent.left
                 right: parent.right
                 top: parent.top
+                bottom: hintSeparator.top
+                bottomMargin: Config.scaled(14, root.uiScale)
                 margins: contentRow.margins
             }
             spacing: Config.scaled(12, root.uiScale)
@@ -111,7 +105,6 @@ Item {
             readonly property real availableWidth: width - spacing * 2 - dividerWidth
             readonly property real leftWidth: availableWidth * 0.325
             readonly property real rightWidth: availableWidth * 0.675
-            readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
             readonly property real cardHeight: Config.scaled(56, root.uiScale)
 
             // ---------------- LEFT: controllers ----------------
@@ -119,7 +112,7 @@ Item {
                 id: leftColumn
 
                 Layout.preferredWidth: contentRow.leftWidth
-                Layout.alignment: Qt.AlignTop
+                Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
                 Text {
@@ -134,7 +127,7 @@ Item {
                     id: controllerList
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+                    Layout.fillHeight: true
                     clip: true
                     spacing: Config.scaled(8, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -153,14 +146,9 @@ Item {
             }
 
             // ---------------- divider ----------------
-            // Layout.fillHeight here used to depend on the RowLayout's own
-            // (unreliably-tracked, see contentWrapper above) implicit height -
-            // bound directly to the same explicit tallest-side expression
-            // instead, so the divider always reaches exactly as far as the
-            // taller of the two columns actually does.
             Rectangle {
                 Layout.preferredWidth: contentRow.dividerWidth
-                Layout.preferredHeight: Math.max(leftColumn.implicitHeight, deviceList.height)
+                Layout.fillHeight: true
                 color: Config.fgcolor
             }
 
@@ -178,8 +166,7 @@ Item {
                 id: deviceList
 
                 Layout.preferredWidth: contentRow.rightWidth
-                Layout.alignment: Qt.AlignTop
-                Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+                Layout.fillHeight: true
                 clip: true
                 spacing: Config.scaled(8, root.uiScale)
                 boundsBehavior: Flickable.StopAtBounds
@@ -244,16 +231,19 @@ Item {
         }
 
         // ---------------- separator ----------------
-        // Stops at the same margins as contentRow above, not its own
-        // separate fixed inset.
+        // Anchored up from hintRow at the bottom now, not down from
+        // contentRow - contentRow's own bottom anchors to this Rectangle's
+        // top (see above), so anchoring this the other way around would be
+        // circular. Stops at the same margins as contentRow above, not its
+        // own separate fixed inset.
         Rectangle {
             id: hintSeparator
             visible: !root.noAdapter
             anchors {
                 left: parent.left
                 right: parent.right
-                top: contentRow.bottom
-                topMargin: Config.scaled(14, root.uiScale)
+                bottom: hintRow.top
+                bottomMargin: Config.scaled(10, root.uiScale)
                 margins: contentRow.margins
             }
             height: Config.scaled(2, root.uiScale)
@@ -268,8 +258,7 @@ Item {
             anchors {
                 left: parent.left
                 right: parent.right
-                top: hintSeparator.bottom
-                topMargin: Config.scaled(10, root.uiScale)
+                bottom: parent.bottom
                 margins: contentRow.margins
             }
             spacing: Config.scaled(16, root.uiScale)

@@ -54,8 +54,12 @@ Item {
     property real uiScale: 1.0
     property bool active: false
 
-    width: root.panelWidth
-    height: contentWrapper.height
+    // Sized by whatever container SettingsScreen.qml gives this tab -
+    // not self-measured from content anymore, so the monitor list
+    // stretches to fill it and the hint row stays pinned to the true
+    // bottom instead of trailing right behind however many monitors
+    // happen to be connected.
+    anchors.fill: parent
 
     // Dashboard.qml's shared root Scope - ddcutil/brightnessctl
     // detection and every monitor's live/pending brightness now live
@@ -1314,17 +1318,15 @@ Item {
         if (root.dashboardRoot) root.dashboardRoot.applyBrightness()
     }
 
+    // Fills the whole tab (root is anchors.fill'd by its container).
+    // contentRow fills everything above the hint row - the monitor list
+    // stretches to use whatever's left instead of capping at a fixed
+    // height, so the hint row always sits at the true bottom of the tab
+    // regardless of how many monitors are connected.
     Item {
         id: contentWrapper
 
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-        }
-        height: contentRow.margins * 2 + Math.max(leftColumn.implicitHeight, rightColumn.implicitHeight)
-            + hintSeparator.anchors.topMargin + hintSeparator.height
-            + hintRow.anchors.topMargin + hintRow.height
+        anchors.fill: parent
 
         RowLayout {
             id: contentRow
@@ -1335,6 +1337,8 @@ Item {
                 left: parent.left
                 right: parent.right
                 top: parent.top
+                bottom: hintSeparator.top
+                bottomMargin: Config.scaled(14, root.uiScale)
                 margins: contentRow.margins
             }
             spacing: Config.scaled(12, root.uiScale)
@@ -1343,7 +1347,6 @@ Item {
             readonly property real availableWidth: width - spacing * 2 - dividerWidth
             readonly property real leftWidth: availableWidth * 0.35
             readonly property real rightWidth: availableWidth * 0.65
-            readonly property real listMaxHeight: Config.scaled(340, root.uiScale)
             // Taller than before to fit the brightness slider + its
             // separator under the icon/label row.
             readonly property real cardHeight: Config.scaled(84, root.uiScale)
@@ -1353,7 +1356,7 @@ Item {
                 id: leftColumn
 
                 Layout.preferredWidth: contentRow.leftWidth
-                Layout.alignment: Qt.AlignTop
+                Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
                 Text {
@@ -1368,7 +1371,7 @@ Item {
                     id: monitorList
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+                    Layout.fillHeight: true
                     clip: true
                     spacing: Config.scaled(8, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -1432,11 +1435,17 @@ Item {
             // ---------------- divider ----------------
             Rectangle {
                 Layout.preferredWidth: contentRow.dividerWidth
-                Layout.preferredHeight: Math.max(leftColumn.implicitHeight, rightColumn.implicitHeight)
+                Layout.fillHeight: true
                 color: Config.fgcolor
             }
 
             // ---------------- RIGHT: selected monitor's config ----------------
+            // Deliberately NOT Layout.fillHeight like leftColumn/
+            // monitorList above - this is a fixed set of form fields,
+            // not a scrollable list, so stretching it would just widen
+            // the gaps between fields rather than showing more useful
+            // content. Left top-aligned within contentRow's now-taller
+            // fillHeight instead.
             ColumnLayout {
                 id: rightColumn
 
@@ -1889,15 +1898,18 @@ Item {
         }
 
         // ---------------- separator ----------------
-        // Stops at the same margins as contentRow above, not its own
-        // separate fixed inset.
+        // Anchored up from hintRow at the bottom now, not down from
+        // contentRow - contentRow's own bottom anchors to this
+        // Rectangle's top (see above), so anchoring this the other way
+        // around would be circular. Stops at the same margins as
+        // contentRow above, not its own separate fixed inset.
         Rectangle {
             id: hintSeparator
             anchors {
                 left: parent.left
                 right: parent.right
-                top: contentRow.bottom
-                topMargin: Config.scaled(14, root.uiScale)
+                bottom: hintRow.top
+                bottomMargin: Config.scaled(10, root.uiScale)
                 margins: contentRow.margins
             }
             height: Config.scaled(2, root.uiScale)
@@ -1911,8 +1923,7 @@ Item {
             anchors {
                 left: parent.left
                 right: parent.right
-                top: hintSeparator.bottom
-                topMargin: Config.scaled(10, root.uiScale)
+                bottom: parent.bottom
                 margins: contentRow.margins
             }
             spacing: Config.scaled(16, root.uiScale)

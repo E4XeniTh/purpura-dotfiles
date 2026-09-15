@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
 import Quickshell.Services.Pipewire
@@ -18,8 +19,13 @@ Item {
     property real uiScale: 1.0
     property bool active: false
 
-    width: root.panelWidth
-    height: soundContent.height
+    // Sized by whatever container SettingsScreen.qml gives this tab
+    // (panelWidth/uiScale above just carry the same numbers through for
+    // Config.scaled() calls) - not self-measured from content anymore,
+    // so the two lists below can stretch to fill it and the hint row
+    // stays pinned to the true bottom instead of trailing right behind
+    // however tall the lists happen to be.
+    anchors.fill: parent
 
     // All hardware (non-stream) audio nodes, split by direction. Bound via
     // PwObjectTracker below so .audio.volume/.muted are valid to use - see
@@ -54,33 +60,36 @@ Item {
         objects: root.playbackNodes.concat(root.recordingNodes)
     }
 
-    Column {
+    Item {
         id: soundContent
 
-        width: root.panelWidth
+        anchors {
+            fill: parent
+            margins: Config.scaled(16, root.uiScale)
+        }
 
-        topPadding: Config.scaled(16, root.uiScale)
-        bottomPadding: Config.scaled(16, root.uiScale)
-        leftPadding: Config.scaled(16, root.uiScale)
-        rightPadding: Config.scaled(16, root.uiScale)
-        spacing: Config.scaled(10, root.uiScale)
-
-        readonly property real contentWidth: width - leftPadding - rightPadding
-        readonly property real columnWidth: (contentWidth - columnsRow.spacing) / 2
+        readonly property real columnWidth: (width - columnsRow.spacing) / 2
         readonly property real cardHeight: Config.scaled(76, root.uiScale)
-        // Same cap as BluetoothSettings/ScreenSettings/NetworkSettings'
-        // own lists - keeps this panel from growing without bound if
-        // there are a lot of playback/recording devices.
-        readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
 
-
-        Row {
+        // Fills everything above the hint row - both lists stretch to
+        // use whatever's left instead of capping at a fixed height, so
+        // the hint row always sits at the true bottom of the tab
+        // regardless of how many playback/recording devices exist.
+        RowLayout {
             id: columnsRow
-            width: soundContent.contentWidth
+
+            anchors {
+                left: parent.left
+                right: parent.right
+                top: parent.top
+                bottom: hintseparator.top
+                bottomMargin: Config.scaled(10, root.uiScale)
+            }
             spacing: Config.scaled(16, root.uiScale)
 
-            Column {
-                width: soundContent.columnWidth
+            ColumnLayout {
+                Layout.preferredWidth: soundContent.columnWidth
+                Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
                 Text {
@@ -92,8 +101,8 @@ Item {
                 }
 
                 ListView {
-                    width: soundContent.columnWidth
-                    height: Math.min(contentHeight, soundContent.listMaxHeight)
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     clip: true
                     spacing: Config.scaled(10, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -102,7 +111,7 @@ Item {
                     delegate: DeviceCard {
                         required property var modelData
 
-                        width: soundContent.columnWidth
+                        width: ListView.view.width
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
@@ -117,8 +126,9 @@ Item {
                 }
             }
 
-            Column {
-                width: soundContent.columnWidth
+            ColumnLayout {
+                Layout.preferredWidth: soundContent.columnWidth
+                Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
                 Text {
@@ -130,8 +140,8 @@ Item {
                 }
 
                 ListView {
-                    width: soundContent.columnWidth
-                    height: Math.min(contentHeight, soundContent.listMaxHeight)
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
                     clip: true
                     spacing: Config.scaled(10, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -140,7 +150,7 @@ Item {
                     delegate: DeviceCard {
                         required property var modelData
 
-                        width: soundContent.columnWidth
+                        width: ListView.view.width
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
@@ -158,7 +168,12 @@ Item {
 
         Rectangle {
             id: hintseparator
-            width: soundContent.contentWidth
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: hintRow.top
+                bottomMargin: Config.scaled(10, root.uiScale)
+            }
             border.width: 2
             border.color: Config.fgcolor
             height: 2
@@ -166,7 +181,11 @@ Item {
 
         // ---------------- hint row: right-click to set default, scroll to adjust volume ----------------
         Row {
-            width: soundContent.contentWidth
+            id: hintRow
+            anchors {
+                left: parent.left
+                bottom: parent.bottom
+            }
             spacing: Config.scaled(16, root.uiScale)
 
             HintItem {

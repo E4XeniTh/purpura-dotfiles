@@ -29,8 +29,11 @@ Item {
     property real uiScale: 1.0
     property bool active: false
 
-    width: root.panelWidth
-    height: contentWrapper.height
+    // Sized by whatever container SettingsScreen.qml gives this tab -
+    // not self-measured from content anymore, so listColumn's existing
+    // Layout.fillHeight machinery below actually has real leftover
+    // height to expand into (see contentWrapper for what changed).
+    anchors.fill: parent
 
     // 0 = Devices, 1 = Connections, 2 = WiFi.
     property int currentTab: 0
@@ -186,22 +189,15 @@ Item {
     }
     onCurrentTabChanged: root.updateWifiScanning()
 
-    // SettingsPanel sizes itself off this outer Item's height via
-    // childrenRect, which only reliably tracks plain Column/Row
-    // positioners, not Layout types - see BluetoothSettings.qml for the
-    // same reasoning and the anchors-vs-Layout pitfall this avoids by
-    // keeping contentRow a direct, non-nested child here.
+    // Fills the whole tab (root is anchors.fill'd by its container) -
+    // no longer self-measured from content, so listColumn's own
+    // Layout.fillHeight children (the spacer Item, and entryList once
+    // it's given fillHeight too) actually have real leftover height to
+    // expand into, keeping the hint row pinned to the true bottom.
     Item {
         id: contentWrapper
 
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-        }
-        height: Math.max(
-            Config.scaled(300, root.uiScale),
-            contentRow.margins * 2 + Math.max(tabColumn.implicitHeight, listColumn.implicitHeight))
+        anchors.fill: parent
 
         RowLayout {
             id: contentRow
@@ -216,7 +212,6 @@ Item {
             }
             spacing: Config.scaled(12, root.uiScale)
 
-            readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
             readonly property real cardHeight: Config.scaled(56, root.uiScale)
             readonly property real dividerWidth: Config.scaled(2, root.uiScale)
 
@@ -364,7 +359,7 @@ Item {
                     id: entryList
 
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, contentRow.listMaxHeight)
+                    Layout.fillHeight: true
                     clip: true
                     spacing: Config.scaled(8, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -476,8 +471,6 @@ Item {
                         color: Config.fgcolor
                     }
                 }
-
-                Item { Layout.fillHeight: true }
 
                 // ---------------- separator ----------------
                 Rectangle {

@@ -48,12 +48,16 @@ Scope {
 
             readonly property bool isPrimary: modelData.name === root.effectivePrimaryName
 
-            // Same dashWidth/uiScale formula Dashboard.qml uses for its
-            // own dashWindow, just a wider fraction of the screen since
-            // this is a dedicated full screen now instead of a slim
-            // dropdown column.
+            // panelWidth is just the card's own physical width - wider
+            // than Dashboard's own dashWidth since this is a dedicated
+            // full screen now instead of a slim dropdown column. uiScale
+            // stays on Dashboard.qml's own dashWidth-based formula
+            // though (NOT derived from this wider panelWidth) so every
+            // font/icon/border here renders at the same density as the
+            // rest of the shell instead of visibly thicker/bigger.
+            readonly property real dashWidth: modelData.width * 0.42
+            readonly property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
             readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200)
-            readonly property real uiScale: Math.max(0.6, Math.min(1.8, panelWidth / 800))
 
             WlrLayershell.namespace: "settingsscreen"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -314,67 +318,65 @@ Scope {
                             color: Config.fgcolor
                         }
 
-                        // ---------------- active tab's content, scrollable if taller than the fixed card height ----------------
+                        // ---------------- active tab's content ----------------
                         // Fixed to fill exactly what's left of maxHeight,
                         // not the active tab's own content height - see
                         // the box's "open" state above for why (a shorter
                         // tab just leaves blank space below it instead of
-                        // shrinking the window).
-                        Flickable {
-                            id: tabFlick
+                        // shrinking the window). Each tab is anchors.fill'd
+                        // to this instead of sizing itself, so its own
+                        // internal lists can stretch down to meet it -
+                        // any overflow within a tab is handled by that
+                        // tab's own ListView clipping/scrolling, not by an
+                        // outer Flickable here.
+                        Item {
+                            id: tabHost
 
                             width: parent.width
                             height: panelScope.maxHeight - tabBar.height - divider.height
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            contentWidth: width
-                            contentHeight: tabHost.height
 
-                            Item {
-                                id: tabHost
+                            AudioSettings {
+                                id: audioTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 0
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 0
+                                selectedSinkId: root.dashboard ? root.dashboard.audioSelectedSinkId : null
+                                selectedSourceId: root.dashboard ? root.dashboard.audioSelectedSourceId : null
+                                onSinkSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSinkId = id }
+                                onSourceSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSourceId = id }
+                            }
 
-                                width: parent.width
-                                height: [audioTab, networkTab, bluetoothTab, screenTab][root.currentTab].height
+                            NetworkSettings {
+                                id: networkTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 1
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 1
+                            }
 
-                                AudioSettings {
-                                    id: audioTab
-                                    visible: root.currentTab === 0
-                                    panelWidth: panelScope.panelWidth
-                                    uiScale: panelScope.uiScale
-                                    active: root.open && root.currentTab === 0
-                                    selectedSinkId: root.dashboard ? root.dashboard.audioSelectedSinkId : null
-                                    selectedSourceId: root.dashboard ? root.dashboard.audioSelectedSourceId : null
-                                    onSinkSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSinkId = id }
-                                    onSourceSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSourceId = id }
-                                }
+                            BluetoothSettings {
+                                id: bluetoothTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 2
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 2
+                            }
 
-                                NetworkSettings {
-                                    id: networkTab
-                                    visible: root.currentTab === 1
-                                    panelWidth: panelScope.panelWidth
-                                    uiScale: panelScope.uiScale
-                                    active: root.open && root.currentTab === 1
-                                }
-
-                                BluetoothSettings {
-                                    id: bluetoothTab
-                                    visible: root.currentTab === 2
-                                    panelWidth: panelScope.panelWidth
-                                    uiScale: panelScope.uiScale
-                                    active: root.open && root.currentTab === 2
-                                }
-
-                                ScreenSettings {
-                                    id: screenTab
-                                    visible: root.currentTab === 3
-                                    panelWidth: panelScope.panelWidth
-                                    uiScale: panelScope.uiScale
-                                    active: root.open && root.currentTab === 3
-                                    primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
-                                    dashboardRoot: root.dashboard
-                                    onPrimarySelected: (name) => { if (root.dashboard) root.dashboard.primaryMonitor = name }
-                                    onIdentifyingChanged: { if (root.dashboard) root.dashboard.identifying = screenTab.identifying }
-                                }
+                            ScreenSettings {
+                                id: screenTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 3
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 3
+                                primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
+                                dashboardRoot: root.dashboard
+                                onPrimarySelected: (name) => { if (root.dashboard) root.dashboard.primaryMonitor = name }
+                                onIdentifyingChanged: { if (root.dashboard) root.dashboard.identifying = screenTab.identifying }
                             }
                         }
                     }
