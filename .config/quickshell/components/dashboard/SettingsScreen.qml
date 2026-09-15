@@ -168,6 +168,19 @@ Scope {
                     background.opacity = 1
                 } else {
                     root.currentTab = 0
+
+                    // ScreenSettings' own identifyTimer (which normally
+                    // clears this after 3s) is destroyed right along
+                    // with the rest of panelComponent the moment this
+                    // window closes (see panelLoader's active binding
+                    // above) - closing mid-identify, or right after
+                    // clicking it, orphaned root.dashboard.identifying
+                    // at true forever with nothing left alive to ever
+                    // clear it, confirmed live as the identify overlay
+                    // never disappearing. Force it off here too so
+                    // closing always clears it regardless of whether
+                    // that timer got to fire first.
+                    if (root.dashboard) root.dashboard.identifying = false
                 }
             }
         }
