@@ -173,7 +173,13 @@ Scope {
                             target: box
 
                             width: panelScope.panelWidth
-                            height: Math.min(cardColumn.height, panelScope.maxHeight)
+                            // Always the full maxHeight, not whatever the
+                            // active tab's own content happens to need -
+                            // otherwise the window visibly grows/shrinks
+                            // every time a different tab is picked. See
+                            // tabFlick below, which is sized to match this
+                            // exactly so the two never disagree.
+                            height: panelScope.maxHeight
                         }
                     }
 
@@ -244,17 +250,39 @@ Scope {
                                             anchors.centerIn: parent
                                             spacing: Config.scaled(8, panelScope.uiScale)
 
-                                            IconImage {
-                                                id: tabIcon
+                                            // Icon + its ColorOverlay are
+                                            // wrapped in a plain, explicitly
+                                            // sized Item rather than sitting
+                                            // directly as Row children - a
+                                            // positioner like Row assigns its
+                                            // children's x directly, which
+                                            // silently fights/breaks an
+                                            // anchors.fill binding on a
+                                            // direct child (confirmed live:
+                                            // the ColorOverlay ended up
+                                            // drawn on top of the label
+                                            // text instead of over the icon,
+                                            // undefined precedence between
+                                            // the two). Anchoring inside
+                                            // this wrapper instead is safe
+                                            // since the wrapper itself is
+                                            // the well-behaved Row child.
+                                            Item {
+                                                width: Config.scaled(20, panelScope.uiScale)
+                                                height: Config.scaled(20, panelScope.uiScale)
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                implicitSize: Config.scaled(20, panelScope.uiScale)
-                                                source: Quickshell.iconPath(tabCard.modelData.icon)
-                                            }
 
-                                            ColorOverlay {
-                                                anchors.fill: tabIcon
-                                                source: tabIcon
-                                                color: tabCard.border.color
+                                                IconImage {
+                                                    id: tabIcon
+                                                    anchors.fill: parent
+                                                    source: Quickshell.iconPath(tabCard.modelData.icon)
+                                                }
+
+                                                ColorOverlay {
+                                                    anchors.fill: tabIcon
+                                                    source: tabIcon
+                                                    color: tabCard.border.color
+                                                }
                                             }
 
                                             Text {
@@ -280,17 +308,23 @@ Scope {
 
                         // ---------------- divider ----------------
                         Rectangle {
+                            id: divider
                             width: parent.width
                             height: Config.scaled(2, panelScope.uiScale)
                             color: Config.fgcolor
                         }
 
-                        // ---------------- active tab's content, scrollable if taller than the card's clamp ----------------
+                        // ---------------- active tab's content, scrollable if taller than the fixed card height ----------------
+                        // Fixed to fill exactly what's left of maxHeight,
+                        // not the active tab's own content height - see
+                        // the box's "open" state above for why (a shorter
+                        // tab just leaves blank space below it instead of
+                        // shrinking the window).
                         Flickable {
                             id: tabFlick
 
                             width: parent.width
-                            height: Math.min(tabHost.height, panelScope.maxHeight - tabBar.height)
+                            height: panelScope.maxHeight - tabBar.height - divider.height
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             contentWidth: width
