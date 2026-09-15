@@ -206,6 +206,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + V", hl.dsp.global("quickshell:clipboard"))
     hl.bind(mainMod .. " + N", hl.dsp.global("quickshell:notifications"))
     hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:dashboard"))
+    hl.bind(mainMod .. " + M", hl.dsp.global("quickshell:settingsscreen"))
     hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"))
 
     hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }))

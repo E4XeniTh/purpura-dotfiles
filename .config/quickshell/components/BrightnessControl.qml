@@ -29,6 +29,12 @@ Rectangle {
     property real uiScale: 1.0
     property var dashboard: null
 
+    // Shell > Bar settings' "Brightness Control" checkbox (see
+    // ShellSettings.qml/Bar.qml) - a user-level show/hide independent of
+    // whether the primary monitor actually supports brightness control at
+    // all (see controllable/detecting below).
+    property bool showBrightnessControl: true
+
     // effectivePrimaryMonitor(), not root.dashboard.primaryMonitor
     // directly - the latter defaults to a hardcoded output name that
     // isn't persisted to disk, so on a laptop that's never had its
@@ -79,7 +85,7 @@ Rectangle {
     // and confirmed the primary has no brightness control at all - while
     // still detecting, the widget stays up showing the placeholder below
     // instead of disappearing and possibly popping back in a moment later.
-    visible: root.detecting || root.controllable
+    visible: root.showBrightnessControl && (root.detecting || root.controllable)
     width: visible ? implicitWidth : 0
     height: visible ? implicitHeight : 0
 

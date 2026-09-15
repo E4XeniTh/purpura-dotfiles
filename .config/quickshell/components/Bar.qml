@@ -1,6 +1,7 @@
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
+import Quickshell.Io
 import QtQuick
 import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
@@ -21,6 +22,27 @@ Scope {
     // this very same process.
     property var dashboard: null
     property var notification: null
+
+    // Shell > Bar settings (ShellSettings.qml) - watched directly rather
+    // than routed through Dashboard.qml's object tree, same convention
+    // WorkspaceRow.qml/WorkspaceOsd.qml already use for their own Bar
+    // settings (strictWorkspaceWidget/showEmptyWidget/showEmptyOsd).
+    FileView {
+        id: barSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
+        watchChanges: true
+        onFileChanged: reload()
+    }
+
+    readonly property var barSettingsStore: {
+        try {
+            return JSON.parse(barSettingsFile.text())
+        } catch (e) {
+            return {}
+        }
+    }
+
+    readonly property bool showBrightnessControl: root.barSettingsStore.showBrightnessControl !== false
 
     // dashboard.primaryMonitor defaults to a hardcoded output name
     // ("DP-1") and isn't persisted to disk, so it can point at a screen
@@ -205,6 +227,7 @@ Scope {
                     id: brightnessControl
                     uiScale: bar.uiScale
                     dashboard: root.dashboard
+                    showBrightnessControl: root.showBrightnessControl
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: volumeControl.right
                     anchors.leftMargin: Config.scaled(10, bar.uiScale)

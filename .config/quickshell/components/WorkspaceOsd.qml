@@ -24,17 +24,12 @@ Scope {
 
     // Read once here (rather than per-screen inside osdWindow below) and
     // shared by every screen's own instance - same monitors.json
-    // ScreenSettings.qml writes, holding both per-monitor pinned
-    // workspaces and the "__showEmptyOsd" global toggle (see
-    // ScreenSettings.qml's toggleShowEmptyOsd()). Backed by watchChanges
-    // (real OS-level file watching), not polling - updates the instant
-    // Apply writes the file rather than waiting on a poll interval or
-    // Hyprland's own raw-event stream (a checkbox-only Apply's
-    // workspace_rule/move dispatches are all no-ops when nothing
-    // physically changed, so no raw event necessarily fires at all -
-    // reported live as "Show Empty in OSD" not visibly taking effect
-    // until switching workspaces or clicking elsewhere happened to force
-    // some other refresh first).
+    // ScreenSettings.qml writes, holding per-monitor pinned workspaces.
+    // Backed by watchChanges (real OS-level file watching), not polling -
+    // updates the instant Apply writes the file rather than waiting on a
+    // poll interval or Hyprland's own raw-event stream (a checkbox-only
+    // Apply's workspace_rule/move dispatches are all no-ops when nothing
+    // physically changed, so no raw event necessarily fires at all).
     FileView {
         id: screensStoreFile
         path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
@@ -51,6 +46,25 @@ Scope {
     }
 
     onScreensStoreChanged: renderSettleTimer.restart()
+
+    // Shell > Bar settings (ShellSettings.qml) - a separate file from
+    // monitors.json, watched the same way, since the "Show empty
+    // workspaces: In OSD" toggle is a simple immediately-saved setting
+    // rather than staged/Apply-dependent monitor state.
+    FileView {
+        id: barSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
+        watchChanges: true
+        onFileChanged: reload()
+    }
+
+    readonly property var barSettingsStore: {
+        try {
+            return JSON.parse(barSettingsFile.text())
+        } catch (e) {
+            return {}
+        }
+    }
 
     // A single Apply dispatches many sequential hyprctl eval calls (see
     // ScreenSettings.qml), each firing a live Hyprland raw event the
@@ -96,7 +110,7 @@ Scope {
 
             readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
 
-            readonly property bool showEmptyOsd: !!root.screensStore.__showEmptyOsd
+            readonly property bool showEmptyOsd: !!root.barSettingsStore.showEmptyOsd
 
             // Every workspace number actually, deliberately pinned to
             // *this* monitor per monitors.json (i.e. chosen via the 1-5

@@ -150,8 +150,7 @@ Item {
     // Still monitor-selection-scoped (discarded on selectMonitor()) -
     // used for things that are genuinely tied to "whatever's currently
     // selected in this panel" rather than a specific monitor's own
-    // state: the checkbox toggles below (toggleStrictWorkspaceWidget
-    // etc.) and togglePreferredMode(). Geometry edits no longer rely on
+    // state: togglePreferredMode(). Geometry edits no longer rely on
     // this for correctness (see effectiveStateFor()) - only for also
     // marking the then-selected monitor as touched, alongside the
     // dedicated edited-keys loop in applyChanges().
@@ -497,16 +496,11 @@ Item {
     // checkbox/preferredMode signal, not geometry) resets. Same for
     // root.pendingWorkspaces (workspace-pin buttons) - already keyed
     // per monitor name (never the flat-blob shape edited used to be),
-    // so persisting it across switches carries none of that same risk;
-    // only the checkbox pending* properties actually need discarding on
-    // reselect.
+    // so persisting it across switches carries none of that same risk.
     function selectMonitor(name) {
         root.selectedName = name
         root.selectedDirty = false
         root.displayFor = ({})
-        root.pendingStrictWorkspaceWidget = undefined
-        root.pendingShowEmptyWidget = undefined
-        root.pendingShowEmptyOsd = undefined
         root.refreshMonitors()
     }
 
@@ -620,14 +614,6 @@ Item {
         // the catch below logs whatever actually broke instead of
         // failing silently.
         try {
-
-        // Commit any staged checkbox changes (see effectiveStrict.../
-        // effectiveShowEmpty* above) into the real properties first -
-        // everything below (and storeSnapshot's __-prefixed keys) reads
-        // the real property, not the pending/effective one.
-        if (root.pendingStrictWorkspaceWidget !== undefined) root.strictWorkspaceWidget = root.pendingStrictWorkspaceWidget
-        if (root.pendingShowEmptyWidget !== undefined) root.showEmptyWidget = root.pendingShowEmptyWidget
-        if (root.pendingShowEmptyOsd !== undefined) root.showEmptyOsd = root.pendingShowEmptyOsd
 
         // The one authoritative, from-scratch, collision-free mapping -
         // see resolveWorkspaceAssignment() above for why this replaced
@@ -795,11 +781,7 @@ Item {
         // resolved[name] - the same already-exclusive mapping that was
         // just dispatched live, so the file on disk and Hyprland's live
         // state can never disagree with each other.
-        const storeSnapshot = {
-            __strictWorkspaceWidget: root.strictWorkspaceWidget,
-            __showEmptyWidget: root.showEmptyWidget,
-            __showEmptyOsd: root.showEmptyOsd
-        }
+        const storeSnapshot = {}
         for (const m of root.monitors) {
             const line = root.buildMonitorLine(m.name)
             const state = root.effectiveStateFor(m.name)
@@ -899,9 +881,6 @@ Item {
         if (root.active) {
             root.pendingEnabled = ({})
             root.pendingWorkspaces = ({})
-            root.pendingStrictWorkspaceWidget = undefined
-            root.pendingShowEmptyWidget = undefined
-            root.pendingShowEmptyOsd = undefined
             root.positionOverrides = ({})
             root.edited = ({})
             root.selectedDirty = false
@@ -1187,60 +1166,6 @@ Item {
         screensStoreProcess.running = true
     }
 
-    // Global (not per-monitor) toggles, all stored in this same
-    // monitors.json under "__"-prefixed keys so none are mistaken for a
-    // monitor name by anything that iterates the file's other keys -
-    // display preferences for other components (WorkspaceRow.qml/
-    // WorkspaceOsd.qml), not live Hyprland/hardware changes, but staged
-    // through the same pending/effective + Apply flow as everything else
-    // in this panel now (see pendingStrictWorkspaceWidget etc. below).
-    //
-    // strictWorkspaceWidget: whether WorkspaceRow.qml's bar widget shows
-    // workspaces past id 5 at all - the auto-assigned spare numbers a
-    // monitor with nothing explicitly pinned to it gets (see
-    // resolveWorkspaceAssignment() above, step 3).
-    //
-    // showEmptyWidget/showEmptyOsd: whether workspaces 1-5 pinned to a
-    // monitor but not currently existing in Hyprland (nobody's switched
-    // to them yet this session, so Hyprland hasn't created them) still
-    // show as an empty placeholder box in WorkspaceRow.qml/WorkspaceOsd.qml,
-    // instead of only appearing once they're actually visited.
-    property bool strictWorkspaceWidget: false
-    property bool showEmptyWidget: false
-    property bool showEmptyOsd: false
-
-    // Staged like `edited`/pendingWorkspaces above now, not written
-    // through immediately - undefined means "no pending change, use the
-    // real property as-is". Cleared (back to undefined) on selectMonitor()
-    // and panel reopen, same as the workspace pins, so clicking a
-    // checkbox and then switching monitors before Apply discards it
-    // instead of persisting.
-    property var pendingStrictWorkspaceWidget: undefined
-    property var pendingShowEmptyWidget: undefined
-    property var pendingShowEmptyOsd: undefined
-
-    readonly property bool effectiveStrictWorkspaceWidget: root.pendingStrictWorkspaceWidget !== undefined
-        ? root.pendingStrictWorkspaceWidget : root.strictWorkspaceWidget
-    readonly property bool effectiveShowEmptyWidget: root.pendingShowEmptyWidget !== undefined
-        ? root.pendingShowEmptyWidget : root.showEmptyWidget
-    readonly property bool effectiveShowEmptyOsd: root.pendingShowEmptyOsd !== undefined
-        ? root.pendingShowEmptyOsd : root.showEmptyOsd
-
-    function toggleStrictWorkspaceWidget() {
-        root.pendingStrictWorkspaceWidget = !root.effectiveStrictWorkspaceWidget
-        root.selectedDirty = true
-    }
-
-    function toggleShowEmptyWidget() {
-        root.pendingShowEmptyWidget = !root.effectiveShowEmptyWidget
-        root.selectedDirty = true
-    }
-
-    function toggleShowEmptyOsd() {
-        root.pendingShowEmptyOsd = !root.effectiveShowEmptyOsd
-        root.selectedDirty = true
-    }
-
     Process {
         id: screensStoreProcess
         // Read via `cat` (like every other read in this file goes
@@ -1254,17 +1179,16 @@ Item {
                 try {
                     const parsed = JSON.parse(text)
                     root.screensStore = parsed
-                    root.strictWorkspaceWidget = !!parsed.__strictWorkspaceWidget
-                    root.showEmptyWidget = !!parsed.__showEmptyWidget
-                    root.showEmptyOsd = !!parsed.__showEmptyOsd
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
                     // "preferred" would show "Manual" until reselected
-                    // once quickshell restarts. "__"-prefixed keys
-                    // (__strictWorkspaceWidget) aren't monitor names -
-                    // skipped here rather than seeding a stray,
-                    // meaningless preferredModes entry for them.
+                    // once quickshell restarts. Any leftover "__"-prefixed
+                    // key from before the workspace-widget toggles moved
+                    // to their own barsettings.json (see ShellSettings.qml)
+                    // isn't a monitor name either - skipped here rather
+                    // than seeding a stray, meaningless preferredModes
+                    // entry for it.
                     const seeded = Object.assign({}, root.preferredModes)
                     for (const name in parsed) {
                         if (name.startsWith("__")) continue
@@ -1670,154 +1594,6 @@ Item {
                                     contentWrapper.forceActiveFocus()
                                     root.toggleWorkspace(root.selectedName, wsButton.modelData)
                                 }
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                // ---------------- strict workspace widget toggle ----------------
-                // Global, not per-monitor - controls whether
-                // WorkspaceRow.qml's bar widget shows workspaces past
-                // id 5 at all. Staged like the workspace pins above -
-                // only takes effect on Apply, discarded if a different
-                // monitor is selected first (see
-                // effectiveStrictWorkspaceWidget/toggleStrictWorkspaceWidget()
-                // above).
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(16, root.uiScale)
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Text {
-                        text: "Only managed workspaces in widget:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleStrictWorkspaceWidget()
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.effectiveStrictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleStrictWorkspaceWidget()
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                // ---------------- show empty toggle (widget + osd) ----------------
-                // Also global - whether a workspace 1-5 pinned to a
-                // monitor but not yet existing in Hyprland (nobody's
-                // switched to it this session, so Hyprland hasn't
-                // created it) still shows as an empty placeholder box in
-                // WorkspaceRow.qml/WorkspaceOsd.qml, rather than only
-                // appearing once actually visited. Two independent
-                // checkboxes since the bar widget and the OSD are
-                // separate pieces of UI someone may only want one of.
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(8, root.uiScale)
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Text {
-                        text: "Show empty workspaces:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-                    }
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.effectiveShowEmptyWidget ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleShowEmptyWidget()
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: "In widget"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleShowEmptyWidget()
-                            }
-                        }
-                    }
-
-                    Item { Layout.preferredWidth: Config.scaled(16, root.uiScale) }
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.effectiveShowEmptyOsd ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleShowEmptyOsd()
-                            }
-                        }
-                    }
-
-                    Text {
-                        text: "In OSD"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.toggleShowEmptyOsd()
                             }
                         }
                     }

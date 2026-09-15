@@ -28,10 +28,11 @@ Row {
         return Math.abs(a.y) - Math.abs(b.y)
     })
 
-    // showEmptyWidget (Screen Settings' "Show Empty: Widget" toggle) -
-    // any workspace 1-5 pinned to a monitor (monitors.json) but not
-    // existing in Hyprland yet (nobody's switched to it this session,
-    // so Hyprland hasn't created it) gets synthesized as a placeholder
+    // showEmptyWidget (Shell settings' Bar category, "Show empty
+    // workspaces: In widget" toggle - see barSettingsStore below) - any
+    // workspace 1-5 pinned to a monitor (monitors.json) but not existing
+    // in Hyprland yet (nobody's switched to it this session, so
+    // Hyprland hasn't created it) gets synthesized as a placeholder
     // here, matching just enough of a real HyprlandWorkspace's shape
     // for wsBox/winBox below to render an empty box for it: .monitor
     // (a real HyprlandMonitor, for aspect ratio/geometry), .active
@@ -40,7 +41,7 @@ Row {
     // nothing to draw in the window grid), and .activate() (dispatches
     // straight to Hyprland, same as a real workspace's own method,
     // since clicking one of these should actually create/switch to it).
-    readonly property bool showEmptyWidget: !!root.screensStore.__showEmptyWidget
+    readonly property bool showEmptyWidget: !!root.barSettingsStore.showEmptyWidget
 
     // existingIds: every workspace id currently real in Hyprland,
     // computed once in sortedWorkspaces below and passed in here rather
@@ -249,11 +250,26 @@ Row {
         return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
     }
 
-    // Global toggle from the same file, stored under a non-monitor-name
-    // key (see ScreenSettings.qml's toggleStrictWorkspaceWidget) - reuses
-    // the same screensStoreFile read above rather than needing its own
-    // separate one.
-    readonly property bool strictWorkspaceWidget: !!root.screensStore.__strictWorkspaceWidget
+    // Shell > Bar settings (ShellSettings.qml) - a separate file from
+    // monitors.json, watched the same way, since these are simple
+    // immediately-saved toggles rather than staged/Apply-dependent
+    // monitor state.
+    FileView {
+        id: barSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
+        watchChanges: true
+        onFileChanged: reload()
+    }
+
+    readonly property var barSettingsStore: {
+        try {
+            return JSON.parse(barSettingsFile.text())
+        } catch (e) {
+            return {}
+        }
+    }
+
+    readonly property bool strictWorkspaceWidget: !!root.barSettingsStore.strictWorkspaceWidget
 
     Repeater {
         model: root.settledEntries

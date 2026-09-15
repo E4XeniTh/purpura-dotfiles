@@ -28,17 +28,19 @@ CONF="$HOME/.config/quickshell/monitors.json"
 
 [ -f "$CONF" ] || exit 0
 
-# "__"-prefixed keys (__strictWorkspaceWidget, __showEmptyWidget,
-# __showEmptyOsd - the global bar/OSD toggles, plain booleans not
-# monitor entries, see ScreenSettings.qml) have to be filtered out
-# before anything touches .line/.workspaces on them: jq raises a hard
-# runtime error ("Cannot index boolean with string") the moment it
-# tries to index a non-object value, which aborts the whole script with
-# zero output rather than just skipping that one entry - confirmed
-# live as the actual reason nothing in monitors.json was being replayed
-# at startup at all once these keys existed, despite Apply's own
-# hyprctl eval calls working fine (that path never goes through this
-# script or jq).
+# "__"-prefixed keys have to be filtered out before anything touches
+# .line/.workspaces on them: jq raises a hard runtime error ("Cannot
+# index boolean with string") the moment it tries to index a
+# non-object value, which aborts the whole script with zero output
+# rather than just skipping that one entry - confirmed live as the
+# actual reason nothing in monitors.json was being replayed at startup
+# at all once these keys existed, despite Apply's own hyprctl eval
+# calls working fine (that path never goes through this script or jq).
+# The global bar/OSD toggles that used to live under keys like this
+# (__strictWorkspaceWidget etc) have since moved to their own
+# barsettings.json (see ShellSettings.qml) and are never written here
+# anymore - this filter stays anyway, both as a defensive no-op and in
+# case an existing monitors.json still has one leftover from before.
 jq -r '
     to_entries[]
     | select(.key | startswith("__") | not)

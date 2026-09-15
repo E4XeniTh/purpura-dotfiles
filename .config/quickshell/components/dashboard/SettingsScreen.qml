@@ -1,6 +1,8 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
+import Quickshell.Hyprland
 import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
 import "settings"
@@ -34,8 +36,23 @@ Scope {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     }
 
-    // 0 = Sound, 1 = Network, 2 = Bluetooth, 3 = Display.
+    // 0 = Shell, 1 = Sound, 2 = Network, 3 = Bluetooth, 4 = Display.
     property int currentTab: 0
+
+    IpcHandler {
+        target: "settingsscreen"
+
+        function toggle(): void { root.open = !root.open }
+        function show(): void { root.open = true }
+        function hide(): void { root.open = false }
+    }
+
+    GlobalShortcut {
+        name: "settingsscreen"
+        onPressed: {
+            root.open = !root.open
+        }
+    }
 
     Variants {
         model: Quickshell.screens
@@ -58,6 +75,17 @@ Scope {
             readonly property real dashWidth: modelData.width * 0.42
             readonly property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
             readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200)
+
+            // Opens right below the bar, same offset Dashboard.qml's own
+            // dashWindow gets automatically from the compositor pushing
+            // it out of the bar's reserved exclusive zone - this window
+            // can't rely on that (WlrLayershell.exclusiveZone is -1, so
+            // it ignores every exclusive zone including the bar's, which
+            // is what lets it dim the strip of screen behind the bar
+            // too), so the offset is computed by hand instead: Bar's own
+            // top margin (10) + height (48) + Dashboard's own extra gap
+            // (4) below that.
+            readonly property real topOffset: Config.scaled(62, uiScale)
 
             WlrLayershell.namespace: "settingsscreen"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -101,6 +129,10 @@ Scope {
             }
 
             // Click outside the card to dismiss - mirrors PowerMenu.qml.
+            // A click that lands INSIDE the card but on blank space (not
+            // on any actual control) is swallowed by box's own catch-all
+            // MouseArea below instead of reaching this one, so a stray
+            // click near a tab button doesn't close the whole screen.
             MouseArea {
                 anchors.fill: parent
                 onClicked: root.open = false
@@ -113,13 +145,21 @@ Scope {
             Loader {
                 id: panelLoader
 
-                anchors.centerIn: parent
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    top: parent.top
+                    topMargin: win.topOffset
+                }
                 active: win.isPrimary && root.open
                 sourceComponent: panelComponent
 
                 property real panelWidth: win.panelWidth
                 property real uiScale: win.uiScale
-                property real maxHeight: win.screen ? win.screen.height * 0.85 : 900
+                // Same gap below as topOffset leaves above, so the card
+                // reads as evenly framed rather than flush with the
+                // bottom edge - mirrors SettingsPanel.qml's own
+                // maxAvailableHeight convention.
+                property real maxHeight: win.screen ? win.screen.height - win.topOffset * 2 : 900
             }
 
             onVisibleChanged: {
@@ -150,12 +190,29 @@ Scope {
             Rectangle {
                 id: box
 
-                anchors.centerIn: parent
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    top: parent.top
+                }
 
                 width: 0
                 height: 4
 
                 color: Config.fillcolor
+
+                // Swallows any click that lands on blank card space (the
+                // tab bar's own margins/gaps between buttons, or empty
+                // space below a short tab's content) before it can fall
+                // through to the full-window "click outside closes"
+                // MouseArea sitting behind this card - without it, a
+                // click just barely missing a tab button closed the
+                // whole screen instead of doing nothing. Declared first
+                // so it sits below every real control in z-order and
+                // never steals a click meant for one of them.
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {}
+                }
 
                 states: [
 
@@ -221,7 +278,7 @@ Scope {
 
                             readonly property real margins: Config.scaled(10, panelScope.uiScale)
                             readonly property real spacing: Config.scaled(10, panelScope.uiScale)
-                            readonly property real tabWidth: (width - margins * 2 - spacing * 3) / 4
+                            readonly property real tabWidth: (width - margins * 2 - spacing * 4) / 5
 
                             Row {
                                 anchors {
@@ -232,6 +289,7 @@ Scope {
 
                                 Repeater {
                                     model: [
+                                        { label: "Shell", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
                                         { label: "Network", icon: "network-wired-symbolic" },
                                         { label: "Bluetooth", icon: "network-bluetooth" },
@@ -335,13 +393,22 @@ Scope {
                             width: parent.width
                             height: panelScope.maxHeight - tabBar.height - divider.height
 
-                            AudioSettings {
-                                id: audioTab
+                            ShellSettings {
+                                id: shellTab
                                 anchors.fill: parent
                                 visible: root.currentTab === 0
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 0
+                            }
+
+                            AudioSettings {
+                                id: audioTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 1
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 1
                                 selectedSinkId: root.dashboard ? root.dashboard.audioSelectedSinkId : null
                                 selectedSourceId: root.dashboard ? root.dashboard.audioSelectedSourceId : null
                                 onSinkSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSinkId = id }
@@ -351,28 +418,28 @@ Scope {
                             NetworkSettings {
                                 id: networkTab
                                 anchors.fill: parent
-                                visible: root.currentTab === 1
-                                panelWidth: panelScope.panelWidth
-                                uiScale: panelScope.uiScale
-                                active: root.open && root.currentTab === 1
-                            }
-
-                            BluetoothSettings {
-                                id: bluetoothTab
-                                anchors.fill: parent
                                 visible: root.currentTab === 2
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 2
                             }
 
-                            ScreenSettings {
-                                id: screenTab
+                            BluetoothSettings {
+                                id: bluetoothTab
                                 anchors.fill: parent
                                 visible: root.currentTab === 3
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 3
+                            }
+
+                            ScreenSettings {
+                                id: screenTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 4
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 4
                                 primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
                                 dashboardRoot: root.dashboard
                                 onPrimarySelected: (name) => { if (root.dashboard) root.dashboard.primaryMonitor = name }
