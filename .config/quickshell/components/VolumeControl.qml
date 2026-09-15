@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Services.Pipewire
 import Qt5Compat.GraphicalEffects
@@ -19,10 +20,25 @@ Rectangle {
 
     property real uiScale: 1.0
     property var dashboard: null
+    // Set from Bar.qml, same reason Tray.qml needs it - so the
+    // right-click playback menu below opens on the right monitor.
+    property var screen: null
 
     readonly property var activeSink: (root.dashboard && root.dashboard.audioSelectedSinkId !== null)
         ? (Pipewire.nodes.values.find(n => n.audio && !n.isStream && n.isSink && n.id === root.dashboard.audioSelectedSinkId) ?? Pipewire.defaultAudioSink)
         : Pipewire.defaultAudioSink
+
+    readonly property var playbackNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && n.isSink)
+
+    // Right-click quick menu: pick the primary playback device without
+    // opening the full Sound settings tab. Same box-grow-open PanelWindow
+    // popup Tray.qml's own right-click menu uses, anchored below this
+    // widget instead of below a tray icon.
+    property bool menuOpen: false
+
+    function closeMenu() {
+        root.menuOpen = false
+    }
 
     // Bind the node so its volume/muted actually update reactively -
     // same requirement VolumeOsd.qml documents for this same service.
@@ -143,6 +159,198 @@ Rectangle {
             const step = 0.02
             const delta = wheel.angleDelta.y > 0 ? step : -step
             root.activeSink.audio.volume = Math.max(0, Math.min(1, root.activeSink.audio.volume + delta))
+        }
+    }
+
+    // Right-click anywhere on the widget opens the playback-picker menu
+    // below - only ever intercepts the right button, so it never
+    // competes with iconArea/dragArea's own left-click handling or the
+    // wheel MouseArea above.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: root.menuOpen = !root.menuOpen
+    }
+
+    // Small quick menu for picking the primary playback device - same
+    // box-grow-open PanelWindow popup Tray.qml's own right-click menu
+    // uses, anchored below this widget instead of below a tray icon.
+    PanelWindow {
+        id: menuWindow
+
+        screen: root.screen
+
+        visible: root.menuOpen
+
+        WlrLayershell.namespace: "volumeMenu"
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        exclusiveZone: 0
+
+        anchors {
+            top: true
+            left: true
+        }
+
+        margins {
+            // Bar's own margins (10 left, 10 top + 48 tall + 4 gap - see
+            // SettingsScreen.qml's own topOffset for the same 62 figure)
+            // plus this widget's own offset within the bar.
+            top: Config.scaled(62, root.uiScale)
+            left: Config.scaled(10, root.uiScale) + root.x
+        }
+
+        implicitWidth: Config.scaled(220, root.uiScale)
+        implicitHeight: Math.max(menuColumn.height + Config.scaled(10, root.uiScale), 1)
+
+        color: "transparent"
+
+        Rectangle {
+            id: menuBox
+
+            width: 0
+            height: 2
+            color: Config.fillcolor
+
+            states: [
+
+                State {
+                    name: "horizontal"
+
+                    PropertyChanges {
+                        target: menuBox
+
+                        width: menuWindow.implicitWidth
+                        height: 3
+                    }
+                },
+
+                State {
+                    name: "open"
+
+                    PropertyChanges {
+                        target: menuBox
+
+                        width: menuWindow.implicitWidth
+                        height: menuWindow.implicitHeight
+                    }
+                }
+
+            ]
+
+            transitions: [
+
+                Transition {
+
+                    NumberAnimation {
+                        properties: "width,height"
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+
+                }
+
+            ]
+
+            Item {
+                anchors.fill: parent
+                anchors.topMargin: Config.scaled(5, root.uiScale)
+                anchors.bottomMargin: Config.scaled(5, root.uiScale)
+                clip: true
+
+                Column {
+                    id: menuColumn
+                    width: menuWindow.implicitWidth
+
+                    Repeater {
+                        model: ScriptModel { values: root.playbackNodes }
+
+                        delegate: Item {
+                            id: entryDelegate
+
+                            required property var modelData
+
+                            width: menuColumn.width
+                            height: Config.scaled(32, root.uiScale)
+
+                            readonly property bool isActive: root.activeSink && entryDelegate.modelData.id === root.activeSink.id
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: entryMouse.containsMouse ? Config.fgcolordark : "transparent"
+
+                                Text {
+                                    anchors {
+                                        fill: parent
+                                        leftMargin: Config.scaled(10, root.uiScale)
+                                        rightMargin: Config.scaled(10, root.uiScale)
+                                    }
+
+                                    verticalAlignment: Text.AlignVCenter
+
+                                    text: entryDelegate.modelData.nickname.length > 0 ? entryDelegate.modelData.nickname
+                                        : entryDelegate.modelData.description.length > 0 ? entryDelegate.modelData.description
+                                        : entryDelegate.modelData.name
+                                    color: entryDelegate.isActive ? Config.fgcolorlight : Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: entryDelegate.isActive
+                                    elide: Text.ElideRight
+                                }
+
+                                MouseArea {
+                                    id: entryMouse
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+
+                                    onClicked: {
+                                        Pipewire.preferredDefaultAudioSink = entryDelegate.modelData
+                                        if (root.dashboard) root.dashboard.audioSelectedSinkId = entryDelegate.modelData.id
+                                        root.closeMenu()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+
+                color: "transparent"
+
+                border.width: Config.scaled(2, root.uiScale)
+                border.color: Config.fgcolor
+
+                radius: 0
+
+                z: 10
+            }
+        }
+
+        onVisibleChanged: {
+            if (visible) {
+                menuBox.width = 0
+                menuBox.height = 4
+
+                menuBox.state = "horizontal"
+                menuOpenTimer.start()
+            }
+        }
+
+        Timer {
+            id: menuOpenTimer
+
+            // Must match the transition's duration above, so phase 1
+            // (width) fully finishes before phase 2 (height) starts.
+            interval: 200
+            repeat: false
+
+            onTriggered: {
+                menuBox.state = "open"
+            }
         }
     }
 }

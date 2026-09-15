@@ -117,18 +117,22 @@ Scope {
                 border.color: Config.fgcolor
 
                 // Left-clicking anywhere on the bar closes an open tray
-                // menu - a TapHandler rather than a MouseArea so it
-                // doesn't compete with (or block) the clock/notification/
-                // tray sub-widgets' own MouseAreas for the click; it just
-                // passively observes the same event they get, the same
-                // coexistence pattern HoverHandler already uses elsewhere
-                // in this shell. Right-clicks are left alone entirely
-                // (TapHandler's own default acceptedButtons is
+                // menu (or the volume widget's own playback-picker menu) -
+                // a TapHandler rather than a MouseArea so it doesn't
+                // compete with (or block) the clock/notification/tray/
+                // volume sub-widgets' own MouseAreas for the click; it
+                // just passively observes the same event they get, the
+                // same coexistence pattern HoverHandler already uses
+                // elsewhere in this shell. Right-clicks are left alone
+                // entirely (TapHandler's own default acceptedButtons is
                 // Qt.LeftButton only) specifically so right-clicking a
-                // tray icon to OPEN its menu can never race this into
-                // closing that same menu right back.
+                // tray icon/the volume widget to OPEN its own menu can
+                // never race this into closing that same menu right back.
                 TapHandler {
-                    onTapped: trayItem.closeMenu()
+                    onTapped: {
+                        trayItem.closeMenu()
+                        volumeControl.closeMenu()
+                    }
                 }
 
                 Tray {
@@ -213,6 +217,7 @@ Scope {
                     id: volumeControl
                     uiScale: bar.uiScale
                     dashboard: root.dashboard
+                    screen: modelData
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: clockCard.right
                     anchors.leftMargin: Config.scaled(10 + 32, bar.uiScale)
