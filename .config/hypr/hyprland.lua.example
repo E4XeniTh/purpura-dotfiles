@@ -184,6 +184,13 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     --## https://wiki.hypr.land/Configuring/Basics/Binds/                                   #
     --#######################################################################################
 
+
+    hl.bind("CTRL + Page_Up", hl.dsp.exec_cmd("xdotool key --window discord --clearmodifiers ctrl+Page_Up"))
+    hl.bind("CTRL + Page_Down", hl.dsp.exec_cmd("xdotool key --window discord --clearmodifiers ctrl+Page_Down"))
+    hl.bind("menu", hl.dsp.exec_cmd("xdotool search --class discord mousedown 9"))
+    hl.bind("menu", hl.dsp.exec_cmd("xdotool search --class discord mouseup 9"), { release = true })
+    hl.bind("mouse:276", hl.dsp.exec_cmd("xdotool search --class discord mousedown 9"), { non_consuming = true })
+    hl.bind("mouse:276", hl.dsp.exec_cmd("xdotool search --class discord mouseup 9"), { release = true, non_consuming = true })
     hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag())
     hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize())
 
