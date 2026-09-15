@@ -206,12 +206,15 @@ Rectangle {
         }
 
         margins {
-            // Bar's own top margin (10) + height (48) + 4 gap - see
-            // SettingsScreen.qml's own topOffset for the same 62 figure.
+            // exclusiveZone: 0 (not -1, unlike SettingsScreen.qml's own
+            // full-dim overlay) means this window still gets pushed
+            // below the bar's own reserved exclusive zone automatically,
+            // same as Tray.qml's own menu - this is just the small extra
+            // gap on top of that auto-push, not the bar's full height.
             // left is a snapshot taken when the menu opens (see the
             // right-click MouseArea above), not a live binding to
             // root.x - see menuMarginLeft's own comment for why.
-            top: Config.scaled(62, root.uiScale)
+            top: Config.scaled(4, root.uiScale)
             left: root.menuMarginLeft
         }
 
