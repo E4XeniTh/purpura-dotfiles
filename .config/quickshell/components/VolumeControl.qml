@@ -36,6 +36,16 @@ Rectangle {
     // widget instead of below a tray icon.
     property bool menuOpen: false
 
+    // Computed once, at the moment the menu opens (see the right-click
+    // MouseArea below) - same as Tray.qml's own menuMarginLeft, rather
+    // than a live binding straight to root.x from inside the popup
+    // window below. A plain snapshot is what Tray.qml already proved
+    // works for positioning a layer-shell popup off a sibling item's
+    // geometry; a live cross-window binding to root.x here visibly
+    // did not (confirmed live - the popup opened well to the left of
+    // this widget instead of underneath it).
+    property real menuMarginLeft: 0
+
     function closeMenu() {
         root.menuOpen = false
     }
@@ -169,7 +179,10 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
-        onClicked: root.menuOpen = !root.menuOpen
+        onClicked: {
+            root.menuMarginLeft = Config.scaled(10, root.uiScale) + root.x
+            root.menuOpen = !root.menuOpen
+        }
     }
 
     // Small quick menu for picking the primary playback device - same
@@ -193,14 +206,16 @@ Rectangle {
         }
 
         margins {
-            // Bar's own margins (10 left, 10 top + 48 tall + 4 gap - see
-            // SettingsScreen.qml's own topOffset for the same 62 figure)
-            // plus this widget's own offset within the bar.
+            // Bar's own top margin (10) + height (48) + 4 gap - see
+            // SettingsScreen.qml's own topOffset for the same 62 figure.
+            // left is a snapshot taken when the menu opens (see the
+            // right-click MouseArea above), not a live binding to
+            // root.x - see menuMarginLeft's own comment for why.
             top: Config.scaled(62, root.uiScale)
-            left: Config.scaled(10, root.uiScale) + root.x
+            left: root.menuMarginLeft
         }
 
-        implicitWidth: Config.scaled(220, root.uiScale)
+        implicitWidth: root.width
         implicitHeight: Math.max(menuColumn.height + Config.scaled(10, root.uiScale), 1)
 
         color: "transparent"
