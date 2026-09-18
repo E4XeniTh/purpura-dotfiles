@@ -28,14 +28,6 @@ Item {
     property color unlitColor: Config.fgcolordark
     property real targetWidth: -1
 
-    // false (default): lit segments fill left-to-right from index 0,
-    // same as every existing usage (Volume/Brightness/Battery). true:
-    // the lit block is centered instead, growing/shrinking symmetrically
-    // out from the middle rather than anchored to the left edge - opt-in
-    // per instance, so this never changes how any other bar looks.
-    property bool centerFill: false
-    readonly property int centerFillStart: Math.floor((root.segmentCount - root.litSegments) / 2)
-
     readonly property real effectiveSegmentWidth: root.targetWidth >= 0
         ? Math.max(1, (root.targetWidth - (root.segmentCount - 1) * root.segmentSpacing) / root.segmentCount)
         : root.segmentWidth
@@ -63,9 +55,7 @@ Item {
                 width: root.effectiveSegmentWidth
                 height: root.barHeight
                 radius: 0
-                color: (root.centerFill
-                    ? (index >= root.centerFillStart && index < root.centerFillStart + root.litSegments)
-                    : index < root.litSegments) ? root.litColor : root.unlitColor
+                color: index < root.litSegments ? root.litColor : root.unlitColor
             }
         }
     }

@@ -277,6 +277,7 @@ Item {
                 Item { width: Config.scaled(149, root.uiScale); height: 1 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "└"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -285,6 +286,7 @@ Item {
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(root.cpuTemp) + "°"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -293,6 +295,7 @@ Item {
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "┘"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -347,6 +350,7 @@ Item {
                 spacing: Config.scaled(4, root.uiScale)
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "└"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -355,6 +359,7 @@ Item {
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "VRAM"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -363,6 +368,12 @@ Item {
                 }
 
                 DigitalBar {
+                    // Row (a plain positioner, not a Layout) never
+                    // vertically centers its children on its own - every
+                    // child just sits at y=0 unless it says otherwise,
+                    // so this shorter bar was hugging the top instead of
+                    // lining up with the taller Text siblings around it.
+                    anchors.verticalCenter: parent.verticalCenter
                     uiScale: root.uiScale
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
                     segmentCount: 16
@@ -370,12 +381,10 @@ Item {
                     barHeight: Config.scaled(12, root.uiScale)
                     litColor: Config.fgcolor
                     unlitColor: Config.fgcolordark
-                    // Grows/shrinks from the center outward instead of
-                    // left-to-right, unlike every other bar here.
-                    centerFill: true
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(root.gpuVramUsedMb / 1024) + "GB"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -383,6 +392,7 @@ Item {
                     font.bold: true
                 }
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "┘"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -393,6 +403,7 @@ Item {
                 Item { width: Config.scaled(6, root.uiScale); height: 1 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "└"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -401,6 +412,7 @@ Item {
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: Math.round(root.gpuTemp) + "°"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
@@ -409,6 +421,7 @@ Item {
                 }
 
                 Text {
+                    anchors.verticalCenter: parent.verticalCenter
                     text: "┘"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
