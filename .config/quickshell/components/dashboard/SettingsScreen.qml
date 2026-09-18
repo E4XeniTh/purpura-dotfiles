@@ -30,6 +30,19 @@ Scope {
     // they're hosted here instead.
     property var dashboard: null
 
+    // Symmetric with Dashboard.qml's own onOpenChanged - both are
+    // large-ish WlrLayer.Overlay surfaces that visually collide if both
+    // are up at once (this window's full-screen dim would cover
+    // Dashboard's entirely), so opening one explicitly closes the other
+    // instead of leaving that an unintentional z-order accident. Guarded
+    // on root.open specifically so this can't ping-pong with Dashboard's
+    // own identical guard.
+    onOpenChanged: {
+        if (root.open && root.dashboard) {
+            root.dashboard.open = false
+        }
+    }
+
     readonly property string effectivePrimaryName: {
         const preferred = root.dashboard ? root.dashboard.primaryMonitor : ""
         if (preferred && Quickshell.screens.some(s => s.name === preferred)) return preferred

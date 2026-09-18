@@ -38,7 +38,16 @@ Item {
 
         Rectangle {
             Layout.fillWidth: true
-            height: width * 0.65
+            // Layout.preferredHeight, not a plain height: binding -
+            // ColumnLayout sizes a managed child's height off
+            // Layout.preferredHeight (falling back to implicitHeight,
+            // which is 0 for a bare Rectangle) when Layout.fillHeight
+            // isn't set, so a plain "height: width * 0.65" binding here
+            // was getting overridden back to ~0 by the layout itself -
+            // confirmed live as the album art (and its "no media"
+            // fallback glyph) silently collapsing to nothing after this
+            // Column became a ColumnLayout.
+            Layout.preferredHeight: width * 0.65
             border.width: Config.scaled(2, root.uiScale)
             border.color: Config.fgcolor
             color: "transparent"

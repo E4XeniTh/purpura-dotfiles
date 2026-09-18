@@ -24,6 +24,22 @@ Scope {
     property bool open: false
     property var screen: null
 
+    // Both this window and SettingsScreen.qml's are large-ish
+    // WlrLayer.Overlay surfaces that visually collide if both are up at
+    // once (SettingsScreen's own full-screen dim covers this one
+    // entirely) - opening one now explicitly closes the other instead of
+    // leaving that an unintentional z-order accident, matching the
+    // Settings button's own existing root.close()-then-open pattern.
+    // Guarded on root.open specifically (not settingsScreen.open) so
+    // this can't ping-pong: SettingsScreen's own symmetric handler only
+    // fires when ITS open flips true, and setting its open to false from
+    // here never satisfies that guard.
+    onOpenChanged: {
+        if (root.open && root.settingsScreen) {
+            root.settingsScreen.open = false
+        }
+    }
+
     // Set from shell.qml, so the power/settings buttons below can call
     // these directly instead of round-tripping through `qs ipc call` to
     // talk to another component in the very same process. Lock is

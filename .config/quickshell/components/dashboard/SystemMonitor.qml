@@ -385,7 +385,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Math.round(root.gpuVramUsedMb / 1024) + "GB"
+                    text: (root.gpuVramTotalMb > 0 ? Math.round(root.gpuVramUsedMb / root.gpuVramTotalMb * 100) : 0) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(12, root.uiScale)
