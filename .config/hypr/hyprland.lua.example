@@ -345,13 +345,6 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
         blur = true,
     })
 
-    -- Allow blur in Purpura Quickshell Dashboard
-    hl.layer_rule({
-        match = { namespace = "dashboard" },
-        blur = true,
-    })
-
-
     -- Dim around rofi
     hl.layer_rule({
         match        = { namespace = "rofi" },
