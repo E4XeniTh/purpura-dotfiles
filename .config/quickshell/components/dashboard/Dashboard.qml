@@ -686,9 +686,14 @@ Scope {
             // screen, just no longer fixed - bumped from 0.43 so the
             // clock/Now Playing cards (and the center column's system
             // monitor filler, which absorbs the rest) have more room
-            // before their own text stops fitting.
+            // before their own text stops fitting. Weather/calendar were
+            // already the right size at the old 0.43 base though, so
+            // they still size off originalColumnHeight below - only
+            // clock (and the two right-column cards, and the center
+            // filler) actually absorb the extra room this bump adds.
             property real dashWidth: modelData.width * 0.42
             property real columnHeight: modelData.height * 0.47
+            property real originalColumnHeight: modelData.height * 0.43
 
             readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name
 
@@ -823,16 +828,27 @@ Scope {
                             height: columnHeight
                             spacing: Config.scaled(10, dashWindow.uiScale)
 
-                            // top left: large numerical clock
+                            // top left: large numerical clock. Absorbs
+                            // whatever's left of the (bumped) columnHeight
+                            // after weather/calendar below take their
+                            // fixed, pre-bump share - same "filler soaks
+                            // up the extra room" pattern the center
+                            // column's system monitor slot already uses,
+                            // so the clock (not weather/calendar, which
+                            // were already the right size) is what grows.
+                            // Forward-references weatherCard/calendarCard,
+                            // declared further down - property bindings
+                            // resolve by id regardless of declaration
+                            // order, so this doesn't need to move.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - 2 * parent.spacing) * 0.2
+                                height: columnHeight - weatherCard.height - calendarCard.height - 2 * parent.spacing
 
                                 Clock {
                                     anchors.centerIn: parent
                                     font.family: Config.fontfamily
-                                    font.pixelSize: parent.height * 0.75
+                                    font.pixelSize: Math.min(parent.height, parent.width) * 0.6
                                     color: Config.fgcolor
                                 }
                             }
@@ -841,11 +857,16 @@ Scope {
                             // key needed - refreshes every 15 min). Weather
                             // itself handles its own click-to-toggle fade
                             // between current conditions and a 3-day
-                            // forecast, no separate panel involved.
+                            // forecast, no separate panel involved. Sized
+                            // off originalColumnHeight (the pre-bump
+                            // base), not columnHeight - this was already
+                            // the right size, so it doesn't grow just
+                            // because the clock above needs more room.
                             DashCard {
+                                id: weatherCard
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - 2 * parent.spacing) * 0.3
+                                height: (originalColumnHeight - 2 * parent.spacing) * 0.3
 
                                 Weather {
                                     anchors.fill: parent
@@ -853,11 +874,13 @@ Scope {
                                 }
                             }
 
-                            // bottom left: calendar
+                            // bottom left: calendar. Same originalColumnHeight
+                            // basis as weather above.
                             DashCard {
+                                id: calendarCard
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - 2 * parent.spacing) * 0.5
+                                height: (originalColumnHeight - 2 * parent.spacing) * 0.5
 
                                 Calendar {
                                     anchors.fill: parent

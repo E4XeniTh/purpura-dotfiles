@@ -231,12 +231,12 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: Config.scaled(6, root.uiScale)
+        spacing: Config.scaled(10, root.uiScale)
 
         // ---------------- CPU ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(3, root.uiScale)
+            spacing: Config.scaled(4, root.uiScale)
 
             Row {
                 width: parent.width
@@ -246,7 +246,7 @@ Item {
                     text: "CPU"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
 
@@ -257,7 +257,7 @@ Item {
                     text: Math.round(root.cpuUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
             }
@@ -272,20 +272,20 @@ Item {
 
             Row {
                 visible: root.hasCpuTemp
-                spacing: Config.scaled(4, root.uiScale)
+                spacing: Config.scaled(5, root.uiScale)
 
                 Text {
                     text: "└"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(10, root.uiScale)
                 }
 
                 Text {
                     text: "TEMP"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                     font.bold: true
                 }
 
@@ -298,36 +298,33 @@ Item {
                     segmentCount: 8
                     segmentWidth: Config.scaled(3, root.uiScale)
                     barHeight: Config.scaled(7, root.uiScale)
+                    // Deliberately left dark/muted (not Config.fgcolor
+                    // like the text around it) - a "depleted" look for
+                    // the bar itself regardless of the reading.
                     litColor: Config.fgcolordark
                     unlitColor: Qt.darker(Config.fgcolordark, 1.6)
                 }
 
                 Text {
                     text: Math.round(root.cpuTemp) + "°"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
 
                 Text {
                     text: "┘"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(10, root.uiScale)
                 }
             }
-        }
-
-        Rectangle {
-            width: parent.width
-            height: Config.scaled(1, root.uiScale)
-            color: Config.fgcolordark
         }
 
         // ---------------- GPU ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(3, root.uiScale)
+            spacing: Config.scaled(4, root.uiScale)
             visible: root.gpuAvailable
 
             Row {
@@ -338,7 +335,7 @@ Item {
                     text: "GPU"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
 
@@ -349,7 +346,7 @@ Item {
                     text: Math.round(root.gpuUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
             }
@@ -362,28 +359,31 @@ Item {
                 barHeight: Config.scaled(9, root.uiScale)
             }
 
+            // TEMP and VRAM share one row (short segment counts below
+            // keep each mini-bar narrow enough that both fit) rather than
+            // stacking on separate rows.
             Row {
-                spacing: Config.scaled(4, root.uiScale)
+                spacing: Config.scaled(5, root.uiScale)
 
                 Text {
                     text: "└"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(10, root.uiScale)
                 }
 
                 Text {
                     text: "TEMP"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                     font.bold: true
                 }
 
                 DigitalBar {
                     uiScale: root.uiScale
                     value: Math.max(0, Math.min(1, root.gpuTemp / 100))
-                    segmentCount: 8
+                    segmentCount: 5
                     segmentWidth: Config.scaled(3, root.uiScale)
                     barHeight: Config.scaled(7, root.uiScale)
                     litColor: Config.fgcolordark
@@ -391,47 +391,33 @@ Item {
                 }
 
                 Text {
-                    text: Math.round(root.gpuTemp) + "°"
-                    color: Config.fgcolordark
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
-                }
-
-                Text {
-                    text: "┘"
-                    color: Config.fgcolordark
+                    text: Math.round(root.gpuTemp) + "° ┘"
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(9, root.uiScale)
                 }
-            }
 
-            // Own row, not side-by-side with TEMP like the reference
-            // image - this column is much narrower (Dashboard's center
-            // column, ~30% of the dashboard's width) than the image's
-            // own wider layout, so both sub-stats sharing one row would
-            // be too cramped to read.
-            Row {
-                spacing: Config.scaled(4, root.uiScale)
+                Item { width: Config.scaled(8, root.uiScale); height: 1 }
 
                 Text {
                     text: "└"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(10, root.uiScale)
                 }
 
                 Text {
                     text: "VRAM"
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                     font.bold: true
                 }
 
                 DigitalBar {
                     uiScale: root.uiScale
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
-                    segmentCount: 8
+                    segmentCount: 5
                     segmentWidth: Config.scaled(3, root.uiScale)
                     barHeight: Config.scaled(7, root.uiScale)
                     litColor: Config.fgcolordark
@@ -439,31 +425,18 @@ Item {
                 }
 
                 Text {
-                    text: Math.round(root.gpuVramUsedMb / 1024) + "GB"
-                    color: Config.fgcolordark
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(8, root.uiScale)
-                }
-
-                Text {
-                    text: "┘"
-                    color: Config.fgcolordark
+                    text: Math.round(root.gpuVramUsedMb / 1024) + "GB ┘"
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(9, root.uiScale)
                 }
             }
         }
 
-        Rectangle {
-            width: parent.width
-            height: Config.scaled(1, root.uiScale)
-            color: Config.fgcolordark
-        }
-
         // ---------------- RAM ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(3, root.uiScale)
+            spacing: Config.scaled(4, root.uiScale)
 
             Row {
                 width: parent.width
@@ -473,7 +446,7 @@ Item {
                     text: "RAM"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
 
@@ -484,7 +457,7 @@ Item {
                     text: Math.round(root.ramUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
             }

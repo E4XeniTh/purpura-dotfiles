@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
@@ -31,13 +32,13 @@ Item {
         }
     }
 
-    Column {
+    ColumnLayout {
         anchors.fill: parent
         spacing: Config.scaled(10, root.uiScale)
 
         Rectangle {
-            width: parent.width
-            height: parent.width * 0.65
+            Layout.fillWidth: true
+            height: width * 0.65
             border.width: Config.scaled(2, root.uiScale)
             border.color: Config.fgcolor
             color: "transparent"
@@ -63,7 +64,7 @@ Item {
         }
 
         Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.player && root.player.trackTitle ? root.player.trackTitle : "No media detected"
             color: Config.fgcolor
             font.pixelSize: Config.scaled(13, root.uiScale)
@@ -73,7 +74,7 @@ Item {
         }
 
         Text {
-            width: parent.width
+            Layout.fillWidth: true
             text: root.player && root.player.trackArtist ? root.player.trackArtist : ""
             color: Config.fgcolor
             font.pixelSize: Config.scaled(11, root.uiScale)
@@ -81,13 +82,20 @@ Item {
             horizontalAlignment: Text.AlignHCenter
         }
 
+        // Absorbs whatever extra height the card has beyond its content's
+        // natural size, pushing the transport buttons down towards the
+        // bottom of the card instead of leaving blank space stranded
+        // below them - previously a fixed 6px gap, which is why the
+        // buttons stayed put (and a growing empty gap opened up below
+        // them) when Dashboard.qml gave this card more height to work
+        // with.
         Item {
-            width: 1
-            height: Config.scaled(6, root.uiScale)   // however much space you want
+            Layout.fillWidth: true
+            Layout.fillHeight: true
         }
 
         Row {
-            anchors.horizontalCenter: parent.horizontalCenter
+            Layout.alignment: Qt.AlignHCenter
             spacing: Config.scaled(8, root.uiScale)
 
             // Shuffle. Recolored via ColorOverlay (same technique as the
