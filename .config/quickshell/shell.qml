@@ -5,13 +5,12 @@ import "components"
 import "components/dashboard"
 
 Scope {
-  PowerMenu { id: powerMenu; dashboard: dashboard }
+  PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen }
   LockScreen { id: lockScreen; dashboard: dashboard }
   SettingsScreen { id: settingsScreen; dashboard: dashboard }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu
-    lockScreen: lockScreen
     settingsScreen: settingsScreen
   }
   Notification { id: notification }

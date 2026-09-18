@@ -29,6 +29,10 @@ Scope {
     // actually connected.
     property var dashboard: null
 
+    // Fed in from shell.qml so the Lock Screen action below can call it
+    // directly, same reasoning as dashboard above.
+    property var lockScreen: null
+
     readonly property string effectivePrimaryName: {
         const preferred = root.dashboard ? root.dashboard.primaryMonitor : ""
         if (preferred && Quickshell.screens.some(s => s.name === preferred)) return preferred
@@ -79,6 +83,12 @@ Scope {
         {
             icon: "system-log-out-symbolic",
             trigger: () => Quickshell.execDetached(["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"])
+        },
+        {
+            icon: "system-lock-screen-symbolic",
+            // Moved here from Dashboard.qml's own power/lock row - that
+            // row is back to just Power/Settings now.
+            trigger: () => { if (root.lockScreen) root.lockScreen.locked = true }
         }
     ]
 
@@ -202,7 +212,10 @@ Scope {
 
                             target: menuBox
 
-                            width: 725
+                            // Wide enough for 5 buttons now (150px each,
+                            // 24px spacing, same as before Lock Screen
+                            // joined the row) - was 725 for 4.
+                            width: 900
                             height: 2
 
                         }
@@ -217,7 +230,7 @@ Scope {
 
                             target: menuBox
 
-                            width: 725
+                            width: 900
                             height: 200
 
                         }

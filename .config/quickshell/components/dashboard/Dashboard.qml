@@ -24,11 +24,12 @@ Scope {
     property bool open: false
     property var screen: null
 
-    // Set from shell.qml, so the power/lock/settings buttons below can
-    // call these directly instead of round-tripping through `qs ipc
-    // call` to talk to another component in the very same process.
+    // Set from shell.qml, so the power/settings buttons below can call
+    // these directly instead of round-tripping through `qs ipc call` to
+    // talk to another component in the very same process. Lock is
+    // reached through PowerMenu now (see its own Lock Screen action),
+    // not from here directly.
     property var powerMenu: null
-    property var lockScreen: null
     property var settingsScreen: null
 
     // Shared across every screen's dashWindow (see below) - each one is
@@ -889,11 +890,14 @@ Scope {
                                 height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - parent.spacing * 3
                             }
 
-                            // Power/Lock/Settings - three square buttons,
-                            // evenly spaced. Settings dims every screen
-                            // (like LockScreen) and opens the fullscreen
-                            // tabbed Sound/Network/Bluetooth/Display
-                            // screen - see SettingsScreen.qml.
+                            // Power/Settings - two wide buttons, same
+                            // style this row always used before Lock
+                            // briefly lived here too (Lock is now the
+                            // last option inside PowerMenu.qml instead).
+                            // Settings dims every screen (like
+                            // LockScreen) and opens the fullscreen tabbed
+                            // Sound/Network/Bluetooth/Display screen -
+                            // see SettingsScreen.qml.
                             Rectangle {
                                 id: powerrow
                                 width: parent.width
@@ -902,18 +906,18 @@ Scope {
 
                                 Row {
                                     anchors.centerIn: parent
-                                    spacing: Config.scaled(16, dashWindow.uiScale)
+                                    spacing: powerrow.width / 11
 
                                     DashCard {
                                         uiScale: dashWindow.uiScale
-                                        width: powerrow.height
+                                        width: powerrow.width / 2.2
                                         height: powerrow.height
                                         color: mouseAreaPower.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             id: powerIcon
                                             anchors.centerIn: parent
-                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
+                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("system-shutdown-symbolic")
                                         }
 
@@ -938,46 +942,14 @@ Scope {
 
                                     DashCard {
                                         uiScale: dashWindow.uiScale
-                                        width: powerrow.height
-                                        height: powerrow.height
-                                        color: mouseAreaLock.containsMouse ? Config.fgcolorhover : Config.fillcolor
-
-                                        IconImage {
-                                            id: lockIcon
-                                            anchors.centerIn: parent
-                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
-                                            source: Quickshell.iconPath("system-lock-screen-symbolic")
-                                        }
-
-                                        ColorOverlay {
-                                            anchors.fill: lockIcon
-                                            source: lockIcon
-                                            color: Config.fgcolor
-                                        }
-
-                                        MouseArea {
-                                            id: mouseAreaLock
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            onClicked: {
-                                                root.close()
-                                                if (root.lockScreen) {
-                                                    root.lockScreen.locked = true
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    DashCard {
-                                        uiScale: dashWindow.uiScale
-                                        width: powerrow.height
+                                        width: powerrow.width / 2.2
                                         height: powerrow.height
                                         color: mouseAreaSettings.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                                         IconImage {
                                             id: settingsIcon
                                             anchors.centerIn: parent
-                                            implicitSize: Config.scaled(28, dashWindow.uiScale)
+                                            implicitSize: Config.scaled(36, dashWindow.uiScale)
                                             source: Quickshell.iconPath("preferences-system-symbolic")
                                         }
 
