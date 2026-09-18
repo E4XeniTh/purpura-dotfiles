@@ -48,8 +48,6 @@ Item {
             // fallback glyph) silently collapsing to nothing after this
             // Column became a ColumnLayout.
             Layout.preferredHeight: width * 0.65
-            border.width: Config.scaled(2, root.uiScale)
-            border.color: Config.fgcolor
             color: "transparent"
 
             Image {
@@ -69,6 +67,21 @@ Item {
                 font.bold: true
                 elide: Text.ElideRight
                 horizontalAlignment: Text.AlignHCenter
+            }
+
+            // Drawn as a separate top layer, not this Rectangle's own
+            // border - a child always paints over its parent's border in
+            // QtQuick, so the album art Image above (anchors.fill:
+            // parent, no margin) was fully covering it. Same "border on
+            // top, z-ordered above the content" convention Tray.qml's
+            // menu box/SettingsScreen.qml's card already use for the
+            // same reason.
+            Rectangle {
+                anchors.fill: parent
+                color: "transparent"
+                border.width: Config.scaled(2, root.uiScale)
+                border.color: Config.fgcolor
+                z: 10
             }
         }
 
