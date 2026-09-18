@@ -303,6 +303,7 @@ Item {
                 }
             }
         }
+        Item {}
     }
 
     // Right-click swaps the active player (see swapPlayer() above). Right
