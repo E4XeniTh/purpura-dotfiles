@@ -708,7 +708,7 @@ Scope {
             // clock (and the two right-column cards, and the center
             // filler) actually absorb the extra room this bump adds.
             property real dashWidth: modelData.width * 0.42
-            property real columnHeight: modelData.height * 0.455
+            property real columnHeight: modelData.height * 0.46
             property real originalColumnHeight: modelData.height * 0.43
 
             readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name

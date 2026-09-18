@@ -378,7 +378,7 @@ Item {
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
                     segmentCount: 16
                     segmentWidth: Config.scaled(2, root.uiScale)
-                    barHeight: Config.scaled(12, root.uiScale)
+                    barHeight: Config.scaled(8, root.uiScale)
                     litColor: Config.fgcolor
                     unlitColor: Config.fgcolordark
                 }
@@ -400,7 +400,7 @@ Item {
                     font.bold: true
                 }
 
-                Item { width: Config.scaled(6, root.uiScale); height: 1 }
+                Item { width: Config.scaled(14, root.uiScale); height: 1 }
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
