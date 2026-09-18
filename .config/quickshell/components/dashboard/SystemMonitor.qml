@@ -363,7 +363,6 @@ Item {
                 }
 
                 DigitalBar {
-                    //margins: {top: 2, bottom: 2}
                     uiScale: root.uiScale
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
                     segmentCount: 16
@@ -371,6 +370,9 @@ Item {
                     barHeight: Config.scaled(12, root.uiScale)
                     litColor: Config.fgcolor
                     unlitColor: Config.fgcolordark
+                    // Grows/shrinks from the center outward instead of
+                    // left-to-right, unlike every other bar here.
+                    centerFill: true
                 }
 
                 Text {
