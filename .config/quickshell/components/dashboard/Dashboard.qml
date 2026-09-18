@@ -879,15 +879,36 @@ Scope {
                                 }
                             }
 
-                            // Empty filler - absorbs whatever height the
-                            // fixed-size siblings above/below don't use.
-                            // Only 3 gaps now (greeting/avatar/filler/
-                            // powerrow) since systemicons and its own
-                            // gap are gone - see powerrow below.
+                            // CPU/GPU/RAM usage meters - absorbs
+                            // whatever height the fixed-size siblings
+                            // above/below don't use, same as the empty
+                            // filler this used to be. Only 3 gaps now
+                            // (greeting/avatar/filler/powerrow) since
+                            // systemicons and its own gap are gone - see
+                            // powerrow below. Loaded lazily by path, same
+                            // as NowPlaying/Cava in the right column - a
+                            // wrong shell-tool assumption in
+                            // SystemMonitor.qml only blanks this card
+                            // instead of breaking the whole shell.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - parent.spacing * 3
+
+                                Loader {
+                                    id: systemMonitorLoader
+                                    anchors.fill: parent
+                                    anchors.margins: Config.scaled(12, dashWindow.uiScale)
+
+                                    source: "SystemMonitor.qml"
+                                }
+
+                                Binding {
+                                    target: systemMonitorLoader.item
+                                    property: "uiScale"
+                                    value: dashWindow.uiScale
+                                    when: systemMonitorLoader.item !== null
+                                }
                             }
 
                             // Power/Settings - two wide buttons, same
