@@ -274,42 +274,22 @@ Item {
                 visible: root.hasCpuTemp
                 spacing: Config.scaled(5, root.uiScale)
 
+                Item { width: Config.scaled(149, root.uiScale); height: 1 }
+
                 Text {
                     text: "└"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(10, root.uiScale)
-                }
-
-                Text {
-                    text: "TEMP"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
                     font.bold: true
-                }
-
-                DigitalBar {
-                    uiScale: root.uiScale
-                    // 0-100C clamp - CPUs throttle well before this, so
-                    // the bar reads as "how close to actually hot", not
-                    // a literal 0-100% scale the way usage above is.
-                    value: Math.max(0, Math.min(1, root.cpuTemp / 100))
-                    segmentCount: 8
-                    segmentWidth: Config.scaled(3, root.uiScale)
-                    barHeight: Config.scaled(7, root.uiScale)
-                    // Deliberately left dark/muted (not Config.fgcolor
-                    // like the text around it) - a "depleted" look for
-                    // the bar itself regardless of the reading.
-                    litColor: Config.fgcolordark
-                    unlitColor: Qt.darker(Config.fgcolordark, 1.6)
                 }
 
                 Text {
                     text: Math.round(root.cpuTemp) + "°"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
                 }
 
                 Text {
@@ -317,6 +297,7 @@ Item {
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.bold: true
                 }
             }
         }
@@ -363,72 +344,74 @@ Item {
             // keep each mini-bar narrow enough that both fit) rather than
             // stacking on separate rows.
             Row {
-                spacing: Config.scaled(5, root.uiScale)
+                spacing: Config.scaled(4, root.uiScale)
 
                 Text {
                     text: "└"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(10, root.uiScale)
-                }
-
-                Text {
-                    text: "TEMP"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
                     font.bold: true
-                }
-
-                DigitalBar {
-                    uiScale: root.uiScale
-                    value: Math.max(0, Math.min(1, root.gpuTemp / 100))
-                    segmentCount: 5
-                    segmentWidth: Config.scaled(3, root.uiScale)
-                    barHeight: Config.scaled(7, root.uiScale)
-                    litColor: Config.fgcolordark
-                    unlitColor: Qt.darker(Config.fgcolordark, 1.6)
-                }
-
-                Text {
-                    text: Math.round(root.gpuTemp) + "° ┘"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
-                }
-
-                Item { width: Config.scaled(8, root.uiScale); height: 1 }
-
-                Text {
-                    text: "└"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
                 }
 
                 Text {
                     text: "VRAM"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
                     font.bold: true
                 }
 
                 DigitalBar {
+                    //margins: {top: 2, bottom: 2}
                     uiScale: root.uiScale
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
-                    segmentCount: 5
-                    segmentWidth: Config.scaled(3, root.uiScale)
-                    barHeight: Config.scaled(7, root.uiScale)
-                    litColor: Config.fgcolordark
-                    unlitColor: Qt.darker(Config.fgcolordark, 1.6)
+                    segmentCount: 16
+                    segmentWidth: Config.scaled(2, root.uiScale)
+                    barHeight: Config.scaled(12, root.uiScale)
+                    litColor: Config.fgcolor
+                    unlitColor: Config.fgcolordark
                 }
 
                 Text {
-                    text: Math.round(root.gpuVramUsedMb / 1024) + "GB ┘"
+                    text: Math.round(root.gpuVramUsedMb / 1024) + "GB"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(9, root.uiScale)
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+                Text {
+                    text: "┘"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.bold: true
+                }
+
+                Item { width: Config.scaled(6, root.uiScale); height: 1 }
+
+                Text {
+                    text: "└"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.bold: true
+                }
+
+                Text {
+                    text: Math.round(root.gpuTemp) + "°"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                Text {
+                    text: "┘"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.bold: true
                 }
             }
         }
@@ -440,7 +423,6 @@ Item {
 
             Row {
                 width: parent.width
-
                 Text {
                     id: ramLabel
                     text: "RAM"

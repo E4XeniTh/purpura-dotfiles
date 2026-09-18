@@ -304,9 +304,9 @@ Scope {
                                     model: [
                                         { label: "Shell", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
+                                        { label: "Display", icon: "video-display-symbolic" },
                                         { label: "Network", icon: "network-wired-symbolic" },
-                                        { label: "Bluetooth", icon: "network-bluetooth" },
-                                        { label: "Display", icon: "video-display-symbolic" }
+                                        { label: "Bluetooth", icon: "network-bluetooth" }
                                     ]
 
                                     delegate: DashCard {
@@ -428,17 +428,21 @@ Scope {
                                 onSourceSelected: (id) => { if (root.dashboard) root.dashboard.audioSelectedSourceId = id }
                             }
 
-                            NetworkSettings {
-                                id: networkTab
+                            ScreenSettings {
+                                id: screenTab
                                 anchors.fill: parent
                                 visible: root.currentTab === 2
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 2
+                                primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
+                                dashboardRoot: root.dashboard
+                                onPrimarySelected: (name) => { if (root.dashboard) root.dashboard.primaryMonitor = name }
+                                onIdentifyingChanged: { if (root.dashboard) root.dashboard.identifying = screenTab.identifying }
                             }
 
-                            BluetoothSettings {
-                                id: bluetoothTab
+                            NetworkSettings {
+                                id: networkTab
                                 anchors.fill: parent
                                 visible: root.currentTab === 3
                                 panelWidth: panelScope.panelWidth
@@ -446,17 +450,13 @@ Scope {
                                 active: root.open && root.currentTab === 3
                             }
 
-                            ScreenSettings {
-                                id: screenTab
+                            BluetoothSettings {
+                                id: bluetoothTab
                                 anchors.fill: parent
                                 visible: root.currentTab === 4
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 4
-                                primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
-                                dashboardRoot: root.dashboard
-                                onPrimarySelected: (name) => { if (root.dashboard) root.dashboard.primaryMonitor = name }
-                                onIdentifyingChanged: { if (root.dashboard) root.dashboard.identifying = screenTab.identifying }
                             }
                         }
                     }
