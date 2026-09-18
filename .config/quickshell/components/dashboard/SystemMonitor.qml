@@ -11,6 +11,10 @@ import "../../Config.js" as Config
 // instantiated directly), same as NowPlaying.qml/Cava.qml right next to
 // it - a wrong shell-tool assumption here only blanks this card instead
 // of breaking the whole shell.
+//
+// Sized noticeably smaller than the reference image's own text - this
+// column is much narrower and shorter than that image's layout, and the
+// original size didn't fit three sections vertically.
 Item {
     id: root
 
@@ -227,12 +231,12 @@ Item {
 
     Column {
         anchors.fill: parent
-        spacing: Config.scaled(10, root.uiScale)
+        spacing: Config.scaled(6, root.uiScale)
 
         // ---------------- CPU ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(4, root.uiScale)
+            spacing: Config.scaled(3, root.uiScale)
 
             Row {
                 width: parent.width
@@ -242,7 +246,7 @@ Item {
                     text: "CPU"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
 
@@ -253,7 +257,7 @@ Item {
                     text: Math.round(root.cpuUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
             }
@@ -263,25 +267,25 @@ Item {
                 value: root.cpuUsage
                 targetWidth: parent.width
                 segmentCount: 28
-                barHeight: Config.scaled(12, root.uiScale)
+                barHeight: Config.scaled(9, root.uiScale)
             }
 
             Row {
                 visible: root.hasCpuTemp
-                spacing: Config.scaled(6, root.uiScale)
+                spacing: Config.scaled(4, root.uiScale)
 
                 Text {
                     text: "└"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
 
                 Text {
                     text: "TEMP"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                     font.bold: true
                 }
 
@@ -292,8 +296,8 @@ Item {
                     // a literal 0-100% scale the way usage above is.
                     value: Math.max(0, Math.min(1, root.cpuTemp / 100))
                     segmentCount: 8
-                    segmentWidth: Config.scaled(4, root.uiScale)
-                    barHeight: Config.scaled(10, root.uiScale)
+                    segmentWidth: Config.scaled(3, root.uiScale)
+                    barHeight: Config.scaled(7, root.uiScale)
                     litColor: Config.fgcolordark
                     unlitColor: Qt.darker(Config.fgcolordark, 1.6)
                 }
@@ -302,14 +306,14 @@ Item {
                     text: Math.round(root.cpuTemp) + "°"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                 }
 
                 Text {
                     text: "┘"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
             }
         }
@@ -323,7 +327,7 @@ Item {
         // ---------------- GPU ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(4, root.uiScale)
+            spacing: Config.scaled(3, root.uiScale)
             visible: root.gpuAvailable
 
             Row {
@@ -334,7 +338,7 @@ Item {
                     text: "GPU"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
 
@@ -345,7 +349,7 @@ Item {
                     text: Math.round(root.gpuUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
             }
@@ -355,24 +359,24 @@ Item {
                 value: root.gpuUsage
                 targetWidth: parent.width
                 segmentCount: 28
-                barHeight: Config.scaled(12, root.uiScale)
+                barHeight: Config.scaled(9, root.uiScale)
             }
 
             Row {
-                spacing: Config.scaled(6, root.uiScale)
+                spacing: Config.scaled(4, root.uiScale)
 
                 Text {
                     text: "└"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
 
                 Text {
                     text: "TEMP"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                     font.bold: true
                 }
 
@@ -380,8 +384,8 @@ Item {
                     uiScale: root.uiScale
                     value: Math.max(0, Math.min(1, root.gpuTemp / 100))
                     segmentCount: 8
-                    segmentWidth: Config.scaled(4, root.uiScale)
-                    barHeight: Config.scaled(10, root.uiScale)
+                    segmentWidth: Config.scaled(3, root.uiScale)
+                    barHeight: Config.scaled(7, root.uiScale)
                     litColor: Config.fgcolordark
                     unlitColor: Qt.darker(Config.fgcolordark, 1.6)
                 }
@@ -390,14 +394,14 @@ Item {
                     text: Math.round(root.gpuTemp) + "°"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                 }
 
                 Text {
                     text: "┘"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
             }
 
@@ -407,20 +411,20 @@ Item {
             // own wider layout, so both sub-stats sharing one row would
             // be too cramped to read.
             Row {
-                spacing: Config.scaled(6, root.uiScale)
+                spacing: Config.scaled(4, root.uiScale)
 
                 Text {
                     text: "└"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
 
                 Text {
                     text: "VRAM"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                     font.bold: true
                 }
 
@@ -428,8 +432,8 @@ Item {
                     uiScale: root.uiScale
                     value: root.gpuVramTotalMb > 0 ? root.gpuVramUsedMb / root.gpuVramTotalMb : 0
                     segmentCount: 8
-                    segmentWidth: Config.scaled(4, root.uiScale)
-                    barHeight: Config.scaled(10, root.uiScale)
+                    segmentWidth: Config.scaled(3, root.uiScale)
+                    barHeight: Config.scaled(7, root.uiScale)
                     litColor: Config.fgcolordark
                     unlitColor: Qt.darker(Config.fgcolordark, 1.6)
                 }
@@ -438,14 +442,14 @@ Item {
                     text: Math.round(root.gpuVramUsedMb / 1024) + "GB"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(10, root.uiScale)
+                    font.pixelSize: Config.scaled(8, root.uiScale)
                 }
 
                 Text {
                     text: "┘"
                     color: Config.fgcolordark
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(11, root.uiScale)
+                    font.pixelSize: Config.scaled(9, root.uiScale)
                 }
             }
         }
@@ -459,7 +463,7 @@ Item {
         // ---------------- RAM ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(4, root.uiScale)
+            spacing: Config.scaled(3, root.uiScale)
 
             Row {
                 width: parent.width
@@ -469,7 +473,7 @@ Item {
                     text: "RAM"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
 
@@ -480,7 +484,7 @@ Item {
                     text: Math.round(root.ramUsage * 100) + "%"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
+                    font.pixelSize: Config.scaled(11, root.uiScale)
                     font.bold: true
                 }
             }
@@ -490,7 +494,7 @@ Item {
                 value: root.ramUsage
                 targetWidth: parent.width
                 segmentCount: 28
-                barHeight: Config.scaled(12, root.uiScale)
+                barHeight: Config.scaled(9, root.uiScale)
             }
         }
     }

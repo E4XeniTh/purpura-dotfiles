@@ -629,6 +629,49 @@ Scope {
         }
     }
 
+    // Whether the currently-focused window is genuinely fullscreen, and
+    // which monitor it's on - so dashWindow below can ignore the bar's
+    // reserved exclusive zone (and sit flush at the true top of that
+    // screen) while the bar itself is hidden behind a fullscreen client
+    // anyway, rather than leaving a bar-height gap at the top for
+    // nothing. Same detection FullscreenHintOsd.qml already uses: there's
+    // no reactive "fullscreen" property on Quickshell's Hyprland toplevel
+    // type, so this taps the same raw "fullscreen>>0/1" IPC event and
+    // re-verifies via `hyprctl activewindow -j`'s fullscreenClient field
+    // (0=none/1=maximized/2=fullscreen/3=both) rather than trusting the
+    // event alone - confirmed live there that it also fires for META+W's
+    // plain floating toggle, nothing to do with real fullscreen at all.
+    property bool activeIsFullscreen: false
+    property string fullscreenMonitorName: ""
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name !== "fullscreen") return
+            fullscreenCheckProcess.running = true
+        }
+    }
+
+    Process {
+        id: fullscreenCheckProcess
+        command: ["hyprctl", "activewindow", "-j"]
+
+        stdout: StdioCollector {
+            id: fullscreenCheckCollector
+            onStreamFinished: {
+                let parsed = null
+                try {
+                    parsed = JSON.parse(fullscreenCheckCollector.text)
+                } catch (e) {
+                    parsed = null
+                }
+                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
+                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
+                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
+            }
+        }
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -638,10 +681,16 @@ Scope {
             property var modelData
             screen: modelData
 
-            // Screen-relative base size. ~0.42/0.43 reproduces the 800x460
-            // this was tuned at on a 1920x1080 screen, just no longer fixed.
+            // Screen-relative base size. ~0.42/0.47 reproduces (a little
+            // taller than) the 800x460 this was tuned at on a 1920x1080
+            // screen, just no longer fixed - bumped from 0.43 so the
+            // clock/Now Playing cards (and the center column's system
+            // monitor filler, which absorbs the rest) have more room
+            // before their own text stops fitting.
             property real dashWidth: modelData.width * 0.42
-            property real columnHeight: modelData.height * 0.43
+            property real columnHeight: modelData.height * 0.47
+
+            readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name
 
             // Everything sized in plain pixels below (fonts, icons,
             // borders, spacing) is written at its 800px-reference value
@@ -654,7 +703,14 @@ Scope {
             WlrLayershell.namespace: "dashboard"
             WlrLayershell.layer: WlrLayer.Overlay
 
-            exclusiveZone: 0
+            // -1 (ignore every exclusive zone, including the bar's own
+            // reservation) only while a fullscreen client is genuinely
+            // occupying this exact screen - the bar is hidden behind it
+            // either way, so there's nothing to leave a bar-height gap
+            // for. 0 normally, same as always (pushed below the bar's
+            // own reserved zone by the compositor, same as
+            // Dashboard.qml's own topOffset elsewhere relies on).
+            exclusiveZone: dashWindow.ignoresBarPadding ? -1 : 0
 
             // Anchoring only the top edge (no left/right) lets the
             // compositor center the window on that axis natively, instead
@@ -666,8 +722,13 @@ Scope {
             margins {
                 // Bar's own top margin (10) + height (48) - border width
                 // (2), so this window's top edge lands on the bar's bottom
-                // border instead of leaving a gap or a seam.
-                top: 4
+                // border instead of leaving a gap or a seam. While
+                // ignoresBarPadding, there's no auto-push to land on top
+                // of, so this is measured from the true screen edge
+                // instead - Bar's own top margin (10, scaled), so the
+                // dashboard sits roughly where the bar's own top edge
+                // would be rather than flush against the very corner.
+                top: dashWindow.ignoresBarPadding ? Config.scaled(10, dashWindow.uiScale) : 4
             }
 
             implicitWidth: dashWidth
