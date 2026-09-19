@@ -29,7 +29,7 @@ Item {
     property real _lastCpuIdle: -1
 
     Timer {
-        interval: 2000
+        interval: 500
         running: true
         repeat: true
         triggeredOnStart: true
@@ -82,7 +82,7 @@ Item {
     property bool _sensorsGotOutput: false
 
     Timer {
-        interval: 2000
+        interval: 500
         running: true
         repeat: true
         triggeredOnStart: true
@@ -147,7 +147,7 @@ Item {
     property real ramUsage: 0 // 0.0 - 1.0
 
     Timer {
-        interval: 2000
+        interval: 500
         running: true
         repeat: true
         triggeredOnStart: true
@@ -184,7 +184,7 @@ Item {
     property bool _nvidiaGotOutput: false
 
     Timer {
-        interval: 2000
+        interval: 500
         running: true
         repeat: true
         triggeredOnStart: true
@@ -308,7 +308,7 @@ Item {
         // ---------------- GPU ----------------
         Column {
             width: parent.width
-            spacing: Config.scaled(4, root.uiScale)
+            spacing: Config.scaled(5, root.uiScale)
             visible: root.gpuAvailable
 
             Row {
@@ -347,7 +347,7 @@ Item {
             // keep each mini-bar narrow enough that both fit) rather than
             // stacking on separate rows.
             Row {
-                spacing: Config.scaled(4, root.uiScale)
+                spacing: Config.scaled(5, root.uiScale)
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -400,7 +400,7 @@ Item {
                     font.bold: true
                 }
 
-                Item { width: Config.scaled(14, root.uiScale); height: 1 }
+                Item { width: Config.scaled(6, root.uiScale); height: 1 }
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
