@@ -2,6 +2,7 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Widgets
 import Quickshell.Io
+import Quickshell.Hyprland
 import QtQuick
 import Qt5Compat.GraphicalEffects
 import "../Config.js" as Config
@@ -15,6 +16,19 @@ Scope {
     // instances it creates.
     property bool locked: false
     property bool powerMenuOpen: false
+
+    // Re-checks fullscreen state right as the bar is about to reappear -
+    // nothing else re-triggers fullscreenCheckProcess just because the
+    // lock screen closed (no new "fullscreen" IPC event fires for a
+    // window that was already fullscreen going into the lock), so
+    // without this the bar's visible binding below could act on a stale
+    // activeIsFullscreen from before the lock.
+    onLockedChanged: {
+        if (!root.locked) {
+            fullscreenCheckProcess.running = false
+            fullscreenCheckProcess.running = true
+        }
+    }
 
     // Dashboard/Notification instances, also passed down from shell.qml -
     // clicking their buttons below calls straight into these rather than
@@ -66,6 +80,48 @@ Scope {
         ? (root.dashboard ? root.dashboard.primaryMonitor : "")
         : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
 
+    // Whether the currently-focused window is genuinely fullscreen, and
+    // which monitor it's on - same detection Dashboard.qml/
+    // FullscreenHintOsd.qml already use (see there for why this taps the
+    // raw "fullscreen>>0/1" IPC event and re-verifies via `hyprctl
+    // activewindow -j` instead of trusting the event alone). Normally
+    // redundant - Hyprland's own layer stacking already visually
+    // occludes a "top"-layer bar behind a genuine fullscreen client - but
+    // unlocking out of LockScreen doesn't reliably restore that
+    // occlusion even when the fullscreened app is still there, so the
+    // bar needs its own explicit check rather than relying on the
+    // compositor to keep hiding it.
+    property bool activeIsFullscreen: false
+    property string fullscreenMonitorName: ""
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name !== "fullscreen") return
+            fullscreenCheckProcess.running = true
+        }
+    }
+
+    Process {
+        id: fullscreenCheckProcess
+        command: ["hyprctl", "activewindow", "-j"]
+
+        stdout: StdioCollector {
+            id: fullscreenCheckCollector
+            onStreamFinished: {
+                let parsed = null
+                try {
+                    parsed = JSON.parse(fullscreenCheckCollector.text)
+                } catch (e) {
+                    parsed = null
+                }
+                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
+                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
+                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
+            }
+        }
+    }
+
     // Falls back to a sane default until hyprctl responds
     Variants {
         model: Quickshell.screens
@@ -77,7 +133,7 @@ Scope {
             // shell.qml), whose primaryMonitor is itself shared across
             // every screen's dashWindow - see that file for why it has
             // to be.
-            visible: !root.locked && !root.powerMenuOpen && (root.dashboard ? modelData.name === root.effectivePrimaryName : true)
+            visible: !root.locked && !root.powerMenuOpen && !(root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name) && (root.dashboard ? modelData.name === root.effectivePrimaryName : true)
             id: bar
             property var modelData
             screen: modelData

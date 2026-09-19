@@ -128,7 +128,16 @@ Scope {
     PanelWindow {
         visible: !root.centerOpen
         anchors { top: true; right: true }
-        margins { top: 4; right: 10 }
+        // Normally pushed below the bar's own reserved exclusive zone by
+        // the compositor (margins.top just adds a small extra gap on top
+        // of that auto-push). While ignoresBarPadding, exclusiveZone -1
+        // stops that auto-push (there's no bar reservation worth
+        // avoiding - it's hidden behind the fullscreen client anyway),
+        // so margins.top is measured from the true screen edge instead -
+        // 10 to roughly land where the bar's own top edge would be,
+        // rather than flush against the very corner.
+        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
+        exclusiveZone: root.ignoresBarPadding ? -1 : 0
 
         implicitWidth: 380
         implicitHeight: Math.max(1, column.implicitHeight)
@@ -280,9 +289,62 @@ Scope {
         }
     }
 
+    // Whether the currently-focused window is genuinely fullscreen - so
+    // both PanelWindows here can ignore the bar's reserved exclusive
+    // zone (and sit flush at the true top of the screen) while the bar
+    // itself is hidden behind a fullscreen client anyway, rather than
+    // leaving a bar-height gap at the top for nothing. Same detection
+    // Dashboard.qml/FullscreenHintOsd.qml already use: there's no
+    // reactive "fullscreen" property on Quickshell's Hyprland toplevel
+    // type, so this taps the same raw "fullscreen>>0/1" IPC event and
+    // re-verifies via `hyprctl activewindow -j`'s fullscreenClient field
+    // (0=none/1=maximized/2=fullscreen/3=both) rather than trusting the
+    // event alone.
+    //
+    // Neither PanelWindow below is given an explicit `screen:` (unlike
+    // Dashboard/Bar/etc.'s per-monitor Variants), so - same as
+    // Dashboard.qml's own "no click position, always the primary screen"
+    // fallback for its GlobalShortcut toggle - this only ever compares
+    // against Quickshell.screens[0], which is where an unscreened
+    // PanelWindow ends up here too.
+    property bool activeIsFullscreen: false
+    property string fullscreenMonitorName: ""
+    readonly property bool ignoresBarPadding: root.activeIsFullscreen && Quickshell.screens.length > 0 && root.fullscreenMonitorName === Quickshell.screens[0].name
+
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name !== "fullscreen") return
+            fullscreenCheckProcess.running = true
+        }
+    }
+
+    Process {
+        id: fullscreenCheckProcess
+        command: ["hyprctl", "activewindow", "-j"]
+
+        stdout: StdioCollector {
+            id: fullscreenCheckCollector
+            onStreamFinished: {
+                let parsed = null
+                try {
+                    parsed = JSON.parse(fullscreenCheckCollector.text)
+                } catch (e) {
+                    parsed = null
+                }
+                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
+                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
+                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
+            }
+        }
+    }
+
     PanelWindow {
-        margins { top: 4; right: 10 }
+        // See the toast PanelWindow above for why margins.top/
+        // exclusiveZone differ between the two ignoresBarPadding branches.
+        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
         anchors { top: true; right: true }
+        exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.centerOpen
 
         // Fixed/content-derived size, NOT bound to panelBox's currently-
