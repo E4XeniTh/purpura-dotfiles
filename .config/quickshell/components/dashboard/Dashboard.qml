@@ -979,20 +979,36 @@ Scope {
                                 }
                             }
 
-                            // Empty filler - absorbs whatever height the
-                            // fixed-size siblings above/below don't use.
-                            // Only 3 gaps now (greeting/avatar/filler/
-                            // powerrow) since systemicons and its own
-                            // gap are gone - see powerrow below. Left
-                            // empty on purpose - the system monitor that
-                            // used to live here moved to the right
-                            // column (replacing Cava, which had more
-                            // room to give it); nothing decided yet for
-                            // this slot.
+                            // CPU/GPU/VRAM/RAM usage meters. Absorbs
+                            // whatever height the fixed-size siblings
+                            // above/below don't use, same as the empty
+                            // filler this replaced. Moved back here from
+                            // the right column now that its compact
+                            // label+tags-on-one-row layout comfortably
+                            // fits this slot after all. Same lazy-Loader
+                            // treatment as NowPlaying in the right column -
+                            // a wrong shell-tool assumption in
+                            // SystemMonitor.qml only blanks this card
+                            // instead of breaking the whole shell.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
                                 height: columnHeight - greetingtext.height - avatarbox.height - powerrow.height - parent.spacing * 3
+
+                                Loader {
+                                    id: systemMonitorLoader
+                                    anchors.fill: parent
+                                    anchors.margins: Config.scaled(12, dashWindow.uiScale)
+
+                                    source: "SystemMonitor.qml"
+                                }
+
+                                Binding {
+                                    target: systemMonitorLoader.item
+                                    property: "uiScale"
+                                    value: dashWindow.uiScale
+                                    when: systemMonitorLoader.item !== null
+                                }
                             }
 
                             // Power/Settings - two wide buttons, same
@@ -1081,16 +1097,11 @@ Scope {
                         }
 
                         // ---------------- RIGHT COLUMN ----------------
-                        // Now playing (0.6) + system monitor (0.4,
-                        // replacing the Cava visualizer that used to
-                        // live here - it had more room to give the
-                        // system monitor than the center column's own
-                        // filler slot did). 0.55/0.45 briefly squeezed
-                        // Now Playing enough that its own transport
-                        // buttons spilled out past the bottom of the
-                        // card - 0.6 is the smallest share that still
-                        // comfortably fits album art + title + artist +
-                        // the button row.
+                        // Now playing (2/3) + Cava audio visualizer
+                        // (1/3). System monitor moved out to the center
+                        // column's filler slot - its compact label+tags-
+                        // on-one-row layout fits there comfortably now,
+                        // freeing this column back up for Cava.
                         Column {
                             id: rightColumn
 
@@ -1106,7 +1117,7 @@ Scope {
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - parent.spacing) * 0.6
+                                height: (columnHeight - parent.spacing) * (2 / 3)
 
                                 Loader {
                                     id: nowPlayingLoader
@@ -1128,32 +1139,28 @@ Scope {
                                 }
                             }
 
-                            // CPU/GPU/RAM usage meters - moved here from
-                            // the center column's filler slot, which
-                            // didn't have enough room to show it
-                            // comfortably. Same lazy-Loader treatment as
-                            // NowPlaying above - a wrong shell-tool
-                            // assumption in SystemMonitor.qml only blanks
-                            // this card instead of breaking the whole
-                            // shell.
+                            // Audio visualizer (cava), same lazy-Loader
+                            // treatment as NowPlaying above - a wrong
+                            // cava/pipewire assumption only blanks this
+                            // card instead of the whole shell.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - parent.spacing) * 0.4
+                                height: (columnHeight - parent.spacing) * (1 / 3)
 
                                 Loader {
-                                    id: systemMonitorLoader
+                                    id: cavaLoader
                                     anchors.fill: parent
-                                    anchors.margins: Config.scaled(12, dashWindow.uiScale)
+                                    anchors.margins: Config.scaled(10, dashWindow.uiScale)
 
-                                    source: "SystemMonitor.qml"
+                                    source: "Cava.qml"
                                 }
 
                                 Binding {
-                                    target: systemMonitorLoader.item
+                                    target: cavaLoader.item
                                     property: "uiScale"
                                     value: dashWindow.uiScale
-                                    when: systemMonitorLoader.item !== null
+                                    when: cavaLoader.item !== null
                                 }
                             }
                         }
