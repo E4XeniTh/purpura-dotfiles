@@ -355,7 +355,7 @@ Item {
                 Row {
                     id: vramTags
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: Config.scaled(6, root.uiScale)
+                    spacing: Config.scaled(2, root.uiScale)
 
                     BracketTag {
                         uiScale: root.uiScale
@@ -403,7 +403,7 @@ Item {
                 Row {
                     id: ramTags
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: Config.scaled(6, root.uiScale)
+                    spacing: Config.scaled(2, root.uiScale)
 
                     BracketTag {
                         uiScale: root.uiScale

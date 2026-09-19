@@ -21,8 +21,7 @@ Row {
     // character count of the value changes (e.g. "9%" vs "100%"),
     // instead of visibly growing and shrinking on every poll tick.
     property real valueWidth: -1
-
-    spacing: Config.scaled(4, root.uiScale)
+    spacing: Config.scaled(1, root.uiScale)
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
