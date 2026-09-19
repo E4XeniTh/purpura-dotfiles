@@ -265,11 +265,13 @@ Item {
                 BracketTag {
                     uiScale: root.uiScale
                     visible: root.hasCpuTemp
+                    valueWidth: 26
                     text: Math.round(root.cpuTemp) + "°"
                 }
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 30
                     text: Math.round(root.cpuUsage * 100) + "%"
                 }
             }
@@ -303,11 +305,13 @@ Item {
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 26
                     text: Math.round(root.gpuTemp) + "°"
                 }
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 30
                     text: Math.round(root.gpuUsage * 100) + "%"
                 }
             }
@@ -341,11 +345,13 @@ Item {
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 120
                     text: (root.gpuVramUsedMb / 1024).toFixed(2) + "GB / " + (root.gpuVramTotalMb / 1024).toFixed(1) + "GB"
                 }
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 30
                     text: (root.gpuVramTotalMb > 0 ? Math.round(root.gpuVramUsedMb / root.gpuVramTotalMb * 100) : 0) + "%"
                 }
             }
@@ -378,11 +384,13 @@ Item {
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 120
                     text: (root.ramUsedMb / 1024).toFixed(2) + "GB / " + (root.ramTotalMb / 1024).toFixed(1) + "GB"
                 }
 
                 BracketTag {
                     uiScale: root.uiScale
+                    valueWidth: 30
                     text: Math.round(root.ramUsage * 100) + "%"
                 }
             }

@@ -14,6 +14,13 @@ Row {
 
     property real uiScale: 1.0
     property string text: ""
+    // Preset width for the value text, unscaled px (Config.scaled is
+    // applied internally). -1 falls back to the text's own implicit
+    // width. Callers should pass this so the tag's total width - and
+    // everything right-aligned alongside it - stays put as the digit/
+    // character count of the value changes (e.g. "9%" vs "100%"),
+    // instead of visibly growing and shrinking on every poll tick.
+    property real valueWidth: -1
 
     spacing: Config.scaled(4, root.uiScale)
 
@@ -28,6 +35,8 @@ Row {
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
+        width: root.valueWidth >= 0 ? Config.scaled(root.valueWidth, root.uiScale) : implicitWidth
+        horizontalAlignment: Text.AlignHCenter
         text: root.text
         color: Config.fgcolor
         font.family: Config.fontfamily
