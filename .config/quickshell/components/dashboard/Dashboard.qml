@@ -713,21 +713,6 @@ Scope {
 
             readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name
 
-            // Frozen at the moment this window becomes visible, NOT read
-            // live from ignoresBarPadding by exclusiveZone/margins below -
-            // changing exclusiveZone on an already-mapped layer surface
-            // while a fullscreen client is active confirmed live to make
-            // the whole surface vanish (it only comes back once
-            // fullscreen ends, or the window is unmapped/remapped some
-            // other way), rather than just repositioning it. Re-
-            // snapshotting only on each fresh visible:false -> true
-            // transition sidesteps that entirely - toggling the dashboard
-            // open/closed while already fullscreen is fine, this just
-            // makes every open a fresh snapshot instead of a live
-            // subscription.
-            property bool frozenIgnoresBarPadding: dashWindow.ignoresBarPadding
-            onVisibleChanged: if (visible) frozenIgnoresBarPadding = dashWindow.ignoresBarPadding
-
             // Everything sized in plain pixels below (fonts, icons,
             // borders, spacing) is written at its 800px-reference value
             // and multiplied by this. Clamped so a tiny or huge monitor
@@ -746,7 +731,7 @@ Scope {
             // for. 0 normally, same as always (pushed below the bar's
             // own reserved zone by the compositor, same as
             // Dashboard.qml's own topOffset elsewhere relies on).
-            exclusiveZone: dashWindow.frozenIgnoresBarPadding ? -1 : 0
+            exclusiveZone: dashWindow.ignoresBarPadding ? -1 : 0
 
             // Anchoring only the top edge (no left/right) lets the
             // compositor center the window on that axis natively, instead
@@ -759,12 +744,12 @@ Scope {
                 // Bar's own top margin (10) + height (48) - border width
                 // (2), so this window's top edge lands on the bar's bottom
                 // border instead of leaving a gap or a seam. While
-                // frozenIgnoresBarPadding, there's no auto-push to land on
-                // top of, so this is measured from the true screen edge
+                // ignoresBarPadding, there's no auto-push to land on top
+                // of, so this is measured from the true screen edge
                 // instead - Bar's own top margin (10, scaled), so the
                 // dashboard sits roughly where the bar's own top edge
                 // would be rather than flush against the very corner.
-                top: dashWindow.frozenIgnoresBarPadding ? Config.scaled(10, dashWindow.uiScale) : 4
+                top: dashWindow.ignoresBarPadding ? Config.scaled(10, dashWindow.uiScale) : 4
             }
 
             implicitWidth: dashWidth

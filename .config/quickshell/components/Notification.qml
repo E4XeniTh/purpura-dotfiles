@@ -128,31 +128,16 @@ Scope {
     PanelWindow {
         visible: !root.centerOpen
         anchors { top: true; right: true }
-
-        // Frozen at the moment this window becomes visible, NOT a live
-        // binding to root.ignoresBarPadding - changing exclusiveZone on
-        // an already-mapped layer surface while a fullscreen client is
-        // active confirmed live to make the whole surface vanish (it
-        // only comes back once fullscreen ends, or the window is
-        // unmapped/remapped some other way), rather than just
-        // repositioning it. Re-snapshotting only on each fresh
-        // visible:false -> true transition sidesteps that entirely -
-        // toggling the panel open/closed while already fullscreen is
-        // confirmed to work fine, this just makes every open a fresh
-        // snapshot instead of a live subscription.
-        property bool frozenIgnoresBarPadding: root.ignoresBarPadding
-        onVisibleChanged: if (visible) frozenIgnoresBarPadding = root.ignoresBarPadding
-
         // Normally pushed below the bar's own reserved exclusive zone by
         // the compositor (margins.top just adds a small extra gap on top
-        // of that auto-push). While frozenIgnoresBarPadding, exclusiveZone
-        // -1 stops that auto-push (there's no bar reservation worth
+        // of that auto-push). While ignoresBarPadding, exclusiveZone -1
+        // stops that auto-push (there's no bar reservation worth
         // avoiding - it's hidden behind the fullscreen client anyway),
         // so margins.top is measured from the true screen edge instead -
         // 10 to roughly land where the bar's own top edge would be,
         // rather than flush against the very corner.
-        margins { top: frozenIgnoresBarPadding ? 10 : 4; right: 10 }
-        exclusiveZone: frozenIgnoresBarPadding ? -1 : 0
+        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
+        exclusiveZone: root.ignoresBarPadding ? -1 : 0
 
         implicitWidth: 380
         implicitHeight: Math.max(1, column.implicitHeight)
@@ -356,15 +341,10 @@ Scope {
 
     PanelWindow {
         // See the toast PanelWindow above for why margins.top/
-        // exclusiveZone differ between the two ignoresBarPadding branches,
-        // and why they read frozenIgnoresBarPadding (snapshotted fresh on
-        // each open) instead of root.ignoresBarPadding directly.
-        property bool frozenIgnoresBarPadding: root.ignoresBarPadding
-        onVisibleChanged: if (visible) frozenIgnoresBarPadding = root.ignoresBarPadding
-
-        margins { top: frozenIgnoresBarPadding ? 10 : 4; right: 10 }
+        // exclusiveZone differ between the two ignoresBarPadding branches.
+        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
         anchors { top: true; right: true }
-        exclusiveZone: frozenIgnoresBarPadding ? -1 : 0
+        exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.centerOpen
 
         // Fixed/content-derived size, NOT bound to panelBox's currently-
