@@ -3,18 +3,14 @@ import Quickshell.Io
 import "../"
 import "../../Config.js" as Config
 
-// CPU/GPU/RAM usage meters for the dashboard's center column filler slot
-// (see Dashboard.qml) - same "digital"/segmented bar look as Volume/
-// Brightness/Battery in the bar, plus a small bracket-tagged sub-stat row
-// under CPU (temp) and GPU (temp + VRAM), matching the reference image's
-// "└ LABEL [bar] value ┘" convention. Loaded lazily by path (not
-// instantiated directly), same as NowPlaying.qml/Cava.qml right next to
-// it - a wrong shell-tool assumption here only blanks this card instead
-// of breaking the whole shell.
-//
-// Sized noticeably smaller than the reference image's own text - this
-// column is much narrower and shorter than that image's layout, and the
-// original size didn't fit three sections vertically.
+// CPU/GPU/VRAM/RAM usage meters for the dashboard's right column (see
+// Dashboard.qml) - four parallel sections, each a label + bracket-tagged
+// stats sharing one header row, with a full-width "digital"/segmented
+// usage bar underneath (same look as Volume/Brightness/Battery in the
+// bar). Loaded lazily by path (not instantiated directly), same as
+// NowPlaying.qml/Cava.qml right next to it - a wrong shell-tool
+// assumption here only blanks this card instead of breaking the whole
+// shell.
 Item {
     id: root
 
@@ -242,12 +238,39 @@ Item {
             width: parent.width
             spacing: Config.scaled(4, root.uiScale)
 
-            Text {
-                text: "CPU"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(12, root.uiScale)
-                font.bold: true
+            Row {
+                width: parent.width
+
+                Text {
+                    id: cpuLabel
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "CPU"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                Item { width: parent.width - cpuLabel.implicitWidth - cpuTags.implicitWidth; height: 1 }
+
+                Row {
+                    id: cpuTags
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        visible: root.hasCpuTemp
+                        valueWidth: 26
+                        text: Math.round(root.cpuTemp) + "°"
+                    }
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 30
+                        text: Math.round(root.cpuUsage * 100) + "%"
+                    }
+                }
             }
 
             DigitalBar {
@@ -257,24 +280,6 @@ Item {
                 segmentCount: 28
                 barHeight: Config.scaled(9, root.uiScale)
             }
-
-            Row {
-                anchors.right: parent.right
-                spacing: Config.scaled(6, root.uiScale)
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    visible: root.hasCpuTemp
-                    valueWidth: 26
-                    text: Math.round(root.cpuTemp) + "°"
-                }
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 30
-                    text: Math.round(root.cpuUsage * 100) + "%"
-                }
-            }
         }
 
         // ---------------- GPU ----------------
@@ -283,12 +288,38 @@ Item {
             spacing: Config.scaled(4, root.uiScale)
             visible: root.gpuAvailable
 
-            Text {
-                text: "GPU"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(12, root.uiScale)
-                font.bold: true
+            Row {
+                width: parent.width
+
+                Text {
+                    id: gpuLabel
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "GPU"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                Item { width: parent.width - gpuLabel.implicitWidth - gpuTags.implicitWidth; height: 1 }
+
+                Row {
+                    id: gpuTags
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 26
+                        text: Math.round(root.gpuTemp) + "°"
+                    }
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 30
+                        text: Math.round(root.gpuUsage * 100) + "%"
+                    }
+                }
             }
 
             DigitalBar {
@@ -298,23 +329,6 @@ Item {
                 segmentCount: 28
                 barHeight: Config.scaled(9, root.uiScale)
             }
-
-            Row {
-                anchors.right: parent.right
-                spacing: Config.scaled(6, root.uiScale)
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 26
-                    text: Math.round(root.gpuTemp) + "°"
-                }
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 30
-                    text: Math.round(root.gpuUsage * 100) + "%"
-                }
-            }
         }
 
         // ---------------- VRAM ----------------
@@ -323,12 +337,38 @@ Item {
             spacing: Config.scaled(4, root.uiScale)
             visible: root.gpuAvailable
 
-            Text {
-                text: "VRAM"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(12, root.uiScale)
-                font.bold: true
+            Row {
+                width: parent.width
+
+                Text {
+                    id: vramLabel
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "VRAM"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                Item { width: parent.width - vramLabel.implicitWidth - vramTags.implicitWidth; height: 1 }
+
+                Row {
+                    id: vramTags
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 100
+                        text: (root.gpuVramUsedMb / 1024).toFixed(1) + "GB / " + (root.gpuVramTotalMb / 1024).toFixed(1) + "GB"
+                    }
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 30
+                        text: (root.gpuVramTotalMb > 0 ? Math.round(root.gpuVramUsedMb / root.gpuVramTotalMb * 100) : 0) + "%"
+                    }
+                }
             }
 
             DigitalBar {
@@ -338,23 +378,6 @@ Item {
                 segmentCount: 28
                 barHeight: Config.scaled(9, root.uiScale)
             }
-
-            Row {
-                anchors.right: parent.right
-                spacing: Config.scaled(6, root.uiScale)
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 120
-                    text: (root.gpuVramUsedMb / 1024).toFixed(2) + "GB / " + (root.gpuVramTotalMb / 1024).toFixed(1) + "GB"
-                }
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 30
-                    text: (root.gpuVramTotalMb > 0 ? Math.round(root.gpuVramUsedMb / root.gpuVramTotalMb * 100) : 0) + "%"
-                }
-            }
         }
 
         // ---------------- RAM ----------------
@@ -362,12 +385,38 @@ Item {
             width: parent.width
             spacing: Config.scaled(4, root.uiScale)
 
-            Text {
-                text: "RAM"
-                color: Config.fgcolor
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(12, root.uiScale)
-                font.bold: true
+            Row {
+                width: parent.width
+
+                Text {
+                    id: ramLabel
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "RAM"
+                    color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                Item { width: parent.width - ramLabel.implicitWidth - ramTags.implicitWidth; height: 1 }
+
+                Row {
+                    id: ramTags
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 100
+                        text: (root.ramUsedMb / 1024).toFixed(1) + "GB / " + (root.ramTotalMb / 1024).toFixed(1) + "GB"
+                    }
+
+                    BracketTag {
+                        uiScale: root.uiScale
+                        valueWidth: 30
+                        text: Math.round(root.ramUsage * 100) + "%"
+                    }
+                }
             }
 
             DigitalBar {
@@ -376,23 +425,6 @@ Item {
                 targetWidth: parent.width
                 segmentCount: 28
                 barHeight: Config.scaled(9, root.uiScale)
-            }
-
-            Row {
-                anchors.right: parent.right
-                spacing: Config.scaled(6, root.uiScale)
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 120
-                    text: (root.ramUsedMb / 1024).toFixed(2) + "GB / " + (root.ramTotalMb / 1024).toFixed(1) + "GB"
-                }
-
-                BracketTag {
-                    uiScale: root.uiScale
-                    valueWidth: 30
-                    text: Math.round(root.ramUsage * 100) + "%"
-                }
             }
         }
     }

@@ -1,9 +1,9 @@
 import QtQuick
 import "../../Config.js" as Config
 
-// "└ TEXT ┘" bracket-wrapped stat tag - SystemMonitor.qml's own small
+// "┌ TEXT ┐" bracket-wrapped stat tag - SystemMonitor.qml's own small
 // stat readouts (temp, percent, used/total) all use this, right-aligned
-// under each section's usage bar. A separate reusable file rather than
+// next to each section's label. A separate reusable file rather than
 // repeating the same three Text elements inline at every call site -
 // this Quickshell's QML engine rejects the inline `component Name: Item
 // {}` declaration syntax outright at boot (see PowerMenu.qml's own
@@ -26,7 +26,7 @@ Row {
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: "└"
+        text: "┌"
         color: Config.fgcolor
         font.family: Config.fontfamily
         font.pixelSize: Config.scaled(10, root.uiScale)
@@ -46,7 +46,7 @@ Row {
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
-        text: "┘"
+        text: "┐"
         color: Config.fgcolor
         font.family: Config.fontfamily
         font.pixelSize: Config.scaled(10, root.uiScale)
