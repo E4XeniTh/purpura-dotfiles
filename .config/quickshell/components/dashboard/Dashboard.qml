@@ -1081,13 +1081,16 @@ Scope {
                         }
 
                         // ---------------- RIGHT COLUMN ----------------
-                        // Now playing (0.55) + system monitor (0.45,
+                        // Now playing (0.6) + system monitor (0.4,
                         // replacing the Cava visualizer that used to
                         // live here - it had more room to give the
                         // system monitor than the center column's own
-                        // filler slot did). Now Playing gave up a bit of
-                        // its own share for this too, not just the
-                        // filler's.
+                        // filler slot did). 0.55/0.45 briefly squeezed
+                        // Now Playing enough that its own transport
+                        // buttons spilled out past the bottom of the
+                        // card - 0.6 is the smallest share that still
+                        // comfortably fits album art + title + artist +
+                        // the button row.
                         Column {
                             id: rightColumn
 
@@ -1103,7 +1106,7 @@ Scope {
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - parent.spacing) * 0.55
+                                height: (columnHeight - parent.spacing) * 0.6
 
                                 Loader {
                                     id: nowPlayingLoader
@@ -1136,7 +1139,7 @@ Scope {
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
-                                height: (columnHeight - parent.spacing) * 0.45
+                                height: (columnHeight - parent.spacing) * 0.4
 
                                 Loader {
                                     id: systemMonitorLoader
