@@ -650,20 +650,28 @@ Scope {
     // reserved exclusive zone (and sit flush at the true top of that
     // screen) while the bar itself is hidden behind a fullscreen client
     // anyway, rather than leaving a bar-height gap at the top for
-    // nothing. Same detection FullscreenHintOsd.qml already uses: there's
-    // no reactive "fullscreen" property on Quickshell's Hyprland toplevel
-    // type, so this taps the same raw "fullscreen>>0/1" IPC event and
-    // re-verifies via `hyprctl activewindow -j`'s fullscreenClient field
-    // (0=none/1=maximized/2=fullscreen/3=both) rather than trusting the
-    // event alone - confirmed live there that it also fires for META+W's
-    // plain floating toggle, nothing to do with real fullscreen at all.
+    // nothing. Same detection FullscreenHintOsd.qml already uses:
+    // there's no reactive "fullscreen" property on Quickshell's Hyprland
+    // toplevel type, so this re-verifies via `hyprctl activewindow -j`'s
+    // fullscreenClient field (0=none/1=maximized/2=fullscreen/3=both)
+    // rather than trusting any single IPC event's own data - confirmed
+    // live there that "fullscreen>>1" also fires for META+W's plain
+    // floating toggle, nothing to do with real fullscreen at all.
+    //
+    // Reacts to every raw event, not just "fullscreen>>0/1" - same
+    // unfiltered convention WorkspaceOsd.qml/WorkspaceRow.qml's own
+    // Connections already use. Switching workspaces (or focus) away from
+    // a fullscreen window never fires its own "fullscreen" event (that
+    // window's fullscreen flag hasn't changed, only which workspace is
+    // active has), so filtering to "fullscreen" only left this convinced
+    // a fullscreen client was still active on a workspace that had
+    // switched away from it entirely.
     property bool activeIsFullscreen: false
     property string fullscreenMonitorName: ""
 
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name !== "fullscreen") return
             fullscreenCheckProcess.running = true
         }
     }

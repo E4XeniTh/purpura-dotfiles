@@ -82,22 +82,30 @@ Scope {
 
     // Whether the currently-focused window is genuinely fullscreen, and
     // which monitor it's on - same detection Dashboard.qml/
-    // FullscreenHintOsd.qml already use (see there for why this taps the
-    // raw "fullscreen>>0/1" IPC event and re-verifies via `hyprctl
-    // activewindow -j` instead of trusting the event alone). Normally
-    // redundant - Hyprland's own layer stacking already visually
-    // occludes a "top"-layer bar behind a genuine fullscreen client - but
-    // unlocking out of LockScreen doesn't reliably restore that
-    // occlusion even when the fullscreened app is still there, so the
-    // bar needs its own explicit check rather than relying on the
-    // compositor to keep hiding it.
+    // FullscreenHintOsd.qml already use (see there for why this
+    // re-verifies via `hyprctl activewindow -j` rather than trusting any
+    // single IPC event's own data). Normally redundant - Hyprland's own
+    // layer stacking already visually occludes a "top"-layer bar behind a
+    // genuine fullscreen client - but unlocking out of LockScreen doesn't
+    // reliably restore that occlusion even when the fullscreened app is
+    // still there, so the bar needs its own explicit check rather than
+    // relying on the compositor to keep hiding it.
+    //
+    // Reacts to every raw event, not just "fullscreen>>0/1" - same
+    // unfiltered convention WorkspaceOsd.qml/WorkspaceRow.qml's own
+    // Connections already use. Switching workspaces (or focus) away from
+    // a fullscreen window never fires its own "fullscreen" event (that
+    // window's fullscreen flag hasn't changed, only which workspace is
+    // active has), so filtering to "fullscreen" only left the bar
+    // convinced a fullscreen client was still active - and itself hidden
+    // - even after switching to an empty workspace with nothing
+    // fullscreen on it at all.
     property bool activeIsFullscreen: false
     property string fullscreenMonitorName: ""
 
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name !== "fullscreen") return
             fullscreenCheckProcess.running = true
         }
     }
