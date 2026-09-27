@@ -7,6 +7,7 @@
 # reasoning the old ~/.config/hypr/screens.json was never tracked either.
 .config/quickshell/monitors.json
 .config/quickshell/barsettings.json
+.config/quickshell/peripheralsettings.json
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf

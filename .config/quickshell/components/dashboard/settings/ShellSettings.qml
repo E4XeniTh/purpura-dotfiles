@@ -8,17 +8,24 @@ import "../../../Config.js" as Config
 // Shell-level settings (as opposed to Sound/Network/Bluetooth/Display,
 // which all configure a piece of hardware) - one tab of
 // SettingsScreen.qml's fullscreen tabbed panel (see there for the tab
-// bar/coordinator). Categories down the left (only "Bar" for now,
-// mirrors Network/Bluetooth's own left icon-tab strip) pick which
+// bar/coordinator). Categories down the left ("Bar", "Peripherals")
+// mirror Network/Bluetooth's own left icon-tab strip, picking which
 // group of settings shows on the right.
 //
 // Everything here is a plain, immediately-saved toggle - no Apply
 // button, unlike ScreenSettings.qml's staged monitor edits - persisted
-// to its own barsettings.json rather than monitors.json, so a Display
-// tab Apply can never clobber a Bar setting (or vice versa) by
-// overwriting the wrong file wholesale. WorkspaceRow.qml/WorkspaceOsd.qml/
-// Bar.qml each watch that same file directly for the same reason they
-// already watched monitors.json - no property-passing chain needed.
+// to its own barsettings.json/peripheralsettings.json rather than
+// monitors.json, so a Display tab Apply can never clobber a Bar/
+// Peripherals setting (or vice versa) by overwriting the wrong file
+// wholesale. WorkspaceRow.qml/WorkspaceOsd.qml/Bar.qml each watch
+// barsettings.json directly for the same reason they already watched
+// monitors.json - no property-passing chain needed. Peripherals'
+// mouse sensitivity/solaar startup settings are instead replayed by
+// ~/.config/hypr/scripts/apply-peripherals.sh from hyprland.lua's own
+// autostart block (see that script), the same "small JSON file +
+// startup replay" pattern apply-monitors.sh already established for
+// monitors.json - there's no live-reload watcher needed on that side
+// since nothing else in the running shell reads these two settings back.
 Item {
     id: root
 
@@ -28,7 +35,7 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar (only category for now).
+    // 0 = Bar, 1 = Peripherals.
     property int currentCategory: 0
 
     property var barStore: ({})
@@ -57,8 +64,51 @@ Item {
     function toggleShowEmptyOsd() { root.setBarSetting("showEmptyOsd", !root.showEmptyOsd) }
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
 
-    onActiveChanged: if (root.active) root.loadBarStore()
-    Component.onCompleted: root.loadBarStore()
+    // ---------------- Peripherals ----------------
+    property var peripheralsStore: ({})
+
+    function loadPeripheralsStore() {
+        peripheralsStoreProcess.running = false
+        peripheralsStoreProcess.running = true
+    }
+
+    function setPeripheralSetting(key, value) {
+        const updated = Object.assign({}, root.peripheralsStore, { [key]: value })
+        root.peripheralsStore = updated
+        peripheralsSettingsFile.setText(JSON.stringify(updated, null, 2) + "\n")
+    }
+
+    // -1.0 - 1.0, 0 means no modification - same range/meaning as
+    // hyprland.lua's own input.sensitivity, since this is the exact
+    // same setting.
+    readonly property real mouseSensitivity: root.peripheralsStore.mouseSensitivity !== undefined ? root.peripheralsStore.mouseSensitivity : 0
+    // Defaults true, matching hyprland.lua.example's own previously-
+    // unconditional `hl.exec_cmd("solaar --window hide")` autostart line -
+    // a fresh install with no peripheralsettings.json yet still starts it.
+    readonly property bool solaarStartupEnabled: root.peripheralsStore.solaarStartupEnabled !== false
+
+    // Live-dragged value, separate from mouseSensitivity (which only
+    // updates once sensitivityApplyTimer's debounce actually writes it
+    // to disk) - same "instant UI feedback, debounced real apply" split
+    // BrightnessControl.qml's own barBrightnessOverride/applyTimer use,
+    // so dragging the slider doesn't fire a `hyprctl eval` on every
+    // single pixel of mouse movement.
+    property real stagedSensitivity: 0
+
+    function toggleSolaarStartup() {
+        const newVal = !root.solaarStartupEnabled
+        root.setPeripheralSetting("solaarStartupEnabled", newVal)
+        if (newVal) {
+            solaarStartProcess.running = false
+            solaarStartProcess.running = true
+        } else {
+            solaarStopProcess.running = false
+            solaarStopProcess.running = true
+        }
+    }
+
+    onActiveChanged: if (root.active) { root.loadBarStore(); root.loadPeripheralsStore() }
+    Component.onCompleted: { root.loadBarStore(); root.loadPeripheralsStore() }
 
     // Read via `cat`, same idiom ScreenSettings.qml uses for monitors.json -
     // a missing file (first run) just yields empty stdout instead of
@@ -85,6 +135,77 @@ Item {
         id: barSettingsFile
         path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
         preload: false
+    }
+
+    // Same `cat`-via-Process idiom as barStoreProcess above.
+    Process {
+        id: peripheralsStoreProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/peripheralsettings.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.peripheralsStore = JSON.parse(text)
+                } catch (e) {
+                    root.peripheralsStore = {}
+                }
+                // Seeds the live slider position from whatever was just
+                // loaded off disk - without this the slider would sit at
+                // 0 (stagedSensitivity's own default) until the user
+                // first touched it, even though a non-zero sensitivity
+                // was already persisted.
+                root.stagedSensitivity = root.mouseSensitivity
+            }
+        }
+    }
+
+    // Write-only, same reasoning as barSettingsFile above - nothing else
+    // in the running shell reads peripheralsettings.json back, only
+    // apply-peripherals.sh at the next Hyprland startup.
+    FileView {
+        id: peripheralsSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/peripheralsettings.json"
+        preload: false
+    }
+
+    // Debounced real apply for the sensitivity slider - see
+    // stagedSensitivity's own comment above for why. `hyprctl eval`, not
+    // `keyword` - this config is parsed by hyprlang's Lua frontend, which
+    // rejects `keyword` outright (see apply-monitors.sh's own comment for
+    // the same reasoning), so re-invoking the same hl.config({ input =
+    // {...} }) call hyprland.lua's static config used at parse time is
+    // the only working live-apply path here too.
+    Timer {
+        id: sensitivityApplyTimer
+        interval: 330
+        repeat: false
+        onTriggered: {
+            root.setPeripheralSetting("mouseSensitivity", root.stagedSensitivity)
+            sensitivityApplyProcess.command = ["hyprctl", "eval", "hl.config({ input = { sensitivity = " + root.stagedSensitivity + " } })"]
+            sensitivityApplyProcess.running = false
+            sensitivityApplyProcess.running = true
+        }
+    }
+
+    Process {
+        id: sensitivityApplyProcess
+    }
+
+    // Immediate live effect for the Solaar Startup toggle, on top of the
+    // persisted setting apply-peripherals.sh reads at next login - "off"
+    // stops it right now instead of only taking effect after a restart,
+    // and "on" starts it right now for the same reason the checkbox
+    // reads as an immediately-applied toggle everywhere else in this
+    // file. `--window hide` matches hyprland.lua.example's own previous
+    // unconditional autostart line exactly.
+    Process {
+        id: solaarStartProcess
+        command: ["solaar", "--window", "hide"]
+    }
+
+    Process {
+        id: solaarStopProcess
+        command: ["pkill", "-x", "solaar"]
     }
 
     Item {
@@ -140,6 +261,32 @@ Item {
                     }
                 }
 
+                DashCard {
+                    id: peripheralsCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: peripheralsCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 1 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Peripherals"
+                        color: peripheralsCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: peripheralsCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 1
+                    }
+                }
+
                 Item { Layout.fillHeight: true }
             }
 
@@ -159,12 +306,20 @@ Item {
                 spacing: Config.scaled(10, root.uiScale)
 
                 Text {
-                    text: "Bar"
+                    text: root.currentCategory === 0 ? "Bar" : "Peripherals"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(14, root.uiScale)
                     font.bold: true
                 }
+
+                // ---------------- Bar category ----------------
+                ColumnLayout {
+                    id: barCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 0
+                    spacing: Config.scaled(10, root.uiScale)
 
                 // ---------------- only managed workspaces in widget ----------------
                 RowLayout {
@@ -315,6 +470,98 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+                }
+
+                } // barCategoryContent
+
+                // ---------------- Peripherals category ----------------
+                ColumnLayout {
+                    id: peripheralsCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 1
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    // ---------------- solaar startup ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "Solaar Startup:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleSolaarStartup()
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.solaarStartupEnabled ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleSolaarStartup()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    // ---------------- mouse sensitivity ----------------
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(4, root.uiScale)
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Mouse Sensitivity:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: root.stagedSensitivity.toFixed(2)
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+                        }
+
+                        DeviceSlider {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            // Maps hyprland.lua's -1.0 - 1.0 sensitivity
+                            // range onto DeviceSlider's own fixed 0.0 - 1.0
+                            // control range.
+                            value: (root.stagedSensitivity + 1) / 2
+                            onMoved: (newValue) => {
+                                root.stagedSensitivity = Math.round((newValue * 2 - 1) * 100) / 100
+                                sensitivityApplyTimer.restart()
+                            }
+                        }
+                    }
                 }
 
                 Item { Layout.fillHeight: true }

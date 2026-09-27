@@ -35,7 +35,12 @@ hl.on("hyprland.start", function()
 -- layout, not just the primary display.
 hl.exec_cmd("~/.config/hypr/scripts/apply-monitors.sh")
 hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
-hl.exec_cmd("solaar --window hide")
+-- Replays mouse sensitivity + whether Solaar autostarts at all, both
+-- saved by the quickshell Shell > Peripherals settings panel - see that
+-- script for why Solaar's own launch (used to be a bare, unconditional
+-- `hl.exec_cmd("solaar --window hide")` right here) now goes through it
+-- instead.
+hl.exec_cmd("~/.config/hypr/scripts/apply-peripherals.sh")
 hl.exec_cmd("hyprpaper")
 hl.exec_cmd("xembedsniproxy")
 hl.exec_cmd("hypridle")
