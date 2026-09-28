@@ -1858,11 +1858,13 @@ Item {
                 ColumnLayout {
                     id: defaultsSection
 
-                    // 0.8, not root.uiScale directly - this table has 8
+                    // 0.95, not root.uiScale directly - this table has 8
                     // columns to fit across contentRow.rightWidth, tighter
                     // than the geometry form's own 0.75 (see rightColumn's
                     // own geometryUiScale) gets away with at only 3-5.
-                    readonly property real defaultsUiScale: root.uiScale * 0.8
+                    // Column widths below scale off this same factor, so
+                    // bumping it grows both font and columns together.
+                    readonly property real defaultsUiScale: root.uiScale * 0.95
 
                     Layout.fillWidth: true
                     Layout.fillHeight: true
@@ -1924,7 +1926,14 @@ Item {
 
                             Text {
                                 Layout.preferredWidth: Config.scaled(150, defaultsSection.defaultsUiScale)
-                                text: defaultRow.entry.width + " x " + defaultRow.entry.height + " @ " + defaultRow.entry.refresh + "hz"
+                                // Ceil, not round - hyprctl reports a
+                                // display's actual negotiated refresh
+                                // rate as something like 59.992hz, never
+                                // exactly 60, and rounding to the
+                                // nearest whole number would occasionally
+                                // land one hz short of the rate it's
+                                // actually advertised/sold at.
+                                text: defaultRow.entry.width + " x " + defaultRow.entry.height + " @ " + Math.ceil(defaultRow.entry.refresh) + "hz"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
