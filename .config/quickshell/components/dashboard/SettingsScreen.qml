@@ -213,6 +213,24 @@ Scope {
 
             Keys.onEscapePressed: root.open = false
 
+            // Quick tab switch while this screen is open - plain digit
+            // keys 1-5, matching the tab bar's own left-to-right order
+            // (Shell/Sound/Display/Network/Bluetooth, see the Repeater's
+            // model above). Only ever fires for a digit key nothing else
+            // already consumed - a focused TextInput inside ScreenSettings'
+            // own geometry fields (Width/Height/X Pos/...) accepts its own
+            // digit presses first, the same way typing "1920" into Width
+            // already works, so this never hijacks typing there.
+            Keys.onPressed: (event) => {
+                switch (event.key) {
+                    case Qt.Key_1: root.currentTab = 0; event.accepted = true; break
+                    case Qt.Key_2: root.currentTab = 1; event.accepted = true; break
+                    case Qt.Key_3: root.currentTab = 2; event.accepted = true; break
+                    case Qt.Key_4: root.currentTab = 3; event.accepted = true; break
+                    case Qt.Key_5: root.currentTab = 4; event.accepted = true; break
+                }
+            }
+
             Rectangle {
                 id: box
 

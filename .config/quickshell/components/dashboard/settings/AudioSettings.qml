@@ -7,11 +7,12 @@ import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
-// Playback/recording device list + volume sliders - one tab of
-// SettingsScreen.qml's fullscreen tabbed panel (see there for the
-// tab bar/coordinator). Embeddable Item instead of a standalone
-// SettingsPanel popup: panelWidth/uiScale/active are plain properties
-// fed in from the tab host instead of coming from a PanelWindow.
+// Playback/recording device list + volume sliders, plus a per-application
+// volume mixer strip along the bottom - one tab of SettingsScreen.qml's
+// fullscreen tabbed panel (see there for the tab bar/coordinator).
+// Embeddable Item instead of a standalone SettingsPanel popup: panelWidth/
+// uiScale/active are plain properties fed in from the tab host instead of
+// coming from a PanelWindow.
 Item {
     id: root
 
@@ -22,9 +23,9 @@ Item {
     // Sized by whatever container SettingsScreen.qml gives this tab
     // (panelWidth/uiScale above just carry the same numbers through for
     // Config.scaled() calls) - not self-measured from content anymore,
-    // so the two lists below can stretch to fill it and the hint row
-    // stays pinned to the true bottom instead of trailing right behind
-    // however tall the lists happen to be.
+    // so the lists below can stretch to fill it and the hint row stays
+    // pinned to the true bottom instead of trailing right behind however
+    // tall they happen to be.
     anchors.fill: parent
 
     // All hardware (non-stream) audio nodes, split by direction. Bound via
@@ -32,6 +33,20 @@ Item {
     // Quickshell's Pipewire docs, audio properties are otherwise invalid.
     readonly property var playbackNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && n.isSink)
     readonly property var recordingNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && !n.isSink)
+
+    // Per-application audio streams (one per app actually emitting sound,
+    // e.g. a browser tab or a music player) for the Volume Mixer strip
+    // below - isStream true means "likely a program, not hardware" per
+    // Quickshell's own Pipewire docs, and isSink false is what
+    // distinguishes a PLAYBACK stream (this node outputs audio onward to
+    // a real sink) from a RECORDING stream (isSink true - this node
+    // instead accepts audio from a real source, e.g. a voice-chat app's
+    // mic capture) - same isStream/isSink pairing playbackNodes/
+    // recordingNodes above already rely on for hardware, just the
+    // opposite isSink value once isStream flips true, since what flows
+    // "into" vs "out of" a stream node is the mirror image of a hardware
+    // node's own direction.
+    readonly property var playbackStreamNodes: Pipewire.nodes.values.filter(n => n.audio && n.isStream && !n.isSink)
 
     // preferredDefaultAudioSink/Source is only a hint to Pipewire/
     // WirePlumber - defaultAudioSink/Source (what the border color used
@@ -57,7 +72,7 @@ Item {
     signal sourceSelected(var id)
 
     PwObjectTracker {
-        objects: root.playbackNodes.concat(root.recordingNodes)
+        objects: root.playbackNodes.concat(root.recordingNodes).concat(root.playbackStreamNodes)
     }
 
     Item {
@@ -70,11 +85,19 @@ Item {
 
         readonly property real columnWidth: (width - columnsRow.spacing) / 2
         readonly property real cardHeight: Config.scaled(76, root.uiScale)
+        // Fixed, not fillHeight - a horizontal row of cards only ever
+        // needs enough height for one row regardless of how many apps are
+        // playing audio, unlike the playback/recording lists above it
+        // (which can genuinely have many devices stacked vertically and
+        // benefit from soaking up whatever extra room is available).
+        readonly property real mixerSectionHeight: Config.scaled(190, root.uiScale)
+        readonly property real mixerCardWidth: Config.scaled(110, root.uiScale)
 
-        // Fills everything above the hint row - both lists stretch to
-        // use whatever's left instead of capping at a fixed height, so
-        // the hint row always sits at the true bottom of the tab
-        // regardless of how many playback/recording devices exist.
+        // Fills everything above the mixer divider - both device lists
+        // stretch to use whatever's left instead of capping at a fixed
+        // height, so the mixer strip always sits at the true bottom of
+        // the tab (just above the hint row) regardless of how many
+        // playback/recording devices exist.
         RowLayout {
             id: columnsRow
 
@@ -82,7 +105,7 @@ Item {
                 left: parent.left
                 right: parent.right
                 top: parent.top
-                bottom: hintseparator.top
+                bottom: mixerDivider.top
                 bottomMargin: Config.scaled(10, root.uiScale)
             }
             spacing: Config.scaled(16, root.uiScale)
@@ -162,6 +185,73 @@ Item {
                             root.sourceSelected(modelData.id)
                         }
                     }
+                }
+            }
+        }
+
+        // ---------------- divider above the mixer ----------------
+        Rectangle {
+            id: mixerDivider
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: mixerSection.top
+                bottomMargin: Config.scaled(10, root.uiScale)
+            }
+            height: Config.scaled(2, root.uiScale)
+            color: Config.fgcolor
+        }
+
+        // ---------------- bottom: per-application volume mixer ----------------
+        // One MixerCard per PipeWire playback stream (root.playbackStreamNodes),
+        // left-to-right in a horizontal ListView - see MixerCard.qml's own
+        // top comment for how its vertical slider is built out of the
+        // ordinary horizontal DeviceSlider.
+        ColumnLayout {
+            id: mixerSection
+
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: hintseparator.top
+                bottomMargin: Config.scaled(10, root.uiScale)
+            }
+            height: soundContent.mixerSectionHeight
+            spacing: Config.scaled(8, root.uiScale)
+
+            Text {
+                text: "Volume Mixer"
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(14, root.uiScale)
+                font.bold: true
+            }
+
+            Text {
+                visible: root.playbackStreamNodes.length === 0
+                text: "No applications playing audio right now."
+                color: Config.fgcolordark
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(12, root.uiScale)
+            }
+
+            ListView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.playbackStreamNodes.length > 0
+                clip: true
+                orientation: ListView.Horizontal
+                spacing: Config.scaled(10, root.uiScale)
+                boundsBehavior: Flickable.StopAtBounds
+                model: ScriptModel { values: root.playbackStreamNodes }
+
+                delegate: MixerCard {
+                    required property var modelData
+
+                    width: soundContent.mixerCardWidth
+                    height: ListView.view.height
+                    uiScale: root.uiScale
+                    stream: modelData
                 }
             }
         }
