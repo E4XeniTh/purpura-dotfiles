@@ -39,14 +39,28 @@ import "../../../Config.js" as Config
 // A disabled monitor's own hyprctl geometry is a stale placeholder
 // (0x0, etc. - nothing's actually driving it), so selecting one instead
 // shows whatever was last remembered for it in ~/.config/quickshell/
-// monitors.json, written on every Apply - this is purely so re-enabling
-// a monitor doesn't force retyping its position/resolution from
-// scratch. An enabled monitor always shows its real, live hyprctl state
-// instead, monitors.json or not. That same file also carries a
-// precomputed hl.monitor({...}) "line" per monitor, which is all
-// scripts/apply-monitors.sh needs to replay the whole layout at login -
-// one combined file instead of the previous monitors.conf/screens.json
-// split, since this panel was the only thing reading or writing either.
+// monitors.json - this is purely so re-enabling a monitor doesn't force
+// retyping its position/resolution from scratch. An enabled monitor
+// always shows its real, live hyprctl state instead, monitors.json or
+// not. That same file also carries a precomputed hl.monitor({...})
+// "line" per monitor, which is all scripts/apply-monitors.sh needs to
+// replay the whole layout at login - one combined file instead of the
+// previous monitors.conf/screens.json split, since this panel was the
+// only thing reading or writing either.
+//
+// Apply and Set Default are deliberately two separate actions now, not
+// one. Apply (applyChanges() below) only ever dispatches the current
+// staged/edited state live via `hyprctl eval` - it no longer writes
+// monitors.json at all, so trying out a layout (or a monitor you don't
+// even want enabled by default, like an occasional TV) can never
+// silently become what happens on the next login. Set Default
+// (setDefault() below) is the only thing that writes monitors.json - it
+// snapshots the exact same effectiveStateFor()/resolveWorkspaceAssignment()
+// state Apply would have sent, but purely to disk, with no live dispatch
+// of its own. The two are meant to be used independently: configure a
+// monitor's position once, Set Default while it's disabled (so it's
+// remembered for later), and from then on just flipping it enabled and
+// hitting Apply reuses that remembered position with nothing to retype.
 Item {
     id: root
 
@@ -771,38 +785,10 @@ Item {
             rescues.push({ monitor: name, oldWorkspace, newWorkspace })
         }
 
-        // monitors.json persists the *whole* layout, not just what
-        // changed this time, since apply-monitors.sh replays every
-        // entry's "line" from scratch at login (hyprland.lua only
-        // defines DP-1) - and doubles as the remembered per-monitor
-        // state, so re-enabling a monitor later shows exactly what it
-        // was just set to (or, if untouched, whatever it already
-        // remembered). Every entry's "workspaces" comes straight from
-        // resolved[name] - the same already-exclusive mapping that was
-        // just dispatched live, so the file on disk and Hyprland's live
-        // state can never disagree with each other.
-        const storeSnapshot = {}
-        for (const m of root.monitors) {
-            const line = root.buildMonitorLine(m.name)
-            const state = root.effectiveStateFor(m.name)
-            if (state && line) {
-                storeSnapshot[m.name] = {
-                    disabled: state.disabled,
-                    width: state.width,
-                    height: state.height,
-                    refresh: state.refresh,
-                    x: state.x,
-                    y: state.y,
-                    scale: state.scale,
-                    mode: state.mode,
-                    workspaces: resolved[m.name] || [],
-                    line
-                }
-            }
-        }
-
-        root.screensStore = storeSnapshot
-        monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+        // No monitors.json write here anymore - Apply is purely a live,
+        // this-boot-only dispatch now. See setDefault() below for the
+        // only thing that persists a layout as what happens on the next
+        // Hyprland login.
 
         // Monitor enable/disable/geometry lines go out first. If any
         // touched monitor is transitioning disabled -> enabled this
@@ -871,6 +857,52 @@ Item {
             // flip the toggle back to "Manual" for the monitor you just
             // applied.
         }
+    }
+
+    // "Set Default" - the only thing that still writes monitors.json
+    // (see this file's own top comment for why that's no longer Apply's
+    // job). Snapshots the exact same effectiveStateFor()/
+    // resolveWorkspaceAssignment() state applyChanges() dispatches live,
+    // straight to disk, with no live dispatch of its own - unlike Apply,
+    // this is meaningful to invoke even when nothing's currently
+    // dirty/staged (e.g. locking in whatever Hyprland just auto-arranged
+    // on its own), so it never early-returns the way applyChanges() does
+    // on !root.dirty. Every entry's "workspaces" comes straight from
+    // resolved[name] - the same already-exclusive mapping, so the file
+    // on disk can never disagree with what the workspace-pin buttons
+    // show. Clears the same staged edits Apply's own finally block does
+    // once written - both buttons consume the current staging session,
+    // one to disk, one live.
+    function setDefault() {
+        const resolved = root.resolveWorkspaceAssignment()
+
+        const storeSnapshot = {}
+        for (const m of root.monitors) {
+            const line = root.buildMonitorLine(m.name)
+            const state = root.effectiveStateFor(m.name)
+            if (state && line) {
+                storeSnapshot[m.name] = {
+                    disabled: state.disabled,
+                    width: state.width,
+                    height: state.height,
+                    refresh: state.refresh,
+                    x: state.x,
+                    y: state.y,
+                    scale: state.scale,
+                    mode: state.mode,
+                    workspaces: resolved[m.name] || [],
+                    line
+                }
+            }
+        }
+
+        root.screensStore = storeSnapshot
+        monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
+
+        root.pendingEnabled = ({})
+        root.pendingWorkspaces = ({})
+        root.edited = ({})
+        root.selectedDirty = false
     }
 
     // ddcutil/brightnessctl detection deliberately does NOT run here
@@ -1633,6 +1665,55 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+
+                    // ---------------- bottom right: set default + apply ----------------
+                    // Set Default writes monitors.json (what replays at
+                    // the next Hyprland login) - see setDefault()'s own
+                    // comment. Left of Apply (which only ever dispatches
+                    // live now), same reading order as the two actions'
+                    // own scope: "what should happen every time" before
+                    // "what should happen right now".
+                    DashCard {
+                        id: setDefaultButton
+
+                        // Wider than Apply/Identify's shared 100 -
+                        // "Set Default" is noticeably longer than either
+                        // label and was crowding its own border at that
+                        // width.
+                        Layout.preferredWidth: Config.scaled(120, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(32, root.uiScale)
+                        Layout.rightMargin: Config.scaled(8, root.uiScale)
+                        uiScale: root.uiScale
+
+                        property color blinkColor: Config.fgcolor
+                        border.color: root.dirty ? setDefaultButton.blinkColor : Config.fgcolordark
+                        color: setDefaultMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+
+                        SequentialAnimation {
+                            running: root.dirty
+                            loops: Animation.Infinite
+                            ColorAnimation { target: setDefaultButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
+                            ColorAnimation { target: setDefaultButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Set Default"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+
+                        MouseArea {
+                            id: setDefaultMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.setDefault()
+                            }
+                        }
+                    }
 
                     // ---------------- bottom right: apply ----------------
                     DashCard {
