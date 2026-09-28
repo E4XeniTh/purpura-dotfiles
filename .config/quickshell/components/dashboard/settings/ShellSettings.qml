@@ -231,7 +231,20 @@ Item {
             ColumnLayout {
                 id: categoryColumn
 
+                // minimumWidth/maximumWidth pin this to exactly
+                // leftWidth, not just preferredWidth - a RowLayout is
+                // still free to shrink a child below its preferredWidth
+                // (down to minimumWidth, which otherwise defaults to 0)
+                // when the row doesn't have enough space for everyone's
+                // preferred size, which is exactly what let this column
+                // visibly narrow/widen depending on how wide the
+                // currently-selected category's own content on the right
+                // (categoryContent, Layout.fillWidth) happened to want to
+                // be - reported live as this column resizing depending
+                // on the right panel.
                 Layout.preferredWidth: contentRow.leftWidth
+                Layout.minimumWidth: contentRow.leftWidth
+                Layout.maximumWidth: contentRow.leftWidth
                 Layout.fillHeight: true
                 spacing: Config.scaled(8, root.uiScale)
 
