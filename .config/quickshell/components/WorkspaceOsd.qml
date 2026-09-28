@@ -23,29 +23,32 @@ Scope {
     id: root
 
     // Read once here (rather than per-screen inside osdWindow below) and
-    // shared by every screen's own instance - same monitors.json
-    // ScreenSettings.qml writes, holding per-monitor pinned workspaces.
-    // Backed by watchChanges (real OS-level file watching), not polling -
-    // updates the instant Apply writes the file rather than waiting on a
-    // poll interval or Hyprland's own raw-event stream (a checkbox-only
-    // Apply's workspace_rule/move dispatches are all no-ops when nothing
+    // shared by every screen's own instance - liveworkspaces.json,
+    // ScreenSettings.qml's Apply writes this on every Apply (Set
+    // Default writes monitors.json instead, which is only a startup
+    // default and no longer reflects what's actually live), holding
+    // per-monitor pinned workspaces. Backed by watchChanges (real
+    // OS-level file watching), not polling - updates the instant Apply
+    // writes the file rather than waiting on a poll interval or
+    // Hyprland's own raw-event stream (a checkbox-only Apply's
+    // workspace_rule/move dispatches are all no-ops when nothing
     // physically changed, so no raw event necessarily fires at all).
     FileView {
-        id: screensStoreFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
+        id: liveWorkspacesFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
         watchChanges: true
         onFileChanged: reload()
     }
 
-    readonly property var screensStore: {
+    readonly property var liveWorkspacesStore: {
         try {
-            return JSON.parse(screensStoreFile.text())
+            return JSON.parse(liveWorkspacesFile.text())
         } catch (e) {
             return {}
         }
     }
 
-    onScreensStoreChanged: renderSettleTimer.restart()
+    onLiveWorkspacesStoreChanged: renderSettleTimer.restart()
 
     // Shell > Bar settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since the "Show empty
@@ -74,7 +77,7 @@ Scope {
     // for a frame, which is what read live as boxes jittering or a
     // workspace appearing to blink in and back out during a workspace/
     // display swap. settleTick increments once the burst of raw events
-    // from one Apply actually stops (or screensStore itself changes, see
+    // from one Apply actually stops (or liveWorkspacesStore itself changes, see
     // above), and each osdWindow only copies its live computation into
     // what it actually renders when settleTick changes - see
     // monitorWorkspaces/liveMonitorWorkspaces below.
@@ -113,9 +116,10 @@ Scope {
             readonly property bool showEmptyOsd: !!root.barSettingsStore.showEmptyOsd
 
             // Every workspace number actually, deliberately pinned to
-            // *this* monitor per monitors.json (i.e. chosen via the 1-5
-            // buttons in Screen Settings) - straight off screensStore,
-            // used both to filter the real Hyprland.workspaces list below
+            // *this* monitor per liveworkspaces.json (i.e. chosen via
+            // the 1-5 buttons in Screen Settings) - straight off
+            // liveWorkspacesStore, used both to filter the real
+            // Hyprland.workspaces list below
             // and to build showEmptyOsd's placeholders. Explicitly capped
             // at id <= 5: resolveWorkspaceAssignment() in
             // ScreenSettings.qml never lets anything past 5 be anything
@@ -133,7 +137,7 @@ Scope {
             // monitor's auto-filled spare even with nothing pinned.
             readonly property var pinnedNumbers: {
                 if (!osdWindow.hyprMonitor) return []
-                const stored = root.screensStore[osdWindow.hyprMonitor.name]
+                const stored = root.liveWorkspacesStore[osdWindow.hyprMonitor.name]
                 const workspaces = (stored && stored.workspaces) ? stored.workspaces : []
                 return workspaces.filter(num => num <= 5)
             }

@@ -30,8 +30,8 @@ Row {
 
     // showEmptyWidget (Shell settings' Bar category, "Show empty
     // workspaces: In widget" toggle - see barSettingsStore below) - any
-    // workspace 1-5 pinned to a monitor (monitors.json) but not existing
-    // in Hyprland yet (nobody's switched to it this session, so
+    // workspace 1-5 pinned to a monitor (liveworkspaces.json) but not
+    // existing in Hyprland yet (nobody's switched to it this session, so
     // Hyprland hasn't created it) gets synthesized as a placeholder
     // here, matching just enough of a real HyprlandWorkspace's shape
     // for wsBox/winBox below to render an empty box for it: .monitor
@@ -58,9 +58,9 @@ Row {
         if (!root.showEmptyWidget) return []
 
         const placeholders = []
-        for (const monName in root.screensStore) {
+        for (const monName in root.liveWorkspacesStore) {
             if (monName.startsWith("__")) continue
-            const stored = root.screensStore[monName]
+            const stored = root.liveWorkspacesStore[monName]
             if (!stored || !stored.workspaces) continue
 
             const mon = Hyprland.monitors.values.find(m => m.name === monName)
@@ -121,7 +121,7 @@ Row {
         // other than an auto-assigned filler for a monitor nothing was
         // explicitly chosen for, and "managed" here means "I picked
         // this", not "this monitor happens to be functional") and
-        // isPinned() (straight off monitors.json's per-monitor
+        // isPinned() (straight off liveworkspaces.json's per-monitor
         // "workspaces" list - catches a genuinely stray/misattributed
         // workspace with an id <= 5 that isn't actually pinned to its
         // own monitor, e.g. left over from before a reassignment).
@@ -130,8 +130,8 @@ Row {
         // read live as this checkbox "doing nothing" for a monitor with
         // nothing explicitly chosen; isPinned() alone let an auto-filled
         // spare through too, since it's still technically present in
-        // monitors.json (fully exclusive/real, just never something a
-        // button produced).
+        // liveworkspaces.json (fully exclusive/real, just never
+        // something a button produced).
         let workspaces = Array.from(byId.values())
         if (root.strictWorkspaceWidget) {
             workspaces = workspaces.filter(w => w.id <= 5 && root.isPinned(w))
@@ -152,7 +152,7 @@ Row {
     // workspace boxes instead of one continuous, ungrouped run of them.
     //
     // This is the "live" computation - re-evaluates the instant any
-    // dependency changes (Hyprland.workspaces, screensStore, etc).
+    // dependency changes (Hyprland.workspaces, liveWorkspacesStore, etc).
     // Deliberately NOT what the Repeater below renders directly - see
     // settledEntries.
     readonly property var rowEntries: {
@@ -214,39 +214,41 @@ Row {
     }
 
     // Which workspace numbers (1-5) are actually pinned to each monitor
-    // via Screen Settings - read straight off the same monitors.json
-    // ScreenSettings.qml writes, via screensStoreFile's watchChanges
-    // below (real OS-level file watching, not polling) - lets the
-    // number label below tell "a real pin" apart from whatever spare
-    // workspace number Hyprland happened to assign a monitor with
-    // nothing pinned to it, and updates the instant Apply writes the
-    // file rather than waiting on a poll interval or Hyprland's own
-    // raw-event stream (a checkbox-only Apply's workspace_rule/move
-    // dispatches are all no-ops when nothing physically changed, so no
-    // raw event necessarily fires at all - reported live as "Show Empty"/
-    // "Only managed workspaces" not visibly taking effect until
-    // switching workspaces or clicking elsewhere happened to force some
-    // other refresh first).
+    // via Screen Settings - read straight off liveworkspaces.json
+    // (ScreenSettings.qml's Apply writes this on every Apply; Set
+    // Default writes monitors.json instead, which is only a startup
+    // default and no longer reflects what's actually live), via
+    // liveWorkspacesFile's watchChanges below (real OS-level file
+    // watching, not polling) - lets the number label below tell "a real
+    // pin" apart from whatever spare workspace number Hyprland happened
+    // to assign a monitor with nothing pinned to it, and updates the
+    // instant Apply writes the file rather than waiting on a poll
+    // interval or Hyprland's own raw-event stream (a checkbox-only
+    // Apply's workspace_rule/move dispatches are all no-ops when nothing
+    // physically changed, so no raw event necessarily fires at all -
+    // reported live as "Show Empty"/"Only managed workspaces" not
+    // visibly taking effect until switching workspaces or clicking
+    // elsewhere happened to force some other refresh first).
     FileView {
-        id: screensStoreFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/monitors.json"
+        id: liveWorkspacesFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
         watchChanges: true
         onFileChanged: reload()
     }
 
-    readonly property var screensStore: {
+    readonly property var liveWorkspacesStore: {
         try {
-            return JSON.parse(screensStoreFile.text())
+            return JSON.parse(liveWorkspacesFile.text())
         } catch (e) {
             return {}
         }
     }
 
-    onScreensStoreChanged: renderSettleTimer.restart()
+    onLiveWorkspacesStoreChanged: renderSettleTimer.restart()
 
     function isPinned(workspace) {
         if (!workspace.monitor) return false
-        const stored = root.screensStore[workspace.monitor.name]
+        const stored = root.liveWorkspacesStore[workspace.monitor.name]
         return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
     }
 
@@ -481,7 +483,7 @@ Row {
             // see resolveWorkspaceAssignment() in ScreenSettings.qml,
             // never something the 1-5 buttons themselves produce) or one
             // that was never actually pinned to this monitor through
-            // Screen Settings (see isPinned()/screensStore above) - the
+            // Screen Settings (see isPinned()/liveWorkspacesStore above) - the
             // box and its window grid still show either way, just
             // without a number that would otherwise look like a
             // deliberate pin.

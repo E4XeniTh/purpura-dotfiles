@@ -24,7 +24,17 @@
 # Run once at startup (see hyprland.lua's autostart block) so a layout
 # built through the settings panel survives a restart - hyprland.lua
 # itself only defines the primary display now.
+#
+# Also seeds ~/.config/quickshell/liveworkspaces.json from this same
+# file's own "workspaces" fields (stripped of everything else) - since
+# ScreenSettings.qml's own Apply button no longer writes monitors.json
+# at all (Set Default is now the only thing that does), WorkspaceRow.qml/
+# WorkspaceOsd.qml read liveworkspaces.json instead for which workspace
+# pins are actually live, and this is what keeps that file in sync with
+# reality from the moment Hyprland starts, before this session's first
+# Apply (or if there never is one) rather than leaving it stale/missing.
 CONF="$HOME/.config/quickshell/monitors.json"
+LIVE_CONF="$HOME/.config/quickshell/liveworkspaces.json"
 
 [ -f "$CONF" ] || exit 0
 
@@ -50,3 +60,10 @@ jq -r '
 ' "$CONF" | while IFS= read -r line; do
     [ -n "$line" ] && hyprctl eval "$line"
 done
+
+jq '
+    to_entries
+    | map(select(.key | startswith("__") | not))
+    | map({ (.key): { workspaces: (.value.workspaces // []) } })
+    | add // {}
+' "$CONF" > "$LIVE_CONF"

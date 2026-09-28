@@ -789,6 +789,23 @@ Item {
         // this-boot-only dispatch now. See setDefault() below for the
         // only thing that persists a layout as what happens on the next
         // Hyprland login.
+        //
+        // liveworkspaces.json is different - it's not a "default", it's
+        // this Apply's own just-dispatched workspace-to-monitor mapping,
+        // and WorkspaceRow.qml/WorkspaceOsd.qml need to see it update
+        // every single Apply (not just a Set Default) to know which
+        // pins/placeholders are actually live right now. Same shape as
+        // monitors.json's own per-entry "workspaces" list (only that
+        // field - no geometry) so those two files' existing `stored.
+        // workspaces` reads need no changes of their own, only their
+        // file path. apply-monitors.sh seeds this same file fresh at
+        // every login from whatever it just replayed off monitors.json,
+        // so it's never stale even before this session's first Apply.
+        const liveWorkspacesSnapshot = {}
+        for (const name in resolved) {
+            liveWorkspacesSnapshot[name] = { workspaces: resolved[name] }
+        }
+        liveWorkspacesFile.setText(JSON.stringify(liveWorkspacesSnapshot, null, 2) + "\n")
 
         // Monitor enable/disable/geometry lines go out first. If any
         // touched monitor is transitioning disabled -> enabled this
@@ -859,6 +876,75 @@ Item {
         }
     }
 
+    // The exact per-monitor snapshot Set Default would write - shared by
+    // setDefault() itself and defaultsOutOfSync below, so "what Set
+    // Default would save" and "whether there's anything new for it to
+    // save" can never disagree with each other.
+    function computeCurrentSnapshot() {
+        const resolved = root.resolveWorkspaceAssignment()
+
+        const snapshot = {}
+        for (const m of root.monitors) {
+            const line = root.buildMonitorLine(m.name)
+            const state = root.effectiveStateFor(m.name)
+            if (state && line) {
+                snapshot[m.name] = {
+                    disabled: state.disabled,
+                    width: state.width,
+                    height: state.height,
+                    refresh: state.refresh,
+                    x: state.x,
+                    y: state.y,
+                    scale: state.scale,
+                    mode: state.mode,
+                    workspaces: resolved[m.name] || [],
+                    line
+                }
+            }
+        }
+        return snapshot
+    }
+
+    // Whether computeCurrentSnapshot() actually differs from what's
+    // already saved in monitors.json - Set Default's own blink (see the
+    // button below) is gated on this, not root.dirty, since those aren't
+    // the same thing: reselecting a monitor and toggling its mode
+    // straight back to what it already was, or a pending workspace
+    // reassignment that resolves right back to what's already saved, is
+    // "dirty" (something was touched this session) but has nothing new
+    // for Set Default to actually persist - blinking anyway would just
+    // be a false "you should click this" signal. Deliberately a plain
+    // per-field comparison, not JSON.stringify(...) equality - key
+    // ordering inside each entry is fixed by computeCurrentSnapshot()
+    // itself so it'd likely still work, but this is explicit about
+    // exactly which fields matter (matching monitors.json's own schema)
+    // rather than leaning on incidental object-key order.
+    readonly property bool defaultsOutOfSync: {
+        const current = root.computeCurrentSnapshot()
+        const defaultNames = root.defaultMonitorNames
+        const currentNames = Object.keys(current)
+
+        if (currentNames.length !== defaultNames.length) return true
+
+        for (const name of currentNames) {
+            const c = current[name]
+            const d = root.screensStore[name]
+            if (!d) return true
+            if (c.disabled !== !!d.disabled) return true
+            if (c.mode !== d.mode) return true
+            if (c.width !== d.width || c.height !== d.height || c.refresh !== d.refresh) return true
+            if (c.x !== d.x || c.y !== d.y || c.scale !== d.scale) return true
+
+            const cw = (c.workspaces || []).slice().sort((a, b) => a - b)
+            const dw = (d.workspaces || []).slice().sort((a, b) => a - b)
+            if (cw.length !== dw.length) return true
+            for (let i = 0; i < cw.length; i++) {
+                if (cw[i] !== dw[i]) return true
+            }
+        }
+        return false
+    }
+
     // "Set Default" - the only thing that still writes monitors.json
     // (see this file's own top comment for why that's no longer Apply's
     // job). Snapshots the exact same effectiveStateFor()/
@@ -874,27 +960,7 @@ Item {
     // once written - both buttons consume the current staging session,
     // one to disk, one live.
     function setDefault() {
-        const resolved = root.resolveWorkspaceAssignment()
-
-        const storeSnapshot = {}
-        for (const m of root.monitors) {
-            const line = root.buildMonitorLine(m.name)
-            const state = root.effectiveStateFor(m.name)
-            if (state && line) {
-                storeSnapshot[m.name] = {
-                    disabled: state.disabled,
-                    width: state.width,
-                    height: state.height,
-                    refresh: state.refresh,
-                    x: state.x,
-                    y: state.y,
-                    scale: state.scale,
-                    mode: state.mode,
-                    workspaces: resolved[m.name] || [],
-                    line
-                }
-            }
-        }
+        const storeSnapshot = root.computeCurrentSnapshot()
 
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
@@ -1168,6 +1234,16 @@ Item {
     // config still existed even after it was deleted.
     readonly property bool hasRealMonitorsConfig: Object.keys(root.screensStore).some(k => !k.startsWith("__"))
 
+    // Every real (non-"__") monitor name Set Default has ever
+    // remembered, alphabetical - used by the "Current default settings"
+    // listing below. Alphabetical rather than root.monitors' own
+    // (hyprctl-reported, connection-order-dependent) ordering so the
+    // list doesn't reshuffle itself around whenever monitors get
+    // plugged in/out in a different order, and so it still lists a
+    // currently-disconnected monitor's remembered default in a stable
+    // position rather than dropping it off the end.
+    readonly property var defaultMonitorNames: Object.keys(root.screensStore).filter(k => !k.startsWith("__")).sort()
+
     // Seeds all five workspaces onto whichever monitor will actually be
     // treated as primary (effectivePrimaryName, not the raw
     // primaryMonitor property - see its own declaration for why)
@@ -1250,6 +1326,17 @@ Item {
         // Write-only from here (screensStoreProcess above is what reads
         // it back, and apply-monitors.sh is what replays it at login) -
         // no need to preload/read it back through this FileView too.
+        preload: false
+    }
+
+    // Write-only from here too - WorkspaceRow.qml/WorkspaceOsd.qml each
+    // read this file back themselves via their own watchChanges
+    // FileView, same split as monitorsFile/barSettingsFile above. See
+    // applyChanges()'s own comment on liveWorkspacesSnapshot for why
+    // this is a genuinely separate file from monitors.json now.
+    FileView {
+        id: liveWorkspacesFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
         preload: false
     }
 
@@ -1686,11 +1773,15 @@ Item {
                         uiScale: root.uiScale
 
                         property color blinkColor: Config.fgcolor
-                        border.color: root.dirty ? setDefaultButton.blinkColor : Config.fgcolordark
+                        // defaultsOutOfSync, not root.dirty - see its own
+                        // comment for why "something's staged" and
+                        // "there's actually something new to persist"
+                        // aren't the same thing.
+                        border.color: root.defaultsOutOfSync ? setDefaultButton.blinkColor : Config.fgcolordark
                         color: setDefaultMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
 
                         SequentialAnimation {
-                            running: root.dirty
+                            running: root.defaultsOutOfSync
                             loops: Animation.Infinite
                             ColorAnimation { target: setDefaultButton; property: "blinkColor"; to: Config.fgcolorlight; duration: 800 }
                             ColorAnimation { target: setDefaultButton; property: "blinkColor"; to: Config.fgcolor; duration: 800 }
@@ -1750,6 +1841,129 @@ Item {
                             }
                         }
                     }
+                }
+
+                // ---------------- current default settings ----------------
+                // Read-only listing of exactly what's in monitors.json
+                // right now (i.e. what Set Default last wrote, replayed
+                // at every Hyprland login) - fills the space rightColumn
+                // otherwise leaves empty below the geometry form (it's
+                // Layout.alignment: Qt.AlignTop, not fillHeight, unlike
+                // leftColumn's monitor list). Every monitor Set Default
+                // has ever remembered is listed here, even one that's
+                // currently disconnected or disabled - that's the whole
+                // point of a "default" (e.g. a TV's position offset,
+                // preset once while it's off, so enabling it later and
+                // hitting Apply just works).
+                ColumnLayout {
+                    id: defaultsSection
+
+                    // 0.8, not root.uiScale directly - this table has 8
+                    // columns to fit across contentRow.rightWidth, tighter
+                    // than the geometry form's own 0.75 (see rightColumn's
+                    // own geometryUiScale) gets away with at only 3-5.
+                    readonly property real defaultsUiScale: root.uiScale * 0.8
+
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.topMargin: Config.scaled(18, root.uiScale)
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    Text {
+                        text: "Current default settings:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    Text {
+                        visible: root.defaultMonitorNames.length === 0
+                        text: "Nothing set yet - use Set Default below."
+                        color: Config.fgcolordark
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(12, root.uiScale)
+                    }
+
+                    Repeater {
+                        model: root.defaultMonitorNames
+
+                        RowLayout {
+                            id: defaultRow
+                            required property string modelData
+                            readonly property var entry: root.screensStore[defaultRow.modelData]
+
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, defaultsSection.defaultsUiScale)
+
+                            Text {
+                                Layout.preferredWidth: Config.scaled(96, defaultsSection.defaultsUiScale)
+                                text: defaultRow.modelData + ":"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                                font.bold: true
+                                elide: Text.ElideRight
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Config.scaled(30, defaultsSection.defaultsUiScale)
+                                text: defaultRow.entry.disabled ? "OFF" : "ON"
+                                color: defaultRow.entry.disabled ? Config.fgcolordark : Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                                font.bold: true
+                            }
+
+                            Text {
+                                text: "|"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Config.scaled(150, defaultsSection.defaultsUiScale)
+                                text: defaultRow.entry.width + " x " + defaultRow.entry.height + " @ " + defaultRow.entry.refresh + "hz"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                text: "|"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                Layout.preferredWidth: Config.scaled(90, defaultsSection.defaultsUiScale)
+                                text: defaultRow.entry.x + " & " + defaultRow.entry.y
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                text: "|"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                text: defaultRow.entry.scale + "x"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+                    }
+
+                    Item { Layout.fillHeight: true }
                 }
             }
         }

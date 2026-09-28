@@ -2,10 +2,17 @@
 .config/quickshell/helpers/cava_bridge
 .config/quickshell/helpers/*.o
 
-# Runtime monitor layout, written by ScreenSettings.qml on every Apply -
-# machine-specific (output names/resolutions differ per box), same
-# reasoning the old ~/.config/hypr/screens.json was never tracked either.
+# Runtime monitor layout, written by ScreenSettings.qml's Set Default
+# button - machine-specific (output names/resolutions differ per box),
+# same reasoning the old ~/.config/hypr/screens.json was never tracked
+# either.
 .config/quickshell/monitors.json
+# This-session's live workspace-to-monitor pins, written by
+# ScreenSettings.qml's Apply on every Apply and seeded at every Hyprland
+# login by apply-monitors.sh - read by WorkspaceRow.qml/WorkspaceOsd.qml,
+# deliberately a separate file from monitors.json (see ScreenSettings.qml's
+# own top comment for why Apply and Set Default write two different files).
+.config/quickshell/liveworkspaces.json
 .config/quickshell/barsettings.json
 .config/quickshell/peripheralsettings.json
 
