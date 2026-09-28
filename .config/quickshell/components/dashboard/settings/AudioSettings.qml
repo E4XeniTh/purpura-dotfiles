@@ -251,9 +251,10 @@ Item {
                     anchors.centerIn: parent
                     visible: root.playbackStreamNodes.length === 0
                     text: "No applications playing audio right now."
-                    color: Config.fgcolordark
+                    color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                    font.pixelSize: Config.scaled(16, root.uiScale)
                 }
 
                 ListView {
