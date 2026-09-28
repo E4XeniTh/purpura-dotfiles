@@ -220,6 +220,15 @@ Item {
             spacing: Config.scaled(8, root.uiScale)
 
             Text {
+                // Explicit AlignTop, not just "first child" - without a
+                // sibling that always fills the remaining height (see the
+                // wrapper Item below), this drifted down toward the
+                // vertical middle of mixerSection whenever the empty-state
+                // Text was its only other visible sibling (nothing left to
+                // stack against, so the two short Texts alone don't span
+                // mixerSection's own fixed height the way heading+ListView
+                // do when there are cards to show).
+                Layout.alignment: Qt.AlignTop
                 text: "Volume Mixer"
                 color: Config.fgcolor
                 font.family: Config.fontfamily
@@ -227,31 +236,43 @@ Item {
                 font.bold: true
             }
 
-            Text {
-                visible: root.playbackStreamNodes.length === 0
-                text: "No applications playing audio right now."
-                color: Config.fgcolordark
-                font.family: Config.fontfamily
-                font.pixelSize: Config.scaled(12, root.uiScale)
-            }
-
-            ListView {
+            // Always present and always Layout.fillHeight (unlike the
+            // ListView/empty-state Text it now wraps, which still toggle
+            // visible on root.playbackStreamNodes.length) - this is what
+            // keeps the heading pinned to the top and gives the empty-state
+            // message a real, full-height parent to center itself in,
+            // rather than the two of them being the only two ColumnLayout
+            // children and getting centered as a short pair instead.
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: root.playbackStreamNodes.length > 0
-                clip: true
-                orientation: ListView.Horizontal
-                spacing: Config.scaled(10, root.uiScale)
-                boundsBehavior: Flickable.StopAtBounds
-                model: ScriptModel { values: root.playbackStreamNodes }
 
-                delegate: MixerCard {
-                    required property var modelData
+                Text {
+                    anchors.centerIn: parent
+                    visible: root.playbackStreamNodes.length === 0
+                    text: "No applications playing audio right now."
+                    color: Config.fgcolordark
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                }
 
-                    width: soundContent.mixerCardWidth
-                    height: ListView.view.height
-                    uiScale: root.uiScale
-                    stream: modelData
+                ListView {
+                    anchors.fill: parent
+                    visible: root.playbackStreamNodes.length > 0
+                    clip: true
+                    orientation: ListView.Horizontal
+                    spacing: Config.scaled(10, root.uiScale)
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: ScriptModel { values: root.playbackStreamNodes }
+
+                    delegate: MixerCard {
+                        required property var modelData
+
+                        width: soundContent.mixerCardWidth
+                        height: ListView.view.height
+                        uiScale: root.uiScale
+                        stream: modelData
+                    }
                 }
             }
         }
