@@ -225,7 +225,7 @@ Item {
             spacing: Config.scaled(12, root.uiScale)
 
             readonly property real dividerWidth: Config.scaled(2, root.uiScale)
-            readonly property real leftWidth: Config.scaled(140, root.uiScale)
+            readonly property real leftWidth: Config.scaled(200, root.uiScale)
 
             // ---------------- LEFT: categories ----------------
             ColumnLayout {

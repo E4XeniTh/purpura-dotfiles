@@ -46,7 +46,7 @@ Item {
     // opposite isSink value once isStream flips true, since what flows
     // "into" vs "out of" a stream node is the mirror image of a hardware
     // node's own direction.
-    readonly property var playbackStreamNodes: Pipewire.nodes.values.filter(n => n.audio && n.isStream && !n.isSink)
+    readonly property var playbackStreamNodes: Pipewire.nodes.values.filter(n => n.audio && n.isStream && n.isSink)
 
     // preferredDefaultAudioSink/Source is only a hint to Pipewire/
     // WirePlumber - defaultAudioSink/Source (what the border color used
@@ -90,7 +90,7 @@ Item {
         // playing audio, unlike the playback/recording lists above it
         // (which can genuinely have many devices stacked vertically and
         // benefit from soaking up whatever extra room is available).
-        readonly property real mixerSectionHeight: Config.scaled(190, root.uiScale)
+        readonly property real mixerSectionHeight: Config.scaled(360, root.uiScale)
         readonly property real mixerCardWidth: Config.scaled(110, root.uiScale)
 
         // Fills everything above the mixer divider - both device lists
