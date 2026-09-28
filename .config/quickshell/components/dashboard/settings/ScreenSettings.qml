@@ -956,19 +956,22 @@ Item {
     // on !root.dirty. Every entry's "workspaces" comes straight from
     // resolved[name] - the same already-exclusive mapping, so the file
     // on disk can never disagree with what the workspace-pin buttons
-    // show. Clears the same staged edits Apply's own finally block does
-    // once written - both buttons consume the current staging session,
-    // one to disk, one live.
+    // show.
+    //
+    // Deliberately does NOT clear pendingEnabled/pendingWorkspaces/
+    // edited/selectedDirty the way applyChanges()'s own finally block
+    // does - reported live as making "Set Default, then Apply" the same
+    // edits impossible (Set Default wiped the staging before Apply ever
+    // got a chance to dispatch it, leaving Apply with nothing left to
+    // send). Leaving the staged edits alone means either order works -
+    // edit, Set Default, Apply, or edit, Apply, Set Default - and each
+    // button still only ever consumes the staging it actually needs
+    // (Apply clears it in its own finally block once IT runs).
     function setDefault() {
         const storeSnapshot = root.computeCurrentSnapshot()
 
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
-
-        root.pendingEnabled = ({})
-        root.pendingWorkspaces = ({})
-        root.edited = ({})
-        root.selectedDirty = false
     }
 
     // ddcutil/brightnessctl detection deliberately does NOT run here
@@ -1963,6 +1966,26 @@ Item {
 
                             Text {
                                 text: defaultRow.entry.scale + "x"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            Text {
+                                text: "|"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
+                            }
+
+                            // Workspace numbers pinned to this monitor by
+                            // default (resolveWorkspaceAssignment()'s own
+                            // sorted output, from computeCurrentSnapshot()/
+                            // setDefault() - see their own comments), same
+                            // "1-5, space separated" shorthand as the
+                            // numbered buttons above.
+                            Text {
+                                text: (defaultRow.entry.workspaces || []).join(" ")
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
