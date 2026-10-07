@@ -349,7 +349,7 @@ Scope {
         // round-trip), which is what made this feel sluggish and gave it
         // a wrong height mid-spread.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 40, 1)
 
         color: "transparent"
 
@@ -358,13 +358,13 @@ Scope {
             visible: root.dropdownOpen
             color: "transparent"
             width: centerCol.width
-            // +20, not a bare fit to centerCol - same breathing room
+            // +40, not a bare fit to centerCol - same breathing room
             // Clipboard.qml's own panelBox gives its content (that file's
-            // contentCol.implicitHeight + 20), so an empty/near-empty
+            // contentCol.implicitHeight + 40), so an empty/near-empty
             // dropdown (e.g. "Everything is up to date" with no list
             // below it) doesn't end up looking cramped against the box's
             // own border the way a plain exact-fit height did.
-            height: centerCol.implicitHeight + 20
+            height: centerCol.implicitHeight + 40
 
             // Grows from the right edge, same as Notification.qml's own
             // panelBox/Tray.qml's menu.
@@ -514,7 +514,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight + 20
+                        height: centerCol.implicitHeight + 40
                     }
                 }
 

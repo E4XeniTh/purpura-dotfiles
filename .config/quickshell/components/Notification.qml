@@ -371,7 +371,7 @@ Scope {
         // window is sized once from the full/settled content, and only
         // an internal Rectangle (panelBox here) animates via clip.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 40, 1)
 
         color: "transparent"
         Rectangle {
@@ -379,13 +379,13 @@ Scope {
             visible: root.centerOpen
             color: "transparent"
             width: centerCol.width
-            // +20, not a bare fit to centerCol - same breathing room
+            // +40, not a bare fit to centerCol - same breathing room
             // Clipboard.qml's own panelBox gives its content (that file's
-            // contentCol.implicitHeight + 20), so an empty "No
+            // contentCol.implicitHeight + 40), so an empty "No
             // notifications" dropdown doesn't end up looking cramped
             // against the box's own border the way a plain exact-fit
             // height did.
-            height: centerCol.implicitHeight + 20
+            height: centerCol.implicitHeight + 40
 
             // No anchor at all defaults to the window's top-left, so as
             // width grew the box appeared to grow rightward from a fixed
@@ -577,7 +577,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight + 20
+                        height: centerCol.implicitHeight + 40
                     }
                 }
 
