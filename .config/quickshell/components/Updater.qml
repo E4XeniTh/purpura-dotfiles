@@ -342,8 +342,14 @@ Scope {
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.dropdownOpen
 
+        // Content-derived, NOT bound to panelBox's currently-animating
+        // height - see Notification.qml's own identical fix/comment:
+        // binding the window itself to the live animation resizes the
+        // actual Wayland surface every frame (a real compositor
+        // round-trip), which is what made this feel sluggish and gave it
+        // a wrong height mid-spread.
         implicitWidth: 400
-        implicitHeight: Math.max(panelBox.height, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight, 1)
 
         color: "transparent"
 
@@ -402,7 +408,7 @@ Scope {
 
                         Text {
                             text: root.updateCount + " available"
-                            color: Config.fgcolordark
+                            color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: 12
                         }
