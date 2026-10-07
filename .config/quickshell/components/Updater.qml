@@ -349,7 +349,7 @@ Scope {
         // round-trip), which is what made this feel sluggish and gave it
         // a wrong height mid-spread.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 10, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
 
         color: "transparent"
 
@@ -358,14 +358,16 @@ Scope {
             visible: root.dropdownOpen
             color: "transparent"
             width: centerCol.width
-            // +10 bottom padding - matches centerCol's own top margin
-            // (anchors.margins below) and its 10px inter-child spacing,
-            // the same uniform 10/10/10 Clipboard.qml's own panelBox
-            // already uses throughout (top margin, internal spacing,
-            // bottom margin all equal) - that plain consistency, not any
-            // extra breathing room, is what made its label read as
-            // well-placed.
-            height: centerCol.implicitHeight + 10
+            // +20 = the 10px top margin centerCol's own anchors.margins
+            // already gives it (an offset on its position, not something
+            // that eats into this box's own height budget) PLUS a
+            // matching 10px gap below it - the exact same "+20 = 10 top +
+            // 10 bottom" Clipboard.qml's own panelBox comment explains
+            // for its box. A bare +10 here left nothing left over for the
+            // bottom gap at all (10 entirely consumed accounting for the
+            // top offset), clipping the empty-state label flush against
+            // the border.
+            height: centerCol.implicitHeight + 20
 
             // Grows from the right edge, same as Notification.qml's own
             // panelBox/Tray.qml's menu.
@@ -515,7 +517,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight + 10
+                        height: centerCol.implicitHeight + 20
                     }
                 }
 
