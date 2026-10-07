@@ -349,7 +349,7 @@ Scope {
         // round-trip), which is what made this feel sluggish and gave it
         // a wrong height mid-spread.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 25, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 10, 1)
 
         color: "transparent"
 
@@ -358,11 +358,14 @@ Scope {
             visible: root.dropdownOpen
             color: "transparent"
             width: centerCol.width
-            // +25 bottom padding, matched by the empty-state label's own
-            // Layout.topMargin above (see that Text) so the gap above
-            // and below it (when it's the only thing showing) are equal
-            // instead of one being barely 10px and the other 40.
-            height: centerCol.implicitHeight + 25
+            // +10 bottom padding - matches centerCol's own top margin
+            // (anchors.margins below) and its 10px inter-child spacing,
+            // the same uniform 10/10/10 Clipboard.qml's own panelBox
+            // already uses throughout (top margin, internal spacing,
+            // bottom margin all equal) - that plain consistency, not any
+            // extra breathing room, is what made its label read as
+            // well-placed.
+            height: centerCol.implicitHeight + 10
 
             // Grows from the right edge, same as Notification.qml's own
             // panelBox/Tray.qml's menu.
@@ -420,12 +423,6 @@ Scope {
 
                     Text {
                         Layout.fillWidth: true
-                        // On top of centerCol's own 10px spacing, so the
-                        // gap above this label (when it's the only thing
-                        // showing) roughly matches the fixed +25 padding
-                        // below it, instead of the title row sitting
-                        // right on top of it.
-                        Layout.topMargin: 15
                         visible: root.updateCount === 0
                         text: "Everything is up to date"
                         color: Config.fgcolor
@@ -518,7 +515,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight + 25
+                        height: centerCol.implicitHeight + 10
                     }
                 }
 
