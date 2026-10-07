@@ -240,11 +240,31 @@ Scope {
         // (see captureMonitorUnderMouse).
         id: captureProcess
         onExited: (exitCode, exitStatus) => {
+            // Only the region/window paths ever touch the layersOut
+            // animation (see startLiveCapture below) - put it back
+            // exactly as queried, never a hardcoded guess, since the
+            // user's real config may not match this project's own
+            // example config at all.
+            if (root.animationRestorePending) {
+                root.animationRestorePending = false
+                if (root.savedLayersOutAnimation) {
+                    const a = root.savedLayersOutAnimation
+                    const style = a.style || ""
+                    restoreFadeoutProcess.command = ["hyprctl", "keyword", "animation",
+                        "layersOut," + (a.enabled ? 1 : 0) + "," + a.speed + "," + a.bezier + (style ? ("," + style) : "")]
+                    restoreFadeoutProcess.running = true
+                }
+            }
+
             root.opening = false
             root.hoveredClient = null
             root.dragging = false
             cleanupProcess.running = true
         }
+    }
+
+    Process {
+        id: restoreFadeoutProcess
     }
 
     // Setting root.active = false only requests the overlay's layer
@@ -265,14 +285,72 @@ Scope {
     // ScreenSettings.qml's own monitorSettleTimer/monitorSettleQueryProcess
     // already use for the same class of problem (confirm a compositor
     // state change actually happened before proceeding).
+    //
+    // That poll alone still wasn't enough on a setup with Hyprland's
+    // "layersOut" close animation enabled: hyprctl drops a layer from
+    // `layers -j` the moment the unmap is REQUESTED, not once the fade
+    // finishes rendering, so the poll above was reporting the surface
+    // "gone" while the compositor was still compositing its fading-out
+    // texture into the very frame grim then read. Fixed by querying and
+    // disabling that one animation before the unmap even starts, and
+    // restoring it (to the exact config queried, never a hardcoded
+    // guess) once the capture is done - see captureProcess.onExited.
     property var pendingCaptureCommand: null
     property int captureSettleAttempts: 0
+    property var savedLayersOutAnimation: null
+    property bool animationRestorePending: false
 
     function startLiveCapture(command) {
         root.pendingCaptureCommand = command
-        root.active = false
-        root.captureSettleAttempts = 0
-        captureSettleTimer.restart()
+        root.animationRestorePending = false
+        queryAnimationsProcess.running = true
+    }
+
+    Process {
+        id: queryAnimationsProcess
+        command: ["hyprctl", "-j", "animations"]
+
+        stdout: StdioCollector {
+            id: queryAnimationsCollector
+            onStreamFinished: {
+                let entry = null
+                try {
+                    const parsed = JSON.parse(queryAnimationsCollector.text)
+                    for (const a of parsed) {
+                        if (a.name === "layersOut") {
+                            entry = a
+                            break
+                        }
+                    }
+                } catch (e) {
+                    entry = null
+                }
+
+                // Nothing to disable (not found, or not even enabled
+                // right now) - skip straight to the usual unmap+poll,
+                // same as before this fix existed.
+                if (entry && entry.enabled) {
+                    root.savedLayersOutAnimation = entry
+                    root.animationRestorePending = true
+                    disableFadeoutProcess.command = ["hyprctl", "keyword", "animation", "layersOut,0"]
+                    disableFadeoutProcess.running = true
+                } else {
+                    root.savedLayersOutAnimation = null
+                    root.active = false
+                    root.captureSettleAttempts = 0
+                    captureSettleTimer.restart()
+                }
+            }
+        }
+    }
+
+    Process {
+        id: disableFadeoutProcess
+        onExited: (exitCode, exitStatus) => {
+            root.active = false
+            root.captureSettleAttempts = 0
+            captureSettleTimer.restart()
+        }
     }
 
     Timer {
