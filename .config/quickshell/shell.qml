@@ -13,7 +13,8 @@ Scope {
     powerMenu: powerMenu
     settingsScreen: settingsScreen
   }
-  Notification { id: notification }
+  Notification { id: notification; updater: updater }
+  Updater { id: updater; notification: notification }
   Clipboard { id: clipboard }
   Screenshot { id: screenshot }
 
@@ -22,6 +23,7 @@ Scope {
     powerMenuOpen: powerMenu.open
     dashboard: dashboard
     notification: notification
+    updater: updater
   }
 
   VolumeOsd {

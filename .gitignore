@@ -15,6 +15,7 @@
 .config/quickshell/liveworkspaces.json
 .config/quickshell/barsettings.json
 .config/quickshell/peripheralsettings.json
+.config/quickshell/updatersettings.json
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf

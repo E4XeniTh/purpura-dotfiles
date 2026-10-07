@@ -36,6 +36,7 @@ Scope {
     // this very same process.
     property var dashboard: null
     property var notification: null
+    property var updater: null
 
     // Shell > Bar settings (ShellSettings.qml) - watched directly rather
     // than routed through Dashboard.qml's object tree, same convention
@@ -57,6 +58,7 @@ Scope {
     }
 
     readonly property bool showBrightnessControl: root.barSettingsStore.showBrightnessControl !== false
+    readonly property bool showUpdater: root.barSettingsStore.showUpdater !== false
 
     // dashboard.primaryMonitor defaults to a hardcoded output name
     // ("DP-1") and isn't persisted to disk, so it can point at a screen
@@ -312,6 +314,65 @@ Scope {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: brightnessControl.right
                     anchors.leftMargin: Config.scaled(10, bar.uiScale)
+                }
+
+                // Hides itself entirely when "Show Updater" (Shell > Bar
+                // settings) is off - same visible/width/height-to-0
+                // convention BrightnessControl.qml/BatteryControl.qml use
+                // for their own conditional hiding, just inlined here
+                // rather than in a dedicated component since this button
+                // has no hardware-detection logic of its own to justify
+                // one.
+                Rectangle {
+                    id: updaterButton
+
+                    visible: root.showUpdater
+                    width: root.showUpdater ? Config.scaled(34, bar.uiScale) : 0
+                    height: root.showUpdater ? Config.scaled(34, bar.uiScale) : 0
+
+                    anchors {
+                        right: notificationButton.left
+                        verticalCenter: parent.verticalCenter
+                        rightMargin: Config.scaled(10, bar.uiScale)
+                    }
+
+                    // fgcolorlight border/icon while updates are pending
+                    // AND the Updater settings category's own "highlight"
+                    // toggle is on - a plain fgcolor otherwise, same as
+                    // every other bar widget's resting state.
+                    readonly property bool highlighted: (root.updater ? root.updater.highlightOnUpdates && root.updater.updateCount > 0 : false)
+
+                    border.width: Config.scaled(2, bar.uiScale)
+                    border.color: updaterButton.highlighted ? Config.fgcolorlight : Config.fgcolor
+                    color: updaterMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+
+                    MouseArea {
+                        id: updaterMouseArea
+                        hoverEnabled: true
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: (mouse) => {
+                            if (mouse.button === Qt.RightButton) {
+                                if (root.updater) root.updater.runUpdate()
+                                return
+                            }
+                            if (root.updater) root.updater.dropdownOpen = !root.updater.dropdownOpen
+                        }
+                    }
+
+                    IconImage {
+                        id: updaterIcon
+
+                        anchors.fill: parent
+                        anchors.margins: Config.scaled(3, bar.uiScale)
+                        source: Quickshell.iconPath("software-update-available-symbolic")
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: updaterIcon
+                        source: updaterIcon
+                        color: updaterButton.highlighted ? Config.fgcolorlight : Config.fgcolor
+                    }
                 }
 
                 Rectangle {

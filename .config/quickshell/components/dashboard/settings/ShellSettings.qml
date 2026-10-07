@@ -8,24 +8,24 @@ import "../../../Config.js" as Config
 // Shell-level settings (as opposed to Sound/Network/Bluetooth/Display,
 // which all configure a piece of hardware) - one tab of
 // SettingsScreen.qml's fullscreen tabbed panel (see there for the tab
-// bar/coordinator). Categories down the left ("Bar", "Peripherals")
-// mirror Network/Bluetooth's own left icon-tab strip, picking which
-// group of settings shows on the right.
+// bar/coordinator). Categories down the left ("Bar", "Peripherals",
+// "Updater") mirror Network/Bluetooth's own left icon-tab strip, picking
+// which group of settings shows on the right.
 //
 // Everything here is a plain, immediately-saved toggle - no Apply
 // button, unlike ScreenSettings.qml's staged monitor edits - persisted
-// to its own barsettings.json/peripheralsettings.json rather than
-// monitors.json, so a Display tab Apply can never clobber a Bar/
-// Peripherals setting (or vice versa) by overwriting the wrong file
-// wholesale. WorkspaceRow.qml/WorkspaceOsd.qml/Bar.qml each watch
-// barsettings.json directly for the same reason they already watched
-// monitors.json - no property-passing chain needed. Peripherals'
-// mouse sensitivity/solaar startup settings are instead replayed by
-// ~/.config/hypr/scripts/apply-peripherals.sh from hyprland.lua's own
-// autostart block (see that script), the same "small JSON file +
-// startup replay" pattern apply-monitors.sh already established for
-// monitors.json - there's no live-reload watcher needed on that side
-// since nothing else in the running shell reads these two settings back.
+// to its own barsettings.json/peripheralsettings.json/updatersettings.json
+// rather than monitors.json, so a Display tab Apply can never clobber a
+// Bar/Peripherals/Updater setting (or vice versa) by overwriting the
+// wrong file wholesale. WorkspaceRow.qml/WorkspaceOsd.qml/Bar.qml each
+// watch barsettings.json directly for the same reason they already
+// watched monitors.json - no property-passing chain needed.
+// Peripherals' mouse sensitivity/solaar startup settings are instead
+// replayed by ~/.config/hypr/scripts/apply-peripherals.sh from
+// hyprland.lua's own autostart block (see that script), the same
+// "small JSON file + startup replay" pattern apply-monitors.sh already
+// established for monitors.json. Updater.qml watches updatersettings.json
+// directly too, same decoupled pattern.
 Item {
     id: root
 
@@ -35,7 +35,7 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals.
+    // 0 = Bar, 1 = Peripherals, 2 = Updater.
     property int currentCategory: 0
 
     property var barStore: ({})
@@ -58,11 +58,13 @@ Item {
     // BrightnessControl.qml's own always-on-until-told-otherwise default,
     // so a fresh install with no barsettings.json yet still shows it.
     readonly property bool showBrightnessControl: root.barStore.showBrightnessControl !== false
+    readonly property bool showUpdater: root.barStore.showUpdater !== false
 
     function toggleStrictWorkspaceWidget() { root.setBarSetting("strictWorkspaceWidget", !root.strictWorkspaceWidget) }
     function toggleShowEmptyWidget() { root.setBarSetting("showEmptyWidget", !root.showEmptyWidget) }
     function toggleShowEmptyOsd() { root.setBarSetting("showEmptyOsd", !root.showEmptyOsd) }
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
+    function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
 
     // ---------------- Peripherals ----------------
     property var peripheralsStore: ({})
@@ -107,8 +109,39 @@ Item {
         }
     }
 
-    onActiveChanged: if (root.active) { root.loadBarStore(); root.loadPeripheralsStore() }
-    Component.onCompleted: { root.loadBarStore(); root.loadPeripheralsStore() }
+    // ---------------- Updater ----------------
+    // Watched directly by Updater.qml too (its own FileView, same
+    // decoupled-from-this-instance pattern barsettings.json/
+    // peripheralsettings.json already use) - this is purely the UI side
+    // of editing it.
+    property var updaterStore: ({})
+
+    function loadUpdaterStore() {
+        updaterStoreProcess.running = false
+        updaterStoreProcess.running = true
+    }
+
+    function setUpdaterSetting(key, value) {
+        const updated = Object.assign({}, root.updaterStore, { [key]: value })
+        root.updaterStore = updated
+        updaterSettingsFile.setText(JSON.stringify(updated, null, 2) + "\n")
+    }
+
+    readonly property bool highlightOnUpdates: root.updaterStore.highlightOnUpdates !== false
+    // Falls back to 30 whenever the stored value is missing or not a
+    // positive number, same reasoning as Updater.qml's own identical
+    // property - both read the same file, this is just the editable
+    // mirror of it.
+    readonly property int checkIntervalMinutes: {
+        const raw = root.updaterStore.checkIntervalMinutes
+        const n = Number(raw)
+        return (raw !== undefined && !isNaN(n) && n > 0) ? n : 30
+    }
+
+    function toggleHighlightOnUpdates() { root.setUpdaterSetting("highlightOnUpdates", !root.highlightOnUpdates) }
+
+    onActiveChanged: if (root.active) { root.loadBarStore(); root.loadPeripheralsStore(); root.loadUpdaterStore() }
+    Component.onCompleted: { root.loadBarStore(); root.loadPeripheralsStore(); root.loadUpdaterStore() }
 
     // Read via `cat`, same idiom ScreenSettings.qml uses for monitors.json -
     // a missing file (first run) just yields empty stdout instead of
@@ -165,6 +198,32 @@ Item {
     FileView {
         id: peripheralsSettingsFile
         path: Quickshell.env("HOME") + "/.config/quickshell/peripheralsettings.json"
+        preload: false
+    }
+
+    // Same `cat`-via-Process idiom as barStoreProcess/peripheralsStoreProcess
+    // above.
+    Process {
+        id: updaterStoreProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/updatersettings.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.updaterStore = JSON.parse(text)
+                } catch (e) {
+                    root.updaterStore = {}
+                }
+            }
+        }
+    }
+
+    // Write-only, same reasoning as barSettingsFile/peripheralsSettingsFile
+    // above - Updater.qml reads this back itself via its own
+    // watchChanges FileView.
+    FileView {
+        id: updaterSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/updatersettings.json"
         preload: false
     }
 
@@ -300,6 +359,32 @@ Item {
                     }
                 }
 
+                DashCard {
+                    id: updaterCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: updaterCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 2 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Updater"
+                        color: updaterCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: updaterCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 2
+                    }
+                }
+
                 Item { Layout.fillHeight: true }
             }
 
@@ -319,7 +404,7 @@ Item {
                 spacing: Config.scaled(10, root.uiScale)
 
                 Text {
-                    text: root.currentCategory === 0 ? "Bar" : "Peripherals"
+                    text: ["Bar", "Peripherals", "Updater"][root.currentCategory]
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(14, root.uiScale)
@@ -485,6 +570,43 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
+                // ---------------- show updater ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.scaled(8, root.uiScale)
+
+                    Text {
+                        text: "Show Updater:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleShowUpdater()
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showUpdater ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleShowUpdater()
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
                 } // barCategoryContent
 
                 // ---------------- Peripherals category ----------------
@@ -572,6 +694,132 @@ Item {
                             onMoved: (newValue) => {
                                 root.stagedSensitivity = Math.round((newValue * 2 - 1) * 100) / 100
                                 sensitivityApplyTimer.restart()
+                            }
+                        }
+                    }
+                }
+
+                // ---------------- Updater category ----------------
+                ColumnLayout {
+                    id: updaterCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 2
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    // ---------------- highlight on updates ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "Highlight Button When Updates Available:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleHighlightOnUpdates()
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleHighlightOnUpdates()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    // ---------------- update check interval ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(4, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "Update Check Interval (minutes):"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(60, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                            color: Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: intervalInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                            TextInput {
+                                id: intervalInput
+
+                                anchors {
+                                    fill: parent
+                                    margins: Config.scaled(6, root.uiScale)
+                                }
+                                horizontalAlignment: TextInput.AlignHCenter
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                selectByMouse: true
+                                clip: true
+
+                                // Positive whole numbers only.
+                                validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
+
+                                // Guards the programmatic resync below
+                                // from being mistaken for a user edit by
+                                // onTextChanged - same reasoning
+                                // LabeledField.qml's own `syncing` flag
+                                // has for the exact same pattern.
+                                property bool syncing: false
+                                text: String(root.checkIntervalMinutes)
+
+                                Connections {
+                                    target: root
+                                    function onCheckIntervalMinutesChanged() {
+                                        intervalInput.syncing = true
+                                        intervalInput.text = String(root.checkIntervalMinutes)
+                                        intervalInput.syncing = false
+                                    }
+                                }
+
+                                // Committed live, on every keystroke that
+                                // actually parses to a positive integer -
+                                // an empty/in-progress edit (e.g. the
+                                // field momentarily cleared while
+                                // retyping) is just left unsaved rather
+                                // than persisting 0/NaN, root.
+                                // checkIntervalMinutes's own fallback
+                                // covers it meanwhile.
+                                onTextChanged: {
+                                    if (intervalInput.syncing) return
+                                    const n = parseInt(intervalInput.text, 10)
+                                    if (!isNaN(n) && n > 0) {
+                                        root.setUpdaterSetting("checkIntervalMinutes", n)
+                                    }
+                                }
+
+                                onAccepted: intervalInput.focus = false
                             }
                         }
                     }

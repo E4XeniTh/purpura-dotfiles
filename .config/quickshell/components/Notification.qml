@@ -255,9 +255,17 @@ Scope {
 
     property bool centerOpen: false
 
+    // Cross-wired from shell.qml - Updater.qml's own dropdown holds the
+    // reverse reference and does the same thing, same mutual-exclusivity
+    // convention Dashboard.qml/SettingsScreen.qml already use for each
+    // other (each only closes the OTHER on its own open, guarded on its
+    // own flag transitioning true, so this can't ping-pong).
+    property var updater: null
+
     onCenterOpenChanged: {
         if (root.centerOpen) {
             autoCloseTimer.restart()
+            if (root.updater) root.updater.dropdownOpen = false
         } else {
             autoCloseTimer.stop()
         }
