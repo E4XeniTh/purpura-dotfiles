@@ -365,7 +365,7 @@ Scope {
 
                         anchors.fill: parent
                         anchors.margins: Config.scaled(3, bar.uiScale)
-                        source: Quickshell.iconPath("software-update-available-symbolic")
+                        source: Quickshell.iconPath("system-software-update-symbolic")
                     }
 
                     ColorOverlay {

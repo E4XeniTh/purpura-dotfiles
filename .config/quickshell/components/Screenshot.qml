@@ -251,30 +251,75 @@ Scope {
     // surfaces unmap - that's an async round-trip to the compositor, not
     // something that's actually happened by the time this same JS tick
     // returns. Running grim immediately after raced that unmap and
-    // grabbed the dim/instruction bar still on screen. Hiding first,
-    // then waiting a beat before actually invoking grim, gives the
-    // compositor time to genuinely drop the overlay from the frame grim
-    // reads. Only the region/window paths need this - they're the only
-    // ones asking grim for a fresh live frame at all.
+    // grabbed the dim/marching-ants selection border/instruction bar
+    // baked right into the captured image. Only the region/window paths
+    // need this - they're the only ones asking grim for a fresh live
+    // frame at all.
+    //
+    // Polls `hyprctl layers -j` until every "screenshot"-namespace
+    // surface is actually gone, rather than guessing with a fixed delay
+    // - a flat 100ms here previously still let the selection border
+    // through on at least one real setup, since a fixed wait can't
+    // account for how long the compositor actually takes to drop the
+    // surface from the frame grim reads. Same poll-don't-guess technique
+    // ScreenSettings.qml's own monitorSettleTimer/monitorSettleQueryProcess
+    // already use for the same class of problem (confirm a compositor
+    // state change actually happened before proceeding).
     property var pendingCaptureCommand: null
-
-    Timer {
-        id: captureDelay
-        interval: 100
-        repeat: false
-        onTriggered: {
-            if (root.pendingCaptureCommand) {
-                captureProcess.command = root.pendingCaptureCommand
-                captureProcess.running = true
-                root.pendingCaptureCommand = null
-            }
-        }
-    }
+    property int captureSettleAttempts: 0
 
     function startLiveCapture(command) {
         root.pendingCaptureCommand = command
         root.active = false
-        captureDelay.start()
+        root.captureSettleAttempts = 0
+        captureSettleTimer.restart()
+    }
+
+    Timer {
+        id: captureSettleTimer
+        interval: 25
+        repeat: false
+        onTriggered: captureSettleCheckProcess.running = true
+    }
+
+    Process {
+        id: captureSettleCheckProcess
+        command: ["hyprctl", "layers", "-j"]
+
+        stdout: StdioCollector {
+            id: captureSettleCollector
+            onStreamFinished: {
+                let stillThere = false
+                try {
+                    const parsed = JSON.parse(captureSettleCollector.text)
+                    for (const monName in parsed) {
+                        const levels = (parsed[monName] && parsed[monName].levels) || {}
+                        for (const levelKey in levels) {
+                            for (const layer of levels[levelKey]) {
+                                if (layer.namespace === "screenshot") stillThere = true
+                            }
+                        }
+                    }
+                } catch (e) {
+                    stillThere = false
+                }
+
+                root.captureSettleAttempts++
+                // Cap at 20 tries (~500ms including the poll interval)
+                // rather than polling forever if the surface somehow
+                // never actually unmaps - fires the capture anyway as a
+                // best effort past that point.
+                if (!stillThere || root.captureSettleAttempts >= 20) {
+                    if (root.pendingCaptureCommand) {
+                        captureProcess.command = root.pendingCaptureCommand
+                        captureProcess.running = true
+                        root.pendingCaptureCommand = null
+                    }
+                } else {
+                    captureSettleTimer.restart()
+                }
+            }
+        }
     }
 
     function captureRegion(x, y, w, h) {

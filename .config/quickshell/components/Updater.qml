@@ -2,8 +2,6 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
-import Quickshell.Widgets
-import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
 
@@ -12,9 +10,11 @@ import "../Config.js" as Config
 // Update checker + dropdown, modeled on apdatifier (github.com/exequtic/
 // apdatifier): periodically checks pacman/AUR and flatpak for pending
 // updates, surfaces a highlighted bar button (Bar.qml) when any are
-// found, and a scrollable dropdown listing them - icon, name, repo/
-// flatpak, old -> new version. Mutually exclusive with Notification.qml's
-// own history panel (each holds a reference to the other and closes it
+// found, and a scrollable dropdown listing them - name, source (the
+// actual repo - core/extra/multilib/... - for an official package, "aur"
+// for an AUR one, "flatpak" for a flatpak), old -> new version. Mutually
+// exclusive with Notification.qml's own history panel (each holds a
+// reference to the other and closes it
 // when it itself opens, same convention Dashboard.qml/SettingsScreen.qml
 // already use for each other), and auto-closes the same way (5s after
 // the mouse last left it). Structurally mirrors Notification.qml's own
@@ -86,6 +86,8 @@ Scope {
     function checkAll() {
         repoCheckProcess.running = false
         repoCheckProcess.running = true
+        repoNameProcess.running = false
+        repoNameProcess.running = true
         aurCheckProcess.running = false
         aurCheckProcess.running = true
         flatpakUpdatesProcess.running = false
@@ -109,15 +111,13 @@ Scope {
     }
 
     // "pkgname oldver -> newver" line format, shared by checkupdates
-    // (official repos) and `yay -Qua` (AUR) below - both tagged "repo"
-    // here, matching this dropdown's own two-category (repo/flatpak)
-    // split rather than a three-way repo/aur/flatpak one.
+    // (official repos) and `yay -Qua` (AUR) below.
     function parseVersionLines(text) {
         const out = []
         const lines = text.split("\n")
         for (const line of lines) {
             const m = line.trim().match(/^(\S+)\s+(\S+)\s*->\s*(\S+)/)
-            if (m) out.push({ category: "repo", name: m[1], oldVersion: m[2], newVersion: m[3] })
+            if (m) out.push({ name: m[1], oldVersion: m[2], newVersion: m[3] })
         }
         return out
     }
@@ -128,24 +128,75 @@ Scope {
     // sudo prompt at all. Missing entirely (pacman-contrib not
     // installed) just yields empty output below, same "hide rather than
     // guess wrong" convention as solaar/ddcutil/sensors elsewhere in
-    // this shell.
+    // this shell. Only gives name/oldver/newver - repoNameProcess below
+    // supplies the actual repo (core/extra/multilib/...) each package
+    // belongs to, matched by name in rebuildRepoUpdates().
+    property var _repoPending: []
+    property var _repoNameByPackage: ({})
+
+    function rebuildRepoUpdates() {
+        const out = []
+        for (const p of root._repoPending) {
+            out.push({
+                category: root._repoNameByPackage[p.name] || "repo",
+                name: p.name,
+                oldVersion: p.oldVersion,
+                newVersion: p.newVersion
+            })
+        }
+        root.repoUpdates = out
+    }
+
     Process {
         id: repoCheckProcess
         command: ["checkupdates"]
         stdout: StdioCollector {
-            onStreamFinished: { root.repoUpdates = root.parseVersionLines(text) }
+            onStreamFinished: {
+                root._repoPending = root.parseVersionLines(text)
+                root.rebuildRepoUpdates()
+            }
+        }
+    }
+
+    // `pacman -Sl` - lists every package in every configured repo as
+    // "repo name version [installed]", one line each. Local-only (no
+    // network), cheap enough to re-run every check cycle alongside
+    // checkupdates. Builds the name -> repo map rebuildRepoUpdates()
+    // above reads; a package with no entry here (shouldn't normally
+    // happen for anything checkupdates itself reported) just falls back
+    // to the plain "repo" label instead of guessing wrong.
+    Process {
+        id: repoNameProcess
+        command: ["pacman", "-Sl"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const map = {}
+                for (const rawLine of text.split("\n")) {
+                    const line = rawLine.trim()
+                    if (line.length === 0) continue
+                    const parts = line.split(/\s+/)
+                    if (parts.length < 2) continue
+                    map[parts[1]] = parts[0]
+                }
+                root._repoNameByPackage = map
+                root.rebuildRepoUpdates()
+            }
         }
     }
 
     // yay -Qua: AUR-only (the trailing "a"), never touches/needs a
     // synced pacman db the way the repo half does - it queries AUR's own
     // RPC API live per package, so no root/sudo and no separate sync
-    // step either.
+    // step either. AUR packages were never in any configured repo at
+    // all, so these are tagged "aur" directly rather than going through
+    // repoNameProcess's own map.
     Process {
         id: aurCheckProcess
         command: ["yay", "-Qua"]
         stdout: StdioCollector {
-            onStreamFinished: { root.aurUpdates = root.parseVersionLines(text) }
+            onStreamFinished: {
+                root.aurUpdates = root.parseVersionLines(text).map(u => Object.assign({ category: "aur" }, u))
+            }
         }
     }
 
@@ -376,23 +427,6 @@ Scope {
                                 anchors.margins: 8
                                 spacing: 8
 
-                                Item {
-                                    Layout.preferredWidth: 24
-                                    Layout.preferredHeight: 24
-
-                                    IconImage {
-                                        id: updateIcon
-                                        anchors.fill: parent
-                                        source: Quickshell.iconPath("software-update-available-symbolic")
-                                    }
-
-                                    ColorOverlay {
-                                        anchors.fill: updateIcon
-                                        source: updateIcon
-                                        color: Config.fgcolor
-                                    }
-                                }
-
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 2
@@ -413,7 +447,7 @@ Scope {
 
                                         Text {
                                             text: modelData.category
-                                            color: Config.fgcolordark
+                                            color: Config.fgcolor
                                             font.family: Config.fontfamily
                                             font.pixelSize: 11
                                         }
