@@ -349,7 +349,7 @@ Scope {
         // round-trip), which is what made this feel sluggish and gave it
         // a wrong height mid-spread.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
 
         color: "transparent"
 
@@ -358,7 +358,13 @@ Scope {
             visible: root.dropdownOpen
             color: "transparent"
             width: centerCol.width
-            height: centerCol.implicitHeight
+            // +20, not a bare fit to centerCol - same breathing room
+            // Clipboard.qml's own panelBox gives its content (that file's
+            // contentCol.implicitHeight + 20), so an empty/near-empty
+            // dropdown (e.g. "Everything is up to date" with no list
+            // below it) doesn't end up looking cramped against the box's
+            // own border the way a plain exact-fit height did.
+            height: centerCol.implicitHeight + 20
 
             // Grows from the right edge, same as Notification.qml's own
             // panelBox/Tray.qml's menu.
@@ -420,7 +426,7 @@ Scope {
                         text: "Everything is up to date"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 14
+                        font.pixelSize: 12
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -485,13 +491,6 @@ Scope {
                             }
                         }
                     }
-
-                    // Small breathing room below the list - centerCol's
-                    // implicitHeight otherwise leaves content sitting
-                    // flush against mainRect's bottom border.
-                    Item {
-                        height: 8
-                    }
                 }
             }
 
@@ -515,7 +514,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight
+                        height: centerCol.implicitHeight + 20
                     }
                 }
 

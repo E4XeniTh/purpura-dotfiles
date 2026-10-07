@@ -371,7 +371,7 @@ Scope {
         // window is sized once from the full/settled content, and only
         // an internal Rectangle (panelBox here) animates via clip.
         implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight, 1)
+        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
 
         color: "transparent"
         Rectangle {
@@ -379,7 +379,13 @@ Scope {
             visible: root.centerOpen
             color: "transparent"
             width: centerCol.width
-            height: centerCol.implicitHeight
+            // +20, not a bare fit to centerCol - same breathing room
+            // Clipboard.qml's own panelBox gives its content (that file's
+            // contentCol.implicitHeight + 20), so an empty "No
+            // notifications" dropdown doesn't end up looking cramped
+            // against the box's own border the way a plain exact-fit
+            // height did.
+            height: centerCol.implicitHeight + 20
 
             // No anchor at all defaults to the window's top-left, so as
             // width grew the box appeared to grow rightward from a fixed
@@ -461,11 +467,10 @@ Scope {
                     Text {
                         Layout.fillWidth: true
                         visible: historyModel.count === 0
-                        text: "No notifications
-                        "
+                        text: "No notifications"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 14
+                        font.pixelSize: 12
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -548,13 +553,6 @@ Scope {
                             }
                         }
                     }
-
-                    // Small breathing room below the list - centerCol's
-                    // implicitHeight otherwise leaves content sitting
-                    // flush against mainRect's bottom border.
-                    Item {
-                        height: 8
-                    }
                 }
 
             }
@@ -579,7 +577,7 @@ Scope {
                         target: panelBox
 
                         width: 400
-                        height: centerCol.implicitHeight
+                        height: centerCol.implicitHeight + 20
                     }
                 }
 
