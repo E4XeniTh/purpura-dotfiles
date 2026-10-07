@@ -37,18 +37,16 @@ Item {
     // Per-application audio streams (one per app actually emitting sound,
     // e.g. a browser tab or a music player) for the Volume Mixer strip
     // below - isStream true means "likely a program, not hardware" per
-    // Quickshell's own Pipewire docs, and isSink true is what identifies
-    // a PLAYBACK stream specifically (confirmed live) - the mirror image
-    // of recordingStreamNodes below, same as how playbackNodes/
-    // recordingNodes above already split hardware by isSink.
+    // Quickshell's own Pipewire docs, and isSink false is what
+    // distinguishes a PLAYBACK stream (this node outputs audio onward to
+    // a real sink) from a RECORDING stream (isSink true - this node
+    // instead accepts audio from a real source, e.g. a voice-chat app's
+    // mic capture) - same isStream/isSink pairing playbackNodes/
+    // recordingNodes above already rely on for hardware, just the
+    // opposite isSink value once isStream flips true, since what flows
+    // "into" vs "out of" a stream node is the mirror image of a hardware
+    // node's own direction.
     readonly property var playbackStreamNodes: Pipewire.nodes.values.filter(n => n.audio && n.isStream && n.isSink)
-
-    // The other half of the mixer - an app's own RECORDING stream (e.g. a
-    // voice-chat app's mic capture), isSink false. Most setups will have
-    // zero or one of these at a time (one mic, one or two apps actually
-    // capturing it), unlike playbackStreamNodes which can easily have
-    // several at once.
-    readonly property var recordingStreamNodes: Pipewire.nodes.values.filter(n => n.audio && n.isStream && !n.isSink)
 
     // preferredDefaultAudioSink/Source is only a hint to Pipewire/
     // WirePlumber - defaultAudioSink/Source (what the border color used
@@ -74,7 +72,7 @@ Item {
     signal sourceSelected(var id)
 
     PwObjectTracker {
-        objects: root.playbackNodes.concat(root.recordingNodes).concat(root.playbackStreamNodes).concat(root.recordingStreamNodes)
+        objects: root.playbackNodes.concat(root.recordingNodes).concat(root.playbackStreamNodes)
     }
 
     Item {
@@ -94,11 +92,6 @@ Item {
         // benefit from soaking up whatever extra room is available).
         readonly property real mixerSectionHeight: Config.scaled(360, root.uiScale)
         readonly property real mixerCardWidth: Config.scaled(110, root.uiScale)
-        readonly property real mixerCardSpacing: Config.scaled(10, root.uiScale)
-        // Exactly two mixer cards wide - recording streams are rare
-        // (usually zero or one app capturing the mic at a time), so the
-        // playback side gets the rest of the width instead.
-        readonly property real mixerRecordingWidth: soundContent.mixerCardWidth * 2 + soundContent.mixerCardSpacing
 
         // Fills everything above the mixer divider - both device lists
         // stretch to use whatever's left instead of capping at a fixed
@@ -227,13 +220,14 @@ Item {
             spacing: Config.scaled(8, root.uiScale)
 
             Text {
-                // Explicit AlignTop - without a sibling that always fills
-                // the remaining height, this drifted down toward the
-                // vertical middle of mixerSection whenever both sides'
-                // ListViews were empty at once (nothing left to stack
-                // against) - see the two wrapper Items below, each always
-                // Layout.fillHeight regardless of its own ListView's
-                // visibility, for why that can't happen anymore.
+                // Explicit AlignTop, not just "first child" - without a
+                // sibling that always fills the remaining height (see the
+                // wrapper Item below), this drifted down toward the
+                // vertical middle of mixerSection whenever the empty-state
+                // Text was its only other visible sibling (nothing left to
+                // stack against, so the two short Texts alone don't span
+                // mixerSection's own fixed height the way heading+ListView
+                // do when there are cards to show).
                 Layout.alignment: Qt.AlignTop
                 text: "Volume Mixer"
                 color: Config.fgcolor
@@ -242,142 +236,43 @@ Item {
                 font.bold: true
             }
 
-            // Split left/right - playback streams (apps emitting sound)
-            // on the left, recording streams (apps capturing the mic) on
-            // the right. The right side is fixed at exactly two mixer
-            // cards wide (mixerRecordingWidth) rather than an even 50/50
-            // split - recording streams are rare (usually zero or one app
-            // capturing the mic at a time), so playback gets the rest of
-            // the width to actually use.
-            RowLayout {
+            // Always present and always Layout.fillHeight (unlike the
+            // ListView/empty-state Text it now wraps, which still toggle
+            // visible on root.playbackStreamNodes.length) - this is what
+            // keeps the heading pinned to the top and gives the empty-state
+            // message a real, full-height parent to center itself in,
+            // rather than the two of them being the only two ColumnLayout
+            // children and getting centered as a short pair instead.
+            Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: Config.scaled(16, root.uiScale)
 
-                // ---------------- left: playback stream mixer ----------------
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    spacing: Config.scaled(6, root.uiScale)
-
-                    Text {
-                        text: "Playback"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(12, root.uiScale)
-                        font.bold: true
-                    }
-
-                    // Always present and always Layout.fillHeight (unlike
-                    // the ListView/empty-state Text it wraps, which still
-                    // toggle visible on root.playbackStreamNodes.length) -
-                    // this is what gives the empty-state message a real,
-                    // full-height parent to center itself in.
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        Text {
-                            anchors.centerIn: parent
-                            visible: root.playbackStreamNodes.length === 0
-                            text: "No applications playing audio right now."
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.bold: true
-                            font.pixelSize: Config.scaled(16, root.uiScale)
-                        }
-
-                        ListView {
-                            anchors.fill: parent
-                            visible: root.playbackStreamNodes.length > 0
-                            clip: true
-                            orientation: ListView.Horizontal
-                            flickableDirection: Flickable.HorizontalFlick
-                            spacing: soundContent.mixerCardSpacing
-                            boundsBehavior: Flickable.StopAtBounds
-                            model: ScriptModel { values: root.playbackStreamNodes }
-
-                            delegate: MixerCard {
-                                required property var modelData
-
-                                width: soundContent.mixerCardWidth
-                                height: ListView.view.height
-                                uiScale: root.uiScale
-                                stream: modelData
-                            }
-                        }
-                    }
-                }
-
-                // ---------------- divider between the two mixer panels ----------------
-                Rectangle {
-                    Layout.preferredWidth: Config.scaled(2, root.uiScale)
-                    Layout.fillHeight: true
+                Text {
+                    anchors.centerIn: parent
+                    visible: root.playbackStreamNodes.length === 0
+                    text: "No applications playing audio right now."
                     color: Config.fgcolor
+                    font.family: Config.fontfamily
+                    font.bold: true
+                    font.pixelSize: Config.scaled(16, root.uiScale)
                 }
 
-                // ---------------- right: recording stream mixer (fixed, 2 cards wide) ----------------
-                ColumnLayout {
-                    // minimumWidth/maximumWidth, not just preferredWidth -
-                    // a RowLayout is still free to shrink a preferredWidth-
-                    // only child below it when it doesn't have enough
-                    // space for every child's preferred size, same
-                    // ShellSettings.qml fix this session's own category
-                    // column already needed for the same reason.
-                    Layout.preferredWidth: soundContent.mixerRecordingWidth
-                    Layout.minimumWidth: soundContent.mixerRecordingWidth
-                    Layout.maximumWidth: soundContent.mixerRecordingWidth
-                    Layout.fillHeight: true
-                    spacing: Config.scaled(6, root.uiScale)
+                ListView {
+                    anchors.fill: parent
+                    visible: root.playbackStreamNodes.length > 0
+                    clip: true
+                    orientation: ListView.Horizontal
+                    spacing: Config.scaled(10, root.uiScale)
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: ScriptModel { values: root.playbackStreamNodes }
 
-                    Text {
-                        text: "Recording"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(12, root.uiScale)
-                        font.bold: true
-                    }
+                    delegate: MixerCard {
+                        required property var modelData
 
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        Text {
-                            anchors.centerIn: parent
-                            visible: root.recordingStreamNodes.length === 0
-                            text: "No applications recording audio right now."
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.bold: true
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            // Wraps, unlike the playback side's own empty-
-                            // state text - this panel is only two cards
-                            // wide, nowhere near enough for this sentence
-                            // on one line.
-                            width: parent.width
-                            wrapMode: Text.WordWrap
-                            horizontalAlignment: Text.AlignHCenter
-                        }
-
-                        ListView {
-                            anchors.fill: parent
-                            visible: root.recordingStreamNodes.length > 0
-                            clip: true
-                            orientation: ListView.Horizontal
-                            flickableDirection: Flickable.HorizontalFlick
-                            spacing: soundContent.mixerCardSpacing
-                            boundsBehavior: Flickable.StopAtBounds
-                            model: ScriptModel { values: root.recordingStreamNodes }
-
-                            delegate: MixerCard {
-                                required property var modelData
-
-                                width: soundContent.mixerCardWidth
-                                height: ListView.view.height
-                                uiScale: root.uiScale
-                                stream: modelData
-                            }
-                        }
+                        width: soundContent.mixerCardWidth
+                        height: ListView.view.height
+                        uiScale: root.uiScale
+                        stream: modelData
                     }
                 }
             }

@@ -333,10 +333,27 @@ Rectangle {
                     }
 
                     // ---------------- separator ----------------
-                    Rectangle {
+                    // Same thin, inset look as Tray.qml's own menu
+                    // separator (a centered 1px line with margins on
+                    // each side, not a full-bleed divider) - scaled via
+                    // Config.scaled/root.uiScale to match the rest of
+                    // this menu's own convention, unlike Tray.qml's menu
+                    // which uses flat unscaled pixel values throughout.
+                    Item {
                         width: menuColumn.width
-                        height: Config.scaled(2, root.uiScale)
-                        color: Config.fgcolor
+                        height: Config.scaled(9, root.uiScale)
+
+                        Rectangle {
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                verticalCenter: parent.verticalCenter
+                                leftMargin: Config.scaled(8, root.uiScale)
+                                rightMargin: Config.scaled(8, root.uiScale)
+                            }
+                            height: Config.scaled(1, root.uiScale)
+                            color: Config.fgcolordark
+                        }
                     }
 
                     // ---------------- open Sound settings, focused on the Sound tab ----------------
