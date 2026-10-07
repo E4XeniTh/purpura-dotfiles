@@ -571,7 +571,6 @@ Scope {
                                 }
                             }
                         }
-
                         Item { height: 8 }
                     }
                 }

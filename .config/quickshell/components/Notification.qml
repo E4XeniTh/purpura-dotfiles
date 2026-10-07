@@ -556,8 +556,8 @@ Scope {
                             }
                         }
                     }
+                    Item { height: 2 }
                 }
-
             }
 
             states: [

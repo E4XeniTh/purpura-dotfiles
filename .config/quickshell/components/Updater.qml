@@ -494,6 +494,7 @@ Scope {
                             }
                         }
                     }
+                    Item { height: 2 }
                 }
             }
 
