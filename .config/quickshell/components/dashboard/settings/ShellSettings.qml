@@ -522,7 +522,7 @@ Item {
 
                     Item { Layout.fillWidth: true }
                 }
-
+                Item {}
                 // ---------------- brightness control ----------------
                 RowLayout {
                     Layout.fillWidth: true
@@ -544,7 +544,7 @@ Item {
                     }
 
                     Text {
-                        text: "Brightness Control"
+                        text: "Show Brightness Control Widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -581,7 +581,7 @@ Item {
                     }
 
                     Text {
-                        text: "Show Updater"
+                        text: "Show Updater Widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -663,7 +663,7 @@ Item {
                                 font.bold: true
                             }
 
-                            Item { Layout.fillWidth: true }
+                            Item { width: Config.scaled(225, root.uiScale) }
 
                             Text {
                                 text: root.stagedSensitivity.toFixed(2)
@@ -675,7 +675,7 @@ Item {
                         }
 
                         DeviceSlider {
-                            Layout.fillWidth: true
+                            width: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
                             // Maps hyprland.lua's -1.0 - 1.0 sensitivity
                             // range onto DeviceSlider's own fixed 0.0 - 1.0
