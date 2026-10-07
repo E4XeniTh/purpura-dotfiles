@@ -49,8 +49,20 @@ Scope {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     }
 
-    // 0 = Shell, 1 = Sound, 2 = Network, 3 = Bluetooth, 4 = Display.
+    // 0 = Shell, 1 = Sound, 2 = Display, 3 = Network, 4 = Bluetooth - matches
+    // the tab bar's own left-to-right Repeater model order below, not the
+    // order these tabs were originally added in.
     property int currentTab: 0
+
+    // Set by a caller that wants this screen to open straight to a
+    // specific tab (e.g. VolumeControl.qml's right-click menu's own
+    // "Sound Settings" entry, requesting tab 1) instead of always
+    // landing back on Shell - consumed (and reset back to 0) the moment
+    // it's actually used, in panelComponent's own Component.onCompleted
+    // below, so it never "sticks" and redirects some later, unrelated
+    // open (e.g. the ordinary Settings button on Dashboard.qml's power
+    // row) to the same tab.
+    property int requestedInitialTab: 0
 
     IpcHandler {
         target: "settingsscreen"
@@ -509,9 +521,14 @@ Scope {
             // Loader above, gated on root.open) - mirrors PowerMenu.qml/
             // LockScreen.qml's own Component.onCompleted reset-then-open
             // sequence, so the box always plays its open animation from
-            // scratch and always starts back on the Sound tab.
+            // scratch. Starts on requestedInitialTab if a caller asked
+            // for a specific one (see its own comment above), Shell
+            // otherwise - and always resets requestedInitialTab back to 0
+            // right away so it's consumed exactly once, not left to
+            // redirect some later, unrelated open too.
             Component.onCompleted: {
-                root.currentTab = 0
+                root.currentTab = root.requestedInitialTab
+                root.requestedInitialTab = 0
 
                 box.width = 0
                 box.height = 2

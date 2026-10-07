@@ -331,6 +331,62 @@ Rectangle {
                             }
                         }
                     }
+
+                    // ---------------- separator ----------------
+                    Rectangle {
+                        width: menuColumn.width
+                        height: Config.scaled(2, root.uiScale)
+                        color: Config.fgcolor
+                    }
+
+                    // ---------------- open Sound settings, focused on the Sound tab ----------------
+                    Item {
+                        width: menuColumn.width
+                        height: Config.scaled(32, root.uiScale)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: soundSettingsMouse.containsMouse ? Config.fgcolordark : "transparent"
+
+                            Text {
+                                anchors {
+                                    fill: parent
+                                    leftMargin: Config.scaled(10, root.uiScale)
+                                    rightMargin: Config.scaled(10, root.uiScale)
+                                }
+
+                                verticalAlignment: Text.AlignVCenter
+
+                                text: "Sound Settings"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                id: soundSettingsMouse
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+
+                                // requestedInitialTab (SettingsScreen.qml)
+                                // is what makes this open straight to the
+                                // Sound tab instead of always landing back
+                                // on Shell - see its own comment there for
+                                // why it has to be set before open, not
+                                // after, and why it resets itself once
+                                // consumed.
+                                onClicked: {
+                                    root.closeMenu()
+                                    if (root.dashboard && root.dashboard.settingsScreen) {
+                                        root.dashboard.settingsScreen.requestedInitialTab = 1
+                                        root.dashboard.settingsScreen.open = true
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
