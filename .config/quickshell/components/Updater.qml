@@ -269,10 +269,24 @@ Scope {
     // Interactive, not headless - yay/flatpak/fwupdmgr all need to
     // prompt for confirmation (and yay/fwupdmgr for sudo), so this opens
     // a real kitty window rather than running detached the way the
-    // read-only check Processes above do.
+    // read-only check Processes above do. The trailing `; echo; echo
+    // ...; read` always runs regardless of whether the `&&` chain ahead
+    // of it succeeded or stopped partway through (a `;`, not another
+    // `&&`) - leaves the window open with its output still on screen
+    // instead of it vanishing the instant the commands finish, and gives
+    // onExited below something to actually wait on.
     Process {
         id: runUpdateProcess
-        command: ["kitty", "sh", "-c", "yay && flatpak update && fwupdmgr update"]
+        command: ["kitty", "sh", "-c", "yay && flatpak update && fwupdmgr update; echo; echo 'Press any key to close this window'; read -n 1 -s"]
+
+        // Rechecks the moment the kitty window actually closes, not just
+        // when the update commands themselves finish - the "press any
+        // key" prompt above deliberately keeps the window (and this
+        // Process) alive past that point so the user can review the
+        // output first - so the dropdown/button highlight reflect
+        // reality again right away instead of waiting for the next
+        // scheduled checkTimer tick.
+        onExited: (exitCode, exitStatus) => root.checkAll()
     }
 
     function runUpdate() {

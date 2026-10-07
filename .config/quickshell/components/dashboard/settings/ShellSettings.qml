@@ -403,14 +403,6 @@ Item {
                 Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
-                Text {
-                    text: ["Bar", "Peripherals", "Updater"][root.currentCategory]
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
-                    font.bold: true
-                }
-
                 // ---------------- Bar category ----------------
                 ColumnLayout {
                     id: barCategoryContent
@@ -424,20 +416,6 @@ Item {
                     Layout.fillWidth: true
                     Layout.topMargin: Config.scaled(8, root.uiScale)
                     spacing: Config.scaled(8, root.uiScale)
-
-                    Text {
-                        text: "Only managed workspaces in widget:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleStrictWorkspaceWidget()
-                        }
-                    }
 
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
@@ -454,21 +432,27 @@ Item {
                         }
                     }
 
-                    Item { Layout.fillWidth: true }
-                }
-
-                // ---------------- show empty workspaces (widget + osd) ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
                     Text {
-                        text: "Show empty workspaces:"
+                        text: "Only Managed Workspaces In Widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
                         font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleStrictWorkspaceWidget()
+                        }
                     }
+
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---------------- show empty workspaces (widget) ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.scaled(8, root.uiScale)
 
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
@@ -486,7 +470,7 @@ Item {
                     }
 
                     Text {
-                        text: "In widget"
+                        text: "Show Empty Workspaces In Widget"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -499,7 +483,13 @@ Item {
                         }
                     }
 
-                    Item { Layout.preferredWidth: Config.scaled(16, root.uiScale) }
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---------------- show empty workspaces (osd) ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.scaled(8, root.uiScale)
 
                     Rectangle {
                         Layout.preferredWidth: Config.scaled(20, root.uiScale)
@@ -517,7 +507,7 @@ Item {
                     }
 
                     Text {
-                        text: "In OSD"
+                        text: "Show Empty Workspaces In OSD"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -538,12 +528,13 @@ Item {
                     Layout.fillWidth: true
                     spacing: Config.scaled(8, root.uiScale)
 
-                    Text {
-                        text: "Brightness Control:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showBrightnessControl ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
 
                         MouseArea {
                             anchors.fill: parent
@@ -552,13 +543,12 @@ Item {
                         }
                     }
 
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showBrightnessControl ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
+                    Text {
+                        text: "Brightness Control"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
 
                         MouseArea {
                             anchors.fill: parent
@@ -575,12 +565,13 @@ Item {
                     Layout.fillWidth: true
                     spacing: Config.scaled(8, root.uiScale)
 
-                    Text {
-                        text: "Show Updater:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showUpdater ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
 
                         MouseArea {
                             anchors.fill: parent
@@ -589,13 +580,12 @@ Item {
                         }
                     }
 
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showUpdater ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
+                    Text {
+                        text: "Show Updater"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
 
                         MouseArea {
                             anchors.fill: parent
@@ -623,12 +613,13 @@ Item {
                         Layout.topMargin: Config.scaled(8, root.uiScale)
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Text {
-                            text: "Solaar Startup:"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.solaarStartupEnabled ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
 
                             MouseArea {
                                 anchors.fill: parent
@@ -637,13 +628,12 @@ Item {
                             }
                         }
 
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.solaarStartupEnabled ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                        Text {
+                            text: "Solaar Startup"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
 
                             MouseArea {
                                 anchors.fill: parent
@@ -713,12 +703,13 @@ Item {
                         Layout.topMargin: Config.scaled(8, root.uiScale)
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Text {
-                            text: "Highlight Button When Updates Available:"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
 
                             MouseArea {
                                 anchors.fill: parent
@@ -727,13 +718,12 @@ Item {
                             }
                         }
 
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                        Text {
+                            text: "Highlight Button When Updates Available"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
 
                             MouseArea {
                                 anchors.fill: parent
@@ -752,14 +742,12 @@ Item {
                         spacing: Config.scaled(8, root.uiScale)
 
                         Text {
-                            text: "Update Check Interval (minutes):"
+                            text: "Check for updates every"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
                             font.bold: true
                         }
-
-                        Item { Layout.fillWidth: true }
 
                         Rectangle {
                             Layout.preferredWidth: Config.scaled(60, root.uiScale)
@@ -822,6 +810,16 @@ Item {
                                 onAccepted: intervalInput.focus = false
                             }
                         }
+
+                        Text {
+                            text: "minutes"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
                 }
 
