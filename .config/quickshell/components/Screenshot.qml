@@ -9,26 +9,33 @@ import "../Config.js" as Config
 
 // Custom interactive screenshot picker - META + X opens it (bound via
 // hyprland.lua's `hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"))`).
-// Freezes every connected screen into a temp PNG first (grim -o <name>),
-// so the picker is always selecting against a static snapshot rather
-// than a live-updating desktop, then dims everything and offers four
-// capture modes:
+// Freezes every connected screen into a temp PNG first (grim -o <name>,
+// plus one plain `grim` of the whole layout), so the picker is always
+// selecting against a static snapshot rather than a live-updating
+// desktop, then dims everything and offers four capture modes:
 //   - hover a window (or the bar) + right-click: captures that surface
 //   - left-click-drag: captures the dragged region
 //   - Enter: captures the whole monitor the mouse is currently on
 //   - Ctrl+Enter: captures every monitor combined into one image
-// Escape cancels. Region/window use `grim -g ... - | wl-copy` against
-// the EXACT geometry this overlay already computed for its own on-screen
-// highlight - never a second, independently re-derived guess at "which
-// window" (the way handing capture off to hyprshot's own picking logic
-// would risk disagreeing with what was actually highlighted). Monitor
-// capture skips grim entirely and just wl-copies the frozen backdrop PNG
-// straight off disk, since that's already exactly the right image.
+// Escape cancels.
+//
+// Every mode captures FROM THOSE FROZEN FILES, never from the live screen:
+// monitor/all-monitors copy a frozen file as-is, region/window crop one
+// (helpers/screenshot-crop.sh, ImageMagick) to the exact geometry this
+// overlay computed for its own on-screen highlight. The frozen frames are
+// written before the overlay ever exists, so its dim, selection border and
+// instruction bar can't end up in a capture no matter how long the
+// compositor takes to unmap or fade it out. Capturing live after hiding
+// the overlay (the previous approach) raced exactly that, and no delay or
+// poll could reliably win it.
 Scope {
     id: root
 
     property bool active: false
     property bool opening: false
+    // Set the moment a capture or cancel starts - blanks the overlay while
+    // it's still mapped, see close().
+    property bool contentHidden: false
 
     property var monitors: []   // parsed hyprctl monitors -j
     property var clients: []    // parsed hyprctl clients -j, filtered to mapped + on-screen + on the active workspace of their monitor
@@ -49,11 +56,28 @@ Scope {
     readonly property real dragRectW: Math.abs(root.dragCurX - root.dragStartX)
     readonly property real dragRectH: Math.abs(root.dragCurY - root.dragStartY)
 
+    function freezePath(name) {
+        return "/tmp/quickshell-screenshot-freeze-" + name + ".png"
+    }
+
     function monitorByName(name) {
         for (const m of root.monitors) {
             if (m.name === name) return m
         }
         return null
+    }
+
+    // hyprctl's monitor width/height are the physical mode, before scale
+    // and rotation - everything else here (window positions, the cursor,
+    // the overlay windows themselves) is in logical layout units.
+    function logicalRect(m) {
+        const rotated = (m.transform % 2) === 1
+        return {
+            x: m.x,
+            y: m.y,
+            w: (rotated ? m.height : m.width) / m.scale,
+            h: (rotated ? m.width : m.height) / m.scale
+        }
     }
 
     function clientArea(c) {
@@ -78,7 +102,8 @@ Scope {
 
     function monitorAt(gx, gy) {
         for (const m of root.monitors) {
-            if (gx >= m.x && gx < m.x + m.width && gy >= m.y && gy < m.y + m.height) return m
+            const r = root.logicalRect(m)
+            if (gx >= r.x && gx < r.x + r.w && gy >= r.y && gy < r.y + r.h) return m
         }
         return null
     }
@@ -96,17 +121,15 @@ Scope {
     }
 
     function begin() {
-        if (root.active || root.opening) return
+        // Also waits out the previous session entirely: its capture may
+        // still be reading the frozen files this would overwrite, and its
+        // cleanup would delete the new ones.
+        if (root.active || root.opening || closeTimer.running || captureProcess.running || cleanupProcess.running) return
         root.opening = true
+        root.contentHidden = false
         root.hoveredClient = null
         root.dragging = false
 
-        // One frozen file per screen, PLUS one more combining every
-        // screen (plain `grim` with no -o composites the whole layout
-        // in one shot) - Ctrl+Enter reads that "all" file directly
-        // later, exactly the same way Enter reads a single-screen file,
-        // instead of asking grim for a second, separate live capture
-        // that has to race the overlay's own unmap all over again.
         const names = Quickshell.screens.map(s => s.name)
         freezeProcess.command = ["bash", "-c", 'for name in "$@"; do grim -o "$name" "/tmp/quickshell-screenshot-freeze-$name.png"; done; grim "/tmp/quickshell-screenshot-freeze-all.png"', "screenshot-freeze", ...names]
         freezeProcess.running = true
@@ -211,6 +234,13 @@ Scope {
                 }
 
                 root.clients = root.clients.concat(barEntries)
+
+                // Cancelled while still freezing - don't pop the overlay
+                // up anyway, just drop the files that freeze wrote.
+                if (!root.opening) {
+                    cleanupProcess.running = true
+                    return
+                }
                 root.opening = false
                 root.active = true
             }
@@ -218,11 +248,29 @@ Scope {
     }
 
     function cancel() {
-        root.active = false
         root.opening = false
+        if (root.active) root.close()
+        cleanupProcess.running = true
+    }
+
+    // Blanks the overlay first and only unmaps it a few frames later.
+    // Hyprland's layer close animation fades out whatever the surface last
+    // showed, so unmapping straight away left a fading dim/selection frame
+    // on screen - which a quick META + X right after could freeze into the
+    // next screenshot. Captures themselves never read the live screen, so
+    // nothing waits on this.
+    function close() {
+        root.contentHidden = true
         root.hoveredClient = null
         root.dragging = false
-        cleanupProcess.running = true
+        closeTimer.restart()
+    }
+
+    Timer {
+        id: closeTimer
+        interval: 60
+        repeat: false
+        onTriggered: root.active = false
     }
 
     Process {
@@ -230,183 +278,81 @@ Scope {
         command: ["bash", "-c", "rm -f /tmp/quickshell-screenshot-freeze-*.png"]
     }
 
+    // Single reused Process - only one capture ever happens per picker
+    // session (starting one closes the picker). Cleanup waits for it to
+    // actually exit, since every capture reads one of the frozen files.
     Process {
-        // Command set fresh per capture by the functions below - a
-        // single reused Process, since only one capture ever happens per
-        // picker session (any of them closes it immediately). Cleanup
-        // (temp files + state reset) waits for this to actually exit
-        // rather than firing right after it's started, so it can never
-        // race a capture that's reading one of those same temp files
-        // (see captureMonitorUnderMouse).
         id: captureProcess
-        onExited: (exitCode, exitStatus) => {
-            // Only the region/window paths ever touch the layersOut
-            // animation (see startLiveCapture below) - put it back
-            // exactly as queried, never a hardcoded guess, since the
-            // user's real config may not match this project's own
-            // example config at all.
-            if (root.animationRestorePending) {
-                root.animationRestorePending = false
-                if (root.savedLayersOutAnimation) {
-                    const a = root.savedLayersOutAnimation
-                    const style = a.style || ""
-                    restoreFadeoutProcess.command = ["hyprctl", "keyword", "animation",
-                        "layersOut," + (a.enabled ? 1 : 0) + "," + a.speed + "," + a.bezier + (style ? ("," + style) : "")]
-                    restoreFadeoutProcess.running = true
-                }
+        onExited: (exitCode, exitStatus) => cleanupProcess.running = true
+    }
+
+    function startCapture(command) {
+        if (root.contentHidden || captureProcess.running) return
+        captureProcess.command = command
+        captureProcess.running = true
+        root.close()
+    }
+
+    function copyFrozen(name) {
+        root.startCapture(["bash", "-c", 'wl-copy --type image/png < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-copy", root.freezePath(name)])
+    }
+
+    // x/y/w/h/lw/lh: crop rect and the frame's full extent, in logical
+    // units relative to the frame's top-left. The helper maps them to
+    // pixels from the frame's real size.
+    function cropFrozen(name, x, y, w, h, lw, lh) {
+        root.startCapture(["bash", Quickshell.shellDir + "/helpers/screenshot-crop.sh", root.freezePath(name)].concat([x, y, w, h, lw, lh].map(String)))
+    }
+
+    // Prefers the one monitor that fully contains the rect: its own frozen
+    // frame is at that monitor's native resolution, whereas grim's combined
+    // frame is rendered at the highest scale of any monitor (a crop from a
+    // lower-scale monitor would come out upscaled). Anything spanning
+    // monitors or hanging past the layout's edge comes from the combined
+    // frame instead, which the helper clamps to what was actually captured.
+    function captureRect(x, y, w, h) {
+        if (root.monitors.length === 0) {
+            root.cancel()
+            return
+        }
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        for (const m of root.monitors) {
+            const r = root.logicalRect(m)
+            // 1px of slack: with fractional scaling a monitor's logical
+            // size isn't a whole number, while window geometry is.
+            if (x >= r.x - 1 && y >= r.y - 1 && x + w <= r.x + r.w + 1 && y + h <= r.y + r.h + 1) {
+                root.cropFrozen(m.name, x - r.x, y - r.y, w, h, r.w, r.h)
+                return
             }
-
-            root.opening = false
-            root.hoveredClient = null
-            root.dragging = false
-            cleanupProcess.running = true
+            minX = Math.min(minX, r.x)
+            minY = Math.min(minY, r.y)
+            maxX = Math.max(maxX, r.x + r.w)
+            maxY = Math.max(maxY, r.y + r.h)
         }
+        root.cropFrozen("all", x - minX, y - minY, w, h, maxX - minX, maxY - minY)
     }
 
-    Process {
-        id: restoreFadeoutProcess
-    }
-
-    // Setting root.active = false only requests the overlay's layer
-    // surfaces unmap - that's an async round-trip to the compositor, not
-    // something that's actually happened by the time this same JS tick
-    // returns. Running grim immediately after raced that unmap and
-    // grabbed the dim/marching-ants selection border/instruction bar
-    // baked right into the captured image. Only the region/window paths
-    // need this - they're the only ones asking grim for a fresh live
-    // frame at all.
-    //
-    // Polls `hyprctl layers -j` until every "screenshot"-namespace
-    // surface is actually gone, rather than guessing with a fixed delay
-    // - a flat 100ms here previously still let the selection border
-    // through on at least one real setup, since a fixed wait can't
-    // account for how long the compositor actually takes to drop the
-    // surface from the frame grim reads. Same poll-don't-guess technique
-    // ScreenSettings.qml's own monitorSettleTimer/monitorSettleQueryProcess
-    // already use for the same class of problem (confirm a compositor
-    // state change actually happened before proceeding).
-    //
-    // That poll alone still wasn't enough on a setup with Hyprland's
-    // "layersOut" close animation enabled: hyprctl drops a layer from
-    // `layers -j` the moment the unmap is REQUESTED, not once the fade
-    // finishes rendering, so the poll above was reporting the surface
-    // "gone" while the compositor was still compositing its fading-out
-    // texture into the very frame grim then read. Fixed by querying and
-    // disabling that one animation before the unmap even starts, and
-    // restoring it (to the exact config queried, never a hardcoded
-    // guess) once the capture is done - see captureProcess.onExited.
-    property var pendingCaptureCommand: null
-    property int captureSettleAttempts: 0
-    property var savedLayersOutAnimation: null
-    property bool animationRestorePending: false
-
-    function startLiveCapture(command) {
-        root.pendingCaptureCommand = command
-        root.animationRestorePending = false
-        queryAnimationsProcess.running = true
-    }
-
-    Process {
-        id: queryAnimationsProcess
-        command: ["hyprctl", "-j", "animations"]
-
-        stdout: StdioCollector {
-            id: queryAnimationsCollector
-            onStreamFinished: {
-                let entry = null
-                try {
-                    const parsed = JSON.parse(queryAnimationsCollector.text)
-                    for (const a of parsed) {
-                        if (a.name === "layersOut") {
-                            entry = a
-                            break
-                        }
-                    }
-                } catch (e) {
-                    entry = null
-                }
-
-                // Nothing to disable (not found, or not even enabled
-                // right now) - skip straight to the usual unmap+poll,
-                // same as before this fix existed.
-                if (entry && entry.enabled) {
-                    root.savedLayersOutAnimation = entry
-                    root.animationRestorePending = true
-                    disableFadeoutProcess.command = ["hyprctl", "keyword", "animation", "layersOut,0"]
-                    disableFadeoutProcess.running = true
-                } else {
-                    root.savedLayersOutAnimation = null
-                    root.active = false
-                    root.captureSettleAttempts = 0
-                    captureSettleTimer.restart()
-                }
-            }
-        }
-    }
-
-    Process {
-        id: disableFadeoutProcess
-        onExited: (exitCode, exitStatus) => {
-            root.active = false
-            root.captureSettleAttempts = 0
-            captureSettleTimer.restart()
-        }
-    }
-
-    Timer {
-        id: captureSettleTimer
-        interval: 25
-        repeat: false
-        onTriggered: captureSettleCheckProcess.running = true
-    }
-
-    Process {
-        id: captureSettleCheckProcess
-        command: ["hyprctl", "layers", "-j"]
-
-        stdout: StdioCollector {
-            id: captureSettleCollector
-            onStreamFinished: {
-                let stillThere = false
-                try {
-                    const parsed = JSON.parse(captureSettleCollector.text)
-                    for (const monName in parsed) {
-                        const levels = (parsed[monName] && parsed[monName].levels) || {}
-                        for (const levelKey in levels) {
-                            for (const layer of levels[levelKey]) {
-                                if (layer.namespace === "screenshot") stillThere = true
-                            }
-                        }
-                    }
-                } catch (e) {
-                    stillThere = false
-                }
-
-                root.captureSettleAttempts++
-                // Cap at 20 tries (~500ms including the poll interval)
-                // rather than polling forever if the surface somehow
-                // never actually unmaps - fires the capture anyway as a
-                // best effort past that point.
-                if (!stillThere || root.captureSettleAttempts >= 20) {
-                    if (root.pendingCaptureCommand) {
-                        captureProcess.command = root.pendingCaptureCommand
-                        captureProcess.running = true
-                        root.pendingCaptureCommand = null
-                    }
-                } else {
-                    captureSettleTimer.restart()
-                }
-            }
-        }
-    }
-
+    // A drag keeps reporting the pointer past its own screen's edge, but
+    // the selection is only ever drawn on that one screen - capture
+    // exactly the part that was visibly selected.
     function captureRegion(x, y, w, h) {
-        const geom = Math.round(x) + "," + Math.round(y) + " " + Math.round(w) + "x" + Math.round(h)
-        root.startLiveCapture(["bash", "-c", 'grim -g "$1" - | wl-copy && notify-send "Screenshot copied to clipboard."', "screenshot-region", geom])
+        const m = root.monitorByName(root.dragScreenName)
+        if (m) {
+            const r = root.logicalRect(m)
+            const x1 = Math.min(x + w, r.x + r.w)
+            const y1 = Math.min(y + h, r.y + r.h)
+            x = Math.max(x, r.x)
+            y = Math.max(y, r.y)
+            w = x1 - x
+            h = y1 - y
+        }
+        if (w < 1 || h < 1) return
+        root.captureRect(x, y, w, h)
     }
 
     function captureClient(client) {
-        root.captureRegion(client.at[0], client.at[1], client.size[0], client.size[1])
+        root.captureRect(client.at[0], client.at[1], client.size[0], client.size[1])
     }
 
     // Enter needs "whichever monitor the mouse is over RIGHT NOW" - going
@@ -425,22 +371,9 @@ Scope {
                 const parts = cursorPosCollector.text.trim().split(",")
                 const gx = parseFloat(parts[0])
                 const gy = parseFloat(parts[1])
-                if (isNaN(gx) || isNaN(gy)) {
-                    root.cancel()
-                    return
-                }
-
-                const mon = root.monitorAt(gx, gy)
+                const mon = (isNaN(gx) || isNaN(gy)) ? null : root.monitorAt(gx, gy)
                 if (mon) {
-                    // Enter grabs the WHOLE monitor - exactly the frame
-                    // begin() already froze to disk before this overlay
-                    // ever existed, so there's nothing to hide or
-                    // re-capture live: hand that exact file to wl-copy
-                    // directly. No compositor round-trip, no unmap race,
-                    // no delay needed for this path at all.
-                    root.active = false
-                    captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-monitor", "/tmp/quickshell-screenshot-freeze-" + mon.name + ".png"]
-                    captureProcess.running = true
+                    root.copyFrozen(mon.name)
                 } else {
                     root.cancel()
                 }
@@ -449,20 +382,12 @@ Scope {
     }
 
     function captureMonitorUnderMouse() {
+        if (root.contentHidden || cursorPosProcess.running) return
         cursorPosProcess.running = true
     }
 
-    // Ctrl+Enter grabs every monitor combined into one image - begin()
-    // already froze exactly this (the whole layout, composited by grim
-    // itself, no ImageMagick or other extra dependency needed) to disk
-    // before this overlay ever existed. Same deal as
-    // captureMonitorUnderMouse: read that file straight off disk rather
-    // than asking grim for a second, separate LIVE capture, which was
-    // racing (and losing to) the overlay's own async unmap.
     function captureAllMonitors() {
-        root.active = false
-        captureProcess.command = ["bash", "-c", 'wl-copy < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-all", "/tmp/quickshell-screenshot-freeze-all.png"]
-        captureProcess.running = true
+        root.copyFrozen("all")
     }
 
     Variants {
@@ -500,18 +425,6 @@ Scope {
             anchors { top: true; bottom: true; left: true; right: true }
             color: "transparent"
 
-            // The frozen backdrop - source only ever toggles between ""
-            // and a real path (never the same non-empty path reused for
-            // different underlying file content), so it always reloads
-            // fresh rather than needing a cache-busting trick.
-            Image {
-                anchors.fill: parent
-                source: root.active ? ("file:///tmp/quickshell-screenshot-freeze-" + modelData.name + ".png") : ""
-                asynchronous: true
-                cache: false
-                fillMode: Image.Stretch
-            }
-
             // A drag in progress punches its own hole (the region being
             // selected undims exactly like a hovered window does);
             // otherwise a hovered window on THIS screen punches one.
@@ -536,170 +449,189 @@ Scope {
                 localMouseX >= instructionBar.x && localMouseX < instructionBar.x + instructionBar.width &&
                 localMouseY >= instructionBar.y && localMouseY < instructionBar.y + instructionBar.height
 
-            // Dim everything (full cover) unless a window on THIS screen
-            // is currently hovered, in which case four strips frame a
-            // clear "hole" over it instead of one full-cover rectangle.
-            Rectangle {
-                visible: !overlayWin.hasHoleHere
+            // Everything this overlay paints - hidden as a whole by
+            // close() before the window itself unmaps.
+            Item {
                 anchors.fill: parent
-                color: Qt.rgba(0, 0, 0, 0.55)
-            }
+                visible: !root.contentHidden
 
-            Rectangle {
-                visible: overlayWin.hasHoleHere
-                x: 0
-                y: 0
-                width: parent.width
-                height: Math.max(0, overlayWin.holeY)
-                color: Qt.rgba(0, 0, 0, 0.55)
-            }
-
-            Rectangle {
-                visible: overlayWin.hasHoleHere
-                x: 0
-                y: overlayWin.holeY + overlayWin.holeH
-                width: parent.width
-                height: Math.max(0, parent.height - (overlayWin.holeY + overlayWin.holeH))
-                color: Qt.rgba(0, 0, 0, 0.55)
-            }
-
-            Rectangle {
-                visible: overlayWin.hasHoleHere
-                x: 0
-                y: overlayWin.holeY
-                width: Math.max(0, overlayWin.holeX)
-                height: overlayWin.holeH
-                color: Qt.rgba(0, 0, 0, 0.55)
-            }
-
-            Rectangle {
-                visible: overlayWin.hasHoleHere
-                x: overlayWin.holeX + overlayWin.holeW
-                y: overlayWin.holeY
-                width: Math.max(0, parent.width - (overlayWin.holeX + overlayWin.holeW))
-                height: overlayWin.holeH
-                color: Qt.rgba(0, 0, 0, 0.55)
-            }
-
-            // Marching-ants border around the hovered window.
-            Canvas {
-                id: hoverAnts
-                anchors.fill: parent
-
-                property real rx: overlayWin.holeX
-                property real ry: overlayWin.holeY
-                property real rw: overlayWin.holeW
-                property real rh: overlayWin.holeH
-                property bool show: overlayWin.hoverHoleHere
-                property real dashPhase: 0
-
-                visible: show
-
-                onRxChanged: requestPaint()
-                onRyChanged: requestPaint()
-                onRwChanged: requestPaint()
-                onRhChanged: requestPaint()
-                onShowChanged: requestPaint()
-                onDashPhaseChanged: requestPaint()
-
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    if (!show || rw <= 0 || rh <= 0) return
-                    ctx.setLineDash([6, 4])
-                    ctx.lineDashOffset = -dashPhase
-                    ctx.lineWidth = 2
-                    ctx.strokeStyle = Config.fgcolorlight
-                    ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                // The frozen backdrop - source only ever toggles between ""
+                // and a real path (never the same non-empty path reused for
+                // different underlying file content), so it always reloads
+                // fresh rather than needing a cache-busting trick.
+                Image {
+                    anchors.fill: parent
+                    source: root.active ? ("file://" + root.freezePath(modelData.name)) : ""
+                    asynchronous: true
+                    cache: false
+                    fillMode: Image.Stretch
                 }
 
-                NumberAnimation on dashPhase {
-                    from: 0
-                    to: 10
-                    duration: 500
-                    loops: Animation.Infinite
-                    running: hoverAnts.visible
-                }
-            }
-
-            // Marching-ants border around the in-progress drag
-            // selection - only ever drawn on the screen the drag
-            // actually started on.
-            Canvas {
-                id: dragAnts
-                anchors.fill: parent
-
-                property real rx: root.dragRectX - overlayWin.monX
-                property real ry: root.dragRectY - overlayWin.monY
-                property real rw: root.dragRectW
-                property real rh: root.dragRectH
-                property bool show: root.dragging && root.dragScreenName === modelData.name && rw > 0 && rh > 0
-                property real dashPhase: 0
-
-                visible: show
-
-                onRxChanged: requestPaint()
-                onRyChanged: requestPaint()
-                onRwChanged: requestPaint()
-                onRhChanged: requestPaint()
-                onShowChanged: requestPaint()
-                onDashPhaseChanged: requestPaint()
-
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.clearRect(0, 0, width, height)
-                    if (!show || rw <= 0 || rh <= 0) return
-                    ctx.setLineDash([6, 4])
-                    ctx.lineDashOffset = -dashPhase
-                    ctx.lineWidth = 2
-                    ctx.strokeStyle = Config.fgcolorlight
-                    ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                // Dim everything (full cover) unless a window on THIS screen
+                // is currently hovered, in which case four strips frame a
+                // clear "hole" over it instead of one full-cover rectangle.
+                Rectangle {
+                    visible: !overlayWin.hasHoleHere
+                    anchors.fill: parent
+                    color: Qt.rgba(0, 0, 0, 0.55)
                 }
 
-                NumberAnimation on dashPhase {
-                    from: 0
-                    to: 10
-                    duration: 500
-                    loops: Animation.Infinite
-                    running: dragAnts.visible
+                Rectangle {
+                    visible: overlayWin.hasHoleHere
+                    x: 0
+                    y: 0
+                    width: parent.width
+                    height: Math.max(0, overlayWin.holeY)
+                    color: Qt.rgba(0, 0, 0, 0.55)
                 }
-            }
 
-            // Top instruction bar - LMB/RMB spelled out rather than an
-            // icon, since there's no standard Unicode glyph that
-            // distinguishes a left-click from a right-click the way a
-            // single generic mouse emoji can't. Fades out (opacity, not
-            // visible) while dragging or while the mouse is over it, so
-            // it never blocks the view of whatever's underneath. Hover
-            // is a plain rect-contains-point check against
-            // root.mouseGlobalX/Y - the same state window-hover already
-            // uses successfully - rather than a second, independent
-            // HoverHandler, which never actually detected anything here
-            // (most likely shadowed by the full-fill MouseArea below,
-            // which sits on top of this Rectangle in stacking order).
-            Rectangle {
-                id: instructionBar
-                anchors {
-                    top: parent.top
-                    horizontalCenter: parent.horizontalCenter
-                    topMargin: 20
+                Rectangle {
+                    visible: overlayWin.hasHoleHere
+                    x: 0
+                    y: overlayWin.holeY + overlayWin.holeH
+                    width: parent.width
+                    height: Math.max(0, parent.height - (overlayWin.holeY + overlayWin.holeH))
+                    color: Qt.rgba(0, 0, 0, 0.55)
                 }
-                width: instructionText.implicitWidth + 24
-                height: instructionText.implicitHeight + 16
-                color: Config.fillcolor
-                border.width: 2
-                border.color: Config.fgcolor
-                opacity: (root.dragging || overlayWin.hintHoveredHere) ? 0 : 1
 
-                Text {
-                    id: instructionText
-                    anchors.centerIn: parent
-                    text: "[LMB] Region  -  [RMB] Window  -  [ENTER] Monitor" +
-                        (Quickshell.screens.length > 1 ? "  -  [CTRL+ENTER] All Monitors" : "") + "  -  [ESC] Cancel"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: 14
-                    font.bold: true
+                Rectangle {
+                    visible: overlayWin.hasHoleHere
+                    x: 0
+                    y: overlayWin.holeY
+                    width: Math.max(0, overlayWin.holeX)
+                    height: overlayWin.holeH
+                    color: Qt.rgba(0, 0, 0, 0.55)
+                }
+
+                Rectangle {
+                    visible: overlayWin.hasHoleHere
+                    x: overlayWin.holeX + overlayWin.holeW
+                    y: overlayWin.holeY
+                    width: Math.max(0, parent.width - (overlayWin.holeX + overlayWin.holeW))
+                    height: overlayWin.holeH
+                    color: Qt.rgba(0, 0, 0, 0.55)
+                }
+
+                // Marching-ants border around the hovered window.
+                Canvas {
+                    id: hoverAnts
+                    anchors.fill: parent
+
+                    property real rx: overlayWin.holeX
+                    property real ry: overlayWin.holeY
+                    property real rw: overlayWin.holeW
+                    property real rh: overlayWin.holeH
+                    property bool show: overlayWin.hoverHoleHere
+                    property real dashPhase: 0
+
+                    visible: show
+
+                    onRxChanged: requestPaint()
+                    onRyChanged: requestPaint()
+                    onRwChanged: requestPaint()
+                    onRhChanged: requestPaint()
+                    onShowChanged: requestPaint()
+                    onDashPhaseChanged: requestPaint()
+
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        if (!show || rw <= 0 || rh <= 0) return
+                        ctx.setLineDash([6, 4])
+                        ctx.lineDashOffset = -dashPhase
+                        ctx.lineWidth = 2
+                        ctx.strokeStyle = Config.fgcolorlight
+                        ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                    }
+
+                    NumberAnimation on dashPhase {
+                        from: 0
+                        to: 10
+                        duration: 500
+                        loops: Animation.Infinite
+                        running: hoverAnts.visible
+                    }
+                }
+
+                // Marching-ants border around the in-progress drag
+                // selection - only ever drawn on the screen the drag
+                // actually started on.
+                Canvas {
+                    id: dragAnts
+                    anchors.fill: parent
+
+                    property real rx: root.dragRectX - overlayWin.monX
+                    property real ry: root.dragRectY - overlayWin.monY
+                    property real rw: root.dragRectW
+                    property real rh: root.dragRectH
+                    property bool show: root.dragging && root.dragScreenName === modelData.name && rw > 0 && rh > 0
+                    property real dashPhase: 0
+
+                    visible: show
+
+                    onRxChanged: requestPaint()
+                    onRyChanged: requestPaint()
+                    onRwChanged: requestPaint()
+                    onRhChanged: requestPaint()
+                    onShowChanged: requestPaint()
+                    onDashPhaseChanged: requestPaint()
+
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.clearRect(0, 0, width, height)
+                        if (!show || rw <= 0 || rh <= 0) return
+                        ctx.setLineDash([6, 4])
+                        ctx.lineDashOffset = -dashPhase
+                        ctx.lineWidth = 2
+                        ctx.strokeStyle = Config.fgcolorlight
+                        ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                    }
+
+                    NumberAnimation on dashPhase {
+                        from: 0
+                        to: 10
+                        duration: 500
+                        loops: Animation.Infinite
+                        running: dragAnts.visible
+                    }
+                }
+
+                // Top instruction bar - LMB/RMB spelled out rather than an
+                // icon, since there's no standard Unicode glyph that
+                // distinguishes a left-click from a right-click the way a
+                // single generic mouse emoji can't. Fades out (opacity, not
+                // visible) while dragging or while the mouse is over it, so
+                // it never blocks the view of whatever's underneath. Hover
+                // is a plain rect-contains-point check against
+                // root.mouseGlobalX/Y - the same state window-hover already
+                // uses successfully - rather than a second, independent
+                // HoverHandler, which never actually detected anything here
+                // (most likely shadowed by the full-fill MouseArea below,
+                // which sits on top of this Rectangle in stacking order).
+                Rectangle {
+                    id: instructionBar
+                    anchors {
+                        top: parent.top
+                        horizontalCenter: parent.horizontalCenter
+                        topMargin: 20
+                    }
+                    width: instructionText.implicitWidth + 24
+                    height: instructionText.implicitHeight + 16
+                    color: Config.fillcolor
+                    border.width: 2
+                    border.color: Config.fgcolor
+                    opacity: (root.dragging || overlayWin.hintHoveredHere) ? 0 : 1
+
+                    Text {
+                        id: instructionText
+                        anchors.centerIn: parent
+                        text: "[LMB] Region  -  [RMB] Window  -  [ENTER] Monitor" +
+                            (Quickshell.screens.length > 1 ? "  -  [CTRL+ENTER] All Monitors" : "") + "  -  [ESC] Cancel"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
                 }
             }
 
