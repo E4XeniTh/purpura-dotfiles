@@ -4,7 +4,7 @@ import QtQuick
 
 // Night light: tints the screen warm through hyprsunset, driven live over
 // `hyprctl hyprsunset`. A manual toggle, a strength, an optional daily
-// schedule, and a fade that eases the tint in or out over fadeMinutes
+// schedule, and a fade that eases the tint in or out over a set time
 // whenever it turns on or off.
 //
 // Unlike the other settings categories, this owns its settings file
@@ -28,11 +28,16 @@ Scope {
     // Minutes since midnight.
     readonly property int scheduleStart: root.minutesOr(root.store.scheduleStart, 21 * 60)
     readonly property int scheduleEnd: root.minutesOr(root.store.scheduleEnd, 7 * 60)
-    readonly property int fadeMinutes: {
-        const n = Number(root.store.fadeMinutes)
-        return (root.store.fadeMinutes !== undefined && Number.isInteger(n) && n >= 0) ? Math.min(n, root.maxFadeMinutes) : 5
+    // Fade length is a number plus a unit. A file from before the unit
+    // existed only has fadeMinutes, which reads as that many minutes.
+    readonly property string fadeUnit: root.store.fadeUnit === "seconds" ? "seconds" : "minutes"
+    readonly property int maxFadeAmount: root.fadeUnit === "seconds" ? 240 * 60 : 240
+    readonly property int fadeAmount: {
+        const raw = root.store.fadeAmount !== undefined ? root.store.fadeAmount : root.store.fadeMinutes
+        const n = Number(raw)
+        return (raw !== undefined && Number.isInteger(n) && n >= 0) ? Math.min(n, root.maxFadeAmount) : 5
     }
-    readonly property int maxFadeMinutes: 240
+    readonly property real fadeMs: root.fadeAmount * (root.fadeUnit === "seconds" ? 1000 : 60000)
 
     function minutesOr(raw, fallback) {
         const n = Number(raw)
@@ -48,7 +53,14 @@ Scope {
     function setStrength(value) { root.update({ strength: Math.round(Math.max(0, Math.min(1, value)) * 100) / 100 }) }
     function setScheduled(on) { root.update({ scheduled: !!on }) }
     function setSchedule(start, end) { root.update({ scheduleStart: start, scheduleEnd: end }) }
-    function setFadeMinutes(minutes) { root.update({ fadeMinutes: Math.max(0, Math.min(root.maxFadeMinutes, minutes)) }) }
+    function setFadeAmount(amount) { root.update({ fadeAmount: Math.max(0, Math.min(root.maxFadeAmount, amount)) }) }
+
+    // Keeps the number and changes what it counts (5 minutes -> 5
+    // seconds), the way a unit picker beside a number field reads.
+    function setFadeUnit(unit) {
+        const max = unit === "seconds" ? 240 * 60 : 240
+        root.update({ fadeUnit: unit, fadeAmount: Math.min(root.fadeAmount, max) })
+    }
 
     // Not watched: this is the only writer, and reloading after our own
     // (debounced) write could clobber an edit made in between.
@@ -104,14 +116,14 @@ Scope {
     property real fadeStartMs: 0
     property real fadeDurationMs: 0
 
-    // A reversal partway through only takes the share of fadeMinutes
+    // A reversal partway through only takes the share of the fade time
     // that's actually left to undo, so toggling twice quickly doesn't
     // start a full-length fade back from almost nowhere.
     function startFade() {
         if (!root.started) return
         const distance = Math.abs(root.targetMired - root.currentMired)
         const full = Math.abs(root.miredFor(root.strength) - root.neutralMired)
-        const totalMs = root.fadeMinutes * 60000
+        const totalMs = root.fadeMs
         if (totalMs <= 0 || distance < 0.5 || full < 0.5) {
             root.fading = false
             fadeTimer.stop()

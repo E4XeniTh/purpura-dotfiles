@@ -52,7 +52,8 @@ Item {
     readonly property bool nlScheduled: !!root.nightLight && root.nightLight.scheduled
     readonly property int nlStart: root.nightLight ? root.nightLight.scheduleStart : 21 * 60
     readonly property int nlEnd: root.nightLight ? root.nightLight.scheduleEnd : 7 * 60
-    readonly property int nlFadeMinutes: root.nightLight ? root.nightLight.fadeMinutes : 5
+    readonly property int nlFadeAmount: root.nightLight ? root.nightLight.fadeAmount : 5
+    readonly property string nlFadeUnit: root.nightLight ? root.nightLight.fadeUnit : "minutes"
 
     function formatDuration(minutes) {
         const h = Math.floor(minutes / 60)
@@ -1100,13 +1101,13 @@ Item {
                                     // Same programmatic-resync guard as
                                     // intervalInput above.
                                     property bool syncing: false
-                                    text: String(root.nlFadeMinutes)
+                                    text: String(root.nlFadeAmount)
 
                                     Connections {
                                         target: root
-                                        function onNlFadeMinutesChanged() {
+                                        function onNlFadeAmountChanged() {
                                             fadeInput.syncing = true
-                                            fadeInput.text = String(root.nlFadeMinutes)
+                                            fadeInput.text = String(root.nlFadeAmount)
                                             fadeInput.syncing = false
                                         }
                                     }
@@ -1117,19 +1118,20 @@ Item {
                                     onTextChanged: {
                                         if (fadeInput.syncing || !root.nightLight) return
                                         const n = parseInt(fadeInput.text, 10)
-                                        if (!isNaN(n) && n >= 0) root.nightLight.setFadeMinutes(n)
+                                        if (!isNaN(n) && n >= 0) root.nightLight.setFadeAmount(n)
                                     }
 
                                     onAccepted: fadeInput.focus = false
                                 }
                             }
 
-                            Text {
-                                text: "minutes"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
+                            DropdownBox {
+                                Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                uiScale: root.uiScale
+                                options: ["minutes", "seconds"]
+                                currentIndex: root.nlFadeUnit === "seconds" ? 1 : 0
+                                onActivated: (index) => root.nightLight.setFadeUnit(index === 1 ? "seconds" : "minutes")
                             }
 
                             Text {
