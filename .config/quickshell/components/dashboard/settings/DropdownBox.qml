@@ -3,9 +3,14 @@ import "../../../Config.js" as Config
 
 // Small inline dropdown in the settings' own look: a bordered box showing
 // the current option and an arrow, opening a list of the options straight
-// underneath it. The list overlays whatever is below rather than pushing
-// the layout down. Controlled: picking an option only emits activated();
-// the caller sets currentIndex.
+// underneath it. Controlled: picking an option only emits activated(); the
+// caller sets currentIndex.
+//
+// The open list is part of this item's own height, not drawn hanging
+// outside it: a list floating below its item's bounds never received
+// clicks here. So opening grows the item downward - give it
+// Layout.alignment: Qt.AlignTop (and top-align its row neighbours) so the
+// box itself stays put.
 Item {
     id: root
 
@@ -19,16 +24,18 @@ Item {
     readonly property real borderWidth: Config.scaled(2, root.uiScale)
     readonly property real rowHeight: Config.scaled(28, root.uiScale)
 
-    implicitWidth: Config.scaled(100, root.uiScale)
-    implicitHeight: root.rowHeight
+    // Options overlap the box and each other by one border, so the column
+    // reads as single 2px lines.
+    readonly property real listHeight: root.options.length * (root.rowHeight - root.borderWidth)
 
-    // Above later siblings while open, so the list isn't drawn under them.
-    z: root.open ? 100 : 0
+    implicitWidth: Config.scaled(100, root.uiScale)
+    implicitHeight: root.rowHeight + (root.open ? root.listHeight : 0)
 
     onVisibleChanged: if (!visible) root.open = false
 
     Rectangle {
-        anchors.fill: parent
+        width: root.width
+        height: root.rowHeight
         color: boxMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
         border.width: root.borderWidth
         border.color: root.open ? Config.fgcolorlight : Config.fgcolor
@@ -90,11 +97,9 @@ Item {
         }
     }
 
-    // Negative spacing overlaps neighbouring borders, so the box and its
-    // options read as one column of single 2px lines.
     Column {
         visible: root.open
-        y: root.height - root.borderWidth
+        y: root.rowHeight - root.borderWidth
         width: root.width
         spacing: -root.borderWidth
 
