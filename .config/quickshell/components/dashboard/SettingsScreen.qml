@@ -30,6 +30,9 @@ Scope {
     // they're hosted here instead.
     property var dashboard: null
 
+    // NightLight.qml - handed on to the Shell tab's Night Light category.
+    property var nightLight: null
+
     // Symmetric with Dashboard.qml's own onOpenChanged - both are
     // large-ish WlrLayer.Overlay surfaces that visually collide if both
     // are up at once (this window's full-screen dim would cover
@@ -49,9 +52,10 @@ Scope {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     }
 
-    // 0 = Shell, 1 = Sound, 2 = Display, 3 = Network, 4 = Bluetooth - matches
-    // the tab bar's own left-to-right Repeater model order below, not the
-    // order these tabs were originally added in.
+    // 0 = Shell, 1 = Sound, 2 = Display, 3 = Connections (Bluetooth is a
+    // category inside it) - matches the tab bar's own left-to-right
+    // Repeater model order below, not the order these tabs were
+    // originally added in.
     property int currentTab: 0
 
     // Set by a caller that wants this screen to open straight to a
@@ -226,8 +230,8 @@ Scope {
             Keys.onEscapePressed: root.open = false
 
             // Quick tab switch while this screen is open - plain digit
-            // keys 1-5, matching the tab bar's own left-to-right order
-            // (Shell/Sound/Display/Network/Bluetooth, see the Repeater's
+            // keys 1-4, matching the tab bar's own left-to-right order
+            // (Shell/Sound/Display/Connections, see the Repeater's
             // model above). Only ever fires for a digit key nothing else
             // already consumed - a focused TextInput inside ScreenSettings'
             // own geometry fields (Width/Height/X Pos/...) accepts its own
@@ -239,7 +243,6 @@ Scope {
                     case Qt.Key_2: root.currentTab = 1; event.accepted = true; break
                     case Qt.Key_3: root.currentTab = 2; event.accepted = true; break
                     case Qt.Key_4: root.currentTab = 3; event.accepted = true; break
-                    case Qt.Key_5: root.currentTab = 4; event.accepted = true; break
                 }
             }
 
@@ -334,7 +337,7 @@ Scope {
 
                             readonly property real margins: Config.scaled(10, panelScope.uiScale)
                             readonly property real spacing: Config.scaled(10, panelScope.uiScale)
-                            readonly property real tabWidth: (width - margins * 2 - spacing * 4) / 5
+                            readonly property real tabWidth: (width - margins * 2 - spacing * 3) / 4
 
                             Row {
                                 anchors {
@@ -348,8 +351,7 @@ Scope {
                                         { label: "Shell", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
                                         { label: "Display", icon: "video-display-symbolic" },
-                                        { label: "Network", icon: "network-wired-symbolic" },
-                                        { label: "Bluetooth", icon: "network-bluetooth" }
+                                        { label: "Connections", icon: "network-wired-symbolic" }
                                     ]
 
                                     delegate: DashCard {
@@ -456,6 +458,7 @@ Scope {
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 0
+                                nightLight: root.nightLight
                             }
 
                             AudioSettings {
@@ -491,15 +494,6 @@ Scope {
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 3
-                            }
-
-                            BluetoothSettings {
-                                id: bluetoothTab
-                                anchors.fill: parent
-                                visible: root.currentTab === 4
-                                panelWidth: panelScope.panelWidth
-                                uiScale: panelScope.uiScale
-                                active: root.open && root.currentTab === 4
                             }
                         }
                     }

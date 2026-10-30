@@ -7,7 +7,8 @@ import "components/dashboard"
 Scope {
   PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen }
   LockScreen { id: lockScreen; dashboard: dashboard }
-  SettingsScreen { id: settingsScreen; dashboard: dashboard }
+  SettingsScreen { id: settingsScreen; dashboard: dashboard; nightLight: nightLight }
+  NightLight { id: nightLight }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu

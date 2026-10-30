@@ -16,6 +16,7 @@
 .config/quickshell/barsettings.json
 .config/quickshell/peripheralsettings.json
 .config/quickshell/updatersettings.json
+.config/quickshell/nightlightsettings.json
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf

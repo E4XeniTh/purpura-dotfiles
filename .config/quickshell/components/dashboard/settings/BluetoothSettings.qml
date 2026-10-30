@@ -8,11 +8,9 @@ import "../"
 import "../../../Config.js" as Config
 
 // Bluetooth controllers (left, 30%) + paired/unpaired devices (right,
-// 70%), split by a vertical line - one tab of SettingsScreen.qml's
-// fullscreen tabbed panel (see there for the tab bar/coordinator).
-// Embeddable Item instead of a standalone SettingsPanel popup:
-// panelWidth/uiScale/active are plain properties fed in from the tab
-// host instead of coming from a PanelWindow.
+// 70%), split by a vertical line - the Bluetooth category of the
+// Connections tab (NetworkSettings.qml embeds it). panelWidth/uiScale/
+// active are plain properties fed in from that host.
 //
 // Note: pairing goes through BlueZ's pair() directly - Quickshell's
 // bluetooth module doesn't implement a pairing agent (org.bluez.Agent1),
@@ -25,6 +23,9 @@ Item {
     property real panelWidth: 800
     property real uiScale: 1.0
     property bool active: false
+    // Inset around the whole layout; NetworkSettings.qml passes 0 since its
+    // own layout already provides one.
+    property real contentMargins: Config.scaled(18, root.uiScale)
 
     // Sized by whatever container SettingsScreen.qml gives this tab -
     // not self-measured from content anymore, so the two lists below
@@ -89,7 +90,7 @@ Item {
         RowLayout {
             id: contentRow
             visible: !root.noAdapter
-            readonly property real margins: Config.scaled(18, root.uiScale)
+            readonly property real margins: root.contentMargins
 
             anchors {
                 left: parent.left

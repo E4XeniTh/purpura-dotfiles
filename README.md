@@ -111,12 +111,13 @@ Beyond a base Arch install:
 - `curl`
 - `pam`
 - `xembedsniproxy` - (useful if you emulate windows applications through Wayland)
-- `networkmanager` - provides `nmcli`, which Network Settings' Connections tab also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
+- `networkmanager` - provides `nmcli`, which the Connections tab's Wired category also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
 - `grim` - the custom screenshot picker (`components/Screenshot.qml`, META + X) freezes every screen with it before the picker appears; every capture is then taken from those frozen frames, never the live screen, so the picker's own dim/selection border can't end up in the image. `wl-clipboard` above also covers the `wl-copy` the result goes into
 - `imagemagick` - crops those frozen frames for region and window captures (`helpers/screenshot-crop.sh`); monitor and all-monitor captures copy a frozen frame as-is and don't need it
+- `hyprsunset` - night light (Settings > Shell > Night Light); the shell starts and drives it itself, so don't autostart it separately
 - `libnotify` - provides `notify-send`, which the screenshot picker calls after every successful capture ("Screenshot copied to clipboard"); routes through this shell's own `NotificationServer` (`components/Notification.qml`) like any other app notification, no separate daemon needed
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)

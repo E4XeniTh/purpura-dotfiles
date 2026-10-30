@@ -9,8 +9,8 @@ import "../../../Config.js" as Config
 // which all configure a piece of hardware) - one tab of
 // SettingsScreen.qml's fullscreen tabbed panel (see there for the tab
 // bar/coordinator). Categories down the left ("Bar", "Peripherals",
-// "Updater") mirror Network/Bluetooth's own left icon-tab strip, picking
-// which group of settings shows on the right.
+// "Updater", "Night Light") mirror the Connections tab's own left
+// icon-tab strip, picking which group of settings shows on the right.
 //
 // Everything here is a plain, immediately-saved toggle - no Apply
 // button, unlike ScreenSettings.qml's staged monitor edits - persisted
@@ -25,7 +25,9 @@ import "../../../Config.js" as Config
 // hyprland.lua's own autostart block (see that script), the same
 // "small JSON file + startup replay" pattern apply-monitors.sh already
 // established for monitors.json. Updater.qml watches updatersettings.json
-// directly too, same decoupled pattern.
+// directly too, same decoupled pattern. Night Light is the exception: its
+// schedule changes settings on its own, so NightLight.qml owns its file
+// and this category just drives that object (`nightLight`).
 Item {
     id: root
 
@@ -33,10 +35,30 @@ Item {
     property real uiScale: 1.0
     property bool active: false
 
+    // NightLight.qml, from shell.qml via SettingsScreen.qml.
+    property var nightLight: null
+
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals, 2 = Updater.
+    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light.
     property int currentCategory: 0
+
+    // Night Light category's view of root.nightLight, with defaults for the
+    // moment before it's wired up.
+    readonly property bool nlUsable: !!root.nightLight && root.nightLight.usable
+    readonly property bool nlEnabled: !!root.nightLight && root.nightLight.enabled
+    readonly property bool nlFading: !!root.nightLight && root.nightLight.fading
+    readonly property real nlStrength: root.nightLight ? root.nightLight.strength : 0.5
+    readonly property bool nlScheduled: !!root.nightLight && root.nightLight.scheduled
+    readonly property int nlStart: root.nightLight ? root.nightLight.scheduleStart : 21 * 60
+    readonly property int nlEnd: root.nightLight ? root.nightLight.scheduleEnd : 7 * 60
+    readonly property int nlFadeMinutes: root.nightLight ? root.nightLight.fadeMinutes : 5
+
+    function formatDuration(minutes) {
+        const h = Math.floor(minutes / 60)
+        const m = minutes % 60
+        return h + "h" + (m > 0 ? " " + m + "m" : "")
+    }
 
     property var barStore: ({})
 
@@ -382,6 +404,32 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.currentCategory = 2
+                    }
+                }
+
+                DashCard {
+                    id: nightLightCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: nightLightCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 3 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Night Light"
+                        color: nightLightCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: nightLightCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 3
                     }
                 }
 
@@ -820,6 +868,279 @@ Item {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+                }
+
+                // ---------------- Night Light category ----------------
+                ColumnLayout {
+                    id: nightLightCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 3
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        visible: !!root.nightLight && root.nightLight.availabilityKnown && !root.nlUsable
+                        text: root.nightLight && root.nightLight.failed
+                            ? "hyprsunset keeps exiting right after it starts, so night light is unavailable."
+                            : "Night light needs hyprsunset: sudo pacman -S hyprsunset"
+                        color: Config.fgcolorred
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                        wrapMode: Text.WordWrap
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(10, root.uiScale)
+                        enabled: root.nlUsable
+                        opacity: enabled ? 1 : 0.35
+
+                        // ---------------- on/off ----------------
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: root.nlEnabled ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+                                radius: 0
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.nightLight.setEnabled(!root.nlEnabled)
+                                }
+                            }
+
+                            Text {
+                                text: "Night Light"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.nightLight.setEnabled(!root.nlEnabled)
+                                }
+                            }
+
+                            Text {
+                                visible: root.nlFading
+                                text: root.nlEnabled ? "(fading in)" : "(fading out)"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // ---------------- strength ----------------
+                        ColumnLayout {
+                            Layout.topMargin: Config.scaled(4, root.uiScale)
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Strength:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: Math.round(root.nlStrength * 100) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.nlStrength
+                                onMoved: (newValue) => root.nightLight.setStrength(newValue)
+                            }
+                        }
+
+                        // ---------------- scheduled ----------------
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: root.nlScheduled ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+                                radius: 0
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                }
+                            }
+
+                            Text {
+                                text: "Scheduled Night Light"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // Only interactable while scheduling is on.
+                        ColumnLayout {
+                            Layout.topMargin: Config.scaled(4, root.uiScale)
+                            spacing: Config.scaled(6, root.uiScale)
+                            enabled: root.nlScheduled
+                            opacity: enabled ? 1 : 0.35
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "From " + scheduleSlider.format(scheduleSlider.previewStart)
+                                        + " to " + scheduleSlider.format(scheduleSlider.previewEnd)
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: root.formatDuration(scheduleSlider.previewLength)
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            TimeRangeSlider {
+                                id: scheduleSlider
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                startMinutes: root.nlStart
+                                endMinutes: root.nlEnd
+                                onCommitted: (start, end) => root.nightLight.setSchedule(start, end)
+                            }
+                        }
+
+                        // ---------------- fade duration ----------------
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Fade in/out over"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(60, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                color: Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: fadeInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                                TextInput {
+                                    id: fadeInput
+
+                                    anchors {
+                                        fill: parent
+                                        margins: Config.scaled(6, root.uiScale)
+                                    }
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    selectByMouse: true
+                                    clip: true
+                                    validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
+
+                                    // Same programmatic-resync guard as
+                                    // intervalInput above.
+                                    property bool syncing: false
+                                    text: String(root.nlFadeMinutes)
+
+                                    Connections {
+                                        target: root
+                                        function onNlFadeMinutesChanged() {
+                                            fadeInput.syncing = true
+                                            fadeInput.text = String(root.nlFadeMinutes)
+                                            fadeInput.syncing = false
+                                        }
+                                    }
+
+                                    // 0 is valid here (instant), unlike
+                                    // the update interval; an empty field
+                                    // mid-edit is just left unsaved.
+                                    onTextChanged: {
+                                        if (fadeInput.syncing || !root.nightLight) return
+                                        const n = parseInt(fadeInput.text, 10)
+                                        if (!isNaN(n) && n >= 0) root.nightLight.setFadeMinutes(n)
+                                    }
+
+                                    onAccepted: fadeInput.focus = false
+                                }
+                            }
+
+                            Text {
+                                text: "minutes"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Text {
+                                text: "(0 = instant)"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
                     }
                 }
 

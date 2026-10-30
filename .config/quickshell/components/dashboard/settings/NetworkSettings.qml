@@ -8,13 +8,15 @@ import Qt5Compat.GraphicalEffects
 import "../"
 import "../../../Config.js" as Config
 
-// Network devices/connections/wifi - one tab of SettingsScreen.qml's
-// fullscreen tabbed panel (see there for the tab bar/coordinator). One
-// ListView whose model swaps between three tabs, picked via a vertical
-// icon-tab strip on the left instead of Bluetooth's two side-by-side
-// lists. Embeddable Item instead of a standalone SettingsPanel popup:
-// panelWidth/uiScale/active are plain properties fed in from the tab
-// host instead of coming from a PanelWindow.
+// The Connections tab of SettingsScreen.qml's fullscreen tabbed panel
+// (see there for the tab bar/coordinator): network devices, wired
+// connections and wifi, plus Bluetooth. A vertical icon-tab strip on the
+// left picks the category; the three network ones share one ListView
+// whose model swaps, while Bluetooth embeds BluetoothSettings.qml whole
+// (its own controllers + devices layout). Embeddable Item instead of a
+// standalone SettingsPanel popup: panelWidth/uiScale/active are plain
+// properties fed in from the tab host instead of coming from a
+// PanelWindow.
 //
 // Backed by Quickshell.Networking (NetworkManager only) - confirmed
 // against Quickshell's own source that only Wifi and Ethernet device
@@ -35,7 +37,7 @@ Item {
     // height to expand into (see contentWrapper for what changed).
     anchors.fill: parent
 
-    // 0 = Devices, 1 = Connections, 2 = WiFi.
+    // 0 = Devices, 1 = Wired, 2 = WiFi, 3 = Bluetooth.
     property int currentTab: 0
 
     readonly property var wifiDevices: Networking.devices.values.filter(d => d.type === DeviceType.Wifi)
@@ -66,7 +68,7 @@ Item {
     // ---------------- Devices tab ----------------
     readonly property var deviceEntries: Networking.devices.values.map(d => ({ kind: "device", device: d }))
 
-    // ---------------- Connections tab: wired only, connected/disconnected (no separator) ----------------
+    // ---------------- Wired tab: connected/disconnected (no separator) ----------------
     // Wireless networks have their own dedicated WiFi tab, so they're
     // excluded here rather than duplicated in both places.
     readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
@@ -329,6 +331,37 @@ Item {
                     }
                 }
 
+                // Always clickable, unlike WiFi - with no adapter,
+                // BluetoothSettings shows its own "no receiver" message.
+                DashCard {
+                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    Layout.alignment: Qt.AlignHCenter
+                    uiScale: root.uiScale
+                    color: bluetoothTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentTab === 3 ? Config.fgcolorlight : Config.fgcolor
+
+                    IconImage {
+                        id: bluetoothTabIcon
+                        anchors.centerIn: parent
+                        implicitSize: Config.scaled(20, root.uiScale)
+                        source: Quickshell.iconPath("network-bluetooth")
+                    }
+
+                    ColorOverlay {
+                        anchors.fill: bluetoothTabIcon
+                        source: bluetoothTabIcon
+                        color: parent.border.color
+                    }
+
+                    MouseArea {
+                        id: bluetoothTabMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentTab = 3
+                    }
+                }
+
                 Item { Layout.fillHeight: true }
             }
 
@@ -345,10 +378,11 @@ Item {
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                visible: root.currentTab !== 3
                 spacing: Config.scaled(8, root.uiScale)
 
                 Text {
-                    text: root.currentTab === 0 ? "Devices" : root.currentTab === 1 ? "Connections" : "WiFi"
+                    text: root.currentTab === 0 ? "Devices" : root.currentTab === 1 ? "Wired" : "WiFi"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(14, root.uiScale)
@@ -405,7 +439,7 @@ Item {
                     }
                 }
 
-                // Connections tab only - see zerotierNetworks above.
+                // Wired tab only - see zerotierNetworks above.
                 // rowData is captured once here (rather than each
                 // nested child reaching back through parent.parent...)
                 // since only this root item's own `parent` is actually
@@ -512,6 +546,24 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+                }
+            }
+
+            // ---------------- RIGHT (Bluetooth category): its own layout ----------------
+            // Wrapped in a plain Item because BluetoothSettings anchors
+            // itself to fill its parent, which a RowLayout child can't do.
+            // contentRow already supplies the outer margins.
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                visible: root.currentTab === 3
+
+                BluetoothSettings {
+                    panelWidth: root.panelWidth
+                    uiScale: root.uiScale
+                    contentMargins: 0
+                    // Scans for nearby devices only while it's showing.
+                    active: root.active && root.currentTab === 3
                 }
             }
         }
