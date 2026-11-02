@@ -13,6 +13,9 @@ Item {
     property bool muted: false
 
     signal moved(real newValue)
+    // The press that drove moved() is over (let go, or the grab was
+    // lost) - for callers that only apply once a drag finishes.
+    signal released()
 
     implicitHeight: Config.scaled(18, uiScale)
 
@@ -63,5 +66,7 @@ Item {
                 updateFromMouse(mouse.x)
             }
         }
+        onReleased: root.released()
+        onCanceled: root.released()
     }
 }

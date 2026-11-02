@@ -22,6 +22,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // Read once here (rather than per-screen inside osdWindow below) and
     // shared by every screen's own instance - liveworkspaces.json,
     // ScreenSettings.qml's Apply writes this on every Apply (Set
@@ -109,7 +113,7 @@ Scope {
             // The shell-wide per-screen scale (see Config.uiScale), so
             // box/text/border sizes track this screen's own resolution
             // instead of assuming a fixed one.
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
 

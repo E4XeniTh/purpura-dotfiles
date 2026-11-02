@@ -189,8 +189,9 @@ package lists are the exact set):
   takes up the same share of a 1440p or 4K screen (ultrawides scale by
   their height). This goes by the size after Hyprland's own monitor
   scale, so a 4K screen at scale 2 isn't scaled twice. To make the shell
-  bigger or smaller on top of that, change `Config.shellscale` (default
-  `1.0`).
+  bigger or smaller on top of that, use the **UI Scale** slider at the
+  bottom of Settings > Shell (50-150%, applied when you let go; saved to
+  `~/.config/quickshell/uiscalesettings.json`).
 - `Config.solaarEnabled` (default `true`) turns Solaar integration off
   entirely - `solaar show` is never invoked at all while it's `false`,
   not just run and ignored. Set it to `false` if solaar isn't installed

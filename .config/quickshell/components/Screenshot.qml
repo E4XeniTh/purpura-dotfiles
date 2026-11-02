@@ -31,6 +31,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     property bool active: false
     property bool opening: false
     // Set the moment a capture or cancel starts - blanks the overlay while
@@ -402,7 +406,7 @@ Scope {
             visible: root.active
 
             // The shell-wide per-screen scale (see Config.uiScale).
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             readonly property var thisMonitor: root.monitorByName(modelData.name)
             readonly property real monX: thisMonitor ? thisMonitor.x : 0

@@ -25,6 +25,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // Cross-wired from shell.qml, same as Dashboard.qml/SettingsScreen.qml's
     // own mutual-exclusivity wiring.
     property var notification: null
@@ -341,7 +345,7 @@ Scope {
 
         // The shell-wide per-screen scale (see Config.uiScale) of
         // whichever screen the compositor put this window on.
-        readonly property real uiScale: Config.uiScale(dropdownWindow.screen)
+        readonly property real uiScale: Config.uiScale(dropdownWindow.screen, root.shellScale)
 
         margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, dropdownWindow.uiScale); right: Config.scaled(10, dropdownWindow.uiScale) }
         anchors { top: true; right: true }

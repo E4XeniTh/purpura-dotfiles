@@ -20,6 +20,10 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     property bool open: false
 
     // Fed in from shell.qml (Dashboard's own primaryMonitor/audio
@@ -32,6 +36,9 @@ Scope {
 
     // NightLight.qml - handed on to the Shell tab's Night Light category.
     property var nightLight: null
+
+    // UiScale.qml - handed on to the Shell tab's UI Scale slider.
+    property var uiScaleSetting: null
 
     // Symmetric with Dashboard.qml's own onOpenChanged - both are
     // large-ish WlrLayer.Overlay surfaces that visually collide if both
@@ -102,7 +109,7 @@ Scope {
             // the same room at any resolution (a fixed 1200 left it
             // cramped on bigger screens), never wider than 70% of the
             // screen.
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
             readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200 * uiScale)
 
             // Opens right below the bar, same offset Dashboard.qml's own
@@ -459,6 +466,7 @@ Scope {
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 0
                                 nightLight: root.nightLight
+                                uiScaleSetting: root.uiScaleSetting
                             }
 
                             AudioSettings {

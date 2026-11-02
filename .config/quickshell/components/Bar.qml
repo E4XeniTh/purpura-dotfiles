@@ -10,6 +10,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // PowerMenu/LockScreen are separate files with their own IpcHandler-
     // driven state now (no more shared *State.qml singleton to read), so
     // shell.qml passes these down from the actual PowerMenu/LockScreen
@@ -151,7 +155,7 @@ Scope {
             // The shell-wide per-screen scale (see Config.uiScale), so
             // every element below tracks this screen's own resolution
             // instead of assuming a fixed one.
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             // Explicit (every other panel in this shell sets one too) so
             // Screenshot.qml can find this exact surface via `hyprctl

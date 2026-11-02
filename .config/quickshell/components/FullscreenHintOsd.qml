@@ -30,6 +30,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // Fed in from shell.qml - watched below so the hint disappears the
     // instant Dashboard actually opens instead of leaving it sitting on
     // screen for however long was left on hideTimer, e.g. someone
@@ -97,7 +101,7 @@ Scope {
             screen: modelData
 
             // The shell-wide per-screen scale (see Config.uiScale).
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             property bool shouldShow: false
 

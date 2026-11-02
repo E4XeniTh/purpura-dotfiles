@@ -19,6 +19,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     property bool open: false
 
     // Fed in from shell.qml (Dashboard's own primaryMonitor) - same
@@ -111,7 +115,7 @@ Scope {
             readonly property bool isPrimary: modelData.name === root.effectivePrimaryName
 
             // The shell-wide per-screen scale (see Config.uiScale).
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             WlrLayershell.namespace: "powermenu"
             WlrLayershell.layer: WlrLayer.Overlay

@@ -24,6 +24,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     property bool open: false
 
     // The LazyLoader gate below (root.open && previewedEntryId !== "")
@@ -293,7 +297,7 @@ Scope {
 
             // The shell-wide per-screen scale (see Config.uiScale) of
             // whichever screen the compositor put this window on.
-            readonly property real uiScale: Config.uiScale(clipWindow.screen)
+            readonly property real uiScale: Config.uiScale(clipWindow.screen, root.shellScale)
 
             anchors { bottom: true; right: true }
             margins { bottom: Config.scaled(3, clipWindow.uiScale); right: Config.scaled(10, clipWindow.uiScale) }
@@ -630,7 +634,7 @@ Scope {
             id: previewWindow
 
             // Same per-screen scale as clipWindow above.
-            readonly property real uiScale: Config.uiScale(previewWindow.screen)
+            readonly property real uiScale: Config.uiScale(previewWindow.screen, root.shellScale)
 
             anchors { bottom: true; right: true }
             // 10 (screen gap, matching clipWindow's own) + 400

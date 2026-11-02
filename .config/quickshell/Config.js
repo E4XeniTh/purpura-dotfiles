@@ -45,26 +45,23 @@ var hiddenTrayApps = ["solaar"]
 // uiScale is applied to it.
 var barheight = 48
 
-// Multiplies the whole shell's size on every screen, on top of the
-// per-screen uiScale() below: 1.0 keeps a 1080p screen exactly as
-// designed, e.g. 1.15 makes everything 15% bigger, 0.9 smaller.
-var shellscale = 1.0
-
 // Per-screen size factor for Config.scaled(). Every pixel value in this
-// shell is written for a 1920x1080 screen, where this is exactly 1.0
-// (times shellscale); a bigger screen gets a proportionally bigger
-// factor, so the shell covers the same share of it at any resolution.
-// The smaller of the two ratios wins, so a 21:9 / 32:9 ultrawide scales
-// by its height instead of blowing everything up by its width.
+// shell is written for a 1920x1080 screen, where this is exactly 1.0; a
+// bigger screen gets a proportionally bigger factor, so the shell covers
+// the same share of it at any resolution. The smaller of the two ratios
+// wins, so a 21:9 / 32:9 ultrawide scales by its height instead of
+// blowing everything up by its width.
 //
 // screen.width/height are logical pixels - after Hyprland's own monitor
 // scale - so a 4K screen at scale 2 already reads as 1920x1080 here and
 // isn't scaled twice. Floored at 0.6 so text stays readable on small
-// screens.
-function uiScale(screen) {
+// screens. userScale is the global UI Scale from Settings > Shell
+// (components/UiScale.qml), multiplied on top; 1.0 when left out.
+function uiScale(screen, userScale) {
+    const user = userScale > 0 ? userScale : 1
     if (!screen || !screen.width || !screen.height)
-        return shellscale
-    return shellscale * Math.max(0.6, Math.min(screen.width / 1920, screen.height / 1080))
+        return user
+    return user * Math.max(0.6, Math.min(screen.width / 1920, screen.height / 1080))
 }
 
 // Rounds px to the nearest whole pixel scaled by a component-local

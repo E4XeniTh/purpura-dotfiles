@@ -21,6 +21,10 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     property bool open: false
     property var screen: null
 
@@ -709,7 +713,7 @@ Scope {
             // borders, spacing) is written at its 1920x1080 value and
             // multiplied by this - the shell-wide per-screen scale, see
             // Config.uiScale.
-            property real uiScale: Config.uiScale(modelData)
+            property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             // Base size: 0.42/0.46 of a 1920x1080 screen (a little
             // taller than the 800x460 this was first tuned at), times
@@ -1279,7 +1283,7 @@ Scope {
             screen: modelData
             visible: root.identifying
 
-            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
             WlrLayershell.namespace: "screen-identify"
             WlrLayershell.layer: WlrLayer.Overlay

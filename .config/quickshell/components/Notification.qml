@@ -11,6 +11,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // Right-click on Bar.qml's notification button toggles this - true
     // mutes POPUPS specifically (see onNotification below), history
     // keeps recording regardless, same as how a real "do not disturb"
@@ -130,7 +134,7 @@ Scope {
 
         // The shell-wide per-screen scale (see Config.uiScale) of
         // whichever screen the compositor put this window on.
-        readonly property real uiScale: Config.uiScale(toastWindow.screen)
+        readonly property real uiScale: Config.uiScale(toastWindow.screen, root.shellScale)
 
         visible: !root.centerOpen
         anchors { top: true; right: true }
@@ -364,7 +368,7 @@ Scope {
         id: centerWindow
 
         // See the toast PanelWindow above.
-        readonly property real uiScale: Config.uiScale(centerWindow.screen)
+        readonly property real uiScale: Config.uiScale(centerWindow.screen, root.shellScale)
 
         // See the toast PanelWindow above for why margins.top/
         // exclusiveZone differ between the two ignoresBarPadding branches.

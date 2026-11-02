@@ -5,19 +5,30 @@ import "components"
 import "components/dashboard"
 
 Scope {
-  PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen }
-  LockScreen { id: lockScreen; dashboard: dashboard }
-  SettingsScreen { id: settingsScreen; dashboard: dashboard; nightLight: nightLight }
+  // Settings > Shell's global UI Scale - every component below that sizes
+  // itself gets its value as shellScale.
+  UiScale { id: uiScaleSetting }
+
+  PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
+  LockScreen { id: lockScreen; dashboard: dashboard; shellScale: uiScaleSetting.value }
+  SettingsScreen {
+    id: settingsScreen
+    dashboard: dashboard
+    nightLight: nightLight
+    uiScaleSetting: uiScaleSetting
+    shellScale: uiScaleSetting.value
+  }
   NightLight { id: nightLight }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu
     settingsScreen: settingsScreen
+    shellScale: uiScaleSetting.value
   }
-  Notification { id: notification; updater: updater }
-  Updater { id: updater; notification: notification }
-  Clipboard { id: clipboard }
-  Screenshot { id: screenshot }
+  Notification { id: notification; updater: updater; shellScale: uiScaleSetting.value }
+  Updater { id: updater; notification: notification; shellScale: uiScaleSetting.value }
+  Clipboard { id: clipboard; shellScale: uiScaleSetting.value }
+  Screenshot { id: screenshot; shellScale: uiScaleSetting.value }
 
   Bar {
     locked: lockScreen.locked
@@ -25,20 +36,23 @@ Scope {
     dashboard: dashboard
     notification: notification
     updater: updater
+    shellScale: uiScaleSetting.value
   }
 
   VolumeOsd {
     id: volumeOsd
     selectedSinkId: dashboard.audioSelectedSinkId
     brightnessOsd: brightnessOsd
+    shellScale: uiScaleSetting.value
   }
 
   BrightnessOsd {
     id: brightnessOsd
     dashboard: dashboard
     volumeOsd: volumeOsd
+    shellScale: uiScaleSetting.value
   }
 
-  WorkspaceOsd {}
-  FullscreenHintOsd { dashboard: dashboard }
+  WorkspaceOsd { shellScale: uiScaleSetting.value }
+  FullscreenHintOsd { dashboard: dashboard; shellScale: uiScaleSetting.value }
 }

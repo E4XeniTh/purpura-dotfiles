@@ -16,6 +16,10 @@ import "../Config.js" as Config
 Scope {
     id: root
 
+    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // multiplied into every window's Config.uiScale below.
+    property real shellScale: 1.0
+
     // Fed in from shell.qml, same as Bar.qml's own dashboard reference.
     property var dashboard: null
 
@@ -71,7 +75,7 @@ Scope {
 
             // The shell-wide per-screen scale (see Config.uiScale) of
             // whichever screen the compositor put this window on.
-            readonly property real uiScale: Config.uiScale(osdWindow.screen)
+            readonly property real uiScale: Config.uiScale(osdWindow.screen, root.shellScale)
 
             // Since the panel's screen is unset, it will be picked by the compositor
             // when the window is created. Most compositors pick the current active monitor.

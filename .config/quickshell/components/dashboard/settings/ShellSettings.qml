@@ -27,7 +27,10 @@ import "../../../Config.js" as Config
 // established for monitors.json. Updater.qml watches updatersettings.json
 // directly too, same decoupled pattern. Night Light is the exception: its
 // schedule changes settings on its own, so NightLight.qml owns its file
-// and this category just drives that object (`nightLight`).
+// and this category just drives that object (`nightLight`). The UI Scale
+// slider under the category list works the same way: UiScale.qml owns
+// its file and hands the value to every component through shell.qml, and
+// the slider here only calls its set() (`uiScaleSetting`).
 Item {
     id: root
 
@@ -37,6 +40,20 @@ Item {
 
     // NightLight.qml, from shell.qml via SettingsScreen.qml.
     property var nightLight: null
+
+    // UiScale.qml, from shell.qml via SettingsScreen.qml - the UI Scale
+    // slider under the category list.
+    property var uiScaleSetting: null
+
+    // The UI Scale slider's position while it's being dragged. The scale
+    // itself only changes once the slider is let go: it resizes this very
+    // screen, slider included, which would keep shifting the value under
+    // the cursor mid-drag.
+    property bool uiScaleDragging: false
+    property real draggedUiScale: 1
+    readonly property real shownUiScale: root.uiScaleDragging
+        ? root.draggedUiScale
+        : (root.uiScaleSetting ? root.uiScaleSetting.value : 1)
 
     anchors.fill: parent
 
@@ -435,6 +452,67 @@ Item {
                 }
 
                 Item { Layout.fillHeight: true }
+
+                // ---------------- UI scale ----------------
+                // The whole shell's size (UiScale.qml), on top of each
+                // screen's own resolution-based scale - not a category of
+                // its own, just a small control pinned under the list.
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                    visible: !!root.uiScaleSetting
+                    color: Config.fgcolor
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(4, root.uiScale)
+                    visible: !!root.uiScaleSetting
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "UI Scale"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    Text {
+                        text: Math.round(root.shownUiScale * 100) + "%"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+                }
+
+                DeviceSlider {
+                    id: uiScaleSlider
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: uiScaleSlider.implicitHeight
+                    visible: !!root.uiScaleSetting
+                    uiScale: root.uiScale
+
+                    readonly property real minimum: root.uiScaleSetting ? root.uiScaleSetting.minimum : 0.5
+                    readonly property real maximum: root.uiScaleSetting ? root.uiScaleSetting.maximum : 1.5
+
+                    value: (root.shownUiScale - uiScaleSlider.minimum) / (uiScaleSlider.maximum - uiScaleSlider.minimum)
+
+                    // Snaps to UiScale's 5% steps while dragging, so the
+                    // label never shows a value that can't be applied.
+                    onMoved: (newValue) => {
+                        root.draggedUiScale = root.uiScaleSetting.clamp(
+                            uiScaleSlider.minimum + newValue * (uiScaleSlider.maximum - uiScaleSlider.minimum))
+                        root.uiScaleDragging = true
+                    }
+                    onReleased: {
+                        if (!root.uiScaleDragging) return
+                        root.uiScaleSetting.set(root.draggedUiScale)
+                        root.uiScaleDragging = false
+                    }
+                }
             }
 
             // ---------------- divider ----------------
