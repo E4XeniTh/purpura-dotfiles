@@ -110,6 +110,9 @@ Scope {
 
             readonly property bool isPrimary: modelData.name === root.effectivePrimaryName
 
+            // The shell-wide per-screen scale (see Config.uiScale).
+            readonly property real uiScale: Config.uiScale(modelData)
+
             WlrLayershell.namespace: "powermenu"
             WlrLayershell.layer: WlrLayer.Overlay
 
@@ -168,6 +171,8 @@ Scope {
                 anchors.fill: parent
                 active: win.isPrimary && root.open
                 sourceComponent: menuBoxComponent
+
+                property real uiScale: win.uiScale
             }
 
             onVisibleChanged: {
@@ -186,6 +191,9 @@ Scope {
             id: menuScope
             anchors.fill: parent
 
+            // From the Loader above (its window's screen).
+            readonly property real uiScale: parent.uiScale
+
             Keys.onLeftPressed: root.selectedIndex = (root.selectedIndex + root.actions.length - 1) % root.actions.length
             Keys.onRightPressed: root.selectedIndex = (root.selectedIndex + 1) % root.actions.length
             Keys.onReturnPressed: root.activateSelected()
@@ -198,7 +206,7 @@ Scope {
                 anchors.centerIn: parent
 
                 width: 0
-                height: 4
+                height: Config.scaled(4, menuScope.uiScale)
 
                 color: Qt.rgba(0, 0, 0, 1)
 
@@ -215,8 +223,8 @@ Scope {
                             // Wide enough for 5 buttons now (150px each,
                             // 24px spacing, same as before Lock Screen
                             // joined the row) - was 725 for 4.
-                            width: 900
-                            height: 2
+                            width: Config.scaled(900, menuScope.uiScale)
+                            height: Config.scaled(2, menuScope.uiScale)
 
                         }
                     },
@@ -230,8 +238,8 @@ Scope {
 
                             target: menuBox
 
-                            width: 900
-                            height: 200
+                            width: Config.scaled(900, menuScope.uiScale)
+                            height: Config.scaled(200, menuScope.uiScale)
 
                         }
                     }
@@ -270,7 +278,7 @@ Scope {
 
                         anchors.centerIn: parent
 
-                        spacing: 24
+                        spacing: Config.scaled(24, menuScope.uiScale)
 
                         Repeater {
                             model: root.actions
@@ -280,8 +288,8 @@ Scope {
                                 required property var modelData
                                 required property int index
 
-                                width: 150
-                                height: 150
+                                width: Config.scaled(150, menuScope.uiScale)
+                                height: Config.scaled(150, menuScope.uiScale)
 
                                 readonly property bool isSelected: buttonItem.index === root.selectedIndex
 
@@ -296,13 +304,13 @@ Scope {
                                     // border so left/right arrow
                                     // navigation is visible without a
                                     // mouse anywhere near the menu.
-                                    border.width: buttonItem.isSelected ? 3 : 2
+                                    border.width: Config.scaled(buttonItem.isSelected ? 3 : 2, menuScope.uiScale)
                                     border.color: buttonItem.isSelected ? Config.fgcolorlight : Config.fgcolor
 
                                     IconImage {
                                         id: buttonIcon
                                         anchors.centerIn: parent
-                                        implicitSize: 88
+                                        implicitSize: Config.scaled(88, menuScope.uiScale)
                                         source: Quickshell.iconPath(buttonItem.modelData.icon)
                                     }
 
@@ -345,7 +353,7 @@ Scope {
                     color: "transparent"
 
                     border.color: Config.fgcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, menuScope.uiScale)
 
                     z: 10
 
@@ -364,7 +372,7 @@ Scope {
                 root.selectedIndex = 0
 
                 menuBox.width = 0
-                menuBox.height = 2
+                menuBox.height = Config.scaled(2, menuScope.uiScale)
 
                 menuBox.state = "horizontal"
 

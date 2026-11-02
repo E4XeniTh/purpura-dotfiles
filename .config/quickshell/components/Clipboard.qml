@@ -291,16 +291,20 @@ Scope {
         PanelWindow {
             id: clipWindow
 
-            anchors { bottom: true; right: true }
-            margins { bottom: 3; right: 10 }
+            // The shell-wide per-screen scale (see Config.uiScale) of
+            // whichever screen the compositor put this window on.
+            readonly property real uiScale: Config.uiScale(clipWindow.screen)
 
-            implicitWidth: 400
+            anchors { bottom: true; right: true }
+            margins { bottom: Config.scaled(3, clipWindow.uiScale); right: Config.scaled(10, clipWindow.uiScale) }
+
+            implicitWidth: Config.scaled(400, clipWindow.uiScale)
             // +20 = the 10px top + 10px bottom margins contentCol below
             // sits inside - without it, panelBox/mainRect were exactly
             // contentCol's own height with only a bottom margin applied,
             // so contentCol's top edge landed 10px above mainRect's top
             // and mainRect's clip:true cut the title row off.
-            implicitHeight: Math.max(contentCol.implicitHeight + 20, 2)
+            implicitHeight: Math.max(contentCol.implicitHeight + Config.scaled(20, clipWindow.uiScale), 2)
             color: "transparent"
 
             // Overlay (not the unset default, which is Top - same as
@@ -333,7 +337,7 @@ Scope {
                 anchors.bottom: parent.bottom
 
                 width: contentCol.width
-                height: contentCol.implicitHeight + 20
+                height: contentCol.implicitHeight + Config.scaled(20, clipWindow.uiScale)
 
                 color: "transparent"
 
@@ -341,7 +345,7 @@ Scope {
                     id: mainRect
                     anchors.fill: parent
                     color: Config.fillcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, clipWindow.uiScale)
                     border.color: Config.fgcolor
                     clip: true
 
@@ -360,14 +364,14 @@ Scope {
 
                     ColumnLayout {
                         id: contentCol
-                        width: 380
+                        width: Config.scaled(400, clipWindow.uiScale) - 2 * Config.scaled(10, clipWindow.uiScale)
 
                         anchors {
                             bottom: parent.bottom
                             left: parent.left
-                            margins: 10
+                            margins: Config.scaled(10, clipWindow.uiScale)
                         }
-                        spacing: 10
+                        spacing: Config.scaled(10, clipWindow.uiScale)
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -377,7 +381,7 @@ Scope {
                                 text: "Clipboard"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
-                                font.pixelSize: 14
+                                font.pixelSize: Config.scaled(14, clipWindow.uiScale)
                                 font.bold: true
                             }
 
@@ -386,7 +390,7 @@ Scope {
                                 text: "Clear all"
                                 color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
                                 font.family: Config.fontfamily
-                                font.pixelSize: 14
+                                font.pixelSize: Config.scaled(14, clipWindow.uiScale)
 
                                 MouseArea {
                                     id: clearAllMouseArea
@@ -403,7 +407,7 @@ Scope {
                             text: "No clipboard history"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 12
+                            font.pixelSize: Config.scaled(12, clipWindow.uiScale)
                             font.bold: true
                             horizontalAlignment: Text.AlignHCenter
                         }
@@ -411,10 +415,10 @@ Scope {
                         ListView {
                             id: clipList
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(contentHeight, 420)
+                            Layout.preferredHeight: Math.min(contentHeight, Config.scaled(420, clipWindow.uiScale))
                             visible: clipModel.count > 0
                             clip: true
-                            spacing: 8
+                            spacing: Config.scaled(8, clipWindow.uiScale)
                             model: clipModel
                             boundsBehavior: Flickable.StopAtBounds
 
@@ -437,9 +441,9 @@ Scope {
                                 // An image entry's 80px-tall thumbnail
                                 // (+16 margin) lands this at 96 - exactly
                                 // two base (48px) text-entry rows tall.
-                                height: Math.max(64, contentRow.implicitHeight + 16)
+                                height: Math.max(Config.scaled(64, clipWindow.uiScale), contentRow.implicitHeight + Config.scaled(16, clipWindow.uiScale))
                                 color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                border.width: 2
+                                border.width: Config.scaled(2, clipWindow.uiScale)
                                 border.color: entryDelegate.isPreviewed ? Config.fgcolorlight : Config.fgcolor
 
                                 RowLayout {
@@ -457,15 +461,15 @@ Scope {
                                         verticalCenter: parent.verticalCenter
                                         left: parent.left
                                         right: parent.right
-                                        margins: 8
+                                        margins: Config.scaled(8, clipWindow.uiScale)
                                     }
-                                    spacing: 8
+                                    spacing: Config.scaled(8, clipWindow.uiScale)
 
                                     Image {
                                         id: thumb
                                         visible: entryDelegate.isImage
-                                        Layout.preferredWidth: 80
-                                        Layout.preferredHeight: 80
+                                        Layout.preferredWidth: Config.scaled(80, clipWindow.uiScale)
+                                        Layout.preferredHeight: Config.scaled(80, clipWindow.uiScale)
                                         Layout.alignment: Qt.AlignTop
                                         // Fit the whole image within the
                                         // thumbnail bounds instead of
@@ -501,7 +505,7 @@ Scope {
                                         textFormat: Text.PlainText
                                         color: Config.fgcolor
                                         font.family: Config.fontfamily
-                                        font.pixelSize: 14
+                                        font.pixelSize: Config.scaled(14, clipWindow.uiScale)
                                         wrapMode: Text.WordWrap
                                         maximumLineCount: 4
                                         elide: Text.ElideRight
@@ -525,7 +529,7 @@ Scope {
                                     z: 0
                                     anchors.fill: contentRow
                                     source: contentRow
-                                    radius: 48
+                                    radius: Config.scaled(48, clipWindow.uiScale)
                                     visible: entryDelegate.isPreviewed
                                 }
 
@@ -571,18 +575,18 @@ Scope {
                                 }
                             }
                         }
-                        Item { height: 8 }
+                        Item { height: Config.scaled(8, clipWindow.uiScale) }
                     }
                 }
 
                 states: [
                     State {
                         name: "spread"
-                        PropertyChanges { target: panelBox; width: 400; height: 2 }
+                        PropertyChanges { target: panelBox; width: Config.scaled(400, clipWindow.uiScale); height: Config.scaled(2, clipWindow.uiScale) }
                     },
                     State {
                         name: "open"
-                        PropertyChanges { target: panelBox; width: 400; height: contentCol.implicitHeight + 20 }
+                        PropertyChanges { target: panelBox; width: Config.scaled(400, clipWindow.uiScale); height: contentCol.implicitHeight + Config.scaled(20, clipWindow.uiScale) }
                     }
                 ]
 
@@ -598,7 +602,7 @@ Scope {
 
                 Component.onCompleted: {
                     panelBox.width = 0
-                    panelBox.height = 4
+                    panelBox.height = Config.scaled(4, clipWindow.uiScale)
                     panelBox.state = "spread"
                     openTimer.start()
                 }
@@ -625,23 +629,26 @@ Scope {
         PanelWindow {
             id: previewWindow
 
+            // Same per-screen scale as clipWindow above.
+            readonly property real uiScale: Config.uiScale(previewWindow.screen)
+
             anchors { bottom: true; right: true }
             // 10 (screen gap, matching clipWindow's own) + 400
             // (clipWindow's width) + 10 (gap between the two panels).
-            margins { bottom: 10; right: 420 }
+            margins { bottom: Config.scaled(10, previewWindow.uiScale); right: 2 * Config.scaled(10, previewWindow.uiScale) + Config.scaled(400, previewWindow.uiScale) }
 
             // 400 max in both cases; images are always exactly that
             // square, text instead shrinks to fit its own content (down
             // to whatever a short entry actually needs) and only ever
             // grows up to this cap, past which it wraps/scrolls instead
             // of the window growing further.
-            readonly property int paneMaxSize: 400
+            readonly property int paneMaxSize: Config.scaled(400, previewWindow.uiScale)
             // Total inset from the window edge to the actual
             // Image/Flickable content: 10px margin from outerBox to the
             // inner nested box, then another 10px from that box to the
             // content itself - twice, once per side (left+right, or
             // top+bottom).
-            readonly property int panePadding: 40
+            readonly property int panePadding: 4 * Config.scaled(10, previewWindow.uiScale)
             // Natural (unwrapped) width the text would take with no
             // width constraint at all - NoWrap means this never depends
             // on any width WE assign it, so it's safe to size the real,
@@ -668,7 +675,7 @@ Scope {
                 textFormat: Text.PlainText
                 wrapMode: Text.NoWrap
                 font.family: Config.fontfamily
-                font.pixelSize: 14
+                font.pixelSize: Config.scaled(14, previewWindow.uiScale)
             }
 
             // Overlay for the same reason as clipWindow above.
@@ -684,7 +691,7 @@ Scope {
 
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: 2
+                border.width: Config.scaled(2, previewWindow.uiScale)
                 border.color: Config.fgcolor
 
                 // Same shared autoCloseTimer as the main panel's own
@@ -707,15 +714,15 @@ Scope {
                 // used elsewhere in this shell (e.g. DashCard.qml).
                 Rectangle {
                     anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.margins: Config.scaled(10, previewWindow.uiScale)
                     color: Config.fillcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, previewWindow.uiScale)
                     border.color: Config.fgcolorlight
 
                     Image {
                         visible: root.previewedIsImage
                         anchors.fill: parent
-                        anchors.margins: 10
+                        anchors.margins: Config.scaled(10, previewWindow.uiScale)
                         source: root.previewedIsImage ? ("file://" + root.previewedImagePath) : ""
                         // Scale to fill as much of the square as possible
                         // without cropping or distorting - including
@@ -730,7 +737,7 @@ Scope {
                     Flickable {
                         visible: !root.previewedIsImage
                         anchors.fill: parent
-                        anchors.margins: 10
+                        anchors.margins: Config.scaled(10, previewWindow.uiScale)
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
                         // Vertical-only - previewTextItem's own width is
@@ -754,7 +761,7 @@ Scope {
                             selectByMouse: true
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 14
+                            font.pixelSize: Config.scaled(14, previewWindow.uiScale)
                         }
                     }
                 }

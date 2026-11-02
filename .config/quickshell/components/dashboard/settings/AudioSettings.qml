@@ -286,9 +286,9 @@ Item {
                 bottom: hintRow.top
                 bottomMargin: Config.scaled(10, root.uiScale)
             }
-            border.width: 2
+            border.width: Config.scaled(2, root.uiScale)
             border.color: Config.fgcolor
-            height: 2
+            height: Config.scaled(2, root.uiScale)
         }
 
         // ---------------- hint row: right-click to set default, scroll to adjust volume ----------------

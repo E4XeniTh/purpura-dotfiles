@@ -126,6 +126,12 @@ Scope {
     }
 
     PanelWindow {
+        id: toastWindow
+
+        // The shell-wide per-screen scale (see Config.uiScale) of
+        // whichever screen the compositor put this window on.
+        readonly property real uiScale: Config.uiScale(toastWindow.screen)
+
         visible: !root.centerOpen
         anchors { top: true; right: true }
         // Normally pushed below the bar's own reserved exclusive zone by
@@ -136,17 +142,17 @@ Scope {
         // so margins.top is measured from the true screen edge instead -
         // 10 to roughly land where the bar's own top edge would be,
         // rather than flush against the very corner.
-        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, toastWindow.uiScale); right: Config.scaled(10, toastWindow.uiScale) }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
 
-        implicitWidth: 380
+        implicitWidth: Config.scaled(380, toastWindow.uiScale)
         implicitHeight: Math.max(1, column.implicitHeight)
         color: "transparent"
 
         ColumnLayout {
             id: column
             width: parent.width
-            spacing: 4
+            spacing: Config.scaled(4, toastWindow.uiScale)
 
             Repeater {
                 model: server.trackedNotifications
@@ -170,20 +176,20 @@ Scope {
                     Layout.fillWidth: true
                     // Grows for wrapped multi-line bodies instead of
                     // clipping them to a fixed 60px card.
-                    Layout.preferredHeight: Math.max(60, toastContentColumn.implicitHeight + 20)
+                    Layout.preferredHeight: Math.max(Config.scaled(60, toastWindow.uiScale), toastContentColumn.implicitHeight + Config.scaled(20, toastWindow.uiScale))
                     color: cardMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, toastWindow.uiScale)
                     border.color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
 
                     RowLayout {
                         id: layout
                         anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 10
+                        anchors.margins: Config.scaled(10, toastWindow.uiScale)
+                        spacing: Config.scaled(10, toastWindow.uiScale)
 
                         Image {
-                            Layout.preferredHeight: 36
-                            Layout.preferredWidth: 36
+                            Layout.preferredHeight: Config.scaled(36, toastWindow.uiScale)
+                            Layout.preferredWidth: Config.scaled(36, toastWindow.uiScale)
                             Layout.alignment: Qt.AlignTop
                             fillMode: Image.PreserveAspectFit
                             visible: source.toString() !== ""
@@ -193,14 +199,14 @@ Scope {
                         ColumnLayout {
                             id: toastContentColumn
                             Layout.fillWidth: true
-                            spacing: 2
+                            spacing: Config.scaled(2, toastWindow.uiScale)
 
                             Text {
                                 Layout.fillWidth: true
                                 text: card.modelData.summary
                                 color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
                                 font.family: Config.fontfamily
-                                font.pixelSize: 14
+                                font.pixelSize: Config.scaled(14, toastWindow.uiScale)
                                 font.bold: true
                                 elide: Text.ElideRight
                             }
@@ -211,7 +217,7 @@ Scope {
                                 text: card.modelData.body
                                 color: modelData.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolorlight
                                 font.family: Config.fontfamily
-                                font.pixelSize: 14 - 2
+                                font.pixelSize: Config.scaled(12, toastWindow.uiScale)
                                 wrapMode: Text.WordWrap
                             }
                         }
@@ -355,9 +361,14 @@ Scope {
     }
 
     PanelWindow {
+        id: centerWindow
+
+        // See the toast PanelWindow above.
+        readonly property real uiScale: Config.uiScale(centerWindow.screen)
+
         // See the toast PanelWindow above for why margins.top/
         // exclusiveZone differ between the two ignoresBarPadding branches.
-        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, centerWindow.uiScale); right: Config.scaled(10, centerWindow.uiScale) }
         anchors { top: true; right: true }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.centerOpen
@@ -370,8 +381,8 @@ Scope {
         // spreading. Dashboard/PowerMenu/Tray never do this - their outer
         // window is sized once from the full/settled content, and only
         // an internal Rectangle (panelBox here) animates via clip.
-        implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
+        implicitWidth: Config.scaled(400, centerWindow.uiScale)
+        implicitHeight: Math.max(centerCol.implicitHeight + Config.scaled(20, centerWindow.uiScale), 1)
 
         color: "transparent"
         Rectangle {
@@ -388,7 +399,7 @@ Scope {
             // bottom gap at all (10 entirely consumed accounting for the
             // top offset), clipping the empty-state label flush against
             // the border.
-            height: centerCol.implicitHeight + 20
+            height: centerCol.implicitHeight + Config.scaled(20, centerWindow.uiScale)
 
             // No anchor at all defaults to the window's top-left, so as
             // width grew the box appeared to grow rightward from a fixed
@@ -400,7 +411,7 @@ Scope {
                 id: mainRect
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: 2
+                border.width: Config.scaled(2, centerWindow.uiScale)
                 border.color: Config.fgcolor
                 clip: true
 
@@ -427,17 +438,18 @@ Scope {
                     // width to that same chain re-creates the circular
                     // dependency the height fix already had to break -
                     // width just wasn't obviously circular the same way
-                    // until you trace it through. A literal width removes
-                    // any coupling in either direction: 400 (panelBox's
-                    // fixed open width) minus 10px margin on each side.
-                    width: 380
+                    // until you trace it through. A width built from
+                    // constants alone removes any coupling in either
+                    // direction: panelBox's fixed open width (400) minus
+                    // the 10px margin on each side.
+                    width: Config.scaled(400, centerWindow.uiScale) - 2 * Config.scaled(10, centerWindow.uiScale)
 
                     anchors {
                         top: parent.top
                         left: parent.left
-                        margins: 10
+                        margins: Config.scaled(10, centerWindow.uiScale)
                     }
-                    spacing: 10
+                    spacing: Config.scaled(10, centerWindow.uiScale)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -447,7 +459,7 @@ Scope {
                             text: "Notifications"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 14
+                            font.pixelSize: Config.scaled(14, centerWindow.uiScale)
                             font.bold: true
                         }
 
@@ -456,7 +468,7 @@ Scope {
                             text: "Clear all"
                             color: clearAllMouseArea.containsMouse ? Config.fgcolorlight : Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 14
+                            font.pixelSize: Config.scaled(14, centerWindow.uiScale)
 
                             MouseArea {
                                 id: clearAllMouseArea
@@ -473,7 +485,7 @@ Scope {
                         text: "No notifications"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 12
+                        font.pixelSize: Config.scaled(12, centerWindow.uiScale)
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -481,10 +493,10 @@ Scope {
                     ListView {
                         id: historyList
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(contentHeight, 420)
+                        Layout.preferredHeight: Math.min(contentHeight, Config.scaled(420, centerWindow.uiScale))
                         visible: historyModel.count > 0
                         clip: true
-                        spacing: 8
+                        spacing: Config.scaled(8, centerWindow.uiScale)
                         model: historyModel
                         boundsBehavior: Flickable.StopAtBounds
 
@@ -492,19 +504,19 @@ Scope {
                             width: historyList.width
                             // Grows for wrapped multi-line bodies instead
                             // of clipping them to a fixed 60px card.
-                            height: Math.max(60, historyContentColumn.implicitHeight + 20)
+                            height: Math.max(Config.scaled(60, centerWindow.uiScale), historyContentColumn.implicitHeight + Config.scaled(20, centerWindow.uiScale))
                             color: historyMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                            border.width: 2
+                            border.width: Config.scaled(2, centerWindow.uiScale)
                             border.color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 10
-                                spacing: 10
+                                anchors.margins: Config.scaled(10, centerWindow.uiScale)
+                                spacing: Config.scaled(10, centerWindow.uiScale)
 
                                 Image {
-                                    Layout.preferredHeight: 36
-                                    Layout.preferredWidth: 36
+                                    Layout.preferredHeight: Config.scaled(36, centerWindow.uiScale)
+                                    Layout.preferredWidth: Config.scaled(36, centerWindow.uiScale)
                                     Layout.alignment: Qt.AlignTop
                                     fillMode: Image.PreserveAspectFit
                                     visible: source.toString() !== ""
@@ -514,14 +526,14 @@ Scope {
                                 ColumnLayout {
                                     id: historyContentColumn
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: Config.scaled(2, centerWindow.uiScale)
 
                                     Text {
                                         Layout.fillWidth: true
                                         text: model.summary
                                         color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolor
                                         font.family: Config.fontfamily
-                                        font.pixelSize: 14
+                                        font.pixelSize: Config.scaled(14, centerWindow.uiScale)
                                         font.bold: true
                                         elide: Text.ElideRight
                                     }
@@ -532,7 +544,7 @@ Scope {
                                         text: model.body
                                         color: model.urgency === NotificationUrgency.Critical ? "red" : Config.fgcolorlight
                                         font.family: Config.fontfamily
-                                        font.pixelSize: 14 - 2
+                                        font.pixelSize: Config.scaled(12, centerWindow.uiScale)
                                         wrapMode: Text.WordWrap
                                     }
                                 }
@@ -556,7 +568,7 @@ Scope {
                             }
                         }
                     }
-                    Item { height: 2 }
+                    Item { height: Config.scaled(2, centerWindow.uiScale) }
                 }
             }
 
@@ -568,8 +580,8 @@ Scope {
                     PropertyChanges {
                         target: panelBox
 
-                        width: 400
-                        height: 2
+                        width: Config.scaled(400, centerWindow.uiScale)
+                        height: Config.scaled(2, centerWindow.uiScale)
                     }
                 },
 
@@ -579,8 +591,8 @@ Scope {
                     PropertyChanges {
                         target: panelBox
 
-                        width: 400
-                        height: centerCol.implicitHeight + 20
+                        width: Config.scaled(400, centerWindow.uiScale)
+                        height: centerCol.implicitHeight + Config.scaled(20, centerWindow.uiScale)
                     }
                 }
 
@@ -607,7 +619,7 @@ Scope {
             onVisibleChanged: {
                 if (visible) {
                     panelBox.width = 0
-                    panelBox.height = 4
+                    panelBox.height = Config.scaled(4, centerWindow.uiScale)
 
                     panelBox.state = "spread"
                     centerOpenTimer.start()

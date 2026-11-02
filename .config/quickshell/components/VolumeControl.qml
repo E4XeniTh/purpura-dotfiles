@@ -227,7 +227,7 @@ Rectangle {
             id: menuBox
 
             width: 0
-            height: 2
+            height: Config.scaled(2, root.uiScale)
             color: Config.fillcolor
 
             states: [
@@ -239,7 +239,7 @@ Rectangle {
                         target: menuBox
 
                         width: menuWindow.implicitWidth
-                        height: 3
+                        height: Config.scaled(3, root.uiScale)
                     }
                 },
 
@@ -336,9 +336,8 @@ Rectangle {
                     // Same thin, inset look as Tray.qml's own menu
                     // separator (a centered 1px line with margins on
                     // each side, not a full-bleed divider) - scaled via
-                    // Config.scaled/root.uiScale to match the rest of
-                    // this menu's own convention, unlike Tray.qml's menu
-                    // which uses flat unscaled pixel values throughout.
+                    // Config.scaled/root.uiScale like the rest of this
+                    // menu.
                     Item {
                         width: menuColumn.width
                         height: Config.scaled(9, root.uiScale)
@@ -424,7 +423,7 @@ Rectangle {
         onVisibleChanged: {
             if (visible) {
                 menuBox.width = 0
-                menuBox.height = 4
+                menuBox.height = Config.scaled(4, root.uiScale)
 
                 menuBox.state = "horizontal"
                 menuOpenTimer.start()

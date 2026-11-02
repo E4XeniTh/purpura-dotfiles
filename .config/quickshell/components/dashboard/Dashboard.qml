@@ -16,8 +16,8 @@ import "../../Config.js" as Config
 // section within is a fraction of *available* space (container size minus
 // its own padding/spacing), so fractions on the same axis always sum to
 // 1.0 with no leftover/overflow. Everything else (fonts, icons, borders,
-// spacing) scales with uiScale, computed against the 800px-wide reference
-// this layout was tuned at on a 1920x1080 screen - see dashWindow below.
+// spacing) scales with uiScale, the shell-wide per-screen factor
+// (Config.uiScale, 1.0 at 1920x1080) - see dashWindow below.
 Scope {
     id: root
 
@@ -705,27 +705,30 @@ Scope {
             property var modelData
             screen: modelData
 
-            // Screen-relative base size. ~0.42/0.47 reproduces (a little
-            // taller than) the 800x460 this was tuned at on a 1920x1080
-            // screen, just no longer fixed - bumped from 0.43 so the
-            // clock/Now Playing cards (and the center column's system
-            // monitor filler, which absorbs the rest) have more room
-            // before their own text stops fitting. Weather/calendar were
-            // already the right size at the old 0.43 base though, so
-            // they still size off originalColumnHeight below - only
-            // clock (and the two right-column cards, and the center
-            // filler) actually absorb the extra room this bump adds.
-            property real dashWidth: modelData.width * 0.42
-            property real columnHeight: modelData.height * 0.46
-            property real originalColumnHeight: modelData.height * 0.43
+            // Everything sized in plain pixels below (fonts, icons,
+            // borders, spacing) is written at its 1920x1080 value and
+            // multiplied by this - the shell-wide per-screen scale, see
+            // Config.uiScale.
+            property real uiScale: Config.uiScale(modelData)
+
+            // Base size: 0.42/0.46 of a 1920x1080 screen (a little
+            // taller than the 800x460 this was first tuned at), times
+            // uiScale like everything inside it - so on any screen the
+            // frame and its contents grow together, and a 21:9 screen
+            // gets the same box rather than a stretched-wide one. 0.46
+            // was bumped from 0.43 so the clock/Now Playing cards (and
+            // the center column's system monitor filler, which absorbs
+            // the rest) have more room before their own text stops
+            // fitting. Weather/calendar were already the right size at
+            // the old 0.43 base though, so they still size off
+            // originalColumnHeight below - only clock (and the two
+            // right-column cards, and the center filler) actually absorb
+            // the extra room this bump adds.
+            property real dashWidth: 1920 * 0.42 * uiScale
+            property real columnHeight: 1080 * 0.46 * uiScale
+            property real originalColumnHeight: 1080 * 0.43 * uiScale
 
             readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name
-
-            // Everything sized in plain pixels below (fonts, icons,
-            // borders, spacing) is written at its 800px-reference value
-            // and multiplied by this. Clamped so a tiny or huge monitor
-            // doesn't make text illegibly small or comically large.
-            property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
 
             visible: root.open && root.screen === modelData
 
@@ -757,7 +760,7 @@ Scope {
                 // instead - Bar's own top margin (10, scaled), so the
                 // dashboard sits roughly where the bar's own top edge
                 // would be rather than flush against the very corner.
-                top: dashWindow.ignoresBarPadding ? Config.scaled(10, dashWindow.uiScale) : 4
+                top: Config.scaled(dashWindow.ignoresBarPadding ? 10 : 4, dashWindow.uiScale)
             }
 
             implicitWidth: dashWidth
@@ -771,7 +774,7 @@ Scope {
                 anchors.horizontalCenter: parent.horizontalCenter
 
                 width: 0
-                height: 2
+                height: Config.scaled(2, dashWindow.uiScale)
 
                 // Fully opaque - each section below sits on top of this in
                 // its own DashCard.
@@ -786,7 +789,7 @@ Scope {
                             target: dashBox
 
                             width: dashWidth
-                            height: 2
+                            height: Config.scaled(2, dashWindow.uiScale)
                         }
                     },
 
@@ -978,7 +981,7 @@ Scope {
 
                                     Image {
                                         anchors.fill: parent
-                                        anchors.margins: 2
+                                        anchors.margins: Config.scaled(2, dashWindow.uiScale)
 
                                         source: "file://" + Quickshell.env("HOME") + "/.face"
                                         fillMode: Image.PreserveAspectCrop
@@ -1192,7 +1195,7 @@ Scope {
             onVisibleChanged: {
                 if (visible) {
                     dashBox.width = 0
-                    dashBox.height = 4
+                    dashBox.height = Config.scaled(4, dashWindow.uiScale)
 
                     dashBox.state = "horizontal"
                     dashOpenTimer.start()
@@ -1270,9 +1273,13 @@ Scope {
         model: Quickshell.screens
 
         PanelWindow {
+            id: identifyWindow
+
             property var modelData
             screen: modelData
             visible: root.identifying
+
+            readonly property real uiScale: Config.uiScale(modelData)
 
             WlrLayershell.namespace: "screen-identify"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -1280,20 +1287,21 @@ Scope {
             exclusiveZone: 0
             mask: Region {}
 
-            implicitWidth: 320
-            implicitHeight: 160
+            implicitWidth: Config.scaled(320, identifyWindow.uiScale)
+            implicitHeight: Config.scaled(160, identifyWindow.uiScale)
 
             color: "transparent"
 
             DashCard {
                 anchors.fill: parent
+                uiScale: identifyWindow.uiScale
 
                 Text {
                     anchors.centerIn: parent
                     text: modelData ? modelData.name : ""
                     color: Config.fgcolor
                     font.family: Config.fontfamily
-                    font.pixelSize: 48
+                    font.pixelSize: Config.scaled(48, identifyWindow.uiScale)
                     font.bold: true
                 }
             }

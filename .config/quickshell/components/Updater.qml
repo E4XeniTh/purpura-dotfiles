@@ -337,7 +337,13 @@ Scope {
     }
 
     PanelWindow {
-        margins { top: root.ignoresBarPadding ? 10 : 4; right: 10 }
+        id: dropdownWindow
+
+        // The shell-wide per-screen scale (see Config.uiScale) of
+        // whichever screen the compositor put this window on.
+        readonly property real uiScale: Config.uiScale(dropdownWindow.screen)
+
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, dropdownWindow.uiScale); right: Config.scaled(10, dropdownWindow.uiScale) }
         anchors { top: true; right: true }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.dropdownOpen
@@ -348,8 +354,8 @@ Scope {
         // actual Wayland surface every frame (a real compositor
         // round-trip), which is what made this feel sluggish and gave it
         // a wrong height mid-spread.
-        implicitWidth: 400
-        implicitHeight: Math.max(centerCol.implicitHeight + 20, 1)
+        implicitWidth: Config.scaled(400, dropdownWindow.uiScale)
+        implicitHeight: Math.max(centerCol.implicitHeight + Config.scaled(20, dropdownWindow.uiScale), 1)
 
         color: "transparent"
 
@@ -367,7 +373,7 @@ Scope {
             // bottom gap at all (10 entirely consumed accounting for the
             // top offset), clipping the empty-state label flush against
             // the border.
-            height: centerCol.implicitHeight + 20
+            height: centerCol.implicitHeight + Config.scaled(20, dropdownWindow.uiScale)
 
             // Grows from the right edge, same as Notification.qml's own
             // panelBox/Tray.qml's menu.
@@ -377,7 +383,7 @@ Scope {
                 id: mainRect
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: 2
+                border.width: Config.scaled(2, dropdownWindow.uiScale)
                 border.color: Config.fgcolor
                 clip: true
 
@@ -394,14 +400,14 @@ Scope {
                 ColumnLayout {
                     id: centerCol
 
-                    width: 380
+                    width: Config.scaled(400, dropdownWindow.uiScale) - 2 * Config.scaled(10, dropdownWindow.uiScale)
 
                     anchors {
                         top: parent.top
                         left: parent.left
-                        margins: 10
+                        margins: Config.scaled(10, dropdownWindow.uiScale)
                     }
-                    spacing: 10
+                    spacing: Config.scaled(10, dropdownWindow.uiScale)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -411,7 +417,7 @@ Scope {
                             text: "Updates"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 14
+                            font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
                             font.bold: true
                         }
 
@@ -419,7 +425,7 @@ Scope {
                             text: root.updateCount + " available"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: 12
+                            font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
                         }
                     }
 
@@ -429,7 +435,7 @@ Scope {
                         text: "Everything is up to date"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 12
+                        font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                     }
@@ -437,48 +443,48 @@ Scope {
                     ListView {
                         id: updatesList
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Math.min(contentHeight, 420)
+                        Layout.preferredHeight: Math.min(contentHeight, Config.scaled(420, dropdownWindow.uiScale))
                         visible: root.updateCount > 0
                         clip: true
-                        spacing: 8
+                        spacing: Config.scaled(8, dropdownWindow.uiScale)
                         model: root.allUpdates
                         boundsBehavior: Flickable.StopAtBounds
 
                         delegate: Rectangle {
                             width: updatesList.width
-                            height: 50
+                            height: Config.scaled(50, dropdownWindow.uiScale)
                             color: Config.fillcolor
-                            border.width: 2
+                            border.width: Config.scaled(2, dropdownWindow.uiScale)
                             border.color: Config.fgcolor
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
+                                anchors.margins: Config.scaled(8, dropdownWindow.uiScale)
+                                spacing: Config.scaled(8, dropdownWindow.uiScale)
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    spacing: 2
+                                    spacing: Config.scaled(2, dropdownWindow.uiScale)
 
                                     Text {
                                         Layout.fillWidth: true
                                         text: modelData.name
                                         color: Config.fgcolor
                                         font.family: Config.fontfamily
-                                        font.pixelSize: 13
+                                        font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
                                         font.bold: true
                                         elide: Text.ElideRight
                                     }
 
                                     RowLayout {
                                         Layout.fillWidth: true
-                                        spacing: 6
+                                        spacing: Config.scaled(6, dropdownWindow.uiScale)
 
                                         Text {
                                             text: modelData.category
                                             color: Config.fgcolor
                                             font.family: Config.fontfamily
-                                            font.pixelSize: 11
+                                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
                                         }
 
                                         Text {
@@ -486,7 +492,7 @@ Scope {
                                             text: (modelData.oldVersion.length > 0 ? modelData.oldVersion + " -> " : "-> ") + modelData.newVersion
                                             color: Config.fgcolorlight
                                             font.family: Config.fontfamily
-                                            font.pixelSize: 11
+                                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
                                             elide: Text.ElideRight
                                         }
                                     }
@@ -494,7 +500,7 @@ Scope {
                             }
                         }
                     }
-                    Item { height: 2 }
+                    Item { height: Config.scaled(2, dropdownWindow.uiScale) }
                 }
             }
 
@@ -506,8 +512,8 @@ Scope {
                     PropertyChanges {
                         target: panelBox
 
-                        width: 400
-                        height: 2
+                        width: Config.scaled(400, dropdownWindow.uiScale)
+                        height: Config.scaled(2, dropdownWindow.uiScale)
                     }
                 },
 
@@ -517,8 +523,8 @@ Scope {
                     PropertyChanges {
                         target: panelBox
 
-                        width: 400
-                        height: centerCol.implicitHeight + 20
+                        width: Config.scaled(400, dropdownWindow.uiScale)
+                        height: centerCol.implicitHeight + Config.scaled(20, dropdownWindow.uiScale)
                     }
                 }
 
@@ -545,7 +551,7 @@ Scope {
             onVisibleChanged: {
                 if (visible) {
                     panelBox.width = 0
-                    panelBox.height = 4
+                    panelBox.height = Config.scaled(4, dropdownWindow.uiScale)
 
                     panelBox.state = "spread"
                     dropdownOpenTimer.start()

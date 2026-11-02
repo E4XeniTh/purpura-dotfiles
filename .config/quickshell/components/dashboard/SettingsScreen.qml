@@ -94,16 +94,16 @@ Scope {
 
             readonly property bool isPrimary: modelData.name === root.effectivePrimaryName
 
-            // panelWidth is just the card's own physical width - wider
-            // than Dashboard's own dashWidth since this is a dedicated
-            // full screen now instead of a slim dropdown column. uiScale
-            // stays on Dashboard.qml's own dashWidth-based formula
-            // though (NOT derived from this wider panelWidth) so every
-            // font/icon/border here renders at the same density as the
-            // rest of the shell instead of visibly thicker/bigger.
-            readonly property real dashWidth: modelData.width * 0.42
-            readonly property real uiScale: Math.max(0.6, Math.min(1.8, dashWidth / 800))
-            readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200)
+            // The shell-wide per-screen scale (see Config.uiScale), same
+            // as the bar/dashboard, so every font/icon/border here
+            // renders at the same density as the rest of the shell.
+            // panelWidth is the card's own width - 1200 at 1920x1080,
+            // scaled with everything inside it so the tabs' content has
+            // the same room at any resolution (a fixed 1200 left it
+            // cramped on bigger screens), never wider than 70% of the
+            // screen.
+            readonly property real uiScale: Config.uiScale(modelData)
+            readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200 * uiScale)
 
             // Opens right below the bar, same offset Dashboard.qml's own
             // dashWindow gets automatically from the compositor pushing
@@ -255,7 +255,7 @@ Scope {
                 }
 
                 width: 0
-                height: 4
+                height: Config.scaled(4, panelScope.uiScale)
 
                 color: Config.fillcolor
 
@@ -282,7 +282,7 @@ Scope {
                             target: box
 
                             width: panelScope.panelWidth
-                            height: 2
+                            height: Config.scaled(2, panelScope.uiScale)
                         }
                     },
 
@@ -525,7 +525,7 @@ Scope {
                 root.requestedInitialTab = 0
 
                 box.width = 0
-                box.height = 2
+                box.height = Config.scaled(2, panelScope.uiScale)
 
                 box.state = "horizontal"
 

@@ -401,6 +401,9 @@ Scope {
 
             visible: root.active
 
+            // The shell-wide per-screen scale (see Config.uiScale).
+            readonly property real uiScale: Config.uiScale(modelData)
+
             readonly property var thisMonitor: root.monitorByName(modelData.name)
             readonly property real monX: thisMonitor ? thisMonitor.x : 0
             readonly property real monY: thisMonitor ? thisMonitor.y : 0
@@ -537,16 +540,20 @@ Scope {
                         const ctx = getContext("2d")
                         ctx.clearRect(0, 0, width, height)
                         if (!show || rw <= 0 || rh <= 0) return
-                        ctx.setLineDash([6, 4])
+                        // Inset by half the line width so the whole
+                        // stroke lands inside the rect.
+                        const lineWidth = Config.scaled(2, overlayWin.uiScale)
+                        ctx.setLineDash([Config.scaled(6, overlayWin.uiScale), Config.scaled(4, overlayWin.uiScale)])
                         ctx.lineDashOffset = -dashPhase
-                        ctx.lineWidth = 2
+                        ctx.lineWidth = lineWidth
                         ctx.strokeStyle = Config.fgcolorlight
-                        ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                        ctx.strokeRect(rx + lineWidth / 2, ry + lineWidth / 2, rw - lineWidth, rh - lineWidth)
                     }
 
                     NumberAnimation on dashPhase {
                         from: 0
-                        to: 10
+                        // One full dash period, so the loop is seamless.
+                        to: Config.scaled(6, overlayWin.uiScale) + Config.scaled(4, overlayWin.uiScale)
                         duration: 500
                         loops: Animation.Infinite
                         running: hoverAnts.visible
@@ -580,16 +587,20 @@ Scope {
                         const ctx = getContext("2d")
                         ctx.clearRect(0, 0, width, height)
                         if (!show || rw <= 0 || rh <= 0) return
-                        ctx.setLineDash([6, 4])
+                        // Inset by half the line width so the whole
+                        // stroke lands inside the rect.
+                        const lineWidth = Config.scaled(2, overlayWin.uiScale)
+                        ctx.setLineDash([Config.scaled(6, overlayWin.uiScale), Config.scaled(4, overlayWin.uiScale)])
                         ctx.lineDashOffset = -dashPhase
-                        ctx.lineWidth = 2
+                        ctx.lineWidth = lineWidth
                         ctx.strokeStyle = Config.fgcolorlight
-                        ctx.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2)
+                        ctx.strokeRect(rx + lineWidth / 2, ry + lineWidth / 2, rw - lineWidth, rh - lineWidth)
                     }
 
                     NumberAnimation on dashPhase {
                         from: 0
-                        to: 10
+                        // One full dash period, so the loop is seamless.
+                        to: Config.scaled(6, overlayWin.uiScale) + Config.scaled(4, overlayWin.uiScale)
                         duration: 500
                         loops: Animation.Infinite
                         running: dragAnts.visible
@@ -613,12 +624,12 @@ Scope {
                     anchors {
                         top: parent.top
                         horizontalCenter: parent.horizontalCenter
-                        topMargin: 20
+                        topMargin: Config.scaled(20, overlayWin.uiScale)
                     }
-                    width: instructionText.implicitWidth + 24
-                    height: instructionText.implicitHeight + 16
+                    width: instructionText.implicitWidth + Config.scaled(24, overlayWin.uiScale)
+                    height: instructionText.implicitHeight + Config.scaled(16, overlayWin.uiScale)
                     color: Config.fillcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, overlayWin.uiScale)
                     border.color: Config.fgcolor
                     opacity: (root.dragging || overlayWin.hintHoveredHere) ? 0 : 1
 
@@ -629,7 +640,7 @@ Scope {
                             (Quickshell.screens.length > 1 ? "  -  [CTRL+ENTER] All Monitors" : "") + "  -  [ESC] Cancel"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 14
+                        font.pixelSize: Config.scaled(14, overlayWin.uiScale)
                         font.bold: true
                     }
                 }

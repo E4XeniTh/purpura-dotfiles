@@ -148,10 +148,10 @@ Scope {
             property var modelData
             screen: modelData
 
-            // Same reference-resolution scaling formula as Dashboard.qml/
-            // WorkspaceOsd.qml, so every element below tracks this
-            // screen's own resolution instead of assuming a fixed one.
-            readonly property real uiScale: Math.max(0.6, Math.min(1.8, modelData.width * 0.42 / 800))
+            // The shell-wide per-screen scale (see Config.uiScale), so
+            // every element below tracks this screen's own resolution
+            // instead of assuming a fixed one.
+            readonly property real uiScale: Config.uiScale(modelData)
 
             // Explicit (every other panel in this shell sets one too) so
             // Screenshot.qml can find this exact surface via `hyprctl
@@ -203,6 +203,7 @@ Scope {
 
                 Tray {
                     id: trayItem
+                    uiScale: bar.uiScale
                     border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
                     width: trayWidth < 16 ? 0 : trayWidth + Config.scaled(16, bar.uiScale)
@@ -222,6 +223,7 @@ Scope {
                 // button specifically.
                 WorkspaceRow {
                     id: workspaceRow
+                    uiScale: bar.uiScale
                     height: clockCard.height
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
@@ -254,6 +256,7 @@ Scope {
                     color: clockmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                     Clock {
                         id: clock
+                        uiScale: bar.uiScale
                         anchors.centerIn: parent
                     }
 

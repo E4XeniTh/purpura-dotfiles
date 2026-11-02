@@ -96,7 +96,7 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
 
         width: 0
-        height: 4
+        height: Config.scaled(4, root.uiScale)
 
         color: Config.fillcolor
 
@@ -109,7 +109,7 @@ PanelWindow {
                     target: box
 
                     width: root.panelWidth
-                    height: 2
+                    height: Config.scaled(2, root.uiScale)
                 }
             },
 
@@ -184,7 +184,7 @@ PanelWindow {
             // silently no-op and skip the width-grow animation entirely.
             box.state = ""
             box.width = 0
-            box.height = 4
+            box.height = Config.scaled(4, root.uiScale)
 
             box.state = "horizontal"
             openTimer.restart()
@@ -224,7 +224,7 @@ PanelWindow {
             // box.state = "horizontal" is a same-value no-op (see above).
             box.state = ""
             box.width = 0
-            box.height = 4
+            box.height = Config.scaled(4, root.uiScale)
 
             root.reallyVisible = false
             root.panelClosed()

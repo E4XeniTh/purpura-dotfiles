@@ -96,9 +96,8 @@ Scope {
             property var modelData
             screen: modelData
 
-            // Same reference-resolution scaling formula as every other
-            // OSD/panel in this shell.
-            readonly property real uiScale: Math.max(0.6, Math.min(1.8, modelData.width * 0.42 / 800))
+            // The shell-wide per-screen scale (see Config.uiScale).
+            readonly property real uiScale: Config.uiScale(modelData)
 
             property bool shouldShow: false
 
@@ -156,7 +155,7 @@ Scope {
             Rectangle {
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: 2
+                border.width: Config.scaled(2, hintWindow.uiScale)
                 border.color: Config.fgcolor
                 radius: 0
 

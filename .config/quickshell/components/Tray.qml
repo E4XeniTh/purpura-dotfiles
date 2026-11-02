@@ -16,6 +16,10 @@ Rectangle {
     // right monitor.
     property var screen: null
 
+    // Fed in by Bar.qml (the per-screen Config.uiScale), for the icons
+    // and the context menu alike.
+    property real uiScale: 1.0
+
     // Bar.qml's Variants instantiate one Tray per connected screen (the
     // bar's PanelWindow only shows on the primary one, but the whole
     // tree - this IpcHandler included - still gets built for every
@@ -51,7 +55,7 @@ Rectangle {
     color: "transparent"
 
     property alias trayWidth: trayRow.width
-    implicitHeight: 24
+    implicitHeight: Config.scaled(24, root.uiScale)
     implicitWidth: trayRow.width
 
     IpcHandler {
@@ -80,7 +84,7 @@ Rectangle {
     Row {
         id: trayRow
         anchors.centerIn: parent
-        spacing: 8
+        spacing: Config.scaled(8, root.uiScale)
 
         Repeater {
             // Filtering the model itself (not hiding delegates after
@@ -95,7 +99,7 @@ Rectangle {
 
                 required property var modelData
 
-                width: 26
+                width: Config.scaled(26, root.uiScale)
                 height: width
 
                 Image {
@@ -121,8 +125,8 @@ Rectangle {
                                 // Bar.qml's own margins (10 left, 10 top, 48 tall) plus
                                 // this item's offset within the tray row. Keep these in
                                 // sync if the bar's layout ever changes.
-                                root.menuMarginLeft = 10 + trayItem.x
-                                root.menuMarginTop = 4
+                                root.menuMarginLeft = Config.scaled(10, root.uiScale) + trayItem.x
+                                root.menuMarginTop = Config.scaled(4, root.uiScale)
                                 root.menuScreen = root.screen
                                 root.openMenu = trayItem.modelData.menu
                             } else {
@@ -162,8 +166,8 @@ Rectangle {
             left: root.menuMarginLeft
         }
 
-        implicitWidth: 160
-        implicitHeight: Math.max(entryColumn.height + (2 * 5), 1)
+        implicitWidth: Config.scaled(160, root.uiScale)
+        implicitHeight: Math.max(entryColumn.height + 2 * Config.scaled(5, root.uiScale), 1)
 
         color: "transparent"
 
@@ -176,7 +180,7 @@ Rectangle {
             id: menuBox
 
             width: 0
-            height: 2
+            height: Config.scaled(2, root.uiScale)
             color: Config.fillcolor
 
             states: [
@@ -187,8 +191,8 @@ Rectangle {
                     PropertyChanges {
                         target: menuBox
 
-                        width: 160
-                        height: 3
+                        width: Config.scaled(160, root.uiScale)
+                        height: Config.scaled(3, root.uiScale)
                     }
                 },
 
@@ -198,8 +202,8 @@ Rectangle {
                     PropertyChanges {
                         target: menuBox
 
-                        width: 160
-                        height: Math.max(entryColumn.height + (2 * 5), 1)
+                        width: Config.scaled(160, root.uiScale)
+                        height: Math.max(entryColumn.height + 2 * Config.scaled(5, root.uiScale), 1)
                     }
                 }
 
@@ -226,14 +230,14 @@ Rectangle {
             Item {
                 id: contentMask
                 anchors.fill: parent
-                anchors.topMargin: 5
-                anchors.bottomMargin: 5
+                anchors.topMargin: Config.scaled(5, root.uiScale)
+                anchors.bottomMargin: Config.scaled(5, root.uiScale)
                 clip: true
 
 
                 Column {
                     id: entryColumn
-                    width: 160
+                    width: Config.scaled(160, root.uiScale)
 
                     Repeater {
                         model: opener.children
@@ -244,7 +248,7 @@ Rectangle {
                             required property var modelData
 
                             width: entryColumn.width
-                            height: entryDelegate.modelData.isSeparator ? 9 : 28
+                            height: Config.scaled(entryDelegate.modelData.isSeparator ? 9 : 28, root.uiScale)
 
                             Rectangle {
                                 visible: entryDelegate.modelData.isSeparator
@@ -253,11 +257,11 @@ Rectangle {
                                     left: parent.left
                                     right: parent.right
                                     verticalCenter: parent.verticalCenter
-                                    leftMargin: 8
-                                    rightMargin: 8
+                                    leftMargin: Config.scaled(8, root.uiScale)
+                                    rightMargin: Config.scaled(8, root.uiScale)
                                 }
 
-                                height: 1
+                                height: Config.scaled(1, root.uiScale)
                                 color: Config.fgcolordark
                             }
 
@@ -271,8 +275,8 @@ Rectangle {
                                 Text {
                                     anchors {
                                         fill: parent
-                                        leftMargin: 10
-                                        rightMargin: 10
+                                        leftMargin: Config.scaled(10, root.uiScale)
+                                        rightMargin: Config.scaled(10, root.uiScale)
                                     }
 
                                     verticalAlignment: Text.AlignVCenter
@@ -280,6 +284,10 @@ Rectangle {
                                     text: entryDelegate.modelData.isSeparator ? "" : entryDelegate.modelData.text
                                     color: entryDelegate.modelData.enabled ? Config.fgcolor : Qt.rgba(1, 1, 1, 0.35)
                                     elide: Text.ElideRight
+                                    // The system's default font (no Config.fontfamily
+                                    // here), just scaled with the screen like the
+                                    // rest of the menu.
+                                    font.pointSize: (Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize : 10) * root.uiScale
                                 }
 
                                 MouseArea {
@@ -305,7 +313,7 @@ Rectangle {
 
                 color: "transparent"
 
-                border.width: 2
+                border.width: Config.scaled(2, root.uiScale)
                 border.color: Config.fgcolor
 
                 radius: 0
@@ -317,7 +325,7 @@ Rectangle {
         onVisibleChanged: {
             if (visible) {
                 menuBox.width = 0
-                menuBox.height = 4
+                menuBox.height = Config.scaled(4, root.uiScale)
 
                 menuBox.state = "horizontal"
                 menuOpenTimer.start()

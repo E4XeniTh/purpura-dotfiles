@@ -106,10 +106,10 @@ Scope {
             property var modelData
             screen: modelData
 
-            // Same reference-resolution scaling formula as Dashboard.qml's
-            // dashWindow, so box/text/border sizes track this screen's own
-            // resolution instead of assuming a fixed one.
-            readonly property real uiScale: Math.max(0.6, Math.min(1.8, modelData.width * 0.42 / 800))
+            // The shell-wide per-screen scale (see Config.uiScale), so
+            // box/text/border sizes track this screen's own resolution
+            // instead of assuming a fixed one.
+            readonly property real uiScale: Config.uiScale(modelData)
 
             readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
 
@@ -266,7 +266,7 @@ Scope {
             // in the middle of the screen. Horizontally this still centers
             // itself the same way VolumeOsd does (no left/right anchors set).
             anchors.bottom: true
-            margins.bottom: modelData.height / 8 + 84 + osdWindow.boxPadding
+            margins.bottom: modelData.height / 8 + Config.scaled(84, osdWindow.uiScale) + osdWindow.boxPadding
             exclusiveZone: 0
             color: "transparent"
 
@@ -291,7 +291,7 @@ Scope {
             Rectangle {
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: 2
+                border.width: Config.scaled(2, osdWindow.uiScale)
                 border.color: Config.fgcolor
                 radius: 0
 
@@ -309,7 +309,7 @@ Scope {
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
                             color: Config.fillcolor
-                            border.width: 2
+                            border.width: Config.scaled(2, osdWindow.uiScale)
                             border.color: Config.fgcolor
                             radius: 0
 

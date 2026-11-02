@@ -184,6 +184,13 @@ package lists are the exact set):
   it and restart `qs` to re-theme the shell alone - or re-run
   `./install.sh --no-packages` to change the highlight everywhere at once
   (it remembers the current one in `~/.local/state/purpura/highlight`).
+- The whole shell scales with each screen's resolution: every size is
+  written for 1920x1080 and grows or shrinks with the screen, so it
+  takes up the same share of a 1440p or 4K screen (ultrawides scale by
+  their height). This goes by the size after Hyprland's own monitor
+  scale, so a 4K screen at scale 2 isn't scaled twice. To make the shell
+  bigger or smaller on top of that, change `Config.shellscale` (default
+  `1.0`).
 - `Config.solaarEnabled` (default `true`) turns Solaar integration off
   entirely - `solaar show` is never invoked at all while it's `false`,
   not just run and ignored. Set it to `false` if solaar isn't installed

@@ -67,6 +67,12 @@ Scope {
         active: root.shouldShowOsd
 
         PanelWindow {
+            id: osdWindow
+
+            // The shell-wide per-screen scale (see Config.uiScale) of
+            // whichever screen the compositor put this window on.
+            readonly property real uiScale: Config.uiScale(osdWindow.screen)
+
             // Since the panel's screen is unset, it will be picked by the compositor
             // when the window is created. Most compositors pick the current active monitor.
 
@@ -81,11 +87,11 @@ Scope {
             // Symmetric with VolumeOsd.qml's own mirror-image version of
             // this same margin.
             anchors.right: root.otherOsdShown
-            margins.right: root.otherOsdShown ? Math.max(0, screen.width / 2 - implicitWidth - 10) : 0
+            margins.right: root.otherOsdShown ? Math.max(0, screen.width / 2 - implicitWidth - Config.scaled(10, osdWindow.uiScale)) : 0
             exclusiveZone: 0
 
-            implicitWidth: 500
-            implicitHeight: 84
+            implicitWidth: Config.scaled(500, osdWindow.uiScale)
+            implicitHeight: Config.scaled(84, osdWindow.uiScale)
             color: "transparent"
 
             // Purely a display - no click mask needed since nothing
@@ -95,17 +101,17 @@ Scope {
                 anchors.fill: parent
                 color: Config.fillcolor
                 radius: 0
-                border.width: 2
+                border.width: Config.scaled(2, osdWindow.uiScale)
                 border.color: Config.fgcolor
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 20
-                    spacing: 16
+                    anchors.margins: Config.scaled(20, osdWindow.uiScale)
+                    spacing: Config.scaled(16, osdWindow.uiScale)
 
                     Item {
-                        Layout.preferredWidth: 48
-                        Layout.preferredHeight: 48
+                        Layout.preferredWidth: Config.scaled(48, osdWindow.uiScale)
+                        Layout.preferredHeight: Config.scaled(48, osdWindow.uiScale)
 
                         IconImage {
                             id: brightIcon
@@ -126,7 +132,7 @@ Scope {
 
                         DigitalBar {
                             id: bar
-                            uiScale: 1.5
+                            uiScale: 1.5 * osdWindow.uiScale
                             targetWidth: parent.width
                             segmentCount: 30
                             value: root.currentBrightness / 100
@@ -135,12 +141,12 @@ Scope {
                     }
 
                     Text {
-                        Layout.preferredWidth: 60
+                        Layout.preferredWidth: Config.scaled(60, osdWindow.uiScale)
                         horizontalAlignment: Text.AlignHCenter
                         text: Math.round(root.currentBrightness) + "%"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
-                        font.pixelSize: 24
+                        font.pixelSize: Config.scaled(24, osdWindow.uiScale)
                         font.bold: true
                     }
                 }

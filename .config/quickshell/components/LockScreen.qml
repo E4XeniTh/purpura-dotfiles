@@ -85,6 +85,9 @@ Scope {
 
             readonly property bool isPrimary: modelData.name === root.effectivePrimaryName
 
+            // The shell-wide per-screen scale (see Config.uiScale).
+            readonly property real uiScale: Config.uiScale(modelData)
+
             WlrLayershell.namespace: "lockscreen"
 
             WlrLayershell.layer: WlrLayer.Overlay
@@ -134,6 +137,8 @@ Scope {
                 anchors.fill: parent
                 active: win.isPrimary && root.locked
                 sourceComponent: loginPromptComponent
+
+                property real uiScale: win.uiScale
             }
 
             onVisibleChanged: {
@@ -153,6 +158,9 @@ Scope {
 
             anchors.fill: parent
 
+            // From the Loader above (its window's screen).
+            readonly property real uiScale: parent.uiScale
+
             property bool wrongPassword: false
 
             Rectangle {
@@ -166,7 +174,7 @@ Scope {
                 }
 
                 width: 0
-                height: 2
+                height: Config.scaled(2, prompt.uiScale)
 
                 color: Qt.rgba(0, 0, 0, 1)
 
@@ -178,8 +186,8 @@ Scope {
                         PropertyChanges {
                             target: loginBox
 
-                            width: 400
-                            height: 2
+                            width: Config.scaled(400, prompt.uiScale)
+                            height: Config.scaled(2, prompt.uiScale)
                         }
                     },
 
@@ -189,8 +197,8 @@ Scope {
                         PropertyChanges {
                             target: loginBox
 
-                            width: 400
-                            height: 400
+                            width: Config.scaled(400, prompt.uiScale)
+                            height: Config.scaled(400, prompt.uiScale)
                         }
                     }
 
@@ -225,15 +233,15 @@ Scope {
                             verticalCenter: parent.verticalCenter
                         }
 
-                        spacing: 20
+                        spacing: Config.scaled(20, prompt.uiScale)
 
                         Image {
                             id: avatar
 
                             source: "file://" + Quickshell.env("HOME") + "/.face"
 
-                            width: 192
-                            height: 192
+                            width: Config.scaled(192, prompt.uiScale)
+                            height: Config.scaled(192, prompt.uiScale)
 
                             anchors.horizontalCenter: parent.horizontalCenter
 
@@ -247,7 +255,7 @@ Scope {
                                 color: "transparent"
 
                                 border.color: prompt.wrongPassword ? "#ff3b3b" : Config.fgcolor
-                                border.width: 2
+                                border.width: Config.scaled(2, prompt.uiScale)
 
                                 radius: 0
                             }
@@ -258,8 +266,12 @@ Scope {
 
                             focus: true
 
-                            width: 240
-                            height: 30
+                            width: Config.scaled(240, prompt.uiScale)
+                            height: Config.scaled(30, prompt.uiScale)
+
+                            // The system's default font, scaled with the
+                            // screen like the rest of the prompt.
+                            font.pointSize: (Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize : 10) * prompt.uiScale
 
                             placeholderText: authProcess.running ? "Checking..." : "Password"
 
@@ -274,7 +286,7 @@ Scope {
                                 color: Qt.rgba(0, 0, 0, 0.3)
 
                                 border.color: prompt.wrongPassword ? "#ff3b3b" : Config.fgcolor
-                                border.width: 2
+                                border.width: Config.scaled(2, prompt.uiScale)
 
                                 radius: 0
 
@@ -296,7 +308,7 @@ Scope {
                     color: "transparent"
 
                     border.color: prompt.wrongPassword ? "#ff3b3b" : Config.fgcolor
-                    border.width: 2
+                    border.width: Config.scaled(2, prompt.uiScale)
 
                     z: 10
 
@@ -324,9 +336,9 @@ Scope {
             SequentialAnimation {
                 id: shakeAnim
 
-                NumberAnimation { target: loginBox; property: "shakeOffset"; to: -12; duration: 60; easing.type: Easing.OutQuad }
-                NumberAnimation { target: loginBox; property: "shakeOffset"; to: 12; duration: 60; easing.type: Easing.OutQuad }
-                NumberAnimation { target: loginBox; property: "shakeOffset"; to: -8; duration: 60; easing.type: Easing.OutQuad }
+                NumberAnimation { target: loginBox; property: "shakeOffset"; to: -Config.scaled(12, prompt.uiScale); duration: 60; easing.type: Easing.OutQuad }
+                NumberAnimation { target: loginBox; property: "shakeOffset"; to: Config.scaled(12, prompt.uiScale); duration: 60; easing.type: Easing.OutQuad }
+                NumberAnimation { target: loginBox; property: "shakeOffset"; to: -Config.scaled(8, prompt.uiScale); duration: 60; easing.type: Easing.OutQuad }
                 NumberAnimation { target: loginBox; property: "shakeOffset"; to: 0; duration: 60; easing.type: Easing.OutQuad }
             }
 
@@ -358,7 +370,7 @@ Scope {
             // over into the next one.
             Component.onCompleted: {
                 loginBox.width = 0
-                loginBox.height = 2
+                loginBox.height = Config.scaled(2, prompt.uiScale)
 
                 passwordInput.clear()
 

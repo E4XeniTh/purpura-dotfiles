@@ -16,7 +16,10 @@ import "../Config.js" as Config
 Row {
     id: root
 
-    spacing: 4
+    // Fed in by Bar.qml (the per-screen Config.uiScale).
+    property real uiScale: 1.0
+
+    spacing: Config.scaled(4, root.uiScale)
 
     // Every connected screen, left-to-right by x - ties (side-by-side
     // monitors stacked vertically instead) broken by whichever is
@@ -287,9 +290,9 @@ Row {
     Component {
         id: separatorComponent
         Row {
-            Rectangle { width: 15; height: 1 ; color: "transparent"}
+            Rectangle { width: Config.scaled(15, root.uiScale); height: 1 ; color: "transparent"}
             Rectangle {
-                width: 2
+                width: Config.scaled(2, root.uiScale)
                 height: root.height * 0.6
                 // y rather than anchors.verticalCenter: a Loader with an
                 // explicit height stretches a non-fill-anchored child to
@@ -303,7 +306,7 @@ Row {
                 y: (root.height - height) / 2
                 color: Config.fgcolor
             }
-            Rectangle { width: 15; height: 1 ; color: "transparent"}
+            Rectangle { width: Config.scaled(15, root.uiScale); height: 1 ; color: "transparent"}
         }
     }
 
@@ -340,7 +343,7 @@ Row {
             height: root.height
             width: wsBox.height * wsBox.aspect
             color: Config.fillcolor
-            border.width: 2
+            border.width: Config.scaled(2, root.uiScale)
             // hasFullscreen bumps the border up a tier from whatever
             // it'd otherwise be - fgcolor becomes fgcolorlight when
             // active, fgcolordark becomes fgcolordarklight when not -
@@ -445,7 +448,7 @@ Row {
                     visible: !wsBox.modelData.hasFullscreen || winBox.isFullscreen
 
                     color: "transparent"
-                    border.width: 1
+                    border.width: Config.scaled(1, root.uiScale)
                     // Only lit up fgcolor when BOTH this window is the
                     // focused one ("activated") AND its workspace is the
                     // currently active one on its monitor - a focused
@@ -458,7 +461,7 @@ Row {
 
                     IconImage {
                         anchors.centerIn: parent
-                        implicitSize: Math.max(4, Math.min(winBox.width, winBox.height) * 0.6)
+                        implicitSize: Math.max(Config.scaled(4, root.uiScale), Math.min(winBox.width, winBox.height) * 0.6)
                         // The plain single-arg iconPath() renders "a
                         // missing texture" image when the name doesn't
                         // resolve in the current icon theme (documented
@@ -491,7 +494,7 @@ Row {
                 anchors {
                     bottom: parent.bottom
                     right: parent.right
-                    rightMargin: 4
+                    rightMargin: Config.scaled(4, root.uiScale)
                 }
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignBottom
@@ -507,7 +510,7 @@ Row {
                 styleColor: "black"
                 font.family: Config.fontfamily
                 font.bold: true
-                font.pixelSize: Math.max(8, Math.min(wsBox.width, wsBox.height) * 0.55)
+                font.pixelSize: Math.max(Config.scaled(8, root.uiScale), Math.min(wsBox.width, wsBox.height) * 0.55)
             }
 
             // Switches to this workspace - Hyprland's own activate(),
