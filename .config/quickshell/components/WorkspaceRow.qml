@@ -91,7 +91,7 @@ Row {
                     // and nothing guarantees they land in order.
                     activate: () => {
                         Quickshell.execDetached(["hyprctl", "eval",
-                            `hl.dispatch(hl.dsp.focus({ monitor = "${monName}" }))\n`
+                            `hl.dispatch(hl.dsp.focus({ monitor = "${monName}" })) `
                             + `hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`])
                     }
                 })
