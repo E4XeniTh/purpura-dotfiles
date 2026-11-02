@@ -104,13 +104,13 @@ Scope {
             // The shell-wide per-screen scale (see Config.uiScale), same
             // as the bar/dashboard, so every font/icon/border here
             // renders at the same density as the rest of the shell.
-            // panelWidth is the card's own width - 1200 at 1920x1080,
-            // scaled with everything inside it so the tabs' content has
-            // the same room at any resolution (a fixed 1200 left it
-            // cramped on bigger screens), never wider than 70% of the
-            // screen.
             readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
-            readonly property real panelWidth: Math.min(modelData.width * 0.7, 1200 * uiScale)
+
+            // The card's own width: always 80% of the screen, at any
+            // resolution and any UI Scale - the same way its height always
+            // fills the screen below the bar (see maxHeight below). Only
+            // the content inside it grows or shrinks with the UI Scale.
+            readonly property real panelWidth: modelData.width * 0.8
 
             // Opens right below the bar, same offset Dashboard.qml's own
             // dashWindow gets automatically from the compositor pushing
