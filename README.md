@@ -170,7 +170,6 @@ package lists are the exact set):
 - `rofi`
 - Waterfox (Flatpak)
 - `xdotool` - the Discord push-to-talk / tab binds
-- Obsidian
 - `solaar` — only if you have Logitech Unifying peripherals
 
 **Bundled personal configs** (only matter if you use them):

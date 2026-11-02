@@ -53,7 +53,7 @@ CORE_PACKAGES=(
 
 # default (y/n) | question | packages | flatpaks
 OPTIONAL_GROUPS=(
-    "y|Apps the keybinds open: rofi, Dolphin, Obsidian, Waterfox (Flatpak)|rofi dolphin obsidian xdotool flatpak|net.waterfox.waterfox"
+    "y|Apps the keybinds open: rofi, Dolphin, Waterfox (Flatpak)|rofi dolphin xdotool flatpak|net.waterfox.waterfox"
     "y|fish shell + fastfetch (the terminal greeting)|fish fastfetch|"
     "n|Solaar (Logitech mice/keyboards: battery list, sensitivity setting)|solaar|"
     "n|ZapZap (WhatsApp)|zapzap|"
