@@ -38,12 +38,11 @@ Row {
     // Hyprland hasn't created it) gets synthesized as a placeholder
     // here, matching just enough of a real HyprlandWorkspace's shape
     // for wsBox/winBox below to render an empty box for it: .monitor
-    // (a real HyprlandMonitor, for aspect ratio/geometry), .active
-    // (always false - it can't be the active workspace if it doesn't
-    // exist), .hasFullscreen (always false), .toplevels.values (empty -
-    // nothing to draw in the window grid), and .activate() (dispatches
-    // straight to Hyprland, same as a real workspace's own method,
-    // since clicking one of these should actually create/switch to it).
+    // (a real HyprlandMonitor, for aspect ratio/geometry), .hasFullscreen
+    // (always false), .toplevels.values (empty - nothing to draw in the
+    // window grid), and .activate() (dispatches straight to Hyprland,
+    // same as a real workspace's own method, since clicking one of these
+    // should actually create/switch to it).
     readonly property bool showEmptyWidget: !!root.barSettingsStore.showEmptyWidget
 
     // existingIds: every workspace id currently real in Hyprland,
@@ -74,20 +73,26 @@ Row {
                 placeholders.push({
                     id: num,
                     monitor: mon,
-                    active: false,
                     hasFullscreen: false,
                     toplevels: { values: [] },
-                    // A plain "workspace N" dispatch only reliably lands
-                    // on the pinned monitor if Hyprland still has its
+                    // A plain workspace focus only reliably lands on the
+                    // pinned monitor if Hyprland still has its
                     // workspace_rule (from the last Apply) in effect for
-                    // this id - focusmonitor first makes this correct
-                    // regardless, rather than silently creating/
+                    // this id - focusing the monitor first makes this
+                    // correct regardless, rather than silently creating/
                     // switching to workspace N on whatever monitor
                     // happens to be focused right now instead of the one
                     // this box is actually sitting under.
+                    //
+                    // Lua syntax because hyprland.lua rejects the legacy
+                    // "focusmonitor X"/"workspace N" dispatch strings. A
+                    // single eval rather than two Hyprland.dispatch()
+                    // calls, since each of those opens its own socket
+                    // and nothing guarantees they land in order.
                     activate: () => {
-                        Hyprland.dispatch("focusmonitor " + monName)
-                        Hyprland.dispatch("workspace " + num)
+                        Quickshell.execDetached(["hyprctl", "eval",
+                            `hl.dispatch(hl.dsp.focus({ monitor = "${monName}" }))\n`
+                            + `hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`])
                     }
                 })
             }
@@ -325,6 +330,16 @@ Row {
 
             readonly property var mon: wsBox.modelData.monitor
 
+            // Compared by id against the monitor's live activeWorkspace,
+            // not read off modelData.active: the box being rendered can
+            // be a placeholder, and the real workspace that replaces it
+            // only arrives once renderSettleTimer fires, which left the
+            // border unlit for that long after switching to an empty
+            // workspace.
+            readonly property bool isActive: !!wsBox.mon
+                && !!wsBox.mon.activeWorkspace
+                && wsBox.mon.activeWorkspace.id === wsBox.modelData.id
+
             // HyprlandMonitor.width/height are the raw/physical output
             // resolution (straight from hyprctl's own JSON), but a
             // window's at/size (and monitor.x/y) are in logical,
@@ -350,8 +365,8 @@ Row {
             // so a workspace holding a fullscreen app always reads as
             // more prominent than one that doesn't, active or not.
             border.color: wsBox.modelData.hasFullscreen
-                ? (wsBox.modelData.active ? Config.fgcolorlight : Config.fgcolordarklight)
-                : (wsBox.modelData.active ? Config.fgcolor : Config.fgcolordark)
+                ? (wsBox.isActive ? Config.fgcolorlight : Config.fgcolordarklight)
+                : (wsBox.isActive ? Config.fgcolor : Config.fgcolordark)
             radius: 0
             // A window that's fullscreened, off-monitor mid-drag, or
             // just rounds slightly past its workspace's edge would
@@ -455,7 +470,7 @@ Row {
                     // window sitting on a workspace you've since
                     // switched away from should still read as dimmed,
                     // not call attention to itself.
-                    border.color: (wsBox.modelData.active && winBox.modelData.activated)
+                    border.color: (wsBox.isActive && winBox.modelData.activated)
                         ? Config.fgcolor
                         : Config.fgcolordark
 
