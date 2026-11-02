@@ -41,12 +41,46 @@ qs ipc call screenshot show            # toggle / hide also work, see Screenshot
 
 ## Install
 
+On Arch Linux or an Arch-based distro:
+
+```bash
+git clone https://github.com/E4XeniTh/purpura-dotfiles
+cd purpura-dotfiles
+./install.sh
+```
+
+The installer:
+
+- asks for a **highlight color** (purple by default; pick a preset or any
+  hex) and applies it across the configs: the shell, Hyprland's borders,
+  GTK, Qt/Kvantum, KDE apps, kitty, rofi, ZapZap, and the wallpaper and
+  fastfetch logo. The repo itself stays purple - only the installed copies
+  are recolored (`install/recolor.py`)
+- installs the packages listed below from the Arch repos and the AUR
+  (offering to set up `yay` if you have no AUR helper), asking about the
+  optional app groups first
+- copies the configs into `~/.config`, backing up every file it changes
+  to `~/.config/purpura-backups/<date>/` first
+- creates `hyprland.lua`, `hyprpaper.conf` and `ZapZap.conf` from their
+  `.example` once and never overwrites them after that (picking a new
+  color only updates `hyprland.lua`'s border colors)
+- builds the helper binaries and installs the lock screen's PAM file
+
+Re-run it whenever you like - e.g. `./install.sh --no-packages` to switch
+to another color. `./install.sh --help` lists the options (`--color HEX`,
+`--yes`, `--no-packages`).
+
+### By hand
+
 ```bash
 cp -r .config/hypr .config/quickshell ~/.config/
 ```
 
 Copy the rest (`fish`, `kitty`, `rofi`, `fastfetch`, `gtk-3.0`,
-`gtk-4.0`, `ZapZap`) too if you want those as well.
+`gtk-4.0`, `Kvantum`, `qt6ct`, `kdeglobals`, `ZapZap`, and
+`.local/share/color-schemes` into `~/.local/share/`) too if you want those
+as well. A few of them name the author's home directory (`kitty.conf`,
+`qt6ct.conf`, `ZapZap.conf`) - point those at yours.
 
 `hyprland.lua`, `hypr/hyprpaper.conf`, and `ZapZap/ZapZap.conf` are
 gitignored - personal/machine-specific enough (keyboard layout, output
@@ -66,7 +100,7 @@ cp -n .config/ZapZap/ZapZap.conf.example ~/.config/ZapZap/ZapZap.conf
 ## Build the helper binaries
 
 Two small C helpers need compiling locally - they're gitignored since
-they're machine-specific.
+they're machine-specific. `install.sh` does this for you; by hand:
 
 - **`auth`**: the lock screen checks your real login password through
   it, over PAM, so the shell process itself never touches `/etc/shadow`.
@@ -85,7 +119,8 @@ Re-run `make` after pulling changes to `helpers/auth.c` or
 
 ## Dependencies and affected apps
 
-Beyond a base Arch install:
+Beyond a base Arch install (`install.sh` installs all of these - its
+package lists are the exact set):
 
 - `kitty`
 - `hyprland`
@@ -98,19 +133,23 @@ Beyond a base Arch install:
 - `libcava` (AUR)
 - `libpulse`
 - `hyprpaper`
+- `hypridle` - `hypr/hypridle.conf`'s AFK notifications, lock and suspend
 - `hyprshutdown`
 - `hyprpolkitagent` (or another polkit authentication agent)
 - `xdg-desktop-portal`
 - `xdg-desktop-portal-hyprland`
 - `pipewire`
+- `pipewire-pulse` - the visualizer's `cava_bridge` reads audio through the PulseAudio API
 - `wireplumber`
+- `bluez` + `bluez-utils` - the Connections tab's Bluetooth category
 - `ddcutil` - Screen Settings' brightness sliders and Bar.qml's brightness widget use this for external DDC/CI monitors
 - `brightnessctl` (optional) - used instead of `ddcutil` for a laptop's own built-in panel (`eDP-*`), which ddcutil can't reach at all; only needed if you actually have one
 - `playerctl`
 - `jq`
 - `curl`
 - `pam`
-- `xembedsniproxy` - (useful if you emulate windows applications through Wayland)
+- `xembedsniproxy` (AUR) - (useful if you emulate windows applications through Wayland)
+- `kservice` - `kbuildsycoca6`, run at login so KDE apps like Dolphin see installed apps
 - `networkmanager` - provides `nmcli`, which the Connections tab's Wired category also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
 - `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
@@ -121,6 +160,8 @@ Beyond a base Arch install:
 - `libnotify` - provides `notify-send`, which the screenshot picker calls after every successful capture ("Screenshot copied to clipboard"); routes through this shell's own `NotificationServer` (`components/Notification.qml`) like any other app notification, no separate daemon needed
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
+- `breeze-gtk`, `breeze-icons`, `kde-gtk-config`, `noto-fonts`, `quintom-cursor-theme-git` (AUR) - the GTK theme, icons, font, cursor and GTK modules `gtk-3.0/settings.ini` names
+- `python` - `install.sh` uses it to apply the highlight color
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)
 
 **Keybind-launched apps** (swap freely — `local` vars at the top of `hyprland.lua`):
@@ -128,6 +169,7 @@ Beyond a base Arch install:
 - `dolphin`
 - `rofi`
 - Waterfox (Flatpak)
+- `xdotool` - the Discord push-to-talk / tab binds
 - Obsidian
 - `solaar` — only if you have Logitech Unifying peripherals
 
@@ -140,7 +182,9 @@ Beyond a base Arch install:
 
 - Colors, font family, and notification timeout live in `Config.js` (base
   of the quickshell config, imported as `Config` from any component). Edit
-  it and restart `qs` to re-theme.
+  it and restart `qs` to re-theme the shell alone - or re-run
+  `./install.sh --no-packages` to change the highlight everywhere at once
+  (it remembers the current one in `~/.local/state/purpura/highlight`).
 - `Config.solaarEnabled` (default `true`) turns Solaar integration off
   entirely - `solaar show` is never invoked at all while it's `false`,
   not just run and ignored. Set it to `false` if solaar isn't installed
