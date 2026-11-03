@@ -1337,6 +1337,47 @@ Item {
                         }
                     }
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Font Size:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: (root.quakeConsole ? root.quakeConsole.fontSize : 0) + "pt"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+                        }
+
+                        DeviceSlider {
+                            id: quakeFontSlider
+
+                            readonly property int minimum: root.quakeConsole ? root.quakeConsole.minFontSize : 0
+                            readonly property int maximum: root.quakeConsole ? root.quakeConsole.maxFontSize : 1
+
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: root.quakeConsole ? (root.quakeConsole.fontSize - minimum) / (maximum - minimum) : 0
+                            onMoved: (newValue) => root.quakeConsole.setFontSize(minimum + newValue * (maximum - minimum))
+                        }
+                    }
+
                     Item {
                         Layout.preferredHeight: Config.scaled(14, root.uiScale)
                     }

@@ -43,7 +43,6 @@ Scope {
 
   Bar {
     id: mainBar
-    quakeConsole: quakeConsole
     edgeGaps: edgeGaps
     locked: lockScreen.locked
     powerMenuOpen: powerMenu.open

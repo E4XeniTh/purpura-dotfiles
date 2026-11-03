@@ -1,12 +1,20 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import Quickshell.Wayland
 import QtQuick
 import "../Config.js" as Config
 
-// Quake console: the bar grows downward linearly, and a terminal appears in
-// the space that opens up. Bar.qml draws the growing part from `expansion`;
-// everything else lives here.
+// Quake console: a panel grows downward from under the bar, linearly, and a
+// terminal appears in the space that opens up.
+//
+// The panel is a surface of its own rather than the bar getting taller. When a
+// layer surface changes size, Hyprland draws its old buffer stretched to the
+// new size until a new one arrives, which showed the bar blown up to the
+// console's height on opening and squashed on closing. This surface never
+// resizes. It doesn't map or unmap with the console either, as Hyprland fades
+// a surface in when it maps: it stays up whenever the bar does, with nothing
+// drawn and no clicks taken while the console is closed.
 //
 // Wayland can't embed another program's surface, so the terminal is really a
 // `kitten panel`, kitty's own layer-shell surface, placed exactly over the
@@ -51,6 +59,7 @@ Scope {
 
     function setWidthPercent(value) { root.update({ widthPercent: root.clamped(value, root.minWidthPercent, 100) }) }
     function setHeightPercent(value) { root.update({ heightPercent: root.clamped(value, root.minHeightPercent, 100) }) }
+    function setFontSize(value) { root.update({ fontSize: root.clamped(value, root.minFontSize, root.maxFontSize) }) }
     function setAutokillEnabled(on) { root.update({ autokill: !!on }) }
     function setAutokillMinutes(value) { root.update({ autokillMinutes: Math.max(1, Math.round(value)) }) }
 
@@ -58,6 +67,11 @@ Scope {
     readonly property int minHeightPercent: 20
     readonly property int widthPercent: root.clamped(Number(root.store.widthPercent) || 100, root.minWidthPercent, 100)
     readonly property int heightPercent: root.clamped(Number(root.store.heightPercent) || 40, root.minHeightPercent, 100)
+
+    readonly property int minFontSize: 8
+    readonly property int maxFontSize: 24
+    // In pts: one of kitty's own 2pt zoom steps under kitty.conf's 16.
+    readonly property int fontSize: root.clamped(Number(root.store.fontSize) || 14, root.minFontSize, root.maxFontSize)
 
     readonly property bool autokillEnabled: root.store.autokill !== false
     readonly property int autokillMinutes: Math.max(1, Math.round(Number(root.store.autokillMinutes)) || 30)
@@ -103,29 +117,86 @@ Scope {
     // How far in from the bar's left edge the console starts.
     readonly property int consoleOffset: Math.round((root.barWidth - root.consoleWidth) / 2)
 
-    // The terminal fills the console inside its side and bottom borders. The
-    // bar's own bottom border is the separator on top of it.
+    // The terminal fills the console inside its side and bottom borders, less
+    // some padding. The bar's own bottom border is the separator on top of it.
+    //
+    // The padding is done here because kitty adds its own to the size it's
+    // given, so a surface with padding of its own would come out larger than
+    // asked for and run past the console's edge. It also adds 1px either way,
+    // which this padding has room for.
+    readonly property int terminalPadding: Config.scaled(11, root.uiScale)
     readonly property var terminalGeometry: ({
-        x: root.edgeLeft + root.consoleOffset + root.borderWidth,
-        y: root.edgeTop + root.barHeight,
-        width: root.consoleWidth - root.borderWidth * 2,
-        height: root.consoleHeight - root.borderWidth
+        x: root.edgeLeft + root.consoleOffset + root.borderWidth + root.terminalPadding,
+        y: root.edgeTop + root.barHeight + root.terminalPadding,
+        width: root.consoleWidth - (root.borderWidth + root.terminalPadding) * 2,
+        height: root.consoleHeight - root.borderWidth - root.terminalPadding * 2
     })
+
+    // ---------------- the panel ----------------
+    PanelWindow {
+        visible: !!root.screen && !root.barHidden
+        screen: root.screen
+
+        WlrLayershell.namespace: "quakeconsolepanel"
+
+        // Covers all the console could take up, so that the size sliders don't
+        // resize it. -1 so the margins count from the screen's edges rather
+        // than from the bar's reserved space.
+        anchors {
+            top: true
+            left: true
+            right: true
+            bottom: true
+        }
+        margins {
+            top: root.edgeTop + root.barHeight
+            left: root.edgeLeft
+            right: root.edgeRight
+            bottom: root.edgeBottom
+        }
+        exclusiveZone: -1
+        color: "transparent"
+
+        // Only what's drawn takes clicks.
+        mask: Region { item: panelBody }
+
+        // The bar's bottom border is the separator on top of this, so this
+        // border's top edge is left clipped off.
+        Item {
+            id: panelBody
+
+            visible: root.expansion > 0
+            x: root.consoleOffset
+            width: root.consoleWidth
+            height: Math.round(root.consoleHeight * root.expansion)
+            clip: true
+
+            Rectangle {
+                y: -border.width
+                width: parent.width
+                height: parent.height + border.width
+                color: Config.fillcolor
+                border.width: root.borderWidth
+                border.color: Config.fgcolor
+            }
+        }
+    }
 
     // ---------------- opening and closing ----------------
     // Whether the console is open or on its way there.
     property bool open: false
     // How far the bar has grown, from 0 to 1.
     property real expansion: 0
-    // Whether any of it shows, which is what the bar sizes its window by.
-    readonly property bool active: root.open || root.expansion > 0
     // Whether kitty's surface is meant to be up.
     property bool terminalShown: false
 
     readonly property int animationMs: 300
-    // Hyprland's fade on a closing layer surface (layersOut in hyprland.lua),
-    // which plays out before the bar starts closing around it.
+    // Hyprland's fade on a closing layer surface (fadeLayersOut in
+    // hyprland.lua), which plays out before the panel starts closing, or
+    // kitty's text would be left hanging outside it.
     readonly property int surfaceFadeMs: 150
+    // kitty's surface name, which Hyprland reports when it goes away.
+    readonly property string terminalNamespace: "quakeconsole"
 
     function toggle() {
         if (root.open) root.closeConsole()
@@ -135,6 +206,7 @@ Scope {
     function openConsole() {
         if (root.barHidden || !root.screen) return
         root.open = true
+        hideTimer.stop()
         fadeTimer.stop()
         root.animateTo(1)
     }
@@ -144,7 +216,7 @@ Scope {
         if (root.terminalShown) {
             root.terminalShown = false
             root.control(["resize-os-window", "--match=all", "--action=hide"])
-            fadeTimer.restart()
+            hideTimer.restart()
         } else {
             root.animateTo(0)
         }
@@ -167,6 +239,7 @@ Scope {
         root.terminalShown = true
         if (terminal.running) {
             root.applyGeometry()
+            root.applyFontSize()
             root.control(["resize-os-window", "--match=all", "--action=show"])
         } else {
             root.startTerminal()
@@ -179,6 +252,26 @@ Scope {
         property: "expansion"
         easing.type: Easing.Linear
         onFinished: root.expansionSettled()
+    }
+
+    // The fade starts when kitty's surface actually goes, which takes a moment
+    // after asking: kitten has to start up and kitty has to get to it.
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            if (event.name === "closelayer" && event.data === root.terminalNamespace && hideTimer.running) {
+                hideTimer.stop()
+                fadeTimer.restart()
+            }
+        }
+    }
+
+    // While this runs, kitty's been asked to hide. Should Hyprland never say
+    // it has, the panel closes anyway.
+    Timer {
+        id: hideTimer
+        interval: 500
+        onTriggered: root.animateTo(0)
     }
 
     Timer {
@@ -199,6 +292,7 @@ Scope {
         const g = root.terminalGeometry
         root.socket = runtimeDir + "/purpura-quake-" + Date.now() + ".sock"
         root.appliedGeometry = root.geometryArgs()
+        root.appliedFontSize = root.fontSize
         terminal.command = [
             "kitten", "panel",
             "--app-id=quakeconsole",
@@ -213,8 +307,11 @@ Scope {
             "--listen-on=unix:" + root.socket,
             "-o", "allow_remote_control=socket-only",
             "-o", "background_opacity=0",
+            "-o", "font_size=" + root.fontSize,
             "-o", "window_margin_width=0",
             "-o", "single_window_margin_width=0",
+            "-o", "window_padding_width=0",
+            "-o", "single_window_padding_width=0",
             // A prompt nobody can see would leave it hanging.
             "-o", "confirm_os_window_close=0",
             // Tells fish's greeting to skip fastfetch.
@@ -232,7 +329,11 @@ Scope {
             root.terminalShown = false
             root.controlQueue = []
             root.controlRetries = 0
-            if (root.open) root.closeConsole()
+            // Its surface is fading out by now, the same as after hiding it.
+            if (root.open) {
+                root.open = false
+                fadeTimer.restart()
+            }
         }
     }
 
@@ -287,8 +388,9 @@ Scope {
         onTriggered: root.runControl()
     }
 
-    // ---------------- resizing a running kitty ----------------
+    // ---------------- changing a running kitty ----------------
     property var appliedGeometry: []
+    property int appliedFontSize: 0
 
     function geometryArgs() {
         const g = root.terminalGeometry
@@ -302,13 +404,24 @@ Scope {
         root.control(["resize-os-window", "--match=all", "--action=os-panel", "--incremental"].concat(args))
     }
 
+    function applyFontSize() {
+        if (root.fontSize === root.appliedFontSize) return
+        root.appliedFontSize = root.fontSize
+        root.control(["set-font-size", "--all", String(root.fontSize)])
+    }
+
     // A hidden kitty catches up when it's next shown.
-    onTerminalGeometryChanged: if (root.terminalShown) resizeTimer.restart()
+    onTerminalGeometryChanged: if (root.terminalShown) changeTimer.restart()
+    onFontSizeChanged: if (root.terminalShown) changeTimer.restart()
 
     Timer {
-        id: resizeTimer
+        id: changeTimer
         interval: 100
-        onTriggered: if (root.terminalShown) root.applyGeometry()
+        onTriggered: {
+            if (!root.terminalShown) return
+            root.applyGeometry()
+            root.applyFontSize()
+        }
     }
 
     // ---------------- autokill ----------------
