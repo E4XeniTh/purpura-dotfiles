@@ -60,7 +60,7 @@ Scope {
     }
 
     // 0 = Shell, 1 = Sound, 2 = Display, 3 = Connections (Bluetooth is a
-    // category inside it) - matches the tab bar's own left-to-right
+    // category inside it), 4 = Shortcuts - matches the tab bar's own left-to-right
     // Repeater model order below, not the order these tabs were
     // originally added in.
     property int currentTab: 0
@@ -237,8 +237,8 @@ Scope {
             Keys.onEscapePressed: root.open = false
 
             // Quick tab switch while this screen is open - plain digit
-            // keys 1-4, matching the tab bar's own left-to-right order
-            // (Shell/Sound/Display/Connections, see the Repeater's
+            // keys 1-5, matching the tab bar's own left-to-right order
+            // (Shell/Sound/Display/Connections/Shortcuts, see the Repeater's
             // model above). Only ever fires for a digit key nothing else
             // already consumed - a focused TextInput inside ScreenSettings'
             // own geometry fields (Width/Height/X Pos/...) accepts its own
@@ -250,6 +250,7 @@ Scope {
                     case Qt.Key_2: root.currentTab = 1; event.accepted = true; break
                     case Qt.Key_3: root.currentTab = 2; event.accepted = true; break
                     case Qt.Key_4: root.currentTab = 3; event.accepted = true; break
+                    case Qt.Key_5: root.currentTab = 4; event.accepted = true; break
                 }
             }
 
@@ -344,7 +345,7 @@ Scope {
 
                             readonly property real margins: Config.scaled(10, panelScope.uiScale)
                             readonly property real spacing: Config.scaled(10, panelScope.uiScale)
-                            readonly property real tabWidth: (width - margins * 2 - spacing * 3) / 4
+                            readonly property real tabWidth: (width - margins * 2 - spacing * 4) / 5
 
                             Row {
                                 anchors {
@@ -358,7 +359,8 @@ Scope {
                                         { label: "Shell", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
                                         { label: "Display", icon: "video-display-symbolic" },
-                                        { label: "Connections", icon: "network-wired-symbolic" }
+                                        { label: "Connections", icon: "network-wired-symbolic" },
+                                        { label: "Shortcuts", icon: "input-keyboard-symbolic" }
                                     ]
 
                                     delegate: DashCard {
@@ -502,6 +504,15 @@ Scope {
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 3
+                            }
+
+                            ShortcutSettings {
+                                id: shortcutsTab
+                                anchors.fill: parent
+                                visible: root.currentTab === 4
+                                panelWidth: panelScope.panelWidth
+                                uiScale: panelScope.uiScale
+                                active: root.open && root.currentTab === 4
                             }
                         }
                     }

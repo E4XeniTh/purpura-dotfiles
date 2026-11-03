@@ -18,6 +18,7 @@ out to be copied straight into place.
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | Full-screen lock, authenticates via PAM |
+| **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
 

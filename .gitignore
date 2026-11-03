@@ -18,6 +18,8 @@
 .config/quickshell/updatersettings.json
 .config/quickshell/nightlightsettings.json
 .config/quickshell/uiscalesettings.json
+.config/quickshell/shortcuts.json
+.config/hypr/shortcuts.lua
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf
