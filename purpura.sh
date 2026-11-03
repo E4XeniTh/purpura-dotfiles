@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # purpura-dotfiles installer: the packages it needs, the configs
-# themselves, and a highlight color applied across them. Safe to re-run -
-# e.g. `./purpura.sh --no-packages` just to switch to another color.
+# themselves, and a highlight color applied across them. On its own it only
+# shows the help. --install does the work and is safe to re-run - e.g.
+# `./purpura.sh --install --no-packages` just to switch to another color.
 # `./purpura.sh --link` links the configs to this checkout instead.
 set -euo pipefail
 
@@ -14,6 +15,7 @@ STATE_FILE=${XDG_STATE_HOME:-$HOME/.local/state}/purpura/highlight
 RECOLOR=(python3 -I "$REPO/install/recolor.py")
 
 ASSUME_YES=0
+INSTALL=0
 INSTALL_PACKAGES=1
 TOGGLE_LINKS=0
 COLOR=""
@@ -102,15 +104,19 @@ ask() {
 
 usage() {
     cat <<EOF
-Usage: ./purpura.sh [options]
+Usage: ./purpura.sh --install [options]
+       ./purpura.sh --link
 
-Installs purpura-dotfiles: the packages it needs (pacman + AUR), its
-configs into ~/.config, and a highlight color applied across them.
+With neither, it only shows this help.
+
+--install installs purpura-dotfiles: the packages it needs (pacman + AUR),
+its configs into ~/.config, and a highlight color applied across them.
 Anything it would overwrite is backed up first.
 
 Changing the color inside Hyprland closes everything that's open when it
 finishes, so nothing stays in the old color. It warns and asks first.
 
+      --install      install; --color, --yes and --no-packages need it
   -c, --color HEX    highlight color, e.g. 00c8ff (skips the color menu)
   -y, --yes          don't ask anything, take the defaults
       --no-packages  skip installing packages, e.g. to just change color
@@ -132,6 +138,7 @@ parse_args() {
                 shift
                 ;;
             --color=*) COLOR=${1#*=} ;;
+            --install) INSTALL=1 ;;
             -y | --yes) ASSUME_YES=1 ;;
             --no-packages) INSTALL_PACKAGES=0 ;;
             --link) TOGGLE_LINKS=1 ;;
@@ -148,6 +155,14 @@ parse_args() {
     done
     if ((TOGGLE_LINKS && argc > 1)); then
         die "--link takes no other options."
+    fi
+    if ((!INSTALL && !TOGGLE_LINKS)); then
+        if ((argc == 0)); then
+            usage
+            exit 0
+        fi
+        usage >&2
+        die "--color, --yes and --no-packages need --install."
     fi
     if ((ASSUME_YES)); then
         NOCONFIRM=(--noconfirm)

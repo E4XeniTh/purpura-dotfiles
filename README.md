@@ -47,7 +47,7 @@ On Arch Linux or an Arch-based distro:
 ```bash
 git clone https://github.com/E4XeniTh/purpura-dotfiles
 cd purpura-dotfiles
-./purpura.sh
+./purpura.sh --install
 ```
 
 The installer:
@@ -72,9 +72,10 @@ The installer:
   The terminal you ran it from stays open, and `qs`, `hyprpaper`, the polkit
   agent and Solaar restart by themselves; other apps you reopen yourself
 
-Re-run it whenever you like - e.g. `./purpura.sh --no-packages` to switch
-to another color. `./purpura.sh --help` lists the options (`--color HEX`,
-`--yes`, `--no-packages`, `--link`).
+Re-run it whenever you like - e.g. `./purpura.sh --install --no-packages` to
+switch to another color. `./purpura.sh` on its own installs nothing and only
+shows the help, which lists the options (`--color HEX`, `--yes`,
+`--no-packages`, `--link`).
 
 ### Linked to the repo
 
@@ -210,8 +211,9 @@ package lists are the exact set):
 - Colors, font family, and notification timeout live in `Config.js` (base
   of the quickshell config, imported as `Config` from any component). Edit
   it and restart `qs` to re-theme the shell alone - or re-run
-  `./purpura.sh --no-packages` to change the highlight everywhere at once
-  (it remembers the current one in `~/.local/state/purpura/highlight`).
+  `./purpura.sh --install --no-packages` to change the highlight everywhere
+  at once (it remembers the current one in
+  `~/.local/state/purpura/highlight`).
 - The whole shell scales with each screen's resolution: every size is
   written for 1920x1080 and grows or shrinks with the screen, so it
   takes up the same share of a 1440p or 4K screen (ultrawides scale by
