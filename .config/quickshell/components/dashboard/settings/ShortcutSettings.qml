@@ -6,7 +6,8 @@ import "../../../Config.js" as Config
 
 // Settings > Shortcuts: a full-size keyboard as wide as the tab and centered
 // in its height, one rectangle per key. Clicking a key opens a panel listing
-// its binds, where new ones are added and existing ones removed.
+// its binds, each removable, with a + button that reveals the form for adding
+// a new one.
 //
 // A key's border shows its state, across all modifiers: fgcolordark when
 // unused, fgcolor when bound, fgcolorlight when one of its binds has a
@@ -203,7 +204,8 @@ Item {
         ? root.allBinds.filter(b => b.key.toLowerCase() === root.selectedKey.sym.toLowerCase())
         : []
 
-    // New-bind form.
+    // New-bind form, hidden until the panel's + button is clicked.
+    property bool formOpen: false
     property var formModifiers: ["SUPER"]
     property int formAction: 0
     property int formWorkspace: 0
@@ -234,15 +236,27 @@ Item {
     onFormComboChanged: root.syncDescription()
 
     function openKey(key) {
+        root.formOpen = false
+        root.selectedKey = key
+        panel.forceActiveFocus()
+    }
+
+    function openForm() {
         root.formModifiers = ["SUPER"]
         root.formAction = 0
         root.formWorkspace = 0
         commandInput.text = ""
         descriptionInput.text = ""
         root.prefilledDescription = ""
-        root.selectedKey = key
+        root.syncDescription()
+        root.formOpen = true
         if (root.formConflict) descriptionInput.focusInput()
         else commandInput.focusInput()
+    }
+
+    function closeForm() {
+        root.formOpen = false
+        panel.forceActiveFocus()
     }
 
     function closeKey() {
@@ -640,7 +654,11 @@ Item {
         width: Config.scaled(560, root.uiScale)
         height: panelColumn.implicitHeight
 
-        Keys.onEscapePressed: root.closeKey()
+        // Steps back one level, the same as Cancel.
+        Keys.onEscapePressed: {
+            if (root.formOpen) root.closeForm()
+            else root.closeKey()
+        }
 
         // Keeps a click on the panel's blank space from reaching the
         // dismissing backdrop behind it.
@@ -699,106 +717,142 @@ Item {
                 }
             }
 
+            // Same look as Project Mortar's add-ammo button.
             Rectangle {
-                visible: root.selectedBinds.length > 0
+                visible: !root.formOpen
                 width: panelColumn.innerWidth
-                height: Config.scaled(2, root.uiScale)
-                color: Config.fgcolor
-            }
+                height: Config.scaled(44, root.uiScale)
+                color: addMouse.containsMouse ? addFill : "transparent"
+                border.width: Config.scaled(2, root.uiScale)
+                border.color: Config.fgcolorlight
 
-            Row {
-                spacing: Config.scaled(8, root.uiScale)
-
-                Repeater {
-                    model: root.modifierNames
-
-                    delegate: PanelButton {
-                        required property string modelData
-
-                        text: modelData
-                        lit: root.formModifiers.indexOf(modelData) !== -1
-                        onClicked: root.toggleModifier(modelData)
-                    }
+                readonly property color addFill: {
+                    const c = Qt.color(Config.fgcolorlight)
+                    return Qt.rgba(c.r, c.g, c.b, 0.12)
                 }
-            }
-
-            Row {
-                spacing: Config.scaled(8, root.uiScale)
-
-                DropdownBox {
-                    width: Config.scaled(280, root.uiScale)
-                    uiScale: root.uiScale
-                    options: root.actionLabels
-                    currentIndex: root.formAction
-                    onActivated: (index) => {
-                        root.formAction = index
-                        open = false
-                        if (root.formActionEntry.command) commandInput.focusInput()
-                        else panel.forceActiveFocus()
-                    }
-                }
-
-                DropdownBox {
-                    visible: !!root.formActionEntry.workspace
-                    width: Config.scaled(80, root.uiScale)
-                    uiScale: root.uiScale
-                    options: root.workspaceLabels
-                    currentIndex: root.formWorkspace
-                    onActivated: (index) => {
-                        root.formWorkspace = index
-                        open = false
-                    }
-                }
-            }
-
-            PanelInput {
-                id: commandInput
-                visible: !!root.formActionEntry.command
-                width: panelColumn.innerWidth
-                placeholder: "Command to run"
-            }
-
-            PanelInput {
-                id: descriptionInput
-                width: panelColumn.innerWidth
-                placeholder: "Description"
-            }
-
-            Item {
-                width: panelColumn.innerWidth
-                height: bindButton.height
 
                 Text {
-                    anchors {
-                        left: parent.left
-                        right: buttonRow.left
-                        rightMargin: Config.scaled(10, root.uiScale)
-                        verticalCenter: parent.verticalCenter
-                    }
-                    elide: Text.ElideRight
-                    text: root.formCombo
-                    color: Config.fgcolor
+                    anchors.centerIn: parent
+                    text: "+"
+                    color: Config.fgcolorlight
                     font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(13, root.uiScale)
+                    font.pixelSize: Config.scaled(24, root.uiScale)
+                }
+
+                MouseArea {
+                    id: addMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.openForm()
+                }
+            }
+
+            Column {
+                visible: root.formOpen
+                width: panelColumn.innerWidth
+                spacing: panelColumn.spacing
+
+                Rectangle {
+                    visible: root.selectedBinds.length > 0
+                    width: panelColumn.innerWidth
+                    height: Config.scaled(2, root.uiScale)
+                    color: Config.fgcolor
                 }
 
                 Row {
-                    id: buttonRow
-                    anchors.right: parent.right
                     spacing: Config.scaled(8, root.uiScale)
 
-                    PanelButton {
-                        text: "Cancel"
-                        onClicked: root.closeKey()
+                    Repeater {
+                        model: root.modifierNames
+
+                        delegate: PanelButton {
+                            required property string modelData
+
+                            text: modelData
+                            lit: root.formModifiers.indexOf(modelData) !== -1
+                            onClicked: root.toggleModifier(modelData)
+                        }
+                    }
+                }
+
+                Row {
+                    spacing: Config.scaled(8, root.uiScale)
+
+                    DropdownBox {
+                        width: Config.scaled(280, root.uiScale)
+                        uiScale: root.uiScale
+                        options: root.actionLabels
+                        currentIndex: root.formAction
+                        onActivated: (index) => {
+                            root.formAction = index
+                            open = false
+                            if (root.formActionEntry.command) commandInput.focusInput()
+                            else panel.forceActiveFocus()
+                        }
                     }
 
-                    PanelButton {
-                        id: bindButton
-                        // Binding a combo that's already taken swaps it out.
-                        text: root.formDescriptionOnly ? "Save" : root.formConflict ? "Replace" : "Bind"
-                        lit: true
-                        enabled: root.formValid
-                        onClicked: root.submitForm()
+                    DropdownBox {
+                        visible: !!root.formActionEntry.workspace
+                        width: Config.scaled(80, root.uiScale)
+                        uiScale: root.uiScale
+                        options: root.workspaceLabels
+                        currentIndex: root.formWorkspace
+                        onActivated: (index) => {
+                            root.formWorkspace = index
+                            open = false
+                        }
+                    }
+                }
+
+                PanelInput {
+                    id: commandInput
+                    visible: !!root.formActionEntry.command
+                    width: panelColumn.innerWidth
+                    placeholder: "Command to run"
+                }
+
+                PanelInput {
+                    id: descriptionInput
+                    width: panelColumn.innerWidth
+                    placeholder: "Description"
+                }
+
+                Item {
+                    width: panelColumn.innerWidth
+                    height: bindButton.height
+
+                    Text {
+                        anchors {
+                            left: parent.left
+                            right: buttonRow.left
+                            rightMargin: Config.scaled(10, root.uiScale)
+                            verticalCenter: parent.verticalCenter
+                        }
+                        elide: Text.ElideRight
+                        text: root.formCombo
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                    }
+
+                    Row {
+                        id: buttonRow
+                        anchors.right: parent.right
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        PanelButton {
+                            text: "Cancel"
+                            onClicked: root.closeForm()
+                        }
+
+                        PanelButton {
+                            id: bindButton
+                            // Binding a combo that's already taken swaps it out.
+                            text: root.formDescriptionOnly ? "Save" : root.formConflict ? "Replace" : "Bind"
+                            lit: true
+                            enabled: root.formValid
+                            onClicked: root.submitForm()
+                        }
                     }
                 }
             }
