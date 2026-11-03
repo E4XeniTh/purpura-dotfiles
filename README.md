@@ -165,7 +165,7 @@ package lists are the exact set):
 - `python` - `install.sh` uses it to apply the highlight color
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)
 
-**Keybind-launched apps** (swap freely — `local` vars at the top of `hyprland.lua`):
+**Keybind-launched apps** (swap freely — their `hl.bind` lines in `hyprland.lua`):
 
 - `dolphin`
 - `rofi`

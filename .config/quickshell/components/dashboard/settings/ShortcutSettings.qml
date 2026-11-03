@@ -31,8 +31,10 @@ import "../../../Config.js" as Config
 // from hyprctl. One edited here is kept in shortcuts.json by combo and wins
 // over that, an empty one included, so a hyprland.lua bind can be changed
 // without being rebound. Hyprland doesn't report a Lua bind's action in a form
-// that can be written back, so editing one keeps its action unless a new one
-// is picked, and moving it to another combo needs a new one.
+// that can be written back, so the form fills it in from hyprland.lua's own
+// hl.bind lines. Leaving it unchanged leaves the bind alone, options like
+// `locked` included; changing it or the combo makes it one of this tab's binds,
+// which don't carry those options.
 Item {
     id: root
 
@@ -120,6 +122,8 @@ Item {
     property var store: ({ binds: [], removed: [], descriptions: {} })
     // Parsed `hyprctl binds -j`.
     property var liveBinds: []
+    // hyprland.lua's bind actions as Lua text, by comboKey.
+    property var sourceActions: ({})
     property string applyError: ""
 
     function comboKey(combo) {
@@ -133,6 +137,55 @@ Item {
         const parts = bits.filter(b => bind.modmask & b[0]).map(b => b[1])
         parts.push(bind.key)
         return parts.join(" + ")
+    }
+
+    // The end of the call opened by text's first parenthesis, skipping
+    // any inside strings.
+    function callEnd(text) {
+        let depth = 0
+        let quote = ""
+        for (let i = 0; i < text.length; i++) {
+            const c = text[i]
+            if (quote) {
+                if (c === "\\") i++
+                else if (c === quote) quote = ""
+            } else if (c === "\"" || c === "'") {
+                quote = c
+            } else if (c === "(") {
+                depth++
+            } else if (c === ")" && --depth === 0) {
+                return i + 1
+            }
+        }
+        return -1
+    }
+
+    // Reads each single-line hl.bind, with plain string locals like mainMod
+    // filled in. The first bind on a combo wins, which for a press/release
+    // pair is the press.
+    function parseSourceActions(text) {
+        const locals = {}
+        const found = {}
+        for (const line of text.split("\n")) {
+            const local = line.match(/^\s*local\s+(\w+)\s*=\s*"([^"]*)"/)
+            if (local) {
+                locals[local[1]] = local[2]
+                continue
+            }
+            const bind = line.match(/^\s*hl\.bind\((.*?),\s*(hl\.dsp\..*)$/)
+            if (!bind) continue
+            const end = root.callEnd(bind[2])
+            if (end === -1) continue
+            const combo = bind[1].split("..").map(part => {
+                const piece = part.trim()
+                return piece.startsWith("\"") ? piece.slice(1, -1) : (locals[piece] || "")
+            }).join("")
+            const id = root.comboKey(combo)
+            if (found[id] !== undefined) continue
+            found[id] = bind[2].slice(0, end).replace(/\((\w+)\)$/, (call, name) =>
+                locals[name] !== undefined ? "(" + JSON.stringify(locals[name]) + ")" : call)
+        }
+        return found
     }
 
     function descriptionFromLive(bind) {
@@ -224,9 +277,18 @@ Item {
     readonly property var formConflict: root.selectedBinds.find(b =>
         root.comboKey(b.combo) === root.comboKey(root.formCombo) && !root.isEditing(b)) || null
     readonly property bool formCommandEmpty: !!root.formActionEntry.command && commandInput.text.trim().length === 0
+    // What the form opened with, to tell whether the action was changed.
+    property int formOriginalAction: 0
+    property int formOriginalWorkspace: 0
+    property string formOriginalCommand: ""
+    // An action the form has no entry for, shown as its Lua text.
+    property string formRawAction: ""
+    readonly property bool formActionUnchanged: root.formAction === root.formOriginalAction
+        && root.formWorkspace === root.formOriginalWorkspace
+        && (!root.formActionEntry.command || commandInput.text.trim() === root.formOriginalCommand)
     readonly property bool formEditingUnknownAction: !!root.editingBind && !root.editingBind.own
     readonly property bool formCanKeepAction: root.formEditingUnknownAction && root.isEditing({ combo: root.formCombo })
-    readonly property bool formKeepsAction: root.formCanKeepAction && root.formCommandEmpty
+    readonly property bool formKeepsAction: root.formCanKeepAction && root.formActionUnchanged
     readonly property bool formValid: !root.formCommandEmpty || root.formKeepsAction
 
     function isEditing(bind) {
@@ -242,6 +304,10 @@ Item {
         root.formModifiers = ["SUPER"]
         root.formAction = 0
         root.formWorkspace = 0
+        root.formOriginalAction = 0
+        root.formOriginalWorkspace = 0
+        root.formOriginalCommand = ""
+        root.formRawAction = ""
         commandInput.text = ""
         descriptionInput.text = ""
     }
@@ -253,8 +319,8 @@ Item {
         commandInput.focusInput()
     }
 
-    // Fills the form from a bind, as far as its action is known: only this
-    // tab's own binds have one to read back.
+    // Fills the form from a bind: this tab's own binds keep their action in
+    // the store, the rest are read from hyprland.lua.
     function editBind(bind) {
         root.resetForm()
         const parts = bind.combo.split("+").map(p => p.trim().toUpperCase())
@@ -262,7 +328,11 @@ Item {
         descriptionInput.text = bind.description
 
         const stored = root.store.binds.find(b => b.combo === bind.combo)
-        if (stored) root.fillAction(stored.lua)
+        const lua = stored ? stored.lua : root.sourceActions[root.comboKey(bind.combo)]
+        if (lua) root.fillAction(lua)
+        root.formOriginalAction = root.formAction
+        root.formOriginalWorkspace = root.formWorkspace
+        root.formOriginalCommand = commandInput.text.trim()
 
         root.editingBind = bind
         root.formOpen = true
@@ -272,8 +342,12 @@ Item {
     function fillAction(lua) {
         const command = lua.match(/^hl\.dsp\.exec_cmd\((".*")\)$/)
         if (command) {
-            commandInput.text = JSON.parse(command[1])
-            return
+            try {
+                commandInput.text = JSON.parse(command[1])
+                return
+            } catch (e) {
+                // A Lua escape JSON doesn't have: shown as Lua below.
+            }
         }
         for (let i = 0; i < root.actions.length; i++) {
             const action = root.actions[i]
@@ -289,6 +363,8 @@ Item {
                 return
             }
         }
+        root.formRawAction = lua
+        commandInput.text = lua
     }
 
     function closeForm() {
@@ -331,8 +407,9 @@ Item {
         let lua = entry.lua
         if (entry.command) {
             const command = commandInput.text.trim()
-            label = "Run: " + command
-            lua = "hl.dsp.exec_cmd(" + root.luaString(command) + ")"
+            const raw = command === root.formRawAction
+            label = raw ? command : "Run: " + command
+            lua = raw ? command : "hl.dsp.exec_cmd(" + root.luaString(command) + ")"
         } else if (entry.workspace) {
             const workspace = root.workspaceLabels[root.formWorkspace]
             label = entry.label + " " + workspace
@@ -408,6 +485,8 @@ Item {
         storeProcess.running = true
         bindsProcess.running = false
         bindsProcess.running = true
+        sourceProcess.running = false
+        sourceProcess.running = true
     }
 
     onActiveChanged: {
@@ -446,6 +525,15 @@ Item {
                     root.liveBinds = []
                 }
             }
+        }
+    }
+
+    Process {
+        id: sourceProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/hypr/hyprland.lua"]
+
+        stdout: StdioCollector {
+            onStreamFinished: root.sourceActions = root.parseSourceActions(text)
         }
     }
 
@@ -921,7 +1009,7 @@ Item {
                     id: commandInput
                     visible: !!root.formActionEntry.command
                     width: panelColumn.innerWidth
-                    placeholder: root.formCanKeepAction ? "Keep current action" : "Command to run"
+                    placeholder: "Command to run"
                 }
 
                 PanelInput {
