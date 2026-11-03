@@ -306,8 +306,10 @@ Scope {
                             // otherwise the window visibly grows/shrinks
                             // every time a different tab is picked. See
                             // tabFlick below, which is sized to match this
-                            // exactly so the two never disagree.
-                            height: panelScope.maxHeight
+                            // exactly so the two never disagree. The one
+                            // exception is Shortcuts, which leaves just the
+                            // tab bar here (see shortcutsWindow below).
+                            height: root.currentTab === 4 ? tabBar.height : panelScope.maxHeight
                         }
                     }
 
@@ -505,15 +507,6 @@ Scope {
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 3
                             }
-
-                            ShortcutSettings {
-                                id: shortcutsTab
-                                anchors.fill: parent
-                                visible: root.currentTab === 4
-                                panelWidth: panelScope.panelWidth
-                                uiScale: panelScope.uiScale
-                                active: root.open && root.currentTab === 4
-                            }
                         }
                     }
                 }
@@ -527,6 +520,47 @@ Scope {
                     border.color: Config.fgcolor
 
                     z: 10
+                }
+            }
+
+            // ---------------- Shortcuts' floating window ----------------
+            // The Shortcuts tab isn't part of the card: it's its own window,
+            // fitted around the keyboard and centered in the space below the
+            // tab bar. Left unclipped, since a key's panel or hint can reach
+            // past its edges.
+            DashCard {
+                id: shortcutsWindow
+
+                // Keeps some gap to the tab bar on a screen where the keyboard
+                // runs out of height first.
+                readonly property real minGap: Config.scaled(10, panelScope.uiScale)
+                readonly property real freeHeight: panelScope.maxHeight - tabBar.height
+
+                anchors {
+                    horizontalCenter: parent.horizontalCenter
+                    top: parent.top
+                    topMargin: tabBar.height + Math.round((shortcutsWindow.freeHeight - height) / 2)
+                }
+
+                visible: root.currentTab === 4 && box.state === "open"
+                uiScale: panelScope.uiScale
+                width: shortcutsTab.implicitWidth
+                height: shortcutsTab.implicitHeight
+
+                // Same as the card's: a click on blank space here shouldn't
+                // reach the full-window "click outside closes" MouseArea.
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {}
+                }
+
+                ShortcutSettings {
+                    id: shortcutsTab
+                    anchors.fill: parent
+                    panelWidth: panelScope.panelWidth
+                    maxHeight: shortcutsWindow.freeHeight - shortcutsWindow.minGap * 2
+                    uiScale: panelScope.uiScale
+                    active: root.open && root.currentTab === 4
                 }
             }
 

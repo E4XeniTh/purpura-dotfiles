@@ -3,14 +3,16 @@ import "../../../Config.js" as Config
 
 // Small inline dropdown in the settings' own look: a bordered box showing
 // the current option and an arrow, opening a list of the options straight
-// underneath it. Controlled: picking an option only emits activated(); the
-// caller sets currentIndex.
+// underneath it, or above it if it wouldn't fit below. If it fits neither way
+// it's held against the window's bottom edge, so every option stays reachable.
+// Controlled: picking an option only emits activated(); the caller sets
+// currentIndex.
 //
-// The open list is part of this item's own height, not drawn hanging
-// outside it: a list floating below its item's bounds never received
-// clicks here. So opening grows the item downward - give it
-// Layout.alignment: Qt.AlignTop (and top-align its row neighbours) so the
-// box itself stays put.
+// The open list floats over the layout instead of taking up space in it, so
+// opening moves nothing. It's parented to the window's root rather than to
+// this item, because a z only counts among siblings: anything later in the
+// layout would still sit on top of a list hanging off this item, and take
+// its clicks. While it's open, a click anywhere else only closes it.
 Item {
     id: root
 
@@ -26,16 +28,28 @@ Item {
 
     // Options overlap the box and each other by one border, so the column
     // reads as single 2px lines.
-    readonly property real listHeight: root.options.length * (root.rowHeight - root.borderWidth)
+    readonly property real listHeight: root.options.length * (root.rowHeight - root.borderWidth) + root.borderWidth
 
     implicitWidth: Config.scaled(100, root.uiScale)
-    implicitHeight: root.rowHeight + (root.open ? root.listHeight : 0)
+    implicitHeight: root.rowHeight
 
     onVisibleChanged: if (!visible) root.open = false
 
+    // Placed once on opening: nothing can move the box while the overlay is
+    // taking every click.
+    onOpenChanged: {
+        if (!root.open) return
+        const box = root.mapToItem(overlay, 0, 0)
+        const below = box.y + root.rowHeight - root.borderWidth
+        const above = box.y + root.borderWidth - root.listHeight
+        list.x = box.x
+        if (below + root.listHeight <= overlay.height) list.y = below
+        else if (above >= 0) list.y = above
+        else list.y = Math.max(0, overlay.height - root.listHeight)
+    }
+
     Rectangle {
-        width: root.width
-        height: root.rowHeight
+        anchors.fill: parent
         color: boxMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
         border.width: root.borderWidth
         border.color: root.open ? Config.fgcolorlight : Config.fgcolor
@@ -97,49 +111,75 @@ Item {
         }
     }
 
-    Column {
+    Item {
+        id: overlay
+
+        parent: root.Window.contentItem
+        anchors.fill: parent
         visible: root.open
-        y: root.rowHeight - root.borderWidth
-        width: root.width
-        spacing: -root.borderWidth
+        z: 1
 
-        Repeater {
-            model: root.options
+        MouseArea {
+            anchors.fill: parent
+            // Also keeps what's underneath from lighting up as if clickable.
+            hoverEnabled: true
+            onClicked: root.open = false
+        }
 
-            Rectangle {
-                id: option
+        // The options' own fill is see-through, which would let the controls
+        // the list covers show through it.
+        Rectangle {
+            x: list.x
+            y: list.y
+            width: root.width
+            height: root.listHeight
+            color: "#ee000000"
+        }
 
-                required property var modelData
-                required property int index
+        Column {
+            id: list
 
-                width: root.width
-                height: root.rowHeight
-                color: optionMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                border.width: root.borderWidth
-                border.color: option.index === root.currentIndex ? Config.fgcolorlight : Config.fgcolor
-                // The highlighted option's border sits over its neighbours'.
-                z: option.index === root.currentIndex ? 1 : 0
+            width: root.width
+            spacing: -root.borderWidth
 
-                Text {
-                    anchors {
-                        left: parent.left
-                        leftMargin: Config.scaled(8, root.uiScale)
-                        verticalCenter: parent.verticalCenter
+            Repeater {
+                model: root.options
+
+                Rectangle {
+                    id: option
+
+                    required property var modelData
+                    required property int index
+
+                    width: root.width
+                    height: root.rowHeight
+                    color: optionMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.width: root.borderWidth
+                    border.color: option.index === root.currentIndex ? Config.fgcolorlight : Config.fgcolor
+                    // The highlighted option's border sits over its neighbours'.
+                    z: option.index === root.currentIndex ? 1 : 0
+
+                    Text {
+                        anchors {
+                            left: parent.left
+                            leftMargin: Config.scaled(8, root.uiScale)
+                            verticalCenter: parent.verticalCenter
+                        }
+                        text: option.modelData
+                        color: option.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
                     }
-                    text: option.modelData
-                    color: option.border.color
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(13, root.uiScale)
-                    font.bold: true
-                }
 
-                MouseArea {
-                    id: optionMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        root.open = false
-                        root.activated(option.index)
+                    MouseArea {
+                        id: optionMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            root.open = false
+                            root.activated(option.index)
+                        }
                     }
                 }
             }

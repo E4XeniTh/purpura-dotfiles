@@ -4,9 +4,10 @@ import Quickshell.Io
 import "../"
 import "../../../Config.js" as Config
 
-// Settings > Shortcuts: a full-size keyboard as wide as the tab and centered
-// in its height, one rectangle per key. Clicking a key opens a panel listing
-// its binds, each with edit and remove buttons, and a + button for adding a new one.
+// Settings > Shortcuts: a full-size keyboard, one rectangle per key, with its
+// implicit size fitted around it for SettingsScreen.qml's floating window.
+// Clicking a key opens a panel listing its binds, each with edit and remove
+// buttons, and a + button for adding a new one.
 // Add and Edit share one form, which changes nothing until it's saved, so
 // cancelling or leaving the tab or the settings screen discards it.
 //
@@ -38,11 +39,22 @@ import "../../../Config.js" as Config
 Item {
     id: root
 
+    // The most room this tab can take; the keys grow until one of them is used up.
     property real panelWidth: 800
+    property real maxHeight: 600
     property real uiScale: 1.0
     property bool active: false
 
-    anchors.fill: parent
+    readonly property real keyboardMargin: Config.scaled(18, root.uiScale)
+    readonly property real keyGap: Config.scaled(4, root.uiScale)
+    readonly property real keyUnit: Math.min(
+        (root.panelWidth - root.keyboardMargin * 2 + root.keyGap) / root.keyboardUnitsWide,
+        (root.maxHeight - root.keyboardMargin * 2 + root.keyGap) / root.keyboardUnitsTall)
+
+    // A key's trailing gap is left off, so the last column and row end flush
+    // and the margin is even all the way around.
+    implicitWidth: root.keyUnit * root.keyboardUnitsWide - root.keyGap + root.keyboardMargin * 2
+    implicitHeight: root.keyUnit * root.keyboardUnitsTall - root.keyGap + root.keyboardMargin * 2
 
     // ---------------- layout ----------------
     // Croatian QWERTZ on an ISO board (hyprland.lua's kb_layout). `sym` is
@@ -698,19 +710,14 @@ Item {
         id: keyboard
 
         anchors {
-            left: parent.left
-            right: parent.right
-            verticalCenter: parent.verticalCenter
-            margins: Config.scaled(18, root.uiScale)
+            fill: parent
+            margins: root.keyboardMargin
         }
 
-        readonly property real gap: Config.scaled(4, root.uiScale)
-        // The width sets the size of a key and the height follows, so keys
-        // are square. A key's trailing gap is left off, so the last column
-        // and row end flush.
-        readonly property real unitWidth: (width + gap) / root.keyboardUnitsWide
-        readonly property real unitHeight: unitWidth
-        height: unitHeight * root.keyboardUnitsTall - gap
+        readonly property real gap: root.keyGap
+        // Keys are square.
+        readonly property real unitWidth: root.keyUnit
+        readonly property real unitHeight: root.keyUnit
 
         Repeater {
             model: root.keys
@@ -821,12 +828,12 @@ Item {
     DashCard {
         id: panel
 
-        // Top-anchored: the dropdowns grow this downward, which would
+        // Top-anchored: opening the form grows this downward, which would
         // otherwise slide the whole panel under the cursor.
         anchors {
             horizontalCenter: parent.horizontalCenter
             top: parent.top
-            topMargin: Config.scaled(40, root.uiScale)
+            topMargin: root.keyboardMargin
         }
 
         visible: root.selectedKey !== null

@@ -1146,9 +1146,6 @@ Item {
                             spacing: Config.scaled(8, root.uiScale)
 
                             Text {
-                                Layout.alignment: Qt.AlignTop
-                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                                verticalAlignment: Text.AlignVCenter
                                 text: "Fade in/out over"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
@@ -1157,7 +1154,6 @@ Item {
                             }
 
                             Rectangle {
-                                Layout.alignment: Qt.AlignTop
                                 Layout.preferredWidth: Config.scaled(60, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(28, root.uiScale)
                                 color: Config.fillcolor
@@ -1207,9 +1203,7 @@ Item {
                                 }
                             }
 
-                            // Grows downward while open (see DropdownBox).
                             DropdownBox {
-                                Layout.alignment: Qt.AlignTop
                                 Layout.preferredWidth: Config.scaled(100, root.uiScale)
                                 uiScale: root.uiScale
                                 options: ["minutes", "seconds"]
@@ -1218,9 +1212,6 @@ Item {
                             }
 
                             Text {
-                                Layout.alignment: Qt.AlignTop
-                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                                verticalAlignment: Text.AlignVCenter
                                 text: "(0 = instant)"
                                 color: Config.fgcolordark
                                 font.family: Config.fontfamily
