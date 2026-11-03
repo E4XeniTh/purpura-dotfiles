@@ -125,7 +125,8 @@ Item {
         { label: "Screenshot", lua: "hl.dsp.global(\"quickshell:screenshot\")" }
     ]
     readonly property var actionLabels: root.actions.map(a => a.label)
-    readonly property var workspaceLabels: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
+    // The shell's workspaces stop at 5 (see WorkspaceRow.qml).
+    readonly property var workspaceLabels: ["1", "2", "3", "4", "5"]
     readonly property var modifierNames: ["SUPER", "CTRL", "ALT", "SHIFT"]
 
     // ---------------- binds ----------------
