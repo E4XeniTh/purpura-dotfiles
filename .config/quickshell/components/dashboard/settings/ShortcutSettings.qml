@@ -6,8 +6,9 @@ import "../../../Config.js" as Config
 
 // Settings > Shortcuts: a full-size keyboard as wide as the tab and centered
 // in its height, one rectangle per key. Clicking a key opens a panel listing
-// its binds, each removable, with a + button that reveals the form for adding
-// a new one.
+// its binds, each with edit and remove buttons, and a + button for adding a new one.
+// Add and Edit share one form, which changes nothing until it's saved, so
+// cancelling or leaving the tab or the settings screen discards it.
 //
 // A key's border shows its state, across all modifiers: fgcolordark when
 // unused, fgcolor when bound, fgcolorlight when one of its binds has a
@@ -29,7 +30,9 @@ import "../../../Config.js" as Config
 // Descriptions set in hyprland.lua (hl.bind's `description` option) are read
 // from hyprctl. One edited here is kept in shortcuts.json by combo and wins
 // over that, an empty one included, so a hyprland.lua bind can be changed
-// without being rebound.
+// without being rebound. Hyprland doesn't report a Lua bind's action in a form
+// that can be written back, so editing one keeps its action unless a new one
+// is picked, and moving it to another combo needs a new one.
 Item {
     id: root
 
@@ -205,8 +208,10 @@ Item {
         ? root.allBinds.filter(b => b.key.toLowerCase() === root.selectedKey.sym.toLowerCase())
         : []
 
-    // New-bind form, hidden until the panel's + button is clicked.
+    // The bind form, hidden until + or a bind's Edit is clicked.
     property bool formOpen: false
+    // The bind being edited, or null when adding a new one.
+    property var editingBind: null
     property var formModifiers: ["SUPER"]
     property int formAction: 0
     property int formWorkspace: 0
@@ -215,52 +220,86 @@ Item {
         .filter(m => root.formModifiers.indexOf(m) !== -1)
         .concat([root.selectedKey.sym])
         .join(" + ") : ""
-    readonly property var formConflict: root.selectedBinds.find(b => root.comboKey(b.combo) === root.comboKey(root.formCombo)) || null
-    // A taken combo with no command typed keeps its action, so a bind can
-    // get a description without being set up again.
-    readonly property bool formDescriptionOnly: !!root.formConflict && !!root.formActionEntry.command && commandInput.text.trim().length === 0
-    readonly property bool formValid: !root.formActionEntry.command || commandInput.text.trim().length > 0 || root.formDescriptionOnly
+    // A different bind already on the combo, which saving would replace.
+    readonly property var formConflict: root.selectedBinds.find(b =>
+        root.comboKey(b.combo) === root.comboKey(root.formCombo) && !root.isEditing(b)) || null
+    readonly property bool formCommandEmpty: !!root.formActionEntry.command && commandInput.text.trim().length === 0
+    readonly property bool formEditingUnknownAction: !!root.editingBind && !root.editingBind.own
+    readonly property bool formCanKeepAction: root.formEditingUnknownAction && root.isEditing({ combo: root.formCombo })
+    readonly property bool formKeepsAction: root.formCanKeepAction && root.formCommandEmpty
+    readonly property bool formValid: !root.formCommandEmpty || root.formKeepsAction
 
-    // What the description field was last filled with, so moving to another
-    // combo clears that but keeps anything typed by hand.
-    property string prefilledDescription: ""
-
-    function syncDescription() {
-        const bind = root.allBinds.find(b => root.comboKey(b.combo) === root.comboKey(root.formCombo))
-        const existing = bind ? bind.description : ""
-        if (existing.length > 0 || descriptionInput.text === root.prefilledDescription) {
-            descriptionInput.text = existing
-            root.prefilledDescription = existing
-        }
+    function isEditing(bind) {
+        return !!root.editingBind && root.comboKey(bind.combo) === root.comboKey(root.editingBind.combo)
     }
-
-    onFormComboChanged: root.syncDescription()
 
     function openKey(key) {
-        root.formOpen = false
+        root.closeForm()
         root.selectedKey = key
-        panel.forceActiveFocus()
     }
 
-    function openForm() {
+    function resetForm() {
         root.formModifiers = ["SUPER"]
         root.formAction = 0
         root.formWorkspace = 0
         commandInput.text = ""
         descriptionInput.text = ""
-        root.prefilledDescription = ""
-        root.syncDescription()
+    }
+
+    function openForm() {
+        root.resetForm()
+        root.editingBind = null
         root.formOpen = true
-        if (root.formConflict) descriptionInput.focusInput()
-        else commandInput.focusInput()
+        commandInput.focusInput()
+    }
+
+    // Fills the form from a bind, as far as its action is known: only this
+    // tab's own binds have one to read back.
+    function editBind(bind) {
+        root.resetForm()
+        const parts = bind.combo.split("+").map(p => p.trim().toUpperCase())
+        root.formModifiers = root.modifierNames.filter(m => parts.indexOf(m) !== -1)
+        descriptionInput.text = bind.description
+
+        const stored = root.store.binds.find(b => b.combo === bind.combo)
+        if (stored) root.fillAction(stored.lua)
+
+        root.editingBind = bind
+        root.formOpen = true
+        descriptionInput.focusInput()
+    }
+
+    function fillAction(lua) {
+        const command = lua.match(/^hl\.dsp\.exec_cmd\((".*")\)$/)
+        if (command) {
+            commandInput.text = JSON.parse(command[1])
+            return
+        }
+        for (let i = 0; i < root.actions.length; i++) {
+            const action = root.actions[i]
+            if (action.lua === lua) {
+                root.formAction = i
+                return
+            }
+            if (!action.workspace) continue
+            const workspace = root.workspaceLabels.findIndex(w => action.workspace.replace("%1", w) === lua)
+            if (workspace !== -1) {
+                root.formAction = i
+                root.formWorkspace = workspace
+                return
+            }
+        }
     }
 
     function closeForm() {
         root.formOpen = false
+        root.editingBind = null
         panel.forceActiveFocus()
     }
 
     function closeKey() {
+        root.formOpen = false
+        root.editingBind = null
         root.selectedKey = null
         root.forceActiveFocus()
     }
@@ -280,7 +319,7 @@ Item {
     function submitForm() {
         if (!root.formValid) return
         const description = descriptionInput.text.trim()
-        if (root.formDescriptionOnly) {
+        if (root.formKeepsAction) {
             const descriptions = Object.assign({}, root.store.descriptions)
             descriptions[root.comboKey(root.formCombo)] = description
             root.saveStore(Object.assign({}, root.store, { descriptions: descriptions }))
@@ -299,29 +338,29 @@ Item {
             label = entry.label + " " + workspace
             lua = entry.workspace.replace("%1", workspace)
         }
-        root.addBind(root.formCombo, root.selectedKey.sym, label, lua, description)
+        root.addBind(root.formCombo, root.selectedKey.sym, label, lua, description, root.editingBind)
         root.closeKey()
     }
 
-    // The descriptions map with this combo's set, or dropped when empty.
-    function withDescription(combo, description) {
-        const next = Object.assign({}, root.store.descriptions)
-        if (description.length > 0) next[root.comboKey(combo)] = description
-        else delete next[root.comboKey(combo)]
-        return next
-    }
-
-    function addBind(combo, key, label, lua, description) {
+    // Saves a bind on `combo`, taking the place of whatever's already there
+    // and of `original`, the bind being edited, if it was on another combo.
+    function addBind(combo, key, label, lua, description, original) {
         const id = root.comboKey(combo)
-        const replaced = root.allBinds.filter(b => root.comboKey(b.combo) === id)
+        const replaced = root.allBinds.filter(b => root.comboKey(b.combo) === id || (original && b.combo === original.combo))
+        const replacedIds = replaced.map(b => root.comboKey(b.combo))
+
         const removed = root.store.removed.slice()
+        const descriptions = Object.assign({}, root.store.descriptions)
         for (const b of replaced) {
             if (!b.own && removed.indexOf(b.combo) === -1) removed.push(b.combo)
+            delete descriptions[root.comboKey(b.combo)]
         }
-        const binds = root.store.binds.filter(b => root.comboKey(b.combo) !== id)
+        if (description.length > 0) descriptions[id] = description
+
+        const binds = root.store.binds.filter(b => replacedIds.indexOf(root.comboKey(b.combo)) === -1)
         binds.push({ combo: combo, key: key, label: label, lua: lua })
 
-        root.saveStore({ binds: binds, removed: removed, descriptions: root.withDescription(combo, description) })
+        root.saveStore({ binds: binds, removed: removed, descriptions: descriptions })
         const unbinds = replaced.map(b => "hl.unbind(" + root.luaString(b.combo) + ")")
         root.applyLive(unbinds.concat(["hl.bind(" + root.luaString(combo) + ", " + lua + ")"]))
     }
@@ -330,10 +369,12 @@ Item {
         const removed = root.store.removed.slice()
         if (!bind.own && removed.indexOf(bind.combo) === -1) removed.push(bind.combo)
         const binds = root.store.binds.filter(b => b.combo !== bind.combo)
+        const descriptions = Object.assign({}, root.store.descriptions)
+        delete descriptions[root.comboKey(bind.combo)]
 
-        root.saveStore({ binds: binds, removed: removed, descriptions: root.withDescription(bind.combo, "") })
+        root.saveStore({ binds: binds, removed: removed, descriptions: descriptions })
         root.applyLive(["hl.unbind(" + root.luaString(bind.combo) + ")"])
-        root.syncDescription()
+        if (root.isEditing(bind)) root.closeForm()
     }
 
     function saveStore(next) {
@@ -438,17 +479,20 @@ Item {
         preload: false
     }
 
-    // A bordered text button, used for the panel's modifiers and actions.
+    // A bordered button, used for the panel's modifiers and actions, showing
+    // `text` or a drawn `icon` ("pencil" or "trash"). Drawn rather than taken
+    // from the icon theme, which doesn't have these under one name everywhere.
     component PanelButton: DashCard {
         id: button
 
         property string text: ""
+        property string icon: ""
         property bool lit: false
         property bool enabled: true
         signal clicked()
 
         uiScale: root.uiScale
-        implicitWidth: buttonLabel.implicitWidth + Config.scaled(20, root.uiScale)
+        implicitWidth: button.icon.length > 0 ? implicitHeight : buttonLabel.implicitWidth + Config.scaled(20, root.uiScale)
         implicitHeight: Config.scaled(32, root.uiScale)
         color: buttonMouse.containsMouse && button.enabled ? Config.fgcolorhover : Config.fillcolor
         border.color: button.lit ? Config.fgcolorlight : Config.fgcolor
@@ -462,6 +506,54 @@ Item {
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(13, root.uiScale)
             font.bold: true
+        }
+
+        Canvas {
+            id: buttonIcon
+            anchors.centerIn: parent
+            visible: button.icon.length > 0
+            width: Config.scaled(18, root.uiScale)
+            height: width
+
+            readonly property color stroke: button.border.color
+            onStrokeChanged: requestPaint()
+            onWidthChanged: requestPaint()
+
+            // Drawn on a 16x16 grid.
+            onPaint: {
+                const ctx = getContext("2d")
+                ctx.reset()
+                ctx.scale(width / 16, height / 16)
+                ctx.strokeStyle = buttonIcon.stroke
+                ctx.lineWidth = 1.5
+                ctx.beginPath()
+                if (button.icon === "pencil") {
+                    ctx.moveTo(2, 14)
+                    ctx.lineTo(2.8, 10.2)
+                    ctx.lineTo(10.5, 2.5)
+                    ctx.lineTo(13.5, 5.5)
+                    ctx.lineTo(5.8, 13.2)
+                    ctx.closePath()
+                    ctx.moveTo(8.8, 4.2)
+                    ctx.lineTo(11.8, 7.2)
+                } else if (button.icon === "trash") {
+                    ctx.moveTo(2, 4)
+                    ctx.lineTo(14, 4)
+                    ctx.moveTo(6, 4)
+                    ctx.lineTo(6, 1.8)
+                    ctx.lineTo(10, 1.8)
+                    ctx.lineTo(10, 4)
+                    ctx.moveTo(3.5, 4)
+                    ctx.lineTo(4.5, 14.5)
+                    ctx.lineTo(11.5, 14.5)
+                    ctx.lineTo(12.5, 4)
+                    ctx.moveTo(6.5, 7)
+                    ctx.lineTo(6.5, 12)
+                    ctx.moveTo(9.5, 7)
+                    ctx.lineTo(9.5, 12)
+                }
+                ctx.stroke()
+            }
         }
 
         MouseArea {
@@ -693,12 +785,22 @@ Item {
                     required property var modelData
 
                     width: panelColumn.innerWidth
-                    height: removeButton.height
+                    height: rowButtons.height
+
+                    // Lit while this bind is open in the form below.
+                    Rectangle {
+                        anchors {
+                            fill: parent
+                            margins: -Config.scaled(4, root.uiScale)
+                        }
+                        visible: root.isEditing(bindRow.modelData)
+                        color: Config.fgcolorhover
+                    }
 
                     Text {
                         anchors {
                             left: parent.left
-                            right: removeButton.left
+                            right: rowButtons.left
                             rightMargin: Config.scaled(10, root.uiScale)
                             verticalCenter: parent.verticalCenter
                         }
@@ -709,11 +811,21 @@ Item {
                         font.pixelSize: Config.scaled(13, root.uiScale)
                     }
 
-                    PanelButton {
-                        id: removeButton
+                    Row {
+                        id: rowButtons
                         anchors.right: parent.right
-                        text: "Remove"
-                        onClicked: root.removeBind(bindRow.modelData)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        PanelButton {
+                            icon: "pencil"
+                            lit: root.isEditing(bindRow.modelData)
+                            onClicked: root.editBind(bindRow.modelData)
+                        }
+
+                        PanelButton {
+                            icon: "trash"
+                            onClicked: root.removeBind(bindRow.modelData)
+                        }
                     }
                 }
             }
@@ -809,7 +921,7 @@ Item {
                     id: commandInput
                     visible: !!root.formActionEntry.command
                     width: panelColumn.innerWidth
-                    placeholder: "Command to run"
+                    placeholder: root.formCanKeepAction ? "Keep current action" : "Command to run"
                 }
 
                 PanelInput {
@@ -848,8 +960,8 @@ Item {
 
                         PanelButton {
                             id: bindButton
-                            // Binding a combo that's already taken swaps it out.
-                            text: root.formDescriptionOnly ? "Save" : root.formConflict ? "Replace" : "Bind"
+                            // Saving onto a combo that's already taken swaps it out.
+                            text: root.formConflict ? "Replace" : root.editingBind ? "Save" : "Bind"
                             lit: true
                             enabled: root.formValid
                             onClicked: root.submitForm()
