@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # purpura-dotfiles installer: the packages it needs, the configs
 # themselves, and a highlight color applied across them. Safe to re-run -
-# e.g. `./install.sh --no-packages` just to switch to another color.
+# e.g. `./purpura.sh --no-packages` just to switch to another color.
+# `./purpura.sh --link` links the configs to this checkout instead.
 set -euo pipefail
 
 # Physical path: it's compared against realpath results below.
@@ -14,11 +15,15 @@ RECOLOR=(python3 -I "$REPO/install/recolor.py")
 
 ASSUME_YES=0
 INSTALL_PACKAGES=1
+TOGGLE_LINKS=0
 COLOR=""
 NOCONFIRM=()
 STAGE=""
 SEEDED=()
 DOTFILES_INSTALLED=0
+CONFIGS_CHANGED=0
+CLOSE_APPS=0
+APPS_RESTARTED=0
 
 PRESETS=(
     "purple 9600fa"
@@ -61,6 +66,20 @@ OPTIONAL_GROUPS=(
     "n|ZeroTier|zerotier-one|"
 )
 
+# What a color change stops besides windows, which often have none open:
+# pgrep -x pattern : the command that brings it back, in autostart order.
+# hyprsunset is respawned by qs, and an orphaned one would make that fail.
+# Solaar is brought back by apply-peripherals.sh, if it's set to autostart.
+SESSION_PROGRAMS=(
+    "hyprpolkitagent:/usr/lib/hyprpolkitagent/hyprpolkitagent"
+    "hyprpaper:hyprpaper"
+    "qs|quickshell:qs"
+    "hyprsunset:"
+    "solaar:"
+    "rofi:"
+    "zapzap:"
+)
+
 # ---------------- output ----------------
 ACCENT="150;0;250"
 
@@ -83,20 +102,28 @@ ask() {
 
 usage() {
     cat <<EOF
-Usage: ./install.sh [options]
+Usage: ./purpura.sh [options]
 
 Installs purpura-dotfiles: the packages it needs (pacman + AUR), its
 configs into ~/.config, and a highlight color applied across them.
 Anything it would overwrite is backed up first.
 
+Changing the color inside Hyprland closes everything that's open when it
+finishes, so nothing stays in the old color. It warns and asks first.
+
   -c, --color HEX    highlight color, e.g. 00c8ff (skips the color menu)
   -y, --yes          don't ask anything, take the defaults
       --no-packages  skip installing packages, e.g. to just change color
+      --link         link the configs to this checkout instead of installing
+                     anything, so editing the repo edits the live config; if
+                     anything is linked already, every link is replaced with
+                     a real copy instead. Takes no other options
   -h, --help         show this help
 EOF
 }
 
 parse_args() {
+    local argc=$#
     while (($#)); do
         case $1 in
             -c | --color)
@@ -107,6 +134,7 @@ parse_args() {
             --color=*) COLOR=${1#*=} ;;
             -y | --yes) ASSUME_YES=1 ;;
             --no-packages) INSTALL_PACKAGES=0 ;;
+            --link) TOGGLE_LINKS=1 ;;
             -h | --help)
                 usage
                 exit 0
@@ -118,6 +146,9 @@ parse_args() {
         esac
         shift
     done
+    if ((TOGGLE_LINKS && argc > 1)); then
+        die "--link takes no other options."
+    fi
     if ((ASSUME_YES)); then
         NOCONFIRM=(--noconfirm)
     fi
@@ -372,7 +403,7 @@ recolor_live_hyprland() {
 in_a_checkout() {
     local dir=$1
     while [[ $dir == /?* ]]; do
-        [[ -f $dir/install.sh && -f $dir/install/recolor.py ]] && return 0
+        [[ -f $dir/install/recolor.py ]] && return 0
         dir=${dir%/*}
     done
     return 1
@@ -430,6 +461,9 @@ sync_stage() {
     done < <(cd "$STAGE" && find . -type f -printf '%P\0' | sort -z)
 
     info "$added added, $updated updated, $same already up to date."
+    if ((added + updated)); then
+        CONFIGS_CHANGED=1
+    fi
     if ((${#SEEDED[@]})); then
         info "Created from their .example (yours to edit, never overwritten): ${SEEDED[*]}"
     fi
@@ -437,7 +471,7 @@ sync_stage() {
         info "Previous versions of the updated files: ${backup/#$HOME/\~}"
     fi
     if ((linked)); then
-        warn "$linked files link into this checkout, so they keep their current colors - recoloring them would edit the repo itself. To recolor them, run the installer from a separate clone: it replaces those links with real copies."
+        warn "$linked files link into this checkout, so they keep their current colors - recoloring them would edit the repo itself. To recolor them, run ./purpura.sh --link first: it replaces those links with real copies."
     fi
 }
 
@@ -455,6 +489,128 @@ install_dotfiles() {
     mkdir -p -- "$(dirname -- "$STATE_FILE")"
     printf '#%s\n' "$COLOR" >"$STATE_FILE"
     DOTFILES_INSTALLED=1
+}
+
+# ---------------- linking ----------------
+# Gitignored files only exist on this machine: a fresh clone doesn't have them,
+# and the repo's copy goes stale while the configs are real copies. So the live
+# one moves into the repo, and whatever it replaces goes to the backup.
+adopt_personal_files() {
+    local item=$1 backup=$2 f
+    while IFS= read -r -d '' f; do
+        cmp -s -- "$HOME/$f" "$REPO/$f" && continue
+        if [[ -e $REPO/$f ]]; then
+            mkdir -p -- "$(dirname -- "$backup/repo/$f")"
+            mv -- "$REPO/$f" "$backup/repo/$f"
+        fi
+        mkdir -p -- "$(dirname -- "$REPO/$f")"
+        cp -p -- "$HOME/$f" "$REPO/$f"
+    done < <(cd "$HOME" && find "$item" -type f -print0 | git -C "$REPO" check-ignore -z --stdin)
+}
+
+# Nothing live to adopt, e.g. a fresh clone: the same seeding as installing.
+seed_personal_files() {
+    local -a examples=()
+    local f target
+    mapfile -d '' -t examples < <(git -C "$REPO" ls-files -z -- '*.example')
+    for f in "${examples[@]}"; do
+        target=$REPO/${f%.example}
+        if [[ ! -e $target ]]; then
+            cp -p -- "$REPO/$f" "$target"
+            info "Created ${f%.example} from its .example."
+        fi
+    done
+}
+
+warn_about_linked_configs() {
+    local f color
+    # stage_dotfiles rewrites these per machine, which a link can't do.
+    for f in .config/kitty/kitty.conf .config/qt6ct/qt6ct.conf .config/ZapZap/ZapZap.conf; do
+        if grep -E '/home/[^/]+/' "$REPO/$f" 2>/dev/null | grep -qv -- "$HOME/"; then
+            warn "$f names another home directory - fix its paths by hand."
+        fi
+    done
+    if [[ ! -x $REPO/.config/quickshell/helpers/auth ]]; then
+        warn "The lock screen's helper isn't built, so it can't check your password: make -C ~/.config/quickshell/helpers"
+    fi
+    color=$(previous_color)
+    if [[ $color != "$BASE_COLOR" ]]; then
+        warn "Linked configs are the repo's own purple (#$BASE_COLOR), not your #$color. Restart your apps to see it."
+    fi
+}
+
+link_configs() {
+    local backup item dst
+    local -a moved=()
+    backup=$HOME/.config/purpura-backups/$(date +%Y%m%d-%H%M%S)
+    say "Linking the configs to $REPO"
+    for item in "$@"; do
+        if [[ -e $HOME/$item ]]; then
+            adopt_personal_files "$item" "$backup"
+        fi
+    done
+    seed_personal_files
+    for item in "$@"; do
+        dst=$HOME/$item
+        if [[ -e $dst ]]; then
+            if diff -rq -- "$dst" "$REPO/$item" &>/dev/null; then
+                rm -rf -- "$dst"
+            else
+                mkdir -p -- "$(dirname -- "$backup/$item")"
+                mv -- "$dst" "$backup/$item"
+                moved+=("$item")
+            fi
+        fi
+        mkdir -p -- "$(dirname -- "$dst")"
+        ln -s -- "$REPO/$item" "$dst"
+    done
+    info "$# configs linked."
+    if ((${#moved[@]})); then
+        info "Differed from the repo, so the live versions are in ${backup/#$HOME/\~}: ${moved[*]}"
+    fi
+    warn_about_linked_configs
+}
+
+unlink_configs() {
+    local item dst target tmp count=0
+    say "Unlinking the configs"
+    for item in "$@"; do
+        dst=$HOME/$item
+        [[ -L $dst ]] || continue
+        # A dangling link has nothing to copy, so it gets the repo's version.
+        if [[ -e $dst ]]; then
+            target=$(realpath -- "$dst")
+        else
+            target=$REPO/$item
+        fi
+        # All of it, not just what's tracked: personal files come along.
+        tmp=$dst.purpura-new
+        rm -rf -- "$tmp"
+        cp -a -- "$target" "$tmp"
+        rm -f -- "$dst"
+        mv -- "$tmp" "$dst"
+        count=$((count + 1))
+    done
+    info "$count links replaced with real copies."
+}
+
+# Whole directories under .config, but .local file by file: the directories
+# there also hold things that aren't ours, like other color schemes.
+toggle_links() {
+    local item
+    local -a items=()
+    mapfile -d '' -t items < <(
+        git -C "$REPO" ls-files -z -- .config | cut -z -d/ -f1,2 | sort -zu
+        git -C "$REPO" ls-files -z -- .local
+    )
+    ((${#items[@]})) || die "No tracked configs found in $REPO - --link needs a git checkout."
+    for item in "${items[@]}"; do
+        if [[ -L $HOME/$item ]]; then
+            unlink_configs "${items[@]}"
+            return
+        fi
+    done
+    link_configs "${items[@]}"
 }
 
 # ---------------- helpers ----------------
@@ -478,6 +634,100 @@ build_helpers() {
     fi
 }
 
+# ---------------- open apps ----------------
+# Apps read their theme when they start, so a new color only takes over
+# completely once everything open has been restarted. The warning comes
+# before any of the work, leaving time to save; the closing comes last.
+warn_about_closing_apps() {
+    [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} && $COLOR != "$(previous_color)" ]] || return 0
+    command -v hyprctl >/dev/null || return 0
+    say "Open apps"
+    warn "Changing the color closes EVERYTHING that's open when the install finishes: every window on every workspace, browsers and games included. Anything unsaved is lost, so save your work now."
+    info "This terminal stays open. The shell (qs), hyprpaper, the polkit agent and Solaar restart by themselves; everything else you reopen yourself."
+    if ask "Close everything when the install finishes?" y; then
+        CLOSE_APPS=1
+    else
+        info "Leaving them open - they keep the old color until restarted."
+    fi
+}
+
+# Every open window's PID, except this terminal and Hyprland itself.
+window_pids() {
+    local pid=$$
+    local -a spared=()
+    while ((pid > 1)); do
+        spared+=("$pid")
+        pid=$(ps -o ppid= -p "$pid") || break
+        pid=${pid//[^0-9]/}
+    done
+    mapfile -t -O "${#spared[@]}" spared < <(pgrep -u "$EUID" -x Hyprland)
+    # X11 windows can report 0 or -1, which `kill` takes to mean every
+    # process in the session.
+    hyprctl -j clients | jq -r '.[].pid | select(. > 1)' | sort -un | while read -r pid; do
+        [[ " ${spared[*]} " == *" $pid "* ]] || printf '%s\n' "$pid"
+    done
+}
+
+# SIGTERM to let them exit cleanly, SIGKILL whatever's still up after 5s.
+stop_pids() {
+    local pid try
+    local -a alive=("$@")
+    ((${#alive[@]})) || return 0
+    kill -TERM -- "${alive[@]}" 2>/dev/null || true
+    for ((try = 0; try < 50; try++)); do
+        set -- "${alive[@]}"
+        alive=()
+        for pid in "$@"; do
+            if kill -0 -- "$pid" 2>/dev/null; then
+                alive+=("$pid")
+            fi
+        done
+        ((${#alive[@]})) || return 0
+        sleep 0.1
+    done
+    kill -KILL -- "${alive[@]}" 2>/dev/null || true
+}
+
+restart_apps() {
+    local entry pattern cmd out
+    local -a pids=() found=()
+    # The reload below reverts what these two replay: the monitor layout and
+    # the mouse sensitivity.
+    local -a commands=("$HOME/.config/hypr/scripts/apply-monitors.sh" "$HOME/.config/hypr/scripts/apply-peripherals.sh")
+    say "Closing everything open"
+    if command -v jq >/dev/null; then
+        mapfile -t pids < <(window_pids)
+    else
+        warn "jq isn't installed, so windows can't be listed - they stay open in the old color."
+    fi
+    for entry in "${SESSION_PROGRAMS[@]}"; do
+        pattern=${entry%%:*}
+        cmd=${entry#*:}
+        mapfile -t found < <(pgrep -u "$EUID" -x "$pattern")
+        ((${#found[@]})) || continue
+        pids+=("${found[@]}")
+        if [[ -n $cmd ]]; then
+            commands+=("$cmd")
+        fi
+    done
+    stop_pids "${pids[@]}"
+
+    say "Restarting the session"
+    hyprctl reload >/dev/null || warn "hyprctl reload failed - run it by hand for the new border color."
+    # Through Hyprland, so they don't depend on this terminal staying open.
+    for cmd in "${commands[@]}"; do
+        out=$(hyprctl dispatch "hl.dsp.exec_cmd(\"$cmd\")" 2>&1) || true
+        if [[ $out == *ok* ]]; then
+            info "Started ${cmd/#$HOME/\~}"
+        else
+            warn "Couldn't start ${cmd/#$HOME/\~}: $out - run it by hand."
+        fi
+    done
+    # kitty rereads its config on this, for the terminal that stayed open.
+    pkill -USR1 -u "$EUID" -x kitty || true
+    APPS_RESTARTED=1
+}
+
 final_notes() {
     local svc
     say "Done"
@@ -486,14 +736,23 @@ final_notes() {
             info "$svc isn't running; the Connections tab needs it: sudo systemctl enable --now $svc"
         fi
     done
-    info "Log into Hyprland, or if you're already in it run: hyprctl reload"
-    info "Apps that were open keep their old colors until restarted."
+    if ((APPS_RESTARTED)); then
+        info "Everything's now running in #$COLOR - reopen your apps whenever you're ready."
+    else
+        info "Log into Hyprland, or if you're already in it run: hyprctl reload"
+        info "Apps that were open keep their old colors until restarted."
+    fi
 }
 
 main() {
     parse_args "$@"
     ((EUID != 0)) || die "Run this as your normal user, not root - it asks for sudo when it needs it."
+    if ((TOGGLE_LINKS)); then
+        toggle_links
+        return
+    fi
     choose_color
+    warn_about_closing_apps
     if ((INSTALL_PACKAGES)); then
         install_packages
     fi
@@ -502,6 +761,9 @@ main() {
     install_dotfiles
     if ((DOTFILES_INSTALLED)); then
         build_helpers
+    fi
+    if ((CLOSE_APPS && CONFIGS_CHANGED)); then
+        restart_apps
     fi
     final_notes
 }

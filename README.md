@@ -47,7 +47,7 @@ On Arch Linux or an Arch-based distro:
 ```bash
 git clone https://github.com/E4XeniTh/purpura-dotfiles
 cd purpura-dotfiles
-./install.sh
+./purpura.sh
 ```
 
 The installer:
@@ -66,10 +66,37 @@ The installer:
   `.example` once and never overwrites them after that (picking a new
   color only updates `hyprland.lua`'s border colors)
 - builds the helper binaries and installs the lock screen's PAM file
+- if you changed the color from inside Hyprland, **closes everything that's
+  open** when it finishes, so nothing stays in the old color. It warns and
+  asks first, because anything unsaved is lost (`--yes` takes that as a yes).
+  The terminal you ran it from stays open, and `qs`, `hyprpaper`, the polkit
+  agent and Solaar restart by themselves; other apps you reopen yourself
 
-Re-run it whenever you like - e.g. `./install.sh --no-packages` to switch
-to another color. `./install.sh --help` lists the options (`--color HEX`,
-`--yes`, `--no-packages`).
+Re-run it whenever you like - e.g. `./purpura.sh --no-packages` to switch
+to another color. `./purpura.sh --help` lists the options (`--color HEX`,
+`--yes`, `--no-packages`, `--link`).
+
+### Linked to the repo
+
+To work on the configs, link them instead of copying them:
+
+```bash
+./purpura.sh --link
+```
+
+Everything the repo tracks gets linked into `~/.config` (and the color scheme
+into `~/.local/share/color-schemes`), so editing the repo edits the live
+config. Run it again to undo: if anything is linked, every link is replaced
+with a real copy instead.
+
+- Your gitignored personal files (`hyprland.lua`, `monitors.json`...) move
+  into the checkout, so don't delete it while linked.
+- Other live files that differ from the repo are moved to
+  `~/.config/purpura-backups/<date>/` first.
+- Linked configs stay in the repo's purple: `purpura.sh` can't recolor them
+  without editing the repo.
+- Apps that rewrite their own config, like fish's `fish_variables`, now show
+  up as changes in `git status`.
 
 ### By hand
 
@@ -101,7 +128,7 @@ cp -n .config/ZapZap/ZapZap.conf.example ~/.config/ZapZap/ZapZap.conf
 ## Build the helper binaries
 
 Two small C helpers need compiling locally - they're gitignored since
-they're machine-specific. `install.sh` does this for you; by hand:
+they're machine-specific. `purpura.sh` does this for you; by hand:
 
 - **`auth`**: the lock screen checks your real login password through
   it, over PAM, so the shell process itself never touches `/etc/shadow`.
@@ -120,7 +147,7 @@ Re-run `make` after pulling changes to `helpers/auth.c` or
 
 ## Dependencies and affected apps
 
-Beyond a base Arch install (`install.sh` installs all of these - its
+Beyond a base Arch install (`purpura.sh` installs all of these - its
 package lists are the exact set):
 
 - `kitty`
@@ -162,7 +189,7 @@ package lists are the exact set):
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - `breeze-gtk`, `breeze-icons`, `kde-gtk-config`, `noto-fonts`, `quintom-cursor-theme-git` (AUR) - the GTK theme, icons, font, cursor and GTK modules `gtk-3.0/settings.ini` names
-- `python` - `install.sh` uses it to apply the highlight color
+- `python` - `purpura.sh` uses it to apply the highlight color
 - A symbolic icon theme covering `weather-*`, `media-*`, `system-*`, `audio-volume-*`, `battery-000` through `battery-100` (in 10% increments, each with a `-charging` variant) (e.g. Papirus)
 
 **Keybind-launched apps** (swap freely — their `hl.bind` lines in `hyprland.lua`):
@@ -183,7 +210,7 @@ package lists are the exact set):
 - Colors, font family, and notification timeout live in `Config.js` (base
   of the quickshell config, imported as `Config` from any component). Edit
   it and restart `qs` to re-theme the shell alone - or re-run
-  `./install.sh --no-packages` to change the highlight everywhere at once
+  `./purpura.sh --no-packages` to change the highlight everywhere at once
   (it remembers the current one in `~/.local/state/purpura/highlight`).
 - The whole shell scales with each screen's resolution: every size is
   written for 1920x1080 and grows or shrinks with the screen, so it
