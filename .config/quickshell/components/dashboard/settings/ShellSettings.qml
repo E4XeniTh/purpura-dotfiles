@@ -809,7 +809,8 @@ Item {
                         spacing: Config.scaled(6, root.uiScale)
 
                         RowLayout {
-                            Layout.fillWidth: true
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
                             spacing: Config.scaled(8, root.uiScale)
 
                             Text {
@@ -820,7 +821,7 @@ Item {
                                 font.bold: true
                             }
 
-                            Item { width: Config.scaled(225, root.uiScale) }
+                            Item { Layout.fillWidth: true }
 
                             Text {
                                 text: root.stagedSensitivity.toFixed(2)
@@ -832,7 +833,7 @@ Item {
                         }
 
                         DeviceSlider {
-                            width: Config.scaled(420, root.uiScale)
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
                             // Maps hyprland.lua's -1.0 - 1.0 sensitivity
                             // range onto DeviceSlider's own fixed 0.0 - 1.0
@@ -1061,6 +1062,7 @@ Item {
 
                             RowLayout {
                                 Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
                                 spacing: Config.scaled(8, root.uiScale)
 
                                 Text {
@@ -1137,6 +1139,7 @@ Item {
 
                             RowLayout {
                                 Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
                                 spacing: Config.scaled(8, root.uiScale)
 
                                 Text {
@@ -1261,65 +1264,77 @@ Item {
                     visible: root.currentCategory === 4
                     spacing: Config.scaled(10, root.uiScale)
 
-                    RowLayout {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                    ColumnLayout {
+                        Layout.fillWidth: true
                         Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(6, root.uiScale)
 
-                        Text {
-                            text: "Width:"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Width:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: (root.quakeConsole ? root.quakeConsole.widthPercent : 0) + "%"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
                         }
 
-                        Item { Layout.fillWidth: true }
-
-                        Text {
-                            text: (root.quakeConsole ? root.quakeConsole.widthPercent : 0) + "%"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-                    }
-
-                    DeviceSlider {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                        uiScale: root.uiScale
-                        value: root.quakeConsole ? root.quakeConsole.widthPercent / 100 : 0
-                        onMoved: (newValue) => root.quakeConsole.setWidthPercent(newValue * 100)
-                    }
-
-                    RowLayout {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Text {
-                            text: "Height:"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Item { Layout.fillWidth: true }
-
-                        Text {
-                            text: (root.quakeConsole ? root.quakeConsole.heightPercent : 0) + "%"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
+                        DeviceSlider {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: root.quakeConsole ? root.quakeConsole.widthPercent / 100 : 0
+                            onMoved: (newValue) => root.quakeConsole.setWidthPercent(newValue * 100)
                         }
                     }
 
-                    DeviceSlider {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                        uiScale: root.uiScale
-                        value: root.quakeConsole ? root.quakeConsole.heightPercent / 100 : 0
-                        onMoved: (newValue) => root.quakeConsole.setHeightPercent(newValue * 100)
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Height:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: (root.quakeConsole ? root.quakeConsole.heightPercent : 0) + "%"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+                        }
+
+                        DeviceSlider {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: root.quakeConsole ? root.quakeConsole.heightPercent / 100 : 0
+                            onMoved: (newValue) => root.quakeConsole.setHeightPercent(newValue * 100)
+                        }
                     }
 
                     Item {
