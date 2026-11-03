@@ -28,6 +28,9 @@ Scope {
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
+    // EdgeGaps.qml: lines this up with the bar's right end.
+    property var edgeGaps: null
+
     property bool open: false
 
     // The LazyLoader gate below (root.open && previewedEntryId !== "")
@@ -300,7 +303,7 @@ Scope {
             readonly property real uiScale: Config.uiScale(clipWindow.screen, root.shellScale)
 
             anchors { bottom: true; right: true }
-            margins { bottom: Config.scaled(3, clipWindow.uiScale); right: Config.scaled(10, clipWindow.uiScale) }
+            margins { bottom: Config.scaled(3, clipWindow.uiScale); right: root.edgeGaps ? root.edgeGaps.right : 10 }
 
             implicitWidth: Config.scaled(400, clipWindow.uiScale)
             // +20 = the 10px top + 10px bottom margins contentCol below
@@ -639,7 +642,7 @@ Scope {
             anchors { bottom: true; right: true }
             // 10 (screen gap, matching clipWindow's own) + 400
             // (clipWindow's width) + 10 (gap between the two panels).
-            margins { bottom: Config.scaled(10, previewWindow.uiScale); right: 2 * Config.scaled(10, previewWindow.uiScale) + Config.scaled(400, previewWindow.uiScale) }
+            margins { bottom: Config.scaled(10, previewWindow.uiScale); right: (root.edgeGaps ? root.edgeGaps.right : 10) + Config.scaled(10, previewWindow.uiScale) + Config.scaled(400, previewWindow.uiScale) }
 
             // 400 max in both cases; images are always exactly that
             // square, text instead shrinks to fit its own content (down

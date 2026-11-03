@@ -27,7 +27,8 @@ import "../../../Config.js" as Config
 // established for monitors.json. Updater.qml watches updatersettings.json
 // directly too, same decoupled pattern. Night Light is the exception: its
 // schedule changes settings on its own, so NightLight.qml owns its file
-// and this category just drives that object (`nightLight`). The UI Scale
+// and this category just drives that object (`nightLight`), as does Quake
+// Console with QuakeConsole.qml (`quakeConsole`). The UI Scale
 // slider under the category list works the same way: UiScale.qml owns
 // its file and hands the value to every component through shell.qml, and
 // the slider here only calls its set() (`uiScaleSetting`).
@@ -40,6 +41,9 @@ Item {
 
     // NightLight.qml, from shell.qml via SettingsScreen.qml.
     property var nightLight: null
+
+    // QuakeConsole.qml, from shell.qml via SettingsScreen.qml.
+    property var quakeConsole: null
 
     // UiScale.qml, from shell.qml via SettingsScreen.qml - the UI Scale
     // slider under the category list.
@@ -57,7 +61,7 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light.
+    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Quake Console.
     property int currentCategory: 0
 
     // Night Light category's view of root.nightLight, with defaults for the
@@ -448,6 +452,32 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.currentCategory = 3
+                    }
+                }
+
+                DashCard {
+                    id: quakeCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: quakeCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 4 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Quake Console"
+                        color: quakeCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: quakeCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 4
                     }
                 }
 
@@ -1220,6 +1250,178 @@ Item {
 
                             Item { Layout.fillWidth: true }
                         }
+                    }
+                }
+
+                // ---------------- Quake Console category ----------------
+                ColumnLayout {
+                    id: quakeCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 4
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    RowLayout {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "Width:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: (root.quakeConsole ? root.quakeConsole.widthPercent : 0) + "%"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+                    }
+
+                    DeviceSlider {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        uiScale: root.uiScale
+                        value: root.quakeConsole ? root.quakeConsole.widthPercent / 100 : 0
+                        onMoved: (newValue) => root.quakeConsole.setWidthPercent(newValue * 100)
+                    }
+
+                    RowLayout {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "Height:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        Text {
+                            text: (root.quakeConsole ? root.quakeConsole.heightPercent : 0) + "%"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+                    }
+
+                    DeviceSlider {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        uiScale: root.uiScale
+                        value: root.quakeConsole ? root.quakeConsole.heightPercent / 100 : 0
+                        onMoved: (newValue) => root.quakeConsole.setHeightPercent(newValue * 100)
+                    }
+
+                    Item {
+                        Layout.preferredHeight: Config.scaled(14, root.uiScale)
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillEnabled
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: parent.on ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.quakeConsole.setAutokillEnabled(!root.quakeConsole.autokillEnabled)
+                            }
+                        }
+
+                        Text {
+                            text: "Autokill when inactive / in background"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.quakeConsole.setAutokillEnabled(!root.quakeConsole.autokillEnabled)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        id: autokillDelayRow
+
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        // Dark and locked while autokill is off.
+                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillEnabled
+                        readonly property int minutes: root.quakeConsole ? root.quakeConsole.autokillMinutes : 30
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(70, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                            color: Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: !autokillDelayRow.on ? Config.fgcolordark
+                                : autokillDelayInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                            TextInput {
+                                id: autokillDelayInput
+
+                                anchors {
+                                    fill: parent
+                                    margins: Config.scaled(6, root.uiScale)
+                                }
+                                enabled: autokillDelayRow.on
+                                horizontalAlignment: TextInput.AlignHCenter
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: autokillDelayRow.on ? Config.fgcolor : Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                selectByMouse: true
+                                clip: true
+                                validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
+                                text: String(autokillDelayRow.minutes)
+
+                                // Saves on Enter or on leaving the box, not on
+                                // each keystroke, so a value being typed can't
+                                // get snapped to the minimum halfway through.
+                                // Then shows what was really saved, which is
+                                // the old value if the box was left empty.
+                                onEditingFinished: {
+                                    const typed = parseInt(autokillDelayInput.text, 10)
+                                    if (!isNaN(typed)) root.quakeConsole.setAutokillMinutes(typed)
+                                    autokillDelayInput.text = String(autokillDelayRow.minutes)
+                                }
+                                onAccepted: autokillDelayInput.focus = false
+                            }
+                        }
+
+                        Text {
+                            text: "minute delay"
+                            color: autokillDelayRow.on ? Config.fgcolor : Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
                 }
 

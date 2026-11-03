@@ -37,6 +37,12 @@ Scope {
     // NightLight.qml - handed on to the Shell tab's Night Light category.
     property var nightLight: null
 
+    // QuakeConsole.qml - handed on to the Shell tab's Quake Console category.
+    property var quakeConsole: null
+
+    // EdgeGaps.qml - the bar's top margin, for topOffset below.
+    property var edgeGaps: null
+
     // UiScale.qml - handed on to the Shell tab's UI Scale slider.
     property var uiScaleSetting: null
 
@@ -119,9 +125,10 @@ Scope {
             // it ignores every exclusive zone including the bar's, which
             // is what lets it dim the strip of screen behind the bar
             // too), so the offset is computed by hand instead: Bar's own
-            // top margin (10) + height (48) + Dashboard's own extra gap
-            // (4) below that.
-            readonly property real topOffset: Config.scaled(62, uiScale)
+            // top margin + height (48) + Dashboard's own extra gap (4)
+            // below that.
+            readonly property real topOffset: (root.edgeGaps ? root.edgeGaps.top : 10)
+                + Config.scaled(Config.barheight, uiScale) + Config.scaled(4, uiScale)
 
             WlrLayershell.namespace: "settingsscreen"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -470,6 +477,7 @@ Scope {
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 0
                                 nightLight: root.nightLight
+                                quakeConsole: root.quakeConsole
                                 uiScaleSetting: root.uiScaleSetting
                             }
 

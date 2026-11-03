@@ -15,6 +15,9 @@ Scope {
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
+    // EdgeGaps.qml: lines this up with the bar's right end.
+    property var edgeGaps: null
+
     // Right-click on Bar.qml's notification button toggles this - true
     // mutes POPUPS specifically (see onNotification below), history
     // keeps recording regardless, same as how a real "do not disturb"
@@ -146,7 +149,7 @@ Scope {
         // so margins.top is measured from the true screen edge instead -
         // 10 to roughly land where the bar's own top edge would be,
         // rather than flush against the very corner.
-        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, toastWindow.uiScale); right: Config.scaled(10, toastWindow.uiScale) }
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, toastWindow.uiScale); right: root.edgeGaps ? root.edgeGaps.right : 10 }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
 
         implicitWidth: Config.scaled(380, toastWindow.uiScale)
@@ -372,7 +375,7 @@ Scope {
 
         // See the toast PanelWindow above for why margins.top/
         // exclusiveZone differ between the two ignoresBarPadding branches.
-        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, centerWindow.uiScale); right: Config.scaled(10, centerWindow.uiScale) }
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, centerWindow.uiScale); right: root.edgeGaps ? root.edgeGaps.right : 10 }
         anchors { top: true; right: true }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.centerOpen

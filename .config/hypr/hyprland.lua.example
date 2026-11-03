@@ -210,6 +210,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:dashboard"), { description = "Dashboard" })
     hl.bind(mainMod .. " + M", hl.dsp.global("quickshell:settingsscreen"), { description = "Settings" })
     hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"), { description = "Screenshot" })
+    hl.bind(mainMod .. " + grave", hl.dsp.global("quickshell:quakeconsole"), { description = "Quake console" })
 
     hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }), { description = "Go to workspace 1" })
     hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }), { description = "Go to workspace 2" })

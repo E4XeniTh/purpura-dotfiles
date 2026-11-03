@@ -8,5 +8,6 @@ if status is-interactive
 end
 
 function fish_greeting
-    fastfetch
+    # The shell's Quake console starts straight at a prompt.
+    set -q PURPURA_QUAKE_CONSOLE; or fastfetch
 end

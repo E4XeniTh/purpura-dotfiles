@@ -41,6 +41,11 @@ Scope {
     property var dashboard: null
     property var notification: null
     property var updater: null
+    property var quakeConsole: null
+
+    // EdgeGaps.qml: Hyprland's edge padding, which the bar keeps to so that
+    // its ends line up with windows.
+    property var edgeGaps: null
 
     // Shell > Bar settings (ShellSettings.qml) - watched directly rather
     // than routed through Dashboard.qml's object tree, same convention
@@ -109,6 +114,10 @@ Scope {
     property bool activeIsFullscreen: false
     property string fullscreenMonitorName: ""
 
+    // Tells the Quake console to close, as it can't show without the bar.
+    readonly property bool hiddenOnPrimary: root.locked || root.powerMenuOpen
+        || (root.activeIsFullscreen && root.fullscreenMonitorName === root.effectivePrimaryName)
+
     Connections {
         target: Hyprland
         function onRawEvent(event) {
@@ -170,17 +179,58 @@ Scope {
                 right: true
             }
             margins {
-                top: Config.scaled(10, bar.uiScale)
-                left: Config.scaled(10, bar.uiScale)
-                right: Config.scaled(10, bar.uiScale)
+                top: root.edgeGaps ? root.edgeGaps.top : 10
+                left: root.edgeGaps ? root.edgeGaps.left : 10
+                right: root.edgeGaps ? root.edgeGaps.right : 10
             }
-            implicitHeight: Config.scaled(Config.barheight, bar.uiScale)
+            readonly property int barHeight: Config.scaled(Config.barheight, bar.uiScale)
+
+            // Takes the Quake console's whole size at once while any of it
+            // shows, rather than resizing the surface on every animation
+            // frame. Only what's drawn takes clicks, and the space reserved
+            // is always just the bar's, so windows don't move.
+            implicitHeight: bar.barHeight + (root.quakeConsole && root.quakeConsole.active ? root.quakeConsole.consoleHeight : 0)
+            exclusiveZone: bar.barHeight
+            mask: Region {
+                item: barBody
+                Region { item: quakeBody }
+            }
+
             // Transparent window; the visible bar is the Rectangle below.
             // This lets us draw a border without fighting the window's
             // own background compositing.
             color: "transparent"
+
+            // The bar's part of the Quake console: the space the terminal
+            // goes in (see QuakeConsole.qml), growing out from under the bar.
+            // The bar's own bottom border is the separator on top of it, so
+            // this border's top edge is left clipped off.
+            Item {
+                id: quakeBody
+
+                readonly property var quake: root.quakeConsole
+
+                visible: !!quake && quake.expansion > 0
+                x: quake ? quake.consoleOffset : 0
+                y: bar.barHeight
+                width: quake ? quake.consoleWidth : 0
+                height: quake ? quake.consoleHeight * quake.expansion : 0
+                clip: true
+
+                Rectangle {
+                    y: -border.width
+                    width: parent.width
+                    height: parent.height + border.width
+                    color: Config.fillcolor
+                    border.width: Config.scaled(2, bar.uiScale)
+                    border.color: Config.fgcolor
+                }
+            }
+
             Rectangle {
-                anchors.fill: parent
+                id: barBody
+                width: parent.width
+                height: bar.barHeight
                 color: Config.fillcolor
                 radius: 0
                 border.width: Config.scaled(2, bar.uiScale)

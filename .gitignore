@@ -17,6 +17,7 @@
 .config/quickshell/peripheralsettings.json
 .config/quickshell/updatersettings.json
 .config/quickshell/nightlightsettings.json
+.config/quickshell/quakesettings.json
 .config/quickshell/uiscalesettings.json
 .config/quickshell/shortcuts.json
 .config/hypr/shortcuts.lua

@@ -8,6 +8,7 @@ Scope {
   // Settings > Shell's global UI Scale - every component below that sizes
   // itself gets its value as shellScale.
   UiScale { id: uiScaleSetting }
+  EdgeGaps { id: edgeGaps }
 
   PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
   LockScreen { id: lockScreen; dashboard: dashboard; shellScale: uiScaleSetting.value }
@@ -15,6 +16,8 @@ Scope {
     id: settingsScreen
     dashboard: dashboard
     nightLight: nightLight
+    quakeConsole: quakeConsole
+    edgeGaps: edgeGaps
     uiScaleSetting: uiScaleSetting
     shellScale: uiScaleSetting.value
   }
@@ -25,12 +28,23 @@ Scope {
     settingsScreen: settingsScreen
     shellScale: uiScaleSetting.value
   }
-  Notification { id: notification; updater: updater; shellScale: uiScaleSetting.value }
-  Updater { id: updater; notification: notification; shellScale: uiScaleSetting.value }
-  Clipboard { id: clipboard; shellScale: uiScaleSetting.value }
+  Notification { id: notification; updater: updater; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
+  Updater { id: updater; notification: notification; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
+  Clipboard { id: clipboard; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
   Screenshot { id: screenshot; shellScale: uiScaleSetting.value }
 
+  QuakeConsole {
+    id: quakeConsole
+    edgeGaps: edgeGaps
+    screenName: mainBar.effectivePrimaryName
+    barHidden: mainBar.hiddenOnPrimary
+    shellScale: uiScaleSetting.value
+  }
+
   Bar {
+    id: mainBar
+    quakeConsole: quakeConsole
+    edgeGaps: edgeGaps
     locked: lockScreen.locked
     powerMenuOpen: powerMenu.open
     dashboard: dashboard

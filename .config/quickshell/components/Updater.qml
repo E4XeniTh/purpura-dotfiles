@@ -29,6 +29,9 @@ Scope {
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
+    // EdgeGaps.qml: lines this up with the bar's right end.
+    property var edgeGaps: null
+
     // Cross-wired from shell.qml, same as Dashboard.qml/SettingsScreen.qml's
     // own mutual-exclusivity wiring.
     property var notification: null
@@ -347,7 +350,7 @@ Scope {
         // whichever screen the compositor put this window on.
         readonly property real uiScale: Config.uiScale(dropdownWindow.screen, root.shellScale)
 
-        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, dropdownWindow.uiScale); right: Config.scaled(10, dropdownWindow.uiScale) }
+        margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, dropdownWindow.uiScale); right: root.edgeGaps ? root.edgeGaps.right : 10 }
         anchors { top: true; right: true }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.dropdownOpen
