@@ -8,10 +8,9 @@ import "../../../Config.js" as Config
 // in its height, one rectangle per key. Clicking a key opens a panel listing
 // its binds, where new ones are added and existing ones removed.
 //
-// A key's border shows its state, across all modifiers: fillcolor (the
-// shell's background color) when unused, fgcolor when bound, fgcolorlight
-// when one of its binds has a description, which also shows in a hint while
-// the key is hovered.
+// A key's border shows its state, across all modifiers: fgcolordark when
+// unused, fgcolor when bound, fgcolorlight when one of its binds has a
+// description, which also shows in a hint while the key is hovered.
 //
 // The bound keys come from `hyprctl binds -j`, so binds written by hand in
 // hyprland.lua show up too. What's changed here is saved to shortcuts.json
@@ -537,7 +536,7 @@ Item {
 
                 color: keyMouse.containsMouse || keyRect.selected ? Config.fgcolorhover : Config.fillcolor
                 border.width: Config.scaled(2, root.uiScale)
-                border.color: keyRect.described ? Config.fgcolorlight : keyRect.bound ? Config.fgcolor : Config.fillcolor
+                border.color: keyRect.described ? Config.fgcolorlight : keyRect.bound ? Config.fgcolor : Config.fgcolordark
 
                 Text {
                     anchors {
