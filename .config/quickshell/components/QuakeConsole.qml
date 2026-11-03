@@ -16,17 +16,24 @@ import "../Config.js" as Config
 // a surface in when it maps: it stays up whenever the bar does, with nothing
 // drawn and no clicks taken while the console is closed.
 //
+// kitty's surface can't be clipped to the panel either, so it's only up while
+// the panel covers all the text on it: it appears as soon as the growing panel
+// reaches the last line of text, and goes just before the shrinking panel does.
+// A full screen of text therefore can't show until the panel is fully open. The
+// layer rule for "quakeconsole" in hyprland.lua turns off Hyprland's fades on
+// it, which would otherwise leave its text fading outside the shrinking panel.
+//
 // Wayland can't embed another program's surface, so the terminal is really a
 // `kitten panel`, kitty's own layer-shell surface, placed exactly over the
-// bar's new area with a transparent background so the bar's colour shows
-// through. It's on the overlay layer because the bar is on top: a surface
-// above the bar keeps its text at full brightness.
+// panel with a transparent background so the panel's colour shows through.
+// It's on the overlay layer because the panel is on top: a surface above the
+// panel keeps its text at full brightness.
 //
-// kitty starts the first time the console finishes opening. After that,
-// closing only hides it, through kitty's remote control socket, so whatever's
-// in it stays. It's a single Process, and a shell reload stops it, so there's
-// only ever one. Should it end on its own (`exit`, a crash), the bar closes
-// the same way as when closed by hand, and the next open starts a new one.
+// kitty starts the first time the console opens. After that, closing only
+// hides it, through kitty's remote control socket, so whatever's in it stays.
+// It's a single Process, and a shell reload stops it, so there's only ever one.
+// Should it end on its own (`exit`, a crash), the panel closes the same way as
+// when closed by hand, and the next open starts a new one.
 //
 // While the console is closed, a hidden kitty with nothing running in its
 // foreground gets stopped once the autokill delay has passed. One that's
@@ -185,18 +192,20 @@ Scope {
     // ---------------- opening and closing ----------------
     // Whether the console is open or on its way there.
     property bool open: false
-    // How far the bar has grown, from 0 to 1.
+    // How far the panel has grown, from 0 to 1.
     property real expansion: 0
+    readonly property int panelHeight: Math.round(root.consoleHeight * root.expansion)
     // Whether kitty's surface is meant to be up.
     property bool terminalShown: false
 
     readonly property int animationMs: 300
-    // Hyprland's fade on a closing layer surface (fadeLayersOut in
-    // hyprland.lua), which plays out before the panel starts closing, or
-    // kitty's text would be left hanging outside it.
-    readonly property int surfaceFadeMs: 150
     // kitty's surface name, which Hyprland reports when it goes away.
     readonly property string terminalNamespace: "quakeconsole"
+    // Roughly how long kitty takes to go after being asked, between kitten
+    // starting up and kitty getting to it. It's asked this much ahead of the
+    // shrinking panel, as going early doesn't show but going late does.
+    readonly property int hideLatencyMs: 30
+    readonly property real hideLeadHeight: root.consoleHeight * root.hideLatencyMs / root.animationMs
 
     function toggle() {
         if (root.open) root.closeConsole()
@@ -207,26 +216,30 @@ Scope {
         if (root.barHidden || !root.screen) return
         root.open = true
         hideTimer.stop()
-        fadeTimer.stop()
+        if (!terminal.running) {
+            // Nothing's on a new kitty yet that could get ahead of the panel.
+            root.terminalShown = true
+            root.startTerminal()
+        } else if (!root.terminalShown) {
+            root.measureText()
+        }
         root.animateTo(1)
     }
 
+    // The panel doesn't move until textMeasured() has said what kitty needs.
     function closeConsole() {
+        if (!root.open) return
         root.open = false
-        if (root.terminalShown) {
-            root.terminalShown = false
-            root.control(["resize-os-window", "--match=all", "--action=hide"])
-            hideTimer.restart()
-        } else {
-            root.animateTo(0)
-        }
+        expandAnimation.stop()
+        if (root.terminalShown) root.measureText()
+        else root.animateTo(0)
     }
 
     function animateTo(value) {
         expandAnimation.stop()
         const distance = Math.abs(value - root.expansion)
         if (distance === 0) {
-            root.expansionSettled()
+            root.updateTerminal()
             return
         }
         expandAnimation.to = value
@@ -234,53 +247,124 @@ Scope {
         expandAnimation.start()
     }
 
-    function expansionSettled() {
-        if (!root.open || root.terminalShown) return
-        root.terminalShown = true
-        if (terminal.running) {
-            root.applyGeometry()
-            root.applyFontSize()
-            root.control(["resize-os-window", "--match=all", "--action=show"])
-        } else {
-            root.startTerminal()
+    function panelAtText() {
+        return root.panelHeight - root.hideLeadHeight <= root.requiredHeight
+    }
+
+    function updateTerminal() {
+        if (root.open) {
+            if (!root.terminalShown && root.panelHeight >= root.requiredHeight) root.showTerminal()
+        } else if (root.terminalShown && root.panelAtText()) {
+            root.hideTerminal()
         }
     }
+
+    function showTerminal() {
+        root.terminalShown = true
+        root.applyGeometry()
+        root.applyFontSize()
+        root.control(["resize-os-window", "--match=all", "--action=show"])
+    }
+
+    function hideTerminal() {
+        root.terminalShown = false
+        root.control(["resize-os-window", "--match=all", "--action=hide"])
+    }
+
+    function textMeasured() {
+        measureTimer.stop()
+        if (root.open) {
+            root.updateTerminal()
+        } else if (root.terminalShown && root.panelAtText()) {
+            // The text already reaches the panel's edge, so the panel waits.
+            root.hideTerminal()
+            hideTimer.restart()
+        } else {
+            root.animateTo(0)
+        }
+    }
+
+    onExpansionChanged: root.updateTerminal()
 
     NumberAnimation {
         id: expandAnimation
         target: root
         property: "expansion"
         easing.type: Easing.Linear
-        onFinished: root.expansionSettled()
+        onFinished: root.updateTerminal()
     }
 
-    // The fade starts when kitty's surface actually goes, which takes a moment
-    // after asking: kitten has to start up and kitty has to get to it.
     Connections {
         target: Hyprland
         function onRawEvent(event) {
             if (event.name === "closelayer" && event.data === root.terminalNamespace && hideTimer.running) {
                 hideTimer.stop()
-                fadeTimer.restart()
+                root.animateTo(0)
             }
         }
     }
 
-    // While this runs, kitty's been asked to hide. Should Hyprland never say
-    // it has, the panel closes anyway.
+    // While this runs, the panel is waiting for kitty to go. Should Hyprland
+    // never say it has, the panel closes anyway.
     Timer {
         id: hideTimer
         interval: 500
         onTriggered: root.animateTo(0)
     }
 
-    Timer {
-        id: fadeTimer
-        interval: root.surfaceFadeMs
-        onTriggered: root.animateTo(0)
+    // The panel's gone with the bar, so kitty can't stay for it.
+    onBarHiddenChanged: {
+        if (!root.barHidden || !root.open) return
+        root.open = false
+        if (root.terminalShown) root.hideTerminal()
+        root.animateTo(0)
     }
 
-    onBarHiddenChanged: if (root.barHidden && root.open) root.closeConsole()
+    // ---------------- how much of the panel kitty's text needs ----------------
+    // In the panel's pixels. -1 until it's known, which counts as all of it.
+    property int textHeight: -1
+    readonly property int requiredHeight: root.textHeight < 0 ? root.consoleHeight : root.textHeight
+
+    function measureText() {
+        root.textHeight = -1
+        measureTimer.restart()
+        measureProcess.running = true
+    }
+
+    // With wrap markers, every line of the screen ends in \r, even a blank one.
+    function textHeightFrom(text) {
+        const lines = text.split("\r")
+        const lineCount = lines.length - 1
+        if (lineCount < 1) return -1
+        let last = lineCount - 1
+        while (last >= 0 && lines[last].trim() === "") last--
+        // One line extra, as kitty centres its grid when it doesn't quite fit.
+        const covered = Math.min(lineCount, last + 2)
+        return Math.min(root.consoleHeight,
+            root.terminalPadding + Math.ceil(root.terminalGeometry.height * covered / lineCount))
+    }
+
+    Process {
+        id: measureProcess
+        // The window showing in its active tab. Left to itself kitty would go by
+        // which of its windows has focus, which a hidden one doesn't.
+        command: ["kitten", "@", "--to", "unix:" + root.socket, "get-text",
+            "--match=state:active and state:parent_active", "--add-wrap-markers"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.textHeight = root.textHeightFrom(text)
+                root.textMeasured()
+            }
+        }
+    }
+
+    // A kitty that doesn't answer in time shouldn't hold the panel up.
+    Timer {
+        id: measureTimer
+        interval: 150
+        onTriggered: root.textMeasured()
+    }
 
     // ---------------- the terminal ----------------
     // A new name for every kitty, as it won't start on a socket file a crashed
@@ -329,11 +413,9 @@ Scope {
             root.terminalShown = false
             root.controlQueue = []
             root.controlRetries = 0
-            // Its surface is fading out by now, the same as after hiding it.
-            if (root.open) {
-                root.open = false
-                fadeTimer.restart()
-            }
+            hideTimer.stop()
+            root.open = false
+            root.animateTo(0)
         }
     }
 

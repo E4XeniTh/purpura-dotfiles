@@ -354,6 +354,13 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
         dim_around      = 1
     })
 
+    -- Purpura Quickshell Quake console's terminal: no fades, as it comes and
+    -- goes with the panel around it (see QuakeConsole.qml)
+    hl.layer_rule({
+        match   = { namespace = "quakeconsole" },
+        no_anim = true,
+    })
+
     --#######################################################################################
     --## ANIMATIONS                                                                         #
     --##                                                                                    #
