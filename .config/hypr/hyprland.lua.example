@@ -187,8 +187,8 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     --#######################################################################################
 
 
-    hl.bind("CTRL + Page_Up", hl.dsp.exec_cmd("xdotool key --window discord --clearmodifiers ctrl+Page_Up"), { description = "Discord: toggle voice mode" })
-    hl.bind("CTRL + Page_Down", hl.dsp.exec_cmd("xdotool key --window discord --clearmodifiers ctrl+Page_Down"), { description = "Discord: toggle deafen" })
+    hl.bind("CTRL + Page_Up", hl.dsp.global("com.discordapp.Discord:discord-toggle-voice-mode"), { description = "Discord: toggle voice mode" })
+    hl.bind("CTRL + Page_Down", hl.dsp.global("com.discordapp.Discord:discord-toggle-deafen"), { description = "Discord: toggle deafen" })
     hl.bind("menu", hl.dsp.exec_cmd("xdotool search --class discord mousedown 9"), { description = "Discord push-to-talk" })
     hl.bind("menu", hl.dsp.exec_cmd("xdotool search --class discord mouseup 9"), { release = true, description = "Discord push-to-talk" })
     hl.bind("mouse:276", hl.dsp.exec_cmd("xdotool search --class discord mousedown 9"), { non_consuming = true, description = "Discord push-to-talk" })

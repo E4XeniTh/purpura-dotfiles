@@ -198,7 +198,7 @@ package lists are the exact set):
 - `dolphin`
 - `rofi`
 - Waterfox (Flatpak)
-- `xdotool` - the Discord push-to-talk / tab binds
+- `xdotool` - the Discord push-to-talk binds
 - `solaar` — only if you have Logitech Unifying peripherals
 
 **Bundled personal configs** (only matter if you use them):
