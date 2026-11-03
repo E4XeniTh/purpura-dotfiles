@@ -58,8 +58,11 @@ Item {
             anchors {
                 left: parent.left
                 leftMargin: Config.scaled(8, root.uiScale)
+                right: arrow.left
+                rightMargin: Config.scaled(8, root.uiScale)
                 verticalCenter: parent.verticalCenter
             }
+            elide: Text.ElideRight
             text: root.options[root.currentIndex] || ""
             color: Config.fgcolor
             font.family: Config.fontfamily
@@ -133,7 +136,7 @@ Item {
             y: list.y
             width: root.width
             height: root.listHeight
-            color: "#ee000000"
+            color: "#000000"
         }
 
         Column {
@@ -163,8 +166,11 @@ Item {
                         anchors {
                             left: parent.left
                             leftMargin: Config.scaled(8, root.uiScale)
+                            right: parent.right
+                            rightMargin: Config.scaled(8, root.uiScale)
                             verticalCenter: parent.verticalCenter
                         }
+                        elide: Text.ElideRight
                         text: option.modelData
                         color: option.border.color
                         font.family: Config.fontfamily

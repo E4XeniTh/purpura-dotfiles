@@ -13,7 +13,9 @@ import "../../../Config.js" as Config
 //
 // A key's border shows its state, across all modifiers: fgcolordark when
 // unused, fgcolor when bound, fgcolorlight when one of its binds has a
-// description, which also shows in a hint while the key is hovered.
+// description, which also shows in a hint while the key is hovered. Shift,
+// Ctrl, Alt and AltGr can't be bound, so they ignore the mouse and are hatched
+// like Project Mortar's OFFLINE sectors, its own look for "can't be picked".
 //
 // The bound keys come from `hyprctl binds -j`, so binds written by hand in
 // hyprland.lua show up too. What's changed here is saved to shortcuts.json
@@ -36,6 +38,10 @@ import "../../../Config.js" as Config
 // hl.bind lines. Leaving it unchanged leaves the bind alone, options like
 // `locked` included; changing it or the combo makes it one of this tab's binds,
 // which don't carry those options.
+//
+// The Global shortcuts action offers what apps have registered with Hyprland,
+// from `hyprctl globalshortcuts -j`, so an app only shows up while it's running.
+// The shell's own are left out, as they already have actions of their own.
 Item {
     id: root
 
@@ -62,6 +68,7 @@ Item {
     // symbols here. Sizes and positions are in key units.
     readonly property real keyboardUnitsWide: 22.5
     readonly property real keyboardUnitsTall: 6.25
+    readonly property var lockedKeySyms: ["Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "ISO_Level3_Shift"]
 
     readonly property var keys: {
         const out = []
@@ -88,7 +95,7 @@ Item {
         row(0, 2.25, [["Tab", "Tab", 1.75], "Q", "W", "E", "R", "T", "Z", "U", "I", "O", "P", ["Š", "scaron"], ["Đ", "dstroke"], ["Enter", "Return", 1.25, 2]])
         row(0, 3.25, [["Caps", "Caps_Lock", 1.75], "A", "S", "D", "F", "G", "H", "J", "K", "L", ["Č", "ccaron"], ["Ć", "cacute"], ["Ž", "zcaron"]])
         row(0, 4.25, [["Shift", "Shift_L", 1.25], ["<", "less"], "Y", "X", "C", "V", "B", "N", "M", [",", "comma"], [".", "period"], ["-", "minus"], ["Shift", "Shift_R", 2.75]])
-        row(0, 5.25, [["Ctrl", "Control_L", 1.25], ["Super", "Super_L", 1.25], ["Alt", "Alt_L", 1.25], ["Space", "space", 6.25], ["AltGr", "ISO_Level3_Shift", 1.25], ["Super", "Super_R", 1.25], ["Menu", "Menu", 1.25], ["Ctrl", "Control_R", 1.25]])
+        row(0, 5.25, [["Ctrl", "Control_L", 1.25], ["Super", "Super_L", 1.25], ["Alt", "Alt_L", 1.25], ["Space", "space", 6.25], ["AltGr", "ISO_Level3_Shift", 1.25], 1.25, ["Menu", "Menu", 1.25], ["Ctrl", "Control_R", 1.25]])
 
         // Navigation block
         row(15.25, 0, [["Print", "Print"], ["Scroll", "Scroll_Lock"], ["Pause", "Pause"]])
@@ -122,7 +129,8 @@ Item {
         { label: "Notifications", lua: "hl.dsp.global(\"quickshell:notifications\")" },
         { label: "Dashboard", lua: "hl.dsp.global(\"quickshell:dashboard\")" },
         { label: "Settings", lua: "hl.dsp.global(\"quickshell:settingsscreen\")" },
-        { label: "Screenshot", lua: "hl.dsp.global(\"quickshell:screenshot\")" }
+        { label: "Screenshot", lua: "hl.dsp.global(\"quickshell:screenshot\")" },
+        { label: "Global shortcuts", global: true }
     ]
     readonly property var actionLabels: root.actions.map(a => a.label)
     // The shell's workspaces stop at 5 (see WorkspaceRow.qml).
@@ -135,6 +143,8 @@ Item {
     property var store: ({ binds: [], removed: [], descriptions: {} })
     // Parsed `hyprctl binds -j`.
     property var liveBinds: []
+    // Parsed `hyprctl globalshortcuts -j`: [{ name: "app:id", description }].
+    property var liveGlobals: []
     // hyprland.lua's bind actions as Lua text, by comboKey.
     property var sourceActions: ({})
     property string applyError: ""
@@ -281,6 +291,16 @@ Item {
     property var formModifiers: ["SUPER"]
     property int formAction: 0
     property int formWorkspace: 0
+    // The global shortcut picked or opened with. Empty means the list's first.
+    property string formGlobal: ""
+    // Includes the form's own, whose app may not be running right now.
+    readonly property var globalNames: {
+        const names = root.liveGlobals.map(g => g.name).filter(n => n && !n.startsWith("quickshell:"))
+        if (root.formGlobal.length > 0 && names.indexOf(root.formGlobal) === -1) names.push(root.formGlobal)
+        return names.sort()
+    }
+    readonly property int formGlobalIndex: Math.max(0, root.globalNames.indexOf(root.formGlobal))
+    readonly property string formPickedGlobal: root.globalNames[root.formGlobalIndex] || ""
     readonly property var formActionEntry: root.actions[root.formAction]
     readonly property string formCombo: root.selectedKey ? root.modifierNames
         .filter(m => root.formModifiers.indexOf(m) !== -1)
@@ -290,19 +310,22 @@ Item {
     readonly property var formConflict: root.selectedBinds.find(b =>
         root.comboKey(b.combo) === root.comboKey(root.formCombo) && !root.isEditing(b)) || null
     readonly property bool formCommandEmpty: !!root.formActionEntry.command && commandInput.text.trim().length === 0
+    readonly property bool formGlobalEmpty: !!root.formActionEntry.global && root.formPickedGlobal.length === 0
     // What the form opened with, to tell whether the action was changed.
     property int formOriginalAction: 0
     property int formOriginalWorkspace: 0
+    property string formOriginalGlobal: ""
     property string formOriginalCommand: ""
     // An action the form has no entry for, shown as its Lua text.
     property string formRawAction: ""
     readonly property bool formActionUnchanged: root.formAction === root.formOriginalAction
         && root.formWorkspace === root.formOriginalWorkspace
+        && (!root.formActionEntry.global || root.formPickedGlobal === root.formOriginalGlobal)
         && (!root.formActionEntry.command || commandInput.text.trim() === root.formOriginalCommand)
     readonly property bool formEditingUnknownAction: !!root.editingBind && !root.editingBind.own
     readonly property bool formCanKeepAction: root.formEditingUnknownAction && root.isEditing({ combo: root.formCombo })
     readonly property bool formKeepsAction: root.formCanKeepAction && root.formActionUnchanged
-    readonly property bool formValid: !root.formCommandEmpty || root.formKeepsAction
+    readonly property bool formValid: (!root.formCommandEmpty && !root.formGlobalEmpty) || root.formKeepsAction
 
     function isEditing(bind) {
         return !!root.editingBind && root.comboKey(bind.combo) === root.comboKey(root.editingBind.combo)
@@ -317,8 +340,10 @@ Item {
         root.formModifiers = ["SUPER"]
         root.formAction = 0
         root.formWorkspace = 0
+        root.formGlobal = ""
         root.formOriginalAction = 0
         root.formOriginalWorkspace = 0
+        root.formOriginalGlobal = ""
         root.formOriginalCommand = ""
         root.formRawAction = ""
         commandInput.text = ""
@@ -345,6 +370,7 @@ Item {
         if (lua) root.fillAction(lua)
         root.formOriginalAction = root.formAction
         root.formOriginalWorkspace = root.formWorkspace
+        root.formOriginalGlobal = root.formGlobal
         root.formOriginalCommand = commandInput.text.trim()
 
         root.editingBind = bind
@@ -376,6 +402,12 @@ Item {
                 return
             }
         }
+        const shortcut = lua.match(/^hl\.dsp\.global\("([^"]+)"\)$/)
+        if (shortcut) {
+            root.formAction = root.actions.findIndex(a => a.global)
+            root.formGlobal = shortcut[1]
+            return
+        }
         root.formRawAction = lua
         commandInput.text = lua
     }
@@ -397,6 +429,15 @@ Item {
         root.formModifiers = root.formModifiers.indexOf(name) === -1
             ? root.formModifiers.concat([name])
             : root.formModifiers.filter(m => m !== name)
+    }
+
+    // "com.discordapp.Discord:toggle-mute" reads as "Discord - " and then the
+    // description the app registered, or failing that its id for the shortcut.
+    function globalLabel(name) {
+        const colon = name.indexOf(":")
+        const app = colon > 0 ? name.slice(0, colon).split(".").pop() + " - " : ""
+        const live = root.liveGlobals.find(g => g.name === name)
+        return app + ((live && live.description) || name.slice(colon + 1))
     }
 
     // Double-quoted JSON strings are valid Lua strings once control
@@ -427,6 +468,9 @@ Item {
             const workspace = root.workspaceLabels[root.formWorkspace]
             label = entry.label + " " + workspace
             lua = entry.workspace.replace("%1", workspace)
+        } else if (entry.global) {
+            label = root.globalLabel(root.formPickedGlobal)
+            lua = "hl.dsp.global(" + root.luaString(root.formPickedGlobal) + ")"
         }
         root.addBind(root.formCombo, root.selectedKey.sym, label, lua, description, root.editingBind)
         root.closeKey()
@@ -500,6 +544,12 @@ Item {
         bindsProcess.running = true
         sourceProcess.running = false
         sourceProcess.running = true
+        root.refreshGlobals()
+    }
+
+    function refreshGlobals() {
+        globalsProcess.running = false
+        globalsProcess.running = true
     }
 
     onActiveChanged: {
@@ -536,6 +586,21 @@ Item {
                     root.liveBinds = JSON.parse(text)
                 } catch (e) {
                     root.liveBinds = []
+                }
+            }
+        }
+    }
+
+    Process {
+        id: globalsProcess
+        command: ["hyprctl", "globalshortcuts", "-j"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    root.liveGlobals = JSON.parse(text)
+                } catch (e) {
+                    root.liveGlobals = []
                 }
             }
         }
@@ -593,7 +658,7 @@ Item {
         signal clicked()
 
         uiScale: root.uiScale
-        implicitWidth: button.icon.length > 0 ? implicitHeight : buttonLabel.implicitWidth + Config.scaled(20, root.uiScale)
+        implicitWidth: button.icon.length > 0 ? implicitHeight : Math.ceil(buttonLabel.implicitWidth) + Config.scaled(20, root.uiScale)
         implicitHeight: Config.scaled(32, root.uiScale)
         color: buttonMouse.containsMouse && button.enabled ? Config.fgcolorhover : Config.fillcolor
         border.color: button.lit ? Config.fgcolorlight : Config.fgcolor
@@ -706,6 +771,46 @@ Item {
         }
     }
 
+    // A locked key's hatching and dashed border, at Project Mortar's OFFLINE
+    // sector proportions: lines 2.25 thick, 7 apart, dashes of 10 with gaps of 6.
+    Component {
+        id: lockedKeyShading
+
+        Canvas {
+            id: shading
+
+            readonly property color ink: Config.fgcolordark
+
+            onPaint: {
+                const ctx = getContext("2d")
+                const scale = root.uiScale
+                const inset = Config.scaled(2, scale) / 2
+                ctx.reset()
+                ctx.strokeStyle = shading.ink
+
+                ctx.save()
+                ctx.beginPath()
+                ctx.rect(0, 0, width, height)
+                ctx.clip()
+                ctx.globalAlpha = 0.8
+                ctx.lineWidth = 2.25 * scale
+                ctx.beginPath()
+                const step = 7 * scale * Math.SQRT2
+                for (let x = -height; x < width; x += step) {
+                    ctx.moveTo(x, height)
+                    ctx.lineTo(x + height, 0)
+                }
+                ctx.stroke()
+                ctx.restore()
+
+                ctx.lineWidth = Config.scaled(2, scale)
+                // Counted in line widths, so 10 and 6 at a 2px border.
+                ctx.setLineDash([5, 3])
+                ctx.strokeRect(inset, inset, width - inset * 2, height - inset * 2)
+            }
+        }
+    }
+
     // ---------------- keyboard ----------------
     Item {
         id: keyboard
@@ -731,6 +836,7 @@ Item {
                 readonly property bool bound: !!root.boundKeys[keyRect.modelData.sym.toLowerCase()]
                 readonly property bool described: !!root.describedKeys[keyRect.modelData.sym.toLowerCase()]
                 readonly property bool selected: root.selectedKey === keyRect.modelData
+                readonly property bool locked: root.lockedKeySyms.indexOf(keyRect.modelData.sym) !== -1
 
                 x: keyRect.modelData.x * keyboard.unitWidth
                 y: keyRect.modelData.y * keyboard.unitHeight
@@ -738,10 +844,30 @@ Item {
                 height: keyRect.modelData.h * keyboard.unitHeight - keyboard.gap
 
                 color: keyMouse.containsMouse || keyRect.selected ? Config.fgcolorhover : Config.fillcolor
-                border.width: Config.scaled(2, root.uiScale)
+                border.width: keyRect.locked ? 0 : Config.scaled(2, root.uiScale)
                 border.color: keyRect.described ? Config.fgcolorlight : keyRect.bound ? Config.fgcolor : Config.fgcolordark
 
+                // On whole pixels: a Canvas blurs off them, where a Rectangle snaps.
+                Loader {
+                    x: Math.round(keyRect.x) - keyRect.x
+                    y: Math.round(keyRect.y) - keyRect.y
+                    width: Math.round(keyRect.x + keyRect.width) - Math.round(keyRect.x)
+                    height: Math.round(keyRect.y + keyRect.height) - Math.round(keyRect.y)
+                    active: keyRect.locked
+                    sourceComponent: lockedKeyShading
+                }
+
+                // Keeps the label readable over the hatching.
+                Rectangle {
+                    anchors.centerIn: parent
+                    visible: keyRect.locked
+                    width: keyLabel.contentWidth + Config.scaled(8, root.uiScale)
+                    height: keyLabel.contentHeight + Config.scaled(4, root.uiScale)
+                    color: "#000000"
+                }
+
                 Text {
+                    id: keyLabel
                     anchors {
                         fill: parent
                         margins: Config.scaled(4, root.uiScale)
@@ -750,7 +876,7 @@ Item {
                     verticalAlignment: Text.AlignVCenter
                     elide: Text.ElideRight
                     text: keyRect.modelData.label
-                    color: keyRect.described ? Config.fgcolorlight : Config.fgcolor
+                    color: keyRect.locked ? Config.fgcolordark : keyRect.described ? Config.fgcolorlight : Config.fgcolor
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(13, root.uiScale)
                     font.bold: true
@@ -759,6 +885,7 @@ Item {
                 MouseArea {
                     id: keyMouse
                     anchors.fill: parent
+                    enabled: !keyRect.locked
                     hoverEnabled: true
                     onClicked: root.openKey(keyRect.modelData)
                     onContainsMouseChanged: {
@@ -995,6 +1122,7 @@ Item {
                         onActivated: (index) => {
                             root.formAction = index
                             open = false
+                            if (root.formActionEntry.global) root.refreshGlobals()
                             if (root.formActionEntry.command) commandInput.focusInput()
                             else panel.forceActiveFocus()
                         }
@@ -1011,6 +1139,17 @@ Item {
                             open = false
                         }
                     }
+                }
+
+                DropdownBox {
+                    visible: !!root.formActionEntry.global
+                    width: panelColumn.innerWidth
+                    uiScale: root.uiScale
+                    options: root.globalNames.length > 0
+                        ? root.globalNames.map(name => root.globalLabel(name))
+                        : ["Nothing registered - is the app running?"]
+                    currentIndex: root.formGlobalIndex
+                    onActivated: (index) => root.formGlobal = root.globalNames[index] || ""
                 }
 
                 PanelInput {
