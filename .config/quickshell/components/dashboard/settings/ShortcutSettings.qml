@@ -189,13 +189,14 @@ Item {
     }
 
     // The key under the mouse and what its hint shows, one line per described
-    // bind. The combo only matters when there's more than one to tell apart.
+    // bind.
     property var hoveredKey: null
     readonly property var hoveredHintLines: {
         if (!root.hoveredKey) return []
         const sym = root.hoveredKey.sym.toLowerCase()
-        const described = root.allBinds.filter(b => b.description && b.key.toLowerCase() === sym)
-        return described.map(b => described.length > 1 ? b.combo + ": " + b.description : b.description)
+        return root.allBinds
+            .filter(b => b.description && b.key.toLowerCase() === sym)
+            .map(b => b.combo + ": " + b.description)
     }
 
     // The key whose panel is open; null when closed.
