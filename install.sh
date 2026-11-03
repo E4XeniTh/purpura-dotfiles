@@ -4,7 +4,8 @@
 # e.g. `./install.sh --no-packages` just to switch to another color.
 set -euo pipefail
 
-REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# Physical path: it's compared against realpath results below.
+REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 # The color every themed file in the repo is written in; installed copies
 # are recolored from it.
 BASE_COLOR=9600fa
@@ -352,11 +353,13 @@ recolor_stage() {
 }
 
 # hyprland.lua is personal, so its live copy is recolored from whatever
-# color it was last given instead of being replaced.
+# color it has instead of being replaced. Read from the file itself: the
+# state file also moves on when this one was left alone or edited by hand.
 recolor_live_hyprland() {
     local live=$HOME/.config/hypr/hyprland.lua staged=$STAGE/.config/hypr/hyprland.lua previous
     [[ -f $live && ! -e $staged ]] || return 0
-    previous=$(previous_color)
+    previous=$(sed -nE 's/^[[:space:]]*active_border[^(]*\(([0-9a-fA-F]{6}).*/\1/p' "$live" | head -n 1)
+    previous=$(normalize_hex "$previous") || previous=$(previous_color)
     [[ $previous == "$COLOR" ]] && return 0
     mkdir -p -- "$(dirname -- "$staged")"
     cp -p -- "$live" "$staged"
@@ -366,12 +369,43 @@ recolor_live_hyprland() {
     fi
 }
 
+in_a_checkout() {
+    local dir=$1
+    while [[ $dir == /?* ]]; do
+        [[ -f $dir/install.sh && -f $dir/install/recolor.py ]] && return 0
+        dir=${dir%/*}
+    done
+    return 1
+}
+
+# A directory like ~/.config/hypr symlinked into some other checkout of
+# these dotfiles: writing through it would recolor that checkout. Swap the
+# link for a real copy (personal gitignored files included) to install into.
+detach_other_checkouts() {
+    local rel=$1 path=$HOME part target tmp
+    local -a parts=()
+    IFS=/ read -ra parts <<<"${rel%/*}"
+    for part in "${parts[@]}"; do
+        path+=/$part
+        [[ -L $path && -d $path ]] || continue
+        target=$(realpath -- "$path")
+        [[ $target != "$REPO" && $target != "$REPO"/* ]] && in_a_checkout "$target" || continue
+        tmp=$path.purpura-new
+        rm -rf -- "$tmp"
+        cp -a -- "$target" "$tmp"
+        rm -f -- "$path"
+        mv -- "$tmp" "$path"
+        info "${path/#$HOME/\~} linked to $target - it's a real copy now, that checkout is left as it was."
+    done
+}
+
 sync_stage() {
     local backup rel src dst added=0 updated=0 same=0 linked=0
     backup=$HOME/.config/purpura-backups/$(date +%Y%m%d-%H%M%S)
     while IFS= read -r -d '' rel; do
         src=$STAGE/$rel
         dst=$HOME/$rel
+        detach_other_checkouts "$rel"
         # e.g. ~/.config/quickshell symlinked to this checkout: writing
         # there would edit the repo itself.
         if [[ $(realpath -m -- "$dst") == "$REPO"/* ]]; then
@@ -403,7 +437,7 @@ sync_stage() {
         info "Previous versions of the updated files: ${backup/#$HOME/\~}"
     fi
     if ((linked)); then
-        warn "$linked files link into this checkout, so they were left alone - recoloring them would edit the repo itself."
+        warn "$linked files link into this checkout, so they keep their current colors - recoloring them would edit the repo itself. To recolor them, run the installer from a separate clone: it replaces those links with real copies."
     fi
 }
 
