@@ -26,4 +26,4 @@
 .config/hypr/hyprpaper.conf
 .config/hypr/hyprland.lua
 
-.claude/*
+.claude/
