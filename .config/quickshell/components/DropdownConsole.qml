@@ -532,7 +532,7 @@ Scope {
         terminal.running = false
         if (!root.autokillNotification) return
         Quickshell.execDetached(["notify-send", "-i", "clock", "Console terminated",
-            "(" + minutes + (minutes === 1 ? " minute of inactivity has passed)" : " minutes of inactivity have passed)")])
+            minutes + (minutes === 1 ? " minute of inactivity has passed" : " minutes of inactivity have passed")])
     }
 
     // At a prompt, the only foreground process is the shell itself.
