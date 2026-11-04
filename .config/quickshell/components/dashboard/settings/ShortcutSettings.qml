@@ -13,9 +13,10 @@ import "../../../Config.js" as Config
 //
 // A key's border shows its state, across all modifiers: fgcolordark when
 // unused, fgcolor when bound, fgcolorlight when one of its binds has a
-// description, which also shows in a hint while the key is hovered. Shift,
-// Ctrl, Alt and AltGr can't be bound, so they ignore the mouse and are hatched
-// like Project Mortar's OFFLINE sectors, its own look for "can't be picked".
+// description, which also shows in a hint while the key is hovered. Super,
+// Shift, Ctrl, Alt and AltGr are for holding down rather than binding, so they
+// ignore the mouse and are hatched like Project Mortar's OFFLINE sectors, its
+// own look for "can't be picked".
 //
 // The bound keys come from `hyprctl binds -j`, so binds written by hand in
 // hyprland.lua show up too. What's changed here is saved to shortcuts.json
@@ -68,7 +69,7 @@ Item {
     // symbols here. Sizes and positions are in key units.
     readonly property real keyboardUnitsWide: 22.5
     readonly property real keyboardUnitsTall: 6.25
-    readonly property var lockedKeySyms: ["Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "ISO_Level3_Shift"]
+    readonly property var lockedKeySyms: ["Super_L", "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "ISO_Level3_Shift"]
 
     readonly property var keys: {
         const out = []
