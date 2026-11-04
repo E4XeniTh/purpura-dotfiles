@@ -1378,6 +1378,42 @@ Item {
                         }
                     }
 
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Opacity:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: (root.dropdownConsole ? root.dropdownConsole.opacityPercent : 0) + "%"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+                        }
+
+                        DeviceSlider {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: root.dropdownConsole ? root.dropdownConsole.opacityPercent / 100 : 0
+                            onMoved: (newValue) => root.dropdownConsole.setOpacityPercent(newValue * 100)
+                        }
+                    }
+
                     Item {
                         Layout.preferredHeight: Config.scaled(14, root.uiScale)
                     }

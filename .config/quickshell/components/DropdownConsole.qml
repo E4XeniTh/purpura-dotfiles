@@ -68,6 +68,7 @@ Scope {
     function setWidthPercent(value) { root.update({ widthPercent: root.clamped(value, root.minWidthPercent, 100) }) }
     function setHeightPercent(value) { root.update({ heightPercent: root.clamped(value, root.minHeightPercent, 100) }) }
     function setFontSize(value) { root.update({ fontSize: root.clamped(value, root.minFontSize, root.maxFontSize) }) }
+    function setOpacityPercent(value) { root.update({ opacityPercent: root.clamped(value, 0, 100) }) }
     function setAutokillEnabled(on) { root.update({ autokill: !!on }) }
     function setAutokillMinutes(value) { root.update({ autokillMinutes: Math.max(1, Math.round(value)) }) }
     function setAutokillNotification(on) { root.update({ autokillNotification: !!on }) }
@@ -81,6 +82,15 @@ Scope {
     readonly property int maxFontSize: 24
     // In pts: one of kitty's own 2pt zoom steps under kitty.conf's 16.
     readonly property int fontSize: root.clamped(Number(root.store.fontSize) || 14, root.minFontSize, root.maxFontSize)
+
+    // How opaque the panel's background is. Only the panel's fill follows this:
+    // kitty's own background is always transparent, so the text and the border
+    // stay solid. The default is Config.fillcolor's own alpha. The type check is
+    // because 0 is a real value here, which the `||` above would turn into the
+    // default.
+    readonly property int opacityPercent: typeof root.store.opacityPercent === "number"
+        ? root.clamped(root.store.opacityPercent, 0, 100)
+        : Math.round(Qt.color(Config.fillcolor).a * 100)
 
     readonly property bool autokillEnabled: root.store.autokill !== false
     readonly property int autokillMinutes: Math.max(1, Math.round(Number(root.store.autokillMinutes)) || 30)
@@ -185,7 +195,7 @@ Scope {
                 y: -border.width
                 width: parent.width
                 height: parent.height + border.width
-                color: Config.fillcolor
+                color: Qt.alpha(Config.fillcolor, root.opacityPercent / 100)
                 border.width: root.borderWidth
                 border.color: Config.fgcolor
             }
