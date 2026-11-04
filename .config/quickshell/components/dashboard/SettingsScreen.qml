@@ -37,8 +37,8 @@ Scope {
     // NightLight.qml - handed on to the Shell tab's Night Light category.
     property var nightLight: null
 
-    // QuakeConsole.qml - handed on to the Shell tab's Quake Console category.
-    property var quakeConsole: null
+    // DropdownConsole.qml - handed on to the Shell tab's Dropdown Console category.
+    property var dropdownConsole: null
 
     // EdgeGaps.qml - the bar's top margin, for topOffset below.
     property var edgeGaps: null
@@ -477,7 +477,7 @@ Scope {
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 0
                                 nightLight: root.nightLight
-                                quakeConsole: root.quakeConsole
+                                dropdownConsole: root.dropdownConsole
                                 uiScaleSetting: root.uiScaleSetting
                             }
 

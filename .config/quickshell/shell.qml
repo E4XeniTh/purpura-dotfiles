@@ -16,7 +16,7 @@ Scope {
     id: settingsScreen
     dashboard: dashboard
     nightLight: nightLight
-    quakeConsole: quakeConsole
+    dropdownConsole: dropdownConsole
     edgeGaps: edgeGaps
     uiScaleSetting: uiScaleSetting
     shellScale: uiScaleSetting.value
@@ -33,8 +33,8 @@ Scope {
   Clipboard { id: clipboard; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
   Screenshot { id: screenshot; shellScale: uiScaleSetting.value }
 
-  QuakeConsole {
-    id: quakeConsole
+  DropdownConsole {
+    id: dropdownConsole
     edgeGaps: edgeGaps
     screenName: mainBar.effectivePrimaryName
     barHidden: mainBar.hiddenOnPrimary

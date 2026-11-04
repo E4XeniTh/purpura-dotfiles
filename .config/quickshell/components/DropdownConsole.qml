@@ -5,7 +5,7 @@ import Quickshell.Wayland
 import QtQuick
 import "../Config.js" as Config
 
-// Quake console: a panel grows downward from under the bar, linearly, and a
+// Dropdown console: a panel grows downward from under the bar, linearly, and a
 // terminal appears in the space that opens up.
 //
 // The panel is a surface of its own rather than the bar getting taller. When a
@@ -20,7 +20,7 @@ import "../Config.js" as Config
 // the panel covers all the text on it: it appears as soon as the growing panel
 // reaches the last line of text, and goes just before the shrinking panel does.
 // A full screen of text therefore can't show until the panel is fully open. The
-// layer rule for "quakeconsole" in hyprland.lua turns off Hyprland's fades on
+// layer rule for "dropdownconsole" in hyprland.lua turns off Hyprland's fades on
 // it, which would otherwise leave its text fading outside the shrinking panel.
 //
 // Wayland can't embed another program's surface, so the terminal is really a
@@ -40,8 +40,8 @@ import "../Config.js" as Config
 // foreground gets stopped once the autokill delay has passed. One that's
 // still running a command keeps being checked instead of being killed.
 //
-// Like NightLight.qml, this owns its settings file (quakesettings.json), and
-// ShellSettings.qml's Quake Console category is a view onto this object.
+// Like NightLight.qml, this owns its settings file (dropdownconsolesettings.json), and
+// ShellSettings.qml's Dropdown Console category is a view onto this object.
 Scope {
     id: root
 
@@ -89,7 +89,7 @@ Scope {
     // Not watched: this is the only writer.
     FileView {
         id: settingsFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/quakesettings.json"
+        path: Quickshell.env("HOME") + "/.config/quickshell/dropdownconsolesettings.json"
         // A fresh install has no file yet - that's just the defaults.
         printErrors: false
 
@@ -147,7 +147,7 @@ Scope {
         visible: !!root.screen && !root.barHidden
         screen: root.screen
 
-        WlrLayershell.namespace: "quakeconsolepanel"
+        WlrLayershell.namespace: "dropdownconsolepanel"
 
         // Covers all the console could take up, so that the size sliders don't
         // resize it. -1 so the margins count from the screen's edges rather
@@ -203,7 +203,7 @@ Scope {
 
     readonly property int animationMs: 300
     // kitty's surface name, which Hyprland reports when it goes away.
-    readonly property string terminalNamespace: "quakeconsole"
+    readonly property string terminalNamespace: "dropdownconsole"
     // Roughly how long kitty takes to go after being asked, between kitten
     // starting up and kitty getting to it. It's asked this much ahead of the
     // shrinking panel, as going early doesn't show but going late does.
@@ -377,12 +377,12 @@ Scope {
     function startTerminal() {
         const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
         const g = root.terminalGeometry
-        root.socket = runtimeDir + "/purpura-quake-" + Date.now() + ".sock"
+        root.socket = runtimeDir + "/purpura-dropdown-console-" + Date.now() + ".sock"
         root.appliedGeometry = root.geometryArgs()
         root.appliedFontSize = root.fontSize
         terminal.command = [
             "kitten", "panel",
-            "--app-id=quakeconsole",
+            "--app-id=dropdownconsole",
             "--edge=none",
             "--layer=overlay",
             "--focus-policy=on-demand",
@@ -405,7 +405,7 @@ Scope {
             // A prompt nobody can see would leave it hanging.
             "-o", "confirm_os_window_close=0",
             // Tells fish's greeting to skip fastfetch.
-            "-o", "env=PURPURA_QUAKE_CONSOLE=1"
+            "-o", "env=PURPURA_DROPDOWN_CONSOLE=1"
         ]
         terminal.running = true
     }
@@ -431,7 +431,7 @@ Scope {
     // the start of the command line, so it can't hit a program that merely
     // mentions the flag.
     Process {
-        command: ["pkill", "-f", "--", "^[^ ]*kitty[^ ]* .*--app-id=quakeconsole( |$)"]
+        command: ["pkill", "-f", "--", "^[^ ]*kitty[^ ]* .*--app-id=dropdownconsole( |$)"]
         running: true
     }
 
@@ -531,7 +531,7 @@ Scope {
         const minutes = root.autokillMinutes
         terminal.running = false
         if (!root.autokillNotification) return
-        Quickshell.execDetached(["notify-send", "-i", "preferences-system-time", "Console terminated",
+        Quickshell.execDetached(["notify-send", "-i", "clock", "Console terminated",
             "(" + minutes + (minutes === 1 ? " minute of inactivity has passed)" : " minutes of inactivity have passed)")])
     }
 
@@ -568,7 +568,7 @@ Scope {
 
     // ---------------- triggers ----------------
     IpcHandler {
-        target: "quakeconsole"
+        target: "dropdownconsole"
 
         function toggle(): void { root.toggle() }
         function show(): void { root.openConsole() }
@@ -576,7 +576,7 @@ Scope {
     }
 
     GlobalShortcut {
-        name: "quakeconsole"
+        name: "dropdownconsole"
         onPressed: root.toggle()
     }
 }

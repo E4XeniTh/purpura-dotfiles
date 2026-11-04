@@ -8,6 +8,6 @@ if status is-interactive
 end
 
 function fish_greeting
-    # The shell's Quake console starts straight at a prompt.
-    set -q PURPURA_QUAKE_CONSOLE; or fastfetch
+    # The shell's dropdown console starts straight at a prompt.
+    set -q PURPURA_DROPDOWN_CONSOLE; or fastfetch
 end

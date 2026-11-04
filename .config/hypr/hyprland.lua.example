@@ -187,7 +187,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     --#######################################################################################
 
 
-    -- Close Window closes the Quake console instead while that's up. It isn't a
+    -- Close Window closes the dropdown console instead while that's up. It isn't a
     -- window, so nothing else can reach it, and a program stuck in it can leave
     -- no other way out. This wraps the action rather than one bind, so any key
     -- bound to it counts, Settings > Shortcuts' included. kitty is stopped from
@@ -200,7 +200,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.dsp.window.close = function(...)
         local close = closeWindow(...)
         return function()
-            for _, layer in ipairs(hl.get_layers({ namespace = "quakeconsole" })) do
+            for _, layer in ipairs(hl.get_layers({ namespace = "dropdownconsole" })) do
                 if layer.mapped and layer.pid > 0 then
                     hl.dispatch(hl.dsp.exec_cmd("kill " .. layer.pid .. "; sleep 1; kill -9 " .. layer.pid .. " 2>/dev/null"))
                     return
@@ -233,7 +233,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + D", hl.dsp.global("quickshell:dashboard"), { description = "Dashboard" })
     hl.bind(mainMod .. " + M", hl.dsp.global("quickshell:settingsscreen"), { description = "Settings" })
     hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"), { description = "Screenshot" })
-    hl.bind(mainMod .. " + grave", hl.dsp.global("quickshell:quakeconsole"), { description = "Quake console" })
+    hl.bind(mainMod .. " + grave", hl.dsp.global("quickshell:dropdownconsole"), { description = "Dropdown console" })
 
     hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }), { description = "Go to workspace 1" })
     hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }), { description = "Go to workspace 2" })
@@ -377,10 +377,10 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
         dim_around      = 1
     })
 
-    -- Purpura Quickshell Quake console's terminal: no fades, as it comes and
-    -- goes with the panel around it (see QuakeConsole.qml)
+    -- Purpura Quickshell dropdown console's terminal: no fades, as it comes and
+    -- goes with the panel around it (see DropdownConsole.qml)
     hl.layer_rule({
-        match   = { namespace = "quakeconsole" },
+        match   = { namespace = "dropdownconsole" },
         no_anim = true,
     })
 

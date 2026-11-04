@@ -27,8 +27,8 @@ import "../../../Config.js" as Config
 // established for monitors.json. Updater.qml watches updatersettings.json
 // directly too, same decoupled pattern. Night Light is the exception: its
 // schedule changes settings on its own, so NightLight.qml owns its file
-// and this category just drives that object (`nightLight`), as does Quake
-// Console with QuakeConsole.qml (`quakeConsole`). The UI Scale
+// and this category just drives that object (`nightLight`), as does Dropdown
+// Console with DropdownConsole.qml (`dropdownConsole`). The UI Scale
 // slider under the category list works the same way: UiScale.qml owns
 // its file and hands the value to every component through shell.qml, and
 // the slider here only calls its set() (`uiScaleSetting`).
@@ -42,8 +42,8 @@ Item {
     // NightLight.qml, from shell.qml via SettingsScreen.qml.
     property var nightLight: null
 
-    // QuakeConsole.qml, from shell.qml via SettingsScreen.qml.
-    property var quakeConsole: null
+    // DropdownConsole.qml, from shell.qml via SettingsScreen.qml.
+    property var dropdownConsole: null
 
     // UiScale.qml, from shell.qml via SettingsScreen.qml - the UI Scale
     // slider under the category list.
@@ -61,7 +61,7 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Quake Console.
+    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Dropdown Console.
     property int currentCategory: 0
 
     // Night Light category's view of root.nightLight, with defaults for the
@@ -456,25 +456,25 @@ Item {
                 }
 
                 DashCard {
-                    id: quakeCategoryCard
+                    id: consoleCategoryCard
 
                     Layout.fillWidth: true
                     Layout.preferredHeight: Config.scaled(40, root.uiScale)
                     uiScale: root.uiScale
-                    color: quakeCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    color: consoleCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
                     border.color: root.currentCategory === 4 ? Config.fgcolorlight : Config.fgcolor
 
                     Text {
                         anchors.centerIn: parent
-                        text: "Quake Console"
-                        color: quakeCategoryCard.border.color
+                        text: "Dropdown Console"
+                        color: consoleCategoryCard.border.color
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(14, root.uiScale)
                         font.bold: true
                     }
 
                     MouseArea {
-                        id: quakeCategoryMouse
+                        id: consoleCategoryMouse
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.currentCategory = 4
@@ -1256,9 +1256,9 @@ Item {
                     }
                 }
 
-                // ---------------- Quake Console category ----------------
+                // ---------------- Dropdown Console category ----------------
                 ColumnLayout {
-                    id: quakeCategoryContent
+                    id: consoleCategoryContent
 
                     Layout.fillWidth: true
                     visible: root.currentCategory === 4
@@ -1285,7 +1285,7 @@ Item {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: (root.quakeConsole ? root.quakeConsole.widthPercent : 0) + "%"
+                                text: (root.dropdownConsole ? root.dropdownConsole.widthPercent : 0) + "%"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1296,8 +1296,8 @@ Item {
                         DeviceSlider {
                             Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
-                            value: root.quakeConsole ? root.quakeConsole.widthPercent / 100 : 0
-                            onMoved: (newValue) => root.quakeConsole.setWidthPercent(newValue * 100)
+                            value: root.dropdownConsole ? root.dropdownConsole.widthPercent / 100 : 0
+                            onMoved: (newValue) => root.dropdownConsole.setWidthPercent(newValue * 100)
                         }
                     }
 
@@ -1321,7 +1321,7 @@ Item {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: (root.quakeConsole ? root.quakeConsole.heightPercent : 0) + "%"
+                                text: (root.dropdownConsole ? root.dropdownConsole.heightPercent : 0) + "%"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1332,8 +1332,8 @@ Item {
                         DeviceSlider {
                             Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
-                            value: root.quakeConsole ? root.quakeConsole.heightPercent / 100 : 0
-                            onMoved: (newValue) => root.quakeConsole.setHeightPercent(newValue * 100)
+                            value: root.dropdownConsole ? root.dropdownConsole.heightPercent / 100 : 0
+                            onMoved: (newValue) => root.dropdownConsole.setHeightPercent(newValue * 100)
                         }
                     }
 
@@ -1357,7 +1357,7 @@ Item {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: (root.quakeConsole ? root.quakeConsole.fontSize : 0) + "pt"
+                                text: (root.dropdownConsole ? root.dropdownConsole.fontSize : 0) + "pt"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1366,15 +1366,15 @@ Item {
                         }
 
                         DeviceSlider {
-                            id: quakeFontSlider
+                            id: consoleFontSlider
 
-                            readonly property int minimum: root.quakeConsole ? root.quakeConsole.minFontSize : 0
-                            readonly property int maximum: root.quakeConsole ? root.quakeConsole.maxFontSize : 1
+                            readonly property int minimum: root.dropdownConsole ? root.dropdownConsole.minFontSize : 0
+                            readonly property int maximum: root.dropdownConsole ? root.dropdownConsole.maxFontSize : 1
 
                             Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
-                            value: root.quakeConsole ? (root.quakeConsole.fontSize - minimum) / (maximum - minimum) : 0
-                            onMoved: (newValue) => root.quakeConsole.setFontSize(minimum + newValue * (maximum - minimum))
+                            value: root.dropdownConsole ? (root.dropdownConsole.fontSize - minimum) / (maximum - minimum) : 0
+                            onMoved: (newValue) => root.dropdownConsole.setFontSize(minimum + newValue * (maximum - minimum))
                         }
                     }
 
@@ -1386,7 +1386,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillEnabled
+                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
 
                         Rectangle {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
@@ -1398,7 +1398,7 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.quakeConsole.setAutokillEnabled(!root.quakeConsole.autokillEnabled)
+                                onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
                             }
                         }
 
@@ -1412,7 +1412,7 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.quakeConsole.setAutokillEnabled(!root.quakeConsole.autokillEnabled)
+                                onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
                             }
                         }
 
@@ -1426,8 +1426,8 @@ Item {
                         spacing: Config.scaled(8, root.uiScale)
 
                         // Dark and locked while autokill is off.
-                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillEnabled
-                        readonly property int minutes: root.quakeConsole ? root.quakeConsole.autokillMinutes : 30
+                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
+                        readonly property int minutes: root.dropdownConsole ? root.dropdownConsole.autokillMinutes : 30
 
                         Rectangle {
                             Layout.preferredWidth: Config.scaled(70, root.uiScale)
@@ -1462,7 +1462,7 @@ Item {
                                 // the old value if the box was left empty.
                                 onEditingFinished: {
                                     const typed = parseInt(autokillDelayInput.text, 10)
-                                    if (!isNaN(typed)) root.quakeConsole.setAutokillMinutes(typed)
+                                    if (!isNaN(typed)) root.dropdownConsole.setAutokillMinutes(typed)
                                     autokillDelayInput.text = String(autokillDelayRow.minutes)
                                 }
                                 onAccepted: autokillDelayInput.focus = false
@@ -1488,7 +1488,7 @@ Item {
 
                         // Dark and locked while autokill is off, like the delay.
                         readonly property bool usable: autokillDelayRow.on
-                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillNotification
+                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillNotification
                         readonly property color shownColor: usable ? Config.fgcolor : Config.fgcolordark
 
                         Rectangle {
@@ -1502,7 +1502,7 @@ Item {
                                 anchors.fill: parent
                                 enabled: autokillNotificationRow.usable
                                 hoverEnabled: true
-                                onClicked: root.quakeConsole.setAutokillNotification(!autokillNotificationRow.on)
+                                onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
                             }
                         }
 
@@ -1517,7 +1517,7 @@ Item {
                                 anchors.fill: parent
                                 enabled: autokillNotificationRow.usable
                                 hoverEnabled: true
-                                onClicked: root.quakeConsole.setAutokillNotification(!autokillNotificationRow.on)
+                                onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
                             }
                         }
 

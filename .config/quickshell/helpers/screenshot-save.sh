@@ -6,7 +6,7 @@
 set -uo pipefail
 
 kept=$1
-icon=accessories-screenshot-tool
+icon=camera-photo-symbolic
 
 fail() {
     notify-send -i "$icon" "Screenshot not saved" "$1" || true

@@ -18,7 +18,7 @@ set -euo pipefail
 # report through the same notification a successful capture uses.
 fail() {
     echo "screenshot-crop: $1" >&2
-    notify-send -i accessories-screenshot-tool "Screenshot failed" "$1" || true
+    notify-send -i camera-photo-symbolic "Screenshot failed" "$1" || true
     exit 1
 }
 

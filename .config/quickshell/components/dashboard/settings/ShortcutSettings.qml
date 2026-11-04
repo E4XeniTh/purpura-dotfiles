@@ -130,7 +130,7 @@ Item {
         { label: "Dashboard", lua: "hl.dsp.global(\"quickshell:dashboard\")" },
         { label: "Settings", lua: "hl.dsp.global(\"quickshell:settingsscreen\")" },
         { label: "Screenshot", lua: "hl.dsp.global(\"quickshell:screenshot\")" },
-        { label: "Quake console", lua: "hl.dsp.global(\"quickshell:quakeconsole\")" },
+        { label: "Dropdown console", lua: "hl.dsp.global(\"quickshell:dropdownconsole\")" },
         { label: "Global shortcuts", global: true }
     ]
     readonly property var actionLabels: root.actions.map(a => a.label)

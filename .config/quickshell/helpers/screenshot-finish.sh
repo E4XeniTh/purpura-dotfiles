@@ -8,7 +8,7 @@
 set -euo pipefail
 
 src=$1
-icon=accessories-screenshot-tool
+icon=camera-photo-symbolic
 dir=${XDG_CACHE_HOME:-$HOME/.cache}/purpura/screenshots
 
 wl-copy --type image/png < "$src"

@@ -113,7 +113,7 @@ Scope {
     property bool activeIsFullscreen: false
     property string fullscreenMonitorName: ""
 
-    // Tells the Quake console to close, as it can't show without the bar.
+    // Tells the dropdown console to close, as it can't show without the bar.
     readonly property bool hiddenOnPrimary: root.locked || root.powerMenuOpen
         || (root.activeIsFullscreen && root.fullscreenMonitorName === root.effectivePrimaryName)
 
