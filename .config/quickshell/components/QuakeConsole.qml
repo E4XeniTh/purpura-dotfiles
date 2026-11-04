@@ -525,6 +525,13 @@ Scope {
         onTriggered: idleCheck.running = true
     }
 
+    function autokill() {
+        const minutes = root.autokillMinutes
+        terminal.running = false
+        Quickshell.execDetached(["notify-send", "Console terminated",
+            "after " + minutes + (minutes === 1 ? " minute" : " minutes") + " of inactivity"])
+    }
+
     // At a prompt, the only foreground process is the shell itself.
     function hasForegroundCommand(osWindows) {
         for (const osWindow of osWindows) {
@@ -551,7 +558,7 @@ Scope {
                     busy = true
                 }
                 if (busy) root.autokillRechecking = true
-                else if (!root.open) terminal.running = false
+                else if (!root.open) root.autokill()
             }
         }
     }
