@@ -96,7 +96,7 @@ with a real copy instead.
   `~/.config/purpura-backups/<date>/` first.
 - Linked configs stay in the repo's purple: `purpura.sh` can't recolor them
   without editing the repo.
-- Apps that rewrite their own config, like fish's `fish_variables`, now show
+- Apps that rewrite their own config now show
   up as changes in `git status`.
 
 ### By hand

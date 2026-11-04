@@ -25,3 +25,7 @@
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf
 .config/hypr/hyprland.lua
+
+# Fish rewrites this itself (tide's prompt cache and item list change as you
+# use the shell), so it would otherwise always show up as modified.
+.config/fish/fish_variables
