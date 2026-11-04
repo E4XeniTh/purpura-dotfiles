@@ -123,7 +123,8 @@ finishes, so nothing stays in the old color. It warns and asks first.
       --link         link the configs to this checkout instead of installing
                      anything, so editing the repo edits the live config; if
                      anything is linked already, every link is replaced with
-                     a real copy instead. Takes no other options
+                     a real copy instead. fish is never linked, since it
+                     rewrites its own config. Takes no other options
   -h, --help         show this help
 EOF
 }
@@ -609,13 +610,28 @@ unlink_configs() {
     info "$count links replaced with real copies."
 }
 
+# Fish rewrites fish_variables as the shell runs, which through a link would
+# keep changing the repo. So it's never linked: a link from before this rule
+# becomes a real copy, and a missing config gets one.
+ensure_fish_copy() {
+    local dst=$HOME/.config/fish
+    if [[ -L $dst && $(realpath -m -- "$dst") == "$REPO/.config/fish" ]]; then
+        unlink_configs .config/fish
+    elif [[ ! -e $dst && ! -L $dst ]]; then
+        mkdir -p -- "$HOME/.config"
+        cp -a -- "$REPO/.config/fish" "$dst"
+        info "Copied fish's config to ~/.config/fish."
+    fi
+}
+
 # Whole directories under .config, but .local file by file: the directories
 # there also hold things that aren't ours, like other color schemes.
 toggle_links() {
     local item
     local -a items=()
+    ensure_fish_copy
     mapfile -d '' -t items < <(
-        git -C "$REPO" ls-files -z -- .config | cut -z -d/ -f1,2 | sort -zu
+        git -C "$REPO" ls-files -z -- .config ':(exclude).config/fish' | cut -z -d/ -f1,2 | sort -zu
         git -C "$REPO" ls-files -z -- .local
     )
     ((${#items[@]})) || die "No tracked configs found in $REPO - --link needs a git checkout."

@@ -85,9 +85,9 @@ To work on the configs, link them instead of copying them:
 ./purpura.sh --link
 ```
 
-Everything the repo tracks gets linked into `~/.config` (and the color scheme
-into `~/.local/share/color-schemes`), so editing the repo edits the live
-config. Run it again to undo: if anything is linked, every link is replaced
+Everything the repo tracks except fish gets linked into `~/.config` (and the
+color scheme into `~/.local/share/color-schemes`), so editing the repo edits
+the live config. Run it again to undo: if anything is linked, every link is replaced
 with a real copy instead.
 
 - Your gitignored personal files (`hyprland.lua`, `monitors.json`...) move
@@ -96,8 +96,10 @@ with a real copy instead.
   `~/.config/purpura-backups/<date>/` first.
 - Linked configs stay in the repo's purple: `purpura.sh` can't recolor them
   without editing the repo.
-- Apps that rewrite their own config now show
-  up as changes in `git status`.
+- fish stays a real copy, because it keeps rewriting its own `fish_variables`.
+  Edits to the repo's fish config need copying over by hand.
+- Other apps that rewrite their own config now show up as changes in
+  `git status`.
 
 ### By hand
 
