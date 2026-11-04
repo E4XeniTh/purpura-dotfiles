@@ -497,7 +497,11 @@ Item {
         binds.push({ combo: combo, key: key, label: label, lua: lua })
 
         root.saveStore({ binds: binds, removed: removed, descriptions: descriptions })
-        const unbinds = replaced.map(b => "hl.unbind(" + root.luaString(b.combo) + ")")
+        // The new combo is unbound too, though nothing's on it as far as this tab
+        // knows: writing shortcuts.lua makes Hyprland reload, and if that gets in
+        // ahead of this eval the bind is already there. hl.bind would add a second
+        // one and both would fire, so a toggle would undo itself.
+        const unbinds = replaced.map(b => b.combo).concat([combo]).map(c => "hl.unbind(" + root.luaString(c) + ")")
         root.applyLive(unbinds.concat(["hl.bind(" + root.luaString(combo) + ", " + lua + ")"]))
     }
 
