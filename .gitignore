@@ -25,3 +25,5 @@
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf
 .config/hypr/hyprland.lua
+
+.claude/*
