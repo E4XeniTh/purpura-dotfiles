@@ -187,6 +187,29 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     --#######################################################################################
 
 
+    -- Close Window closes the Quake console instead while that's up. It isn't a
+    -- window, so nothing else can reach it, and a program stuck in it can leave
+    -- no other way out. This wraps the action rather than one bind, so any key
+    -- bound to it counts, Settings > Shortcuts' included. kitty is stopped from
+    -- here rather than through the shell so that a stuck shell can't get in the
+    -- way, with SIGKILL following in case kitty is what's stuck.
+    --
+    -- The pid check matters: it's -1 if Hyprland can't tell, and kill -9 -1 would
+    -- stop every process the user owns.
+    local closeWindow = hl.dsp.window.close
+    hl.dsp.window.close = function(...)
+        local close = closeWindow(...)
+        return function()
+            for _, layer in ipairs(hl.get_layers({ namespace = "quakeconsole" })) do
+                if layer.mapped and layer.pid > 0 then
+                    hl.dispatch(hl.dsp.exec_cmd("kill " .. layer.pid .. "; sleep 1; kill -9 " .. layer.pid .. " 2>/dev/null"))
+                    return
+                end
+            end
+            hl.dispatch(close)
+        end
+    end
+
     hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { description = "Drag window" })
     hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { description = "Resize window" })
 

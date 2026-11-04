@@ -32,8 +32,9 @@ import "../Config.js" as Config
 // kitty starts the first time the console opens. After that, closing only
 // hides it, through kitty's remote control socket, so whatever's in it stays.
 // It's a single Process, and a shell reload stops it, so there's only ever one.
-// Should it end on its own (`exit`, a crash), the panel closes the same way as
-// when closed by hand, and the next open starts a new one.
+// Should it end any other way (`exit`, a crash, the close window bind in
+// hyprland.lua), the panel disappears with it rather than sliding away, and the
+// next open starts a new one.
 //
 // While the console is closed, a hidden kitty with nothing running in its
 // foreground gets stopped once the autokill delay has passed. One that's
@@ -392,6 +393,9 @@ Scope {
             "-o", "allow_remote_control=socket-only",
             "-o", "background_opacity=0",
             "-o", "font_size=" + root.fontSize,
+            // kitty_mod is ctrl in kitty.conf, which makes this copy and nothing
+            // else, so a stuck program could never be interrupted.
+            "-o", "map=ctrl+c copy_or_interrupt",
             "-o", "window_margin_width=0",
             "-o", "single_window_margin_width=0",
             "-o", "window_padding_width=0",
@@ -414,8 +418,9 @@ Scope {
             root.controlQueue = []
             root.controlRetries = 0
             hideTimer.stop()
+            expandAnimation.stop()
             root.open = false
-            root.animateTo(0)
+            root.expansion = 0
         }
     }
 
