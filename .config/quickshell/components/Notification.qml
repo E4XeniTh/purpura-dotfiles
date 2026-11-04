@@ -47,10 +47,12 @@ Scope {
                 body: n.body,
                 appIcon: n.appIcon,
                 image: n.image,
-                urgency: n.urgency
+                urgency: n.urgency,
+                screenshotFile: root.screenshotFileFrom(n.hints)
             })
 
             while (historyModel.count > 50) {
+                root.discardScreenshot(historyModel.count - 1)
                 historyModel.remove(historyModel.count - 1)
             }
 
@@ -102,12 +104,56 @@ Scope {
 
     // Closes the panel on "Clear all" / on deleting the last remaining
     // entry, matching Clipboard.qml's own close-when-empty behavior.
+    // A screenshot's notification saves it when clicked, in a popup or in
+    // history alike (helpers/screenshot-finish.sh). Each row owns the copy it
+    // offers, which is deleted along with the row unless it's being saved.
+    // Nothing else can offer one, so a file from outside the cache is ignored.
+    readonly property string screenshotDir: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/purpura/screenshots"
+
+    function screenshotFileFrom(hints) {
+        const file = hints["x-purpura-screenshot"]
+        if (typeof file !== "string" || !file.startsWith(root.screenshotDir + "/") || file.includes("/../")) return ""
+        return file
+    }
+
+    function discardScreenshot(index) {
+        const file = historyModel.get(index).screenshotFile
+        if (file) Quickshell.execDetached(["rm", "-f", file])
+    }
+
+    function saveScreenshot(index) {
+        const file = historyModel.get(index).screenshotFile
+        if (!file) return
+        historyModel.setProperty(index, "screenshotFile", "")
+        Quickshell.execDetached(["bash", Quickshell.shellDir + "/helpers/screenshot-save.sh", file])
+    }
+
+    function historyIndexOf(notifId) {
+        // Number(...) both sides - ListModel's dynamic-role storage and
+        // the live Notification.id property aren't guaranteed to come
+        // back as the exact same JS numeric subtype, and === doesn't
+        // coerce.
+        const target = Number(notifId)
+        for (let i = 0; i < historyModel.count; i++) {
+            if (Number(historyModel.get(i).notificationId) === target) return i
+        }
+        return -1
+    }
+
+    // History doesn't outlive the shell, so neither do the copies it offers.
+    Process {
+        command: ["rm", "-rf", root.screenshotDir]
+        running: true
+    }
+
     function clearAllHistory() {
+        for (let i = 0; i < historyModel.count; i++) root.discardScreenshot(i)
         historyModel.clear()
         root.centerOpen = false
     }
 
     function removeHistoryEntry(index) {
+        root.discardScreenshot(index)
         historyModel.remove(index)
         if (historyModel.count === 0) root.centerOpen = false
     }
@@ -118,16 +164,10 @@ Scope {
     // notification that just times out unclicked is left in history
     // untouched, that's the whole point of it being there.
     function removeHistoryByNotificationId(notifId) {
-        // Number(...) both sides - ListModel's dynamic-role storage and
-        // the live Notification.id property aren't guaranteed to come
-        // back as the exact same JS numeric subtype, and === doesn't
-        // coerce.
-        const target = Number(notifId)
-        for (let i = 0; i < historyModel.count; i++) {
-            if (Number(historyModel.get(i).notificationId) === target) {
-                historyModel.remove(i)
-                break
-            }
+        const i = root.historyIndexOf(notifId)
+        if (i >= 0) {
+            root.discardScreenshot(i)
+            historyModel.remove(i)
         }
         if (historyModel.count === 0) root.centerOpen = false
     }
@@ -254,6 +294,8 @@ Scope {
                                 card.modelData.dismiss()
                                 return
                             }
+                            const row = root.historyIndexOf(card.modelData.id)
+                            if (row >= 0) root.saveScreenshot(row)
                             const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
                             if (defaultAction) defaultAction.invoke()
                             card.modelData.dismiss()
@@ -563,12 +605,15 @@ Scope {
                             // here - left click can only remove + close,
                             // not "give attention" the way a still-live
                             // toast card (above) can.
+                            // A screenshot is the exception, as its row
+                            // owns the file and saves it without the sender.
                             MouseArea {
                                 id: historyMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 onClicked: (mouse) => {
+                                    if (mouse.button === Qt.LeftButton) root.saveScreenshot(index)
                                     root.removeHistoryEntry(index)
                                     if (mouse.button === Qt.LeftButton) root.centerOpen = false
                                 }

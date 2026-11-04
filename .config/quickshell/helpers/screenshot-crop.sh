@@ -18,7 +18,7 @@ set -euo pipefail
 # report through the same notification a successful capture uses.
 fail() {
     echo "screenshot-crop: $1" >&2
-    notify-send "Screenshot failed" "$1" || true
+    notify-send -i accessories-screenshot-tool "Screenshot failed" "$1" || true
     exit 1
 }
 
@@ -66,5 +66,4 @@ geom=$(awk -v pw="$pw" -v ph="$ph" -v lw="$lw" -v lh="$lh" \
 out=$(mktemp --suffix=.png)
 trap 'rm -f "$out"' EXIT
 "${convert[@]}" "$src" -crop "$geom" +repage "png:$out" || fail "ImageMagick couldn't crop the frame."
-wl-copy --type image/png < "$out"
-notify-send "Screenshot copied to clipboard."
+bash "$(dirname "${BASH_SOURCE[0]}")/screenshot-finish.sh" "$out"

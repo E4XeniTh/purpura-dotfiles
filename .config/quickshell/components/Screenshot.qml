@@ -298,7 +298,7 @@ Scope {
     }
 
     function copyFrozen(name) {
-        root.startCapture(["bash", "-c", 'wl-copy --type image/png < "$1" && notify-send "Screenshot copied to clipboard."', "screenshot-copy", root.freezePath(name)])
+        root.startCapture(["bash", Quickshell.shellDir + "/helpers/screenshot-finish.sh", root.freezePath(name)])
     }
 
     // x/y/w/h/lw/lh: crop rect and the frame's full extent, in logical

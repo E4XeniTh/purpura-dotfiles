@@ -70,6 +70,7 @@ Scope {
     function setFontSize(value) { root.update({ fontSize: root.clamped(value, root.minFontSize, root.maxFontSize) }) }
     function setAutokillEnabled(on) { root.update({ autokill: !!on }) }
     function setAutokillMinutes(value) { root.update({ autokillMinutes: Math.max(1, Math.round(value)) }) }
+    function setAutokillNotification(on) { root.update({ autokillNotification: !!on }) }
 
     readonly property int minWidthPercent: 25
     readonly property int minHeightPercent: 20
@@ -83,6 +84,7 @@ Scope {
 
     readonly property bool autokillEnabled: root.store.autokill !== false
     readonly property int autokillMinutes: Math.max(1, Math.round(Number(root.store.autokillMinutes)) || 30)
+    readonly property bool autokillNotification: root.store.autokillNotification !== false
 
     // Not watched: this is the only writer.
     FileView {
@@ -528,8 +530,9 @@ Scope {
     function autokill() {
         const minutes = root.autokillMinutes
         terminal.running = false
-        Quickshell.execDetached(["notify-send", "Console terminated",
-            "after " + minutes + (minutes === 1 ? " minute" : " minutes") + " of inactivity"])
+        if (!root.autokillNotification) return
+        Quickshell.execDetached(["notify-send", "-i", "preferences-system-time", "Console terminated",
+            "(" + minutes + (minutes === 1 ? " minute of inactivity has passed)" : " minutes of inactivity have passed)")])
     }
 
     // At a prompt, the only foreground process is the shell itself.

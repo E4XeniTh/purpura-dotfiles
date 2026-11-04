@@ -1479,6 +1479,50 @@ Item {
 
                         Item { Layout.fillWidth: true }
                     }
+
+                    RowLayout {
+                        id: autokillNotificationRow
+
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        // Dark and locked while autokill is off, like the delay.
+                        readonly property bool usable: autokillDelayRow.on
+                        readonly property bool on: !!root.quakeConsole && root.quakeConsole.autokillNotification
+                        readonly property color shownColor: usable ? Config.fgcolor : Config.fgcolordark
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: autokillNotificationRow.on ? autokillNotificationRow.shownColor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: autokillNotificationRow.shownColor
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: autokillNotificationRow.usable
+                                hoverEnabled: true
+                                onClicked: root.quakeConsole.setAutokillNotification(!autokillNotificationRow.on)
+                            }
+                        }
+
+                        Text {
+                            text: "Show auto-kill notification"
+                            color: autokillNotificationRow.shownColor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: autokillNotificationRow.usable
+                                hoverEnabled: true
+                                onClicked: root.quakeConsole.setAutokillNotification(!autokillNotificationRow.on)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
                 }
 
                 Item { Layout.fillHeight: true }
