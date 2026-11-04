@@ -41,6 +41,24 @@ Scope {
     // fire.
     property var dashboard: null
 
+    // Settings > Shell > Bar's "Show fullscreen hint" (ShellSettings.qml),
+    // watched the same way WorkspaceOsd.qml watches its own Bar setting.
+    FileView {
+        id: barSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
+        watchChanges: true
+        onFileChanged: reload()
+    }
+
+    readonly property var barSettingsStore: {
+        try {
+            return JSON.parse(barSettingsFile.text())
+        } catch (e) {
+            return {}
+        }
+    }
+    readonly property bool showFullscreenHint: root.barSettingsStore.showFullscreenHint !== false
+
     property string hintMonitorName: ""
     property int showToken: 0
     property int hideToken: 0
@@ -50,7 +68,7 @@ Scope {
         function onRawEvent(event) {
             if (event.name !== "fullscreen") return
             if (event.data === "1") {
-                fullscreenCheckProcess.running = true
+                if (root.showFullscreenHint) fullscreenCheckProcess.running = true
             } else if (event.data === "0") {
                 // Exiting fullscreen (any window, any monitor) hides
                 // immediately rather than leaving the hint to linger

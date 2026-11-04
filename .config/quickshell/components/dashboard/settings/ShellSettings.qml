@@ -103,12 +103,14 @@ Item {
     // so a fresh install with no barsettings.json yet still shows it.
     readonly property bool showBrightnessControl: root.barStore.showBrightnessControl !== false
     readonly property bool showUpdater: root.barStore.showUpdater !== false
+    readonly property bool showFullscreenHint: root.barStore.showFullscreenHint !== false
 
     function toggleStrictWorkspaceWidget() { root.setBarSetting("strictWorkspaceWidget", !root.strictWorkspaceWidget) }
     function toggleShowEmptyWidget() { root.setBarSetting("showEmptyWidget", !root.showEmptyWidget) }
     function toggleShowEmptyOsd() { root.setBarSetting("showEmptyOsd", !root.showEmptyOsd) }
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
     function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
+    function toggleShowFullscreenHint() { root.setBarSetting("showFullscreenHint", !root.showFullscreenHint) }
 
     // ---------------- Peripherals ----------------
     property var peripheralsStore: ({})
@@ -748,6 +750,43 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             onClicked: root.toggleShowUpdater()
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+                }
+
+                // ---------------- fullscreen hint ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Config.scaled(8, root.uiScale)
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                        color: root.showFullscreenHint ? Config.fgcolor : Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+                        radius: 0
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleShowFullscreenHint()
+                        }
+                    }
+
+                    Text {
+                        text: "Show fullscreen hint"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.toggleShowFullscreenHint()
                         }
                     }
 
