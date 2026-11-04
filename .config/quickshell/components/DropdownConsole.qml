@@ -31,10 +31,16 @@ import "../Config.js" as Config
 //
 // kitty starts the first time the console opens. After that, closing only
 // hides it, through kitty's remote control socket, so whatever's in it stays.
-// It's a single Process, and a shell reload stops it, so there's only ever one.
-// Should it end any other way (`exit`, a crash, the close window bind in
+// Should it end some other way (`exit`, a crash, the close window bind in
 // hyprland.lua), the panel disappears with it rather than sliding away, and the
 // next open starts a new one.
+//
+// kitty outlives the shell, so a reload or a restart leaves the console as it
+// was. Quickshell stops any Process it's running when either happens, so kitty
+// is started detached instead. The new shell finds it through its socket, which
+// has a fixed name for this reason, and reads whether it was open from a state
+// file, as kitty can't say whether it's hidden. A kitty that's there but doesn't
+// answer gets stopped, so there's only ever one.
 //
 // While the console is closed, a hidden kitty with nothing running in its
 // foreground gets stopped once the autokill delay has passed. One that's
@@ -109,7 +115,9 @@ Scope {
             } catch (e) {
                 root.store = {}
             }
+            root.settingsLoaded = true
         }
+        onLoadFailed: root.settingsLoaded = true
     }
 
     Timer {
@@ -226,10 +234,10 @@ Scope {
     }
 
     function openConsole() {
-        if (root.barHidden || !root.screen) return
+        if (root.restoring || root.barHidden || !root.screen) return
         root.open = true
         hideTimer.stop()
-        if (!terminal.running) {
+        if (!root.terminalRunning) {
             // Nothing's on a new kitty yet that could get ahead of the panel.
             root.terminalShown = true
             root.startTerminal()
@@ -380,17 +388,29 @@ Scope {
     }
 
     // ---------------- the terminal ----------------
-    // A new name for every kitty, as it won't start on a socket file a crashed
-    // one left behind.
-    property string socket: ""
+    // Whether there's a kitty, including one that's still starting.
+    property bool terminalRunning: false
+    // The screen it's on, which it can't change.
+    property string terminalScreen: ""
+
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
+    readonly property string socket: root.runtimeDir + "/purpura-dropdown-console.sock"
+    // The pattern needs kitty at the start of the command line, so it can't hit
+    // a program that merely mentions the flag.
+    readonly property string terminalPattern: "^[^ ]*kitty[^ ]* .*--app-id=dropdownconsole( |$)"
 
     function startTerminal() {
-        const runtimeDir = Quickshell.env("XDG_RUNTIME_DIR") || "/tmp"
         const g = root.terminalGeometry
-        root.socket = runtimeDir + "/purpura-dropdown-console-" + Date.now() + ".sock"
+        root.terminalRunning = true
+        root.terminalScreen = root.screenName
         root.appliedGeometry = root.geometryArgs()
         root.appliedFontSize = root.fontSize
-        terminal.command = [
+        root.saveState()
+        root.startProbes = 0
+        terminalProbe.running = true
+        // kitty won't start on a socket file a crashed one left behind.
+        Quickshell.execDetached([
+            "sh", "-c", 'rm -f -- "$0"; exec "$@"', root.socket,
             "kitten", "panel",
             "--app-id=dropdownconsole",
             "--edge=none",
@@ -416,37 +436,148 @@ Scope {
             "-o", "confirm_os_window_close=0",
             // Tells fish's greeting to skip fastfetch.
             "-o", "env=PURPURA_DROPDOWN_CONSOLE=1"
-        ]
-        terminal.running = true
+        ])
     }
 
-    Process {
-        id: terminal
+    function stopTerminal() {
+        Quickshell.execDetached(["pkill", "-f", "--", root.terminalPattern])
+    }
 
-        // Not onExited, which doesn't fire if it never managed to start.
-        onRunningChanged: {
-            if (terminal.running) return
-            root.terminalShown = false
-            root.controlQueue = []
-            root.controlRetries = 0
-            hideTimer.stop()
-            expandAnimation.stop()
-            root.open = false
-            root.expansion = 0
+    function terminalGone() {
+        root.terminalRunning = false
+        root.terminalShown = false
+        root.controlQueue = []
+        root.controlRetries = 0
+        hideTimer.stop()
+        expandAnimation.stop()
+        root.open = false
+        root.expansion = 0
+        root.saveState()
+    }
+
+    // Says when kitty ends, however that happens. It can only start once kitty
+    // has answered, as before that kitty's command line doesn't match yet. A
+    // shell going away just stops this, which kitty doesn't notice.
+    //
+    // Not onExited, which doesn't fire if it never managed to start.
+    Process {
+        id: terminalWatch
+        command: ["pidwait", "-f", "--", root.terminalPattern]
+        onRunningChanged: if (!terminalWatch.running) root.terminalGone()
+    }
+
+    // How a kitty that's still starting up, or one from before a reload, is
+    // known to be there.
+    Process {
+        id: terminalProbe
+        command: ["kitten", "@", "--to", "unix:" + root.socket, "ls"]
+        onExited: (exitCode) => root.terminalProbed(exitCode === 0)
+    }
+
+    property int startProbes: 0
+
+    function terminalProbed(answered) {
+        if (root.restoring) {
+            root.restoring = false
+            restoreTimer.stop()
+            if (answered) root.adoptTerminal(root.restoredState)
+            else root.stopTerminal()
+        } else if (root.terminalRunning && !terminalWatch.running) {
+            if (answered) {
+                terminalWatch.running = true
+            } else if (root.startProbes++ < 50) {
+                startProbeTimer.start()
+            } else {
+                root.stopTerminal()
+                root.terminalGone()
+            }
         }
     }
 
-    // A kitty left over from a shell that was killed outright can't be
-    // reached any more, so it's stopped by name. The pattern needs kitty at
-    // the start of the command line, so it can't hit a program that merely
-    // mentions the flag.
-    Process {
-        command: ["pkill", "-f", "--", "^[^ ]*kitty[^ ]* .*--app-id=dropdownconsole( |$)"]
-        running: true
+    Timer {
+        id: startProbeTimer
+        interval: 100
+        onTriggered: terminalProbe.running = true
     }
 
     // kitty can't change outputs, so a new primary screen means a new kitty.
-    onScreenNameChanged: if (terminal.running) terminal.running = false
+    onScreenNameChanged: if (root.terminalRunning && root.screenName !== root.terminalScreen) root.stopTerminal()
+
+    // ---------------- surviving a shell restart ----------------
+    // In the runtime directory, so it goes away along with any kitty it's about.
+    FileView {
+        id: stateFile
+        // Empty until then so that kitty is picked up with the saved settings,
+        // not the defaults. A path is what starts it loading.
+        path: root.settingsLoaded ? root.runtimeDir + "/purpura-dropdown-console.json" : ""
+        printErrors: false
+        // A reload right after this has to find it written.
+        blockWrites: true
+
+        onLoaded: {
+            let state = {}
+            try {
+                state = JSON.parse(stateFile.text()) || {}
+            } catch (e) {
+                state = {}
+            }
+            root.restore(state)
+        }
+        onLoadFailed: root.restore({})
+    }
+
+    // Until it's known whether there's a kitty to carry on with.
+    property bool restoring: true
+    property var restoredState: ({})
+    property bool settingsLoaded: false
+
+    function saveState() {
+        if (root.restoring) return
+        stateFile.setText(JSON.stringify({
+            open: root.open,
+            screen: root.terminalScreen,
+            geometry: root.appliedGeometry,
+            fontSize: root.appliedFontSize
+        }) + "\n")
+    }
+
+    function restore(state) {
+        if (!root.restoring || terminalProbe.running) return
+        root.restoredState = state
+        restoreTimer.start()
+        terminalProbe.running = true
+    }
+
+    // A kitty that's stuck, or left by a version with another socket, can't be
+    // reached, so it's stopped by name.
+    Timer {
+        id: restoreTimer
+        interval: 3000
+        onTriggered: root.terminalProbed(false)
+    }
+
+    // Its surface is already up if the console was open. The show and hide are
+    // for a state file that's behind, and the geometry waits for changeTimer so
+    // that it sees the edge gaps and scale, which load on their own.
+    function adoptTerminal(state) {
+        root.terminalRunning = true
+        root.terminalScreen = state.screen || ""
+        root.appliedGeometry = state.geometry || []
+        root.appliedFontSize = state.fontSize || 0
+        terminalWatch.running = true
+        if (root.terminalScreen !== root.screenName) {
+            root.stopTerminal()
+        } else if (state.open && root.screen && !root.barHidden) {
+            root.open = true
+            root.expansion = 1
+            root.terminalShown = true
+            root.control(["resize-os-window", "--match=all", "--action=show"])
+            changeTimer.restart()
+        } else {
+            root.control(["resize-os-window", "--match=all", "--action=hide"])
+        }
+        root.saveState()
+    }
 
     // ---------------- remote control ----------------
     // One command at a time, in order.
@@ -470,7 +601,7 @@ Scope {
         // kitty's socket isn't there yet if it's only just been started, as
         // when the console is closed again straight away.
         onExited: (exitCode) => {
-            if (exitCode !== 0 && terminal.running && root.controlRetries < 20) {
+            if (exitCode !== 0 && root.terminalRunning && root.controlRetries < 20) {
                 root.controlRetries++
                 controlRetryTimer.start()
                 return
@@ -500,12 +631,14 @@ Scope {
         const args = root.geometryArgs()
         if (args.join() === root.appliedGeometry.join()) return
         root.appliedGeometry = args
+        root.saveState()
         root.control(["resize-os-window", "--match=all", "--action=os-panel", "--incremental"].concat(args))
     }
 
     function applyFontSize() {
         if (root.fontSize === root.appliedFontSize) return
         root.appliedFontSize = root.fontSize
+        root.saveState()
         root.control(["set-font-size", "--all", String(root.fontSize)])
     }
 
@@ -528,18 +661,21 @@ Scope {
     // rather than after another full delay.
     property bool autokillRechecking: false
 
-    onOpenChanged: root.autokillRechecking = false
+    onOpenChanged: {
+        root.autokillRechecking = false
+        root.saveState()
+    }
 
     Timer {
         interval: (root.autokillRechecking ? 1 : root.autokillMinutes) * 60000
-        running: root.autokillEnabled && terminal.running && !root.open
+        running: root.autokillEnabled && root.terminalRunning && !root.open
         repeat: true
         onTriggered: idleCheck.running = true
     }
 
     function autokill() {
         const minutes = root.autokillMinutes
-        terminal.running = false
+        root.stopTerminal()
         if (!root.autokillNotification) return
         Quickshell.execDetached(["notify-send", "-i", "clock", "Console terminated",
             minutes + (minutes === 1 ? " minute of inactivity has passed" : " minutes of inactivity have passed")])
