@@ -65,6 +65,14 @@ CORE_PACKAGES=(
     base-devel git pam
 )
 
+# Packages whose program can also come from a bigger package that doesn't
+# declare it - plasma-workspace ships its own xembedsniproxy - so pacman counts
+# them as missing, and installing them then clashes over the file.
+# package:program - skipped when the program is already there.
+SHIPPED_ELSEWHERE=(
+    "xembedsniproxy:xembedsniproxy"
+)
+
 # default (y/n) | question | packages | flatpaks
 OPTIONAL_GROUPS=(
     "y|Apps the keybinds open: rofi, Dolphin, Waterfox (Flatpak)|rofi dolphin flatpak|net.waterfox.waterfox"
@@ -357,6 +365,17 @@ install_packages() {
             wanted+=("${extra[@]}")
             read -ra extra <<<"$fps"
             flatpaks+=("${extra[@]}")
+        fi
+    done
+
+    local entry pkg prog
+    for entry in "${SHIPPED_ELSEWHERE[@]}"; do
+        pkg=${entry%%:*} prog=${entry#*:}
+        if ! pacman -Qq -- "$pkg" &>/dev/null && command -v -- "$prog" >/dev/null; then
+            info "$prog is already installed (by $(pacman -Qqo -- "$(command -v -- "$prog")" 2>/dev/null || echo "something else")), so the $pkg package is skipped."
+            for p in "${!wanted[@]}"; do
+                [[ ${wanted[p]} == "$pkg" ]] && unset 'wanted[p]'
+            done
         fi
     done
 
