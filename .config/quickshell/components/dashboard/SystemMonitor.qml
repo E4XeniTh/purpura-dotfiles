@@ -175,7 +175,7 @@ Item {
         }
     }
 
-    // ---------------- GPU (NVIDIA only for now - see nvidiaProcess) ----------------
+    // ---------------- GPU (NVIDIA or AMD - see nvidiaProcess) ----------------
     property real gpuUsage: 0 // 0.0 - 1.0
     property real gpuTemp: -1
     property real gpuVramUsedMb: 0
@@ -194,14 +194,39 @@ Item {
         }
     }
 
-    // AMD/Intel GPUs aren't covered here yet - nvidia-smi is the only
-    // single, well-documented command that reports usage/temp/VRAM in
-    // one call without guessing at sysfs paths that vary by driver/card.
-    // Missing entirely (not installed, or no NVIDIA GPU) just hides this
-    // whole section - see gpuAvailable below - rather than guess wrong.
+    // NVIDIA: nvidia-smi. AMD: the amdgpu driver's sysfs files
+    // (gpu_busy_percent, mem_info_vram_used/total, hwmon temp1_input in
+    // millidegrees). Both branches print the same one-line CSV
+    // "usage%, tempC, vramUsedMiB, vramTotalMiB" so the parser below
+    // doesn't care which one answered. With several amdgpu cards (e.g.
+    // APU + discrete), the one with the most VRAM wins - the APU's
+    // carve-out is always the smaller one. Temp is -1 if the card has no
+    // hwmon reading, which hides just the temp tag. Intel isn't covered
+    // (i915/xe don't expose busy % or VRAM like this). Nothing matching
+    // hides the whole section - see gpuAvailable below.
     Process {
         id: nvidiaProcess
-        command: ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"]
+        command: ["sh", "-c", `
+            if command -v nvidia-smi >/dev/null 2>&1 &&
+               nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | grep -q .; then
+                nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits | head -n1
+                exit 0
+            fi
+            best=""; bestTotal=0
+            for d in /sys/class/drm/card*/device; do
+                [ -r "$d/gpu_busy_percent" ] && [ -r "$d/mem_info_vram_total" ] && [ -r "$d/mem_info_vram_used" ] || continue
+                t=$(cat "$d/mem_info_vram_total" 2>/dev/null) || continue
+                if [ "$t" -gt "$bestTotal" ] 2>/dev/null; then best="$d"; bestTotal="$t"; fi
+            done
+            [ -n "$best" ] || exit 1
+            busy=$(cat "$best/gpu_busy_percent") || exit 1
+            used=$(cat "$best/mem_info_vram_used") || exit 1
+            temp=-1
+            for h in "$best"/hwmon/hwmon*/temp1_input; do
+                [ -r "$h" ] && temp=$(( $(cat "$h") / 1000 )) && break
+            done
+            echo "$busy, $temp, $(( used / 1048576 )), $(( bestTotal / 1048576 ))"
+        `]
 
         // See sensorsProcess's identical _sensorsGotOutput above for why
         // this can't just unconditionally clear gpuAvailable once the
@@ -310,6 +335,7 @@ Item {
 
                     BracketTag {
                         uiScale: root.uiScale
+                        visible: root.gpuTemp >= 0
                         valueWidth: 26
                         text: Math.round(root.gpuTemp) + "°"
                     }
