@@ -167,13 +167,14 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
                 disable_hyprland_logo = true,
         },
         input = {
-            kb_layout = "hr",
+            kb_layout = "us", -- ./purpura.sh --install asks for this one
             kb_variant = "",
             kb_model = "",
             kb_options = "",
             kb_rules = "",
             follow_mouse = 1,
             sensitivity = -1, -- -1.0 - 1.0, 0 means no modification.
+            force_no_accel = true, -- no mouse acceleration
             touchpad = {
                 natural_scroll = false,
             },

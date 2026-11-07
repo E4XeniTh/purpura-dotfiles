@@ -78,6 +78,7 @@ Scope {
     function setAutokillEnabled(on) { root.update({ autokill: !!on }) }
     function setAutokillMinutes(value) { root.update({ autokillMinutes: Math.max(1, Math.round(value)) }) }
     function setAutokillNotification(on) { root.update({ autokillNotification: !!on }) }
+    function setStartupCommand(text) { root.update({ startupCommand: String(text).trim() }) }
 
     readonly property int minWidthPercent: 25
     readonly property int minHeightPercent: 20
@@ -101,6 +102,13 @@ Scope {
     readonly property bool autokillEnabled: root.store.autokill !== false
     readonly property int autokillMinutes: Math.max(1, Math.round(Number(root.store.autokillMinutes)) || 30)
     readonly property bool autokillNotification: root.store.autokillNotification !== false
+
+    // Typed into the shell each time a new kitty starts, as if by hand, e.g.
+    // `cd ~/project && claude`. Typed rather than passed to kitty as the program
+    // to run, so a `cd` in it sticks, the shell stays once the command ends,
+    // and kitty's shell integration still loads.
+    readonly property string startupCommand: typeof root.store.startupCommand === "string"
+        ? root.store.startupCommand : ""
 
     // Not watched: this is the only writer.
     FileView {
@@ -437,6 +445,11 @@ Scope {
             // Tells fish's greeting to skip fastfetch.
             "-o", "env=PURPURA_DROPDOWN_CONSOLE=1"
         ])
+        // Waits in the queue until kitty's socket answers, and in the terminal
+        // until the shell is ready to read it. send-text takes Python string
+        // escapes, so backslashes are doubled to arrive as typed.
+        if (root.startupCommand !== "")
+            root.control(["send-text", root.startupCommand.replace(/\\/g, "\\\\") + "\\r"])
     }
 
     function stopTerminal() {

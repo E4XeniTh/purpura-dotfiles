@@ -19,6 +19,7 @@ INSTALL=0
 INSTALL_PACKAGES=1
 TOGGLE_LINKS=0
 COLOR=""
+KB_LAYOUT=""
 NOCONFIRM=()
 STAGE=""
 SEEDED=()
@@ -26,6 +27,11 @@ DOTFILES_INSTALLED=0
 CONFIGS_CHANGED=0
 CLOSE_APPS=0
 APPS_RESTARTED=0
+
+LAYOUTS=(
+    "us US"
+    "hr HR (Croatian)"
+)
 
 PRESETS=(
     "purple 9600fa"
@@ -232,6 +238,80 @@ choose_color() {
         warn "#$COLOR is very dark - it will be hard to see on the black UI."
     fi
     info "Highlight: $(swatch "$COLOR") #$COLOR"
+}
+
+# ---------------- keyboard layout ----------------
+# The kb_layout in hyprland.lua's input block.
+HYPRLAND_LUA=$HOME/.config/hypr/hyprland.lua
+KB_LAYOUT_SED='s/^([[:space:]]*kb_layout[[:space:]]*=[[:space:]]*)"[^"]*"/'
+
+current_kb_layout() {
+    local layout=""
+    if [[ -r $HYPRLAND_LUA ]]; then
+        layout=$(sed -nE 's/^[[:space:]]*kb_layout[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p' "$HYPRLAND_LUA" | head -n 1)
+    fi
+    printf '%s' "${layout:-us}"
+}
+
+# Letters, digits, _ and -, comma-separated for several layouts (us,hr).
+valid_kb_layout() { [[ $1 =~ ^[A-Za-z0-9_-]+(,[A-Za-z0-9_-]+)*$ ]]; }
+
+choose_kb_layout() {
+    local current choice code name i
+    current=$(current_kb_layout)
+    if ((ASSUME_YES)); then
+        KB_LAYOUT=$current
+        return
+    fi
+    say "Keyboard layout"
+    for i in "${!LAYOUTS[@]}"; do
+        read -r code name <<<"${LAYOUTS[i]}"
+        printf '   %d) %s%s\n' $((i + 1)) "$name" "$([[ $code == "$current" ]] && echo "  (current)")"
+    done
+    info "Or type a layout code of your own, e.g. de, fr or us,hr."
+    while :; do
+        read -r -p "   Pick one [Enter keeps $current]: " choice || choice=""
+        choice=${choice//[[:space:]]/}
+        if [[ -z $choice ]]; then
+            KB_LAYOUT=$current
+        elif [[ $choice =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#LAYOUTS[@]})); then
+            read -r KB_LAYOUT _ <<<"${LAYOUTS[choice - 1]}"
+        elif valid_kb_layout "$choice"; then
+            KB_LAYOUT=${choice,,}
+        else
+            warn "Pick a number from the list or type a layout code like de."
+            continue
+        fi
+        break
+    done
+    info "Keyboard layout: $KB_LAYOUT"
+}
+
+# Like the color, the live hyprland.lua is edited rather than replaced, through
+# the staged copy (a fresh one is seeded there from the .example). One linked
+# into this checkout is the gitignored personal copy, so it's edited in place.
+apply_kb_layout() {
+    local staged=$STAGE/.config/hypr/hyprland.lua target
+    [[ -n $KB_LAYOUT ]] || return 0
+    if [[ -e $staged ]]; then
+        target=$staged
+    elif [[ -f $HYPRLAND_LUA ]]; then
+        [[ $(current_kb_layout) == "$KB_LAYOUT" ]] && return 0
+        if [[ $(realpath -- "$HYPRLAND_LUA") == "$REPO"/* ]]; then
+            target=$(realpath -- "$HYPRLAND_LUA")
+        else
+            mkdir -p -- "$(dirname -- "$staged")"
+            cp -p -- "$HYPRLAND_LUA" "$staged"
+            target=$staged
+        fi
+    else
+        return 0
+    fi
+    if grep -qE '^[[:space:]]*kb_layout[[:space:]]*=[[:space:]]*"' "$target"; then
+        sed -i -E "${KB_LAYOUT_SED}\\1\"$KB_LAYOUT\"/" "$target"
+    else
+        warn "No kb_layout line in ~/.config/hypr/hyprland.lua - add kb_layout = \"$KB_LAYOUT\" to its input block by hand."
+    fi
 }
 
 # ---------------- packages ----------------
@@ -502,6 +582,7 @@ install_dotfiles() {
     stage_dotfiles
     recolor_stage
     recolor_live_hyprland
+    apply_kb_layout
     sync_stage
     mkdir -p -- "$(dirname -- "$STATE_FILE")"
     printf '#%s\n' "$COLOR" >"$STATE_FILE"
@@ -797,6 +878,7 @@ main() {
         return
     fi
     choose_color
+    choose_kb_layout
     warn_about_closing_apps
     if ((INSTALL_PACKAGES)); then
         install_packages

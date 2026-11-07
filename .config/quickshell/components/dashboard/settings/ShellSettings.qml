@@ -1598,6 +1598,54 @@ Item {
 
                         Item { Layout.fillWidth: true }
                     }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        Text {
+                            text: "Execute on new instance:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                            color: Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: startupCommandInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                            TextInput {
+                                id: startupCommandInput
+
+                                anchors {
+                                    fill: parent
+                                    margins: Config.scaled(6, root.uiScale)
+                                }
+                                verticalAlignment: TextInput.AlignVCenter
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                selectByMouse: true
+                                clip: true
+                                text: root.dropdownConsole ? root.dropdownConsole.startupCommand : ""
+
+                                // Saved on Enter or on leaving the box, like the
+                                // autokill delay. Only a console started after
+                                // that runs it.
+                                onEditingFinished: {
+                                    if (!root.dropdownConsole) return
+                                    root.dropdownConsole.setStartupCommand(startupCommandInput.text)
+                                    startupCommandInput.text = root.dropdownConsole.startupCommand
+                                }
+                                onAccepted: startupCommandInput.focus = false
+                            }
+                        }
+                    }
                 }
 
                 Item { Layout.fillHeight: true }
