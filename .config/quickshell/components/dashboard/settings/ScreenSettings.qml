@@ -490,6 +490,18 @@ Item {
         root.selectedDirty = true
     }
 
+    // Steps the selected monitor's rotation a quarter turn (clockwise for
+    // step = 1, back for -1), staged in root.edited like any geometry
+    // edit so it only takes effect on Apply. A flipped transform (4-7)
+    // keeps its flip and only has its rotation stepped.
+    function rotateSelected(step) {
+        const state = root.effectiveStateFor(root.selectedName)
+        if (!state) return
+        const flip = state.transform & 4
+        const rotation = ((state.transform & 3) + step + 4) % 4
+        root.setEdited("transform", flip | rotation)
+    }
+
     function togglePreferredMode() {
         root.setPreferredMode(root.selectedName, !root.preferredModes[root.selectedName])
         root.selectedDirty = true
@@ -557,11 +569,18 @@ Item {
         const y = override ? override.y : (e.y !== undefined ? e.y : remembered.y)
         const rawScale = e.scale !== undefined ? e.scale : remembered.scale
         const scale = rawScale > 0 ? rawScale : 1
+        // Hyprland's transform index: 0 = normal, 1/2/3 = 90/180/270
+        // degrees (4-7 are the flipped variants, never set from here but
+        // passed through untouched if hyprctl or monitors.json reports
+        // one). Old monitors.json entries from before this field existed
+        // have no transform, so they count as 0.
+        const rawTransform = e.transform !== undefined ? e.transform : remembered.transform
+        const transform = Number.isInteger(rawTransform) ? rawTransform : 0
 
         if (!root.enabledFor(name)) {
             return {
                 disabled: true,
-                width, height, refresh, x, y, scale,
+                width, height, refresh, x, y, scale, transform,
                 mode: stored ? stored.mode : "manual",
                 usesExplicitMode: false,
                 usesExplicitPosition: false
@@ -582,7 +601,7 @@ Item {
 
         return {
             disabled: false,
-            width, height, refresh, x, y, scale,
+            width, height, refresh, x, y, scale, transform,
             mode: root.preferredModes[name] ? "preferred" : "manual",
             usesExplicitMode,
             usesExplicitPosition
@@ -613,7 +632,7 @@ Item {
         // mode/position/scale given (confirmed live: applying without
         // this left a re-enabled monitor off despite hyprctl replying
         // "ok" to every call).
-        return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${state.scale}" })`
+        return `hl.monitor({ output = "${name}", disabled = false, mode = "${mode}", position = "${position}", scale = "${state.scale}", transform = ${state.transform} })`
     }
 
     function applyChanges() {
@@ -896,6 +915,7 @@ Item {
                     x: state.x,
                     y: state.y,
                     scale: state.scale,
+                    transform: state.transform,
                     mode: state.mode,
                     workspaces: resolved[m.name] || [],
                     line
@@ -934,6 +954,7 @@ Item {
             if (c.mode !== d.mode) return true
             if (c.width !== d.width || c.height !== d.height || c.refresh !== d.refresh) return true
             if (c.x !== d.x || c.y !== d.y || c.scale !== d.scale) return true
+            if (c.transform !== (Number.isInteger(d.transform) ? d.transform : 0)) return true
 
             const cw = (c.workspaces || []).slice().sort((a, b) => a - b)
             const dw = (d.workspaces || []).slice().sort((a, b) => a - b)
@@ -1534,6 +1555,42 @@ Item {
                             onClicked: {
                                 contentWrapper.forceActiveFocus()
                                 root.togglePreferredMode()
+                            }
+                        }
+                    }
+
+                    // Rotation button: left-click turns the monitor 90
+                    // degrees clockwise, right-click turns it back. Staged
+                    // until Apply, like the fields below.
+                    DashCard {
+                        readonly property int monitorTransform: {
+                            const state = root.effectiveStateFor(root.selectedName)
+                            return state ? state.transform : 0
+                        }
+
+                        Layout.preferredWidth: Config.scaled(130, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(34, root.uiScale)
+                        uiScale: root.uiScale
+                        enabled: root.selectedName.length > 0
+                        color: rotateMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Rotate " + ((parent.monitorTransform & 3) * 90) + "°" + ((parent.monitorTransform & 4) ? " F" : "")
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(14, root.uiScale)
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: rotateMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.LeftButton | Qt.RightButton
+                            onClicked: (mouse) => {
+                                contentWrapper.forceActiveFocus()
+                                root.rotateSelected(mouse.button === Qt.RightButton ? -1 : 1)
                             }
                         }
                     }
