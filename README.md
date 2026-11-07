@@ -85,7 +85,7 @@ To work on the configs, link them instead of copying them:
 ./purpura.sh --link
 ```
 
-Everything the repo tracks except fish gets linked into `~/.config` (and the
+Everything the repo tracks except fish and the GTK folders gets linked into `~/.config` (and the
 color scheme into `~/.local/share/color-schemes`), so editing the repo edits
 the live config. Run it again to undo: if anything is linked, every link is replaced
 with a real copy instead.
@@ -96,8 +96,10 @@ with a real copy instead.
   `~/.config/purpura-backups/<date>/` first.
 - Linked configs stay in the repo's purple: `purpura.sh` can't recolor them
   without editing the repo.
-- fish stays a real copy, because it keeps rewriting its own `fish_variables`.
-  Edits to the repo's fish config need copying over by hand.
+- fish and `gtk-3.0`/`gtk-4.0` stay real copies, because they get rewritten
+  as they're used: fish rewrites its own `fish_variables`, and KDE's GTK
+  settings sync rewrites the GTK folders. Edits to the repo's copies need
+  copying over by hand.
 - Other apps that rewrite their own config now show up as changes in
   `git status`.
 

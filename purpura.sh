@@ -123,8 +123,9 @@ finishes, so nothing stays in the old color. It warns and asks first.
       --link         link the configs to this checkout instead of installing
                      anything, so editing the repo edits the live config; if
                      anything is linked already, every link is replaced with
-                     a real copy instead. fish is never linked, since it
-                     rewrites its own config. Takes no other options
+                     a real copy instead. fish and the GTK folders are
+                     never linked, since they get rewritten as they're
+                     used. Takes no other options
   -h, --help         show this help
 EOF
 }
@@ -610,17 +611,27 @@ unlink_configs() {
     info "$count links replaced with real copies."
 }
 
-# Fish rewrites fish_variables as the shell runs, which through a link would
-# keep changing the repo. So it's never linked: a link from before this rule
-# becomes a real copy, and a missing config gets one.
-ensure_fish_copy() {
-    local dst=$HOME/.config/fish
-    if [[ -L $dst && $(realpath -m -- "$dst") == "$REPO/.config/fish" ]]; then
-        unlink_configs .config/fish
-    elif [[ ! -e $dst && ! -L $dst ]]; then
-        mkdir -p -- "$HOME/.config"
-        cp -a -- "$REPO/.config/fish" "$dst"
-        info "Copied fish's config to ~/.config/fish."
+# Configs other programs rewrite as they run, which through a link would keep
+# changing the repo: fish its fish_variables, and KDE's GTK settings sync the
+# GTK folders (cursor theme, window button assets). So they're never linked:
+# a link from before this rule becomes a real copy, and a missing one gets one.
+NEVER_LINKED=(.config/fish .config/gtk-3.0 .config/gtk-4.0)
+
+ensure_real_copies() {
+    local item dst
+    local -a linked=()
+    for item in "${NEVER_LINKED[@]}"; do
+        dst=$HOME/$item
+        if [[ -L $dst && $(realpath -m -- "$dst") == "$REPO/$item" ]]; then
+            linked+=("$item")
+        elif [[ ! -e $dst && ! -L $dst && -e $REPO/$item ]]; then
+            mkdir -p -- "$(dirname -- "$dst")"
+            cp -a -- "$REPO/$item" "$dst"
+            info "Copied $item to ~/$item."
+        fi
+    done
+    if ((${#linked[@]})); then
+        unlink_configs "${linked[@]}"
     fi
 }
 
@@ -628,10 +639,13 @@ ensure_fish_copy() {
 # there also hold things that aren't ours, like other color schemes.
 toggle_links() {
     local item
-    local -a items=()
-    ensure_fish_copy
+    local -a items=() excludes=()
+    ensure_real_copies
+    for item in "${NEVER_LINKED[@]}"; do
+        excludes+=(":(exclude)$item")
+    done
     mapfile -d '' -t items < <(
-        git -C "$REPO" ls-files -z -- .config ':(exclude).config/fish' | cut -z -d/ -f1,2 | sort -zu
+        git -C "$REPO" ls-files -z -- .config "${excludes[@]}" | cut -z -d/ -f1,2 | sort -zu
         git -C "$REPO" ls-files -z -- .local
     )
     ((${#items[@]})) || die "No tracked configs found in $REPO - --link needs a git checkout."
