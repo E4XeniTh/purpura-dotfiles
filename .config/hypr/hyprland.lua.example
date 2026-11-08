@@ -196,7 +196,10 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     -- the action rather than one bind, so any key bound to it counts, Settings >
     -- Shortcuts' included. kitty is stopped from here rather than through the
     -- shell so that a stuck shell can't get in the way, with SIGKILL following
-    -- in case kitty is what's stuck.
+    -- in case kitty is what's stuck. While the console slides in or out, kitty's
+    -- surface isn't always up, so the shell covers the console's area with an
+    -- empty "dropdownconsolesliding" surface, and a press there does nothing
+    -- rather than close the window underneath.
     --
     -- The pid check matters: it's -1 if Hyprland can't tell, and kill -9 -1 would
     -- stop every process the user owns.
@@ -251,6 +254,9 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
                     hl.dispatch(hl.dsp.exec_cmd("kill " .. layer.pid .. "; sleep 1; kill -9 " .. layer.pid .. " 2>/dev/null"))
                     return
                 end
+            end
+            for _, layer in ipairs(hl.get_layers({ namespace = "dropdownconsolesliding" })) do
+                if layer.mapped and contains(layer.x, layer.y, layer.w, layer.h, cursor) then return end
             end
             local window = windowUnderCursor(cursor)
             if window then hl.dispatch(closeWindow({ window = window })) end

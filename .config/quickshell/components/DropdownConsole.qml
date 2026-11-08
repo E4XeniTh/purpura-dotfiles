@@ -29,6 +29,11 @@ import "../Config.js" as Config
 // It's on the overlay layer because the panel is on top: a surface above the
 // panel keeps its text at full brightness.
 //
+// hyprland.lua's Close Window stops kitty when the mouse is over its surface.
+// While the panel slides, or waits for a new kitty, that surface isn't always
+// up, so an empty "dropdownconsolesliding" surface covers the console's area
+// for that time, and Close Window leaves the window underneath alone.
+//
 // kitty starts the first time the console opens. After that, closing only
 // hides it, through kitty's remote control socket, so whatever's in it stays.
 // Should it end some other way (`exit`, a crash, the close window bind in
@@ -224,6 +229,35 @@ Scope {
         }
     }
 
+    // ---------------- while it slides ----------------
+    // See the top of this file. Nothing's drawn and no clicks are taken, so it
+    // can map and unmap without showing.
+    PanelWindow {
+        visible: !!root.screen && !root.barHidden && root.sliding
+        screen: root.screen
+
+        WlrLayershell.namespace: "dropdownconsolesliding"
+
+        anchors {
+            top: true
+            left: true
+        }
+        margins {
+            top: root.edgeTop + root.barHeight
+            left: root.edgeLeft + root.consoleOffset
+        }
+        implicitWidth: root.consoleWidth
+        implicitHeight: root.consoleHeight
+        exclusiveZone: -1
+        color: "transparent"
+        mask: Region {}
+    }
+
+    // Whether Hyprland has kitty's surface up, from its own events.
+    property bool terminalMapped: false
+    readonly property bool sliding: root.expansion > 0
+        && !(root.open && root.expansion === 1 && root.terminalMapped)
+
     // ---------------- opening and closing ----------------
     // Whether the console is open or on its way there.
     property bool open: false
@@ -332,7 +366,10 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (event.name === "closelayer" && event.data === root.terminalNamespace && hideTimer.running) {
+            if (event.data !== root.terminalNamespace) return
+            if (event.name === "openlayer") root.terminalMapped = true
+            if (event.name === "closelayer") root.terminalMapped = false
+            if (event.name === "closelayer" && hideTimer.running) {
                 hideTimer.stop()
                 root.animateTo(0)
             }
@@ -465,6 +502,7 @@ Scope {
     function terminalGone() {
         root.terminalRunning = false
         root.terminalShown = false
+        root.terminalMapped = false
         root.controlQueue = []
         root.controlRetries = 0
         hideTimer.stop()
@@ -590,6 +628,8 @@ Scope {
             root.open = true
             root.expansion = 1
             root.terminalShown = true
+            // Already up, so Hyprland won't say so again.
+            root.terminalMapped = true
             root.control(["resize-os-window", "--match=all", "--action=show"])
             changeTimer.restart()
         } else {
