@@ -48,9 +48,9 @@ LIVE_CONF="$HOME/.config/quickshell/liveworkspaces.json"
 # calls working fine (that path never goes through this script or jq).
 # The global bar/OSD toggles that used to live under keys like this
 # (__strictWorkspaceWidget etc) have since moved to their own
-# barsettings.json (see ShellSettings.qml) and are never written here
-# anymore - this filter stays anyway, both as a defensive no-op and in
-# case an existing monitors.json still has one leftover from before.
+# barsettings.json (see ShellSettings.qml), but Set Default does still
+# write "__primary" (which monitor is primary, read back by
+# Dashboard.qml) - so this filter is load-bearing, not just defensive.
 jq -r '
     to_entries[]
     | select(.key | startswith("__") | not)

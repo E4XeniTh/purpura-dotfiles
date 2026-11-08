@@ -63,9 +63,12 @@ Scope {
     property bool identifying: false
     property string primaryMonitor: "DP-1"
 
-    // primaryMonitor defaults to a hardcoded output name and isn't
-    // persisted to disk, so on a machine that's never had its primary
-    // explicitly set (double-click a display in Screen Settings) it can
+    // primaryMonitor defaults to a hardcoded output name until
+    // savedPrimaryProcess below loads the one Set Default saved (the
+    // "__primary" key in monitors.json, see ScreenSettings.qml's
+    // setDefault()), so on a machine that's never had its primary
+    // explicitly set and saved (double-click a display in Screen
+    // Settings, then Set Default) it can
     // easily point at a name nothing is actually connected to - a
     // laptop with only eDP-1 is exactly this case, since "DP-1" doesn't
     // exist on it at all. Same "resolve to whichever screen is actually
@@ -624,6 +627,27 @@ Scope {
     Component.onCompleted: {
         root.detectBrightnessControllers()
         root.refreshSolaar()
+        savedPrimaryProcess.running = true
+    }
+
+    // Restores the primary monitor Set Default saved (monitors.json's
+    // "__primary" key, see ScreenSettings.qml's setDefault()) - once, at
+    // startup only. A double-click later in the session is live-only
+    // until Set Default, same as every other Screen Settings edit, so
+    // this never re-reads and overrides it. Missing file/key just
+    // leaves the hardcoded default above in place.
+    Process {
+        id: savedPrimaryProcess
+        command: ["cat", Quickshell.env("HOME") + "/.config/quickshell/monitors.json"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const saved = JSON.parse(text).__primary
+                    if (typeof saved === "string" && saved !== "") root.primaryMonitor = saved
+                } catch (e) {}
+            }
+        }
     }
 
     IpcHandler {

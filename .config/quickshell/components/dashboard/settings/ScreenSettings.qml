@@ -109,8 +109,9 @@ Item {
     onPrimaryMonitorChanged: root.seedDefaultWorkspacesIfFresh()
 
     // primaryMonitor itself defaults to a hardcoded output name
-    // ("DP-1", see Dashboard.qml) and isn't persisted to disk, so on a
-    // genuinely fresh setup (or a different machine entirely) it can
+    // ("DP-1", see Dashboard.qml) until Set Default has saved one (see
+    // setDefault()'s "__primary"), so on a genuinely fresh setup (or a
+    // different machine entirely) it can
     // easily point at a name nothing is actually connected to. Same
     // "resolve to whichever screen is actually there" fallback Bar.qml/
     // LockScreen.qml already use, so seedDefaultWorkspacesIfFresh()
@@ -946,6 +947,9 @@ Item {
 
         if (currentNames.length !== defaultNames.length) return true
 
+        // Primary changed (or was never saved) - see setDefault().
+        if (root.effectivePrimaryName && root.screensStore.__primary !== root.effectivePrimaryName) return true
+
         for (const name of currentNames) {
             const c = current[name]
             const d = root.screensStore[name]
@@ -988,8 +992,18 @@ Item {
     // edit, Set Default, Apply, or edit, Apply, Set Default - and each
     // button still only ever consumes the staging it actually needs
     // (Apply clears it in its own finally block once IT runs).
+    //
+    // Also saves which monitor is primary (double-click a card) as the
+    // "__primary" key - kept out of computeCurrentSnapshot() itself
+    // since everything else treats that snapshot as monitor-name keys
+    // only. effectivePrimaryName rather than the raw primaryMonitor, so
+    // what gets saved is the screen actually acting as primary right
+    // now, never a name that isn't connected. Dashboard.qml reads it
+    // back once at startup (see its savedPrimaryProcess);
+    // apply-monitors.sh already skips every "__" key.
     function setDefault() {
         const storeSnapshot = root.computeCurrentSnapshot()
+        if (root.effectivePrimaryName) storeSnapshot.__primary = root.effectivePrimaryName
 
         root.screensStore = storeSnapshot
         monitorsFile.setText(JSON.stringify(storeSnapshot, null, 2) + "\n")
@@ -2050,6 +2064,16 @@ Item {
 
                             Item { Layout.fillWidth: true }
                         }
+                    }
+
+                    // Which monitor Set Default saved as primary (its
+                    // "__primary" key, see setDefault()).
+                    Text {
+                        visible: !!root.screensStore.__primary
+                        text: "Primary: " + (root.screensStore.__primary || "")
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
                     }
 
                     Item { Layout.fillHeight: true }
