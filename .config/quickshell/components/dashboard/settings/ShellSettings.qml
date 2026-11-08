@@ -1461,6 +1461,43 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
+                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autoHideEnabled
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: parent.on ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
+                            }
+                        }
+
+                        Text {
+                            text: "Auto-hide when unfocused"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
                         readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
 
                         Rectangle {

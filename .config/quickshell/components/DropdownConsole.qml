@@ -42,6 +42,10 @@ import "../Config.js" as Config
 // file, as kitty can't say whether it's hidden. A kitty that's there but doesn't
 // answer gets stopped, so there's only ever one.
 //
+// With auto-hide on, the console closes once kitty loses keyboard focus, e.g.
+// to a click on a window. Hyprland doesn't announce focus moving between layer
+// surfaces, so kitty is asked instead, a few times a second while it's up.
+//
 // While the console is closed, a hidden kitty with nothing running in its
 // foreground gets stopped once the autokill delay has passed. One that's
 // still running a command keeps being checked instead of being killed.
@@ -78,6 +82,7 @@ Scope {
     function setAutokillEnabled(on) { root.update({ autokill: !!on }) }
     function setAutokillMinutes(value) { root.update({ autokillMinutes: Math.max(1, Math.round(value)) }) }
     function setAutokillNotification(on) { root.update({ autokillNotification: !!on }) }
+    function setAutoHideEnabled(on) { root.update({ autoHide: !!on }) }
     function setStartupCommand(text) { root.update({ startupCommand: String(text).trim() }) }
 
     readonly property int minWidthPercent: 25
@@ -99,6 +104,7 @@ Scope {
         ? root.clamped(root.store.opacityPercent, 0, 100)
         : Math.round(Qt.color(Config.fillcolor).a * 100)
 
+    readonly property bool autoHideEnabled: root.store.autoHide !== false
     readonly property bool autokillEnabled: root.store.autokill !== false
     readonly property int autokillMinutes: Math.max(1, Math.round(Number(root.store.autokillMinutes)) || 30)
     readonly property bool autokillNotification: root.store.autokillNotification !== false
@@ -666,6 +672,38 @@ Scope {
             if (!root.terminalShown) return
             root.applyGeometry()
             root.applyFontSize()
+        }
+    }
+
+    // ---------------- auto-hide ----------------
+    // Only after kitty has had focus since it was last shown, so a kitty that
+    // never gets it, or is slow to, isn't hidden straight away.
+    property bool terminalHadFocus: false
+
+    onTerminalShownChanged: root.terminalHadFocus = false
+
+    Timer {
+        interval: 250
+        running: root.autoHideEnabled && root.open && root.terminalShown && root.terminalRunning
+        repeat: true
+        onTriggered: if (!focusCheck.running) focusCheck.running = true
+    }
+
+    Process {
+        id: focusCheck
+        command: ["kitten", "@", "--to", "unix:" + root.socket, "ls"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let focused
+                try {
+                    focused = JSON.parse(text).some(osWindow => osWindow.is_focused)
+                } catch (e) {
+                    return
+                }
+                if (focused) root.terminalHadFocus = true
+                else if (root.terminalHadFocus && root.autoHideEnabled && root.open && root.terminalShown) root.closeConsole()
+            }
         }
     }
 

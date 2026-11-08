@@ -188,26 +188,72 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     --#######################################################################################
 
 
-    -- Close Window closes the dropdown console instead while that's up. It isn't a
-    -- window, so nothing else can reach it, and a program stuck in it can leave
-    -- no other way out. This wraps the action rather than one bind, so any key
-    -- bound to it counts, Settings > Shortcuts' included. kitty is stopped from
-    -- here rather than through the shell so that a stuck shell can't get in the
-    -- way, with SIGKILL following in case kitty is what's stuck.
+    -- Close Window closes whatever's under the mouse: the dropdown console if
+    -- it's up and the mouse is over it, otherwise the window there, so a stray
+    -- press can't close something the mouse isn't on. With nothing under the
+    -- mouse it does nothing. The console isn't a window, so nothing else can
+    -- reach it, and a program stuck in it can leave no other way out. This wraps
+    -- the action rather than one bind, so any key bound to it counts, Settings >
+    -- Shortcuts' included. kitty is stopped from here rather than through the
+    -- shell so that a stuck shell can't get in the way, with SIGKILL following
+    -- in case kitty is what's stuck.
     --
     -- The pid check matters: it's -1 if Hyprland can't tell, and kill -9 -1 would
     -- stop every process the user owns.
+    local function pair(v, a, b)
+        if type(v) ~= "table" then return 0, 0 end
+        return v[a] or v[1] or 0, v[b] or v[2] or 0
+    end
+
+    local function contains(x, y, w, h, cursor)
+        return cursor.x >= x and cursor.x < x + w and cursor.y >= y and cursor.y < y + h
+    end
+
+    -- Hyprland can't say which window is on top, so this goes by what's drawn
+    -- over what: a shown special workspace over the rest, pinned and floating
+    -- windows over tiled ones, a fullscreen window over everything that isn't
+    -- allowed over it, and the most recently focused one among equals.
+    local function windowUnderCursor(cursor)
+        local best, bestRank, bestHistory
+        for _, window in ipairs(hl.get_windows({ mapped = true })) do
+            local workspace = window.workspace
+            if window.visible ~= false and not window.hidden and workspace and workspace.visible then
+                local x, y = pair(window.at, "x", "y")
+                local w, h = pair(window.size, "x", "y")
+                if contains(x, y, w, h, cursor) then
+                    local rank = 0
+                    if workspace.special then rank = rank + 16 end
+                    if window.pinned then rank = rank + 8 end
+                    if window.allowed_over_fullscreen then rank = rank + 4 end
+                    if (window.fullscreen or 0) > 0 then rank = rank + 2 end
+                    if window.floating then rank = rank + 1 end
+                    local history = window.focus_history_id or math.huge
+                    if history < 0 then history = math.huge end
+                    if not best or rank > bestRank or (rank == bestRank and history < bestHistory) then
+                        best, bestRank, bestHistory = window, rank, history
+                    end
+                end
+            end
+        end
+        return best
+    end
+
     local closeWindow = hl.dsp.window.close
     hl.dsp.window.close = function(...)
         local close = closeWindow(...)
+        -- A bind that names its own window keeps it.
+        if select("#", ...) > 0 then return close end
         return function()
+            local cursor = hl.get_cursor_pos()
+            if not cursor then return end
             for _, layer in ipairs(hl.get_layers({ namespace = "dropdownconsole" })) do
-                if layer.mapped and layer.pid > 0 then
+                if layer.mapped and layer.pid > 0 and contains(layer.x, layer.y, layer.w, layer.h, cursor) then
                     hl.dispatch(hl.dsp.exec_cmd("kill " .. layer.pid .. "; sleep 1; kill -9 " .. layer.pid .. " 2>/dev/null"))
                     return
                 end
             end
-            hl.dispatch(close)
+            local window = windowUnderCursor(cursor)
+            if window then hl.dispatch(closeWindow({ window = window })) end
         end
     end
 
