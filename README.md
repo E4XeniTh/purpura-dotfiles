@@ -184,7 +184,7 @@ package lists are the exact set):
 - `xembedsniproxy` (AUR) - (useful if you emulate windows applications through Wayland)
 - `kservice` - `kbuildsycoca6`, run at login so KDE apps like Dolphin see installed apps
 - `networkmanager` - provides `nmcli`, which the Connections tab's Wired category also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
-- `zerotier-one` (AUR, optional) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
+- `zerotier-one` (AUR, optional, not installed by `purpura.sh`) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
 - `grim` - the custom screenshot picker (`components/Screenshot.qml`, META + X) freezes every screen with it before the picker appears; every capture is then taken from those frozen frames, never the live screen, so the picker's own dim/selection border can't end up in the image. `wl-clipboard` above also covers the `wl-copy` the result goes into
@@ -201,13 +201,13 @@ package lists are the exact set):
 
 - `dolphin`
 - `rofi`
-- Waterfox (Flatpak)
+- Waterfox (Flatpak, not installed by `purpura.sh`)
 - `solaar` — only if you have Logitech Unifying peripherals
 
 **Bundled personal configs** (only matter if you use them):
 - `fish`
 - `fastfetch`
-- ZapZap
+- ZapZap (not installed by `purpura.sh`)
 
 ## Notes
 

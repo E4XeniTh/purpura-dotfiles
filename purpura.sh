@@ -73,13 +73,11 @@ SHIPPED_ELSEWHERE=(
     "xembedsniproxy:xembedsniproxy"
 )
 
-# default (y/n) | question | packages | flatpaks
+# default (y/n) | question | packages
 OPTIONAL_GROUPS=(
-    "y|Apps the keybinds open: rofi, Dolphin, Waterfox (Flatpak)|rofi dolphin flatpak|net.waterfox.waterfox"
-    "y|fish shell + fastfetch (the terminal greeting)|fish fastfetch|"
-    "n|Solaar (Logitech mice/keyboards: battery list, sensitivity setting)|solaar|"
-    "n|ZapZap (WhatsApp)|zapzap|"
-    "n|ZeroTier|zerotier-one|"
+    "y|Apps the keybinds open: rofi, Dolphin|rofi dolphin"
+    "y|fish shell + fastfetch (the terminal greeting)|fish fastfetch"
+    "n|Solaar (Logitech mice/keyboards: battery list, sensitivity setting)|solaar"
 )
 
 # What a color change stops besides windows, which often have none open:
@@ -353,18 +351,16 @@ install_packages() {
     command -v pacman >/dev/null || die "This installer is for Arch Linux and Arch-based distros (no pacman found). Use --no-packages to only install the configs."
     say "Packages"
 
-    local -a wanted=("${CORE_PACKAGES[@]}") flatpaks=() extra=() missing=() repo=() aur=() found=() unknown=()
-    local group default question pkgs fps p helper
+    local -a wanted=("${CORE_PACKAGES[@]}") extra=() missing=() repo=() aur=() found=() unknown=()
+    local group default question pkgs p helper
     if [[ -n $(ls -A /sys/class/backlight 2>/dev/null) ]]; then
         wanted+=(brightnessctl) # a built-in panel ddcutil can't reach
     fi
     for group in "${OPTIONAL_GROUPS[@]}"; do
-        IFS='|' read -r default question pkgs fps <<<"$group"
+        IFS='|' read -r default question pkgs <<<"$group"
         if ask "$question?" "$default"; then
             read -ra extra <<<"$pkgs"
             wanted+=("${extra[@]}")
-            read -ra extra <<<"$fps"
-            flatpaks+=("${extra[@]}")
         fi
     done
 
@@ -421,18 +417,6 @@ install_packages() {
     fi
     if ((${#missing[@]} == 0)); then
         info "Everything's already installed."
-    fi
-
-    if ((${#flatpaks[@]})) && ! command -v flatpak >/dev/null; then
-        warn "flatpak isn't installed, skipped: ${flatpaks[*]}"
-    elif ((${#flatpaks[@]})); then
-        info "From Flathub: ${flatpaks[*]}"
-        flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-        if ((ASSUME_YES)); then
-            flatpak install --user -y flathub "${flatpaks[@]}"
-        else
-            flatpak install --user flathub "${flatpaks[@]}"
-        fi
     fi
 }
 
