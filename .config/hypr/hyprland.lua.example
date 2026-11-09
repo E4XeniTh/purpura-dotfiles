@@ -275,7 +275,6 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
     hl.bind(mainMod .. " + space", hl.dsp.exec_cmd("rofi -show drun"), { description = "App launcher" })
 
-    hl.bind(mainMod .. " + F", hl.dsp.exec_cmd("flatpak run net.waterfox.waterfox"), { description = "Open browser" })
     hl.bind(mainMod .. " + E", hl.dsp.exec_cmd("dolphin"), { description = "Open file manager" })
 
 

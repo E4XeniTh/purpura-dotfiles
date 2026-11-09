@@ -201,7 +201,6 @@ package lists are the exact set):
 
 - `dolphin`
 - `rofi`
-- Waterfox (Flatpak, not installed by `purpura.sh`)
 - `solaar` — only if you have Logitech Unifying peripherals
 
 **Bundled personal configs** (only matter if you use them):
