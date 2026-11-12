@@ -37,7 +37,8 @@ hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
 hl.exec_cmd("~/.config/hypr/scripts/apply-peripherals.sh")
 hl.exec_cmd("hyprpaper")
 hl.exec_cmd("xembedsniproxy")
-hl.exec_cmd("hypridle")
+-- No hypridle: the shell locks, sleeps and sends the AFK reminders itself
+-- (Settings > Shell > Power).
 -- HYPRLAND_INSTANCE_SIGNATURE is what xdg-desktop-portal-hyprland needs
 -- to find this specific Hyprland instance's IPC socket - without it in
 -- the activation environment, screen sharing/picker (Discord, OBS, etc.)

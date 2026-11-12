@@ -11,8 +11,12 @@ import "IdleLogic.js" as Logic
 // The decisions themselves are in IdleLogic.js.
 //
 // Idleness comes from Hyprland (IdleMonitor, ext-idle-notify-v1), which
-// also counts anything keeping the computer awake - a video playing, the
-// idle_inhibit window rules in hyprland.lua - as activity.
+// also counts anything keeping the computer awake - a Wayland idle
+// inhibitor, the idle_inhibit window rules in hyprland.lua - as activity.
+// Apps that ask over D-Bus instead (org.freedesktop.ScreenSaver - browsers
+// playing a video, among others) or hold a systemd idle inhibitor lock
+// are answered by helpers/idle_inhibit, and count too: see "kept awake
+// over D-Bus" below.
 //
 // Auto-sleep, by its two options:
 // - Countdown off: it sleeps the moment the delay is up.
@@ -102,13 +106,81 @@ Scope {
         onTriggered: settingsFile.setText(JSON.stringify(root.store, null, 2) + "\n")
     }
 
+    // ---------------- kept awake over D-Bus ----------------
+    // helpers/idle_inhibit answers org.freedesktop.ScreenSaver and watches
+    // systemd's idle inhibitor locks, keeping what's inhibiting in this file.
+    // It runs on its own, outliving the shell: a reload would otherwise drop
+    // every inhibitor, and apps only ask once. Starting it again is harmless
+    // (a second one exits straight away), so it's started now and then in
+    // case it isn't running.
+    readonly property string inhibitorsPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/purpura/idle-inhibitors.json"
+
+    FileView {
+        id: inhibitorsFile
+
+        path: root.inhibitorsPath
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: inhibitorsFile.reload()
+    }
+
+    readonly property var external: Logic.readExternal(inhibitorsFile.text())
+
+    // While anything's inhibiting this way, the idle monitors below are
+    // switched off - and switched back on when it stops, which starts their
+    // delays over from then, the same as a Wayland inhibitor ending does.
+    readonly property bool externallyInhibited: root.external.any
+
+    Timer {
+        interval: 60000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+
+        onTriggered: Quickshell.execDetached([Quickshell.shellDir + "/helpers/idle_inhibit", root.inhibitorsPath])
+    }
+
+    // ---------------- AFK reminders ----------------
+    // Moved over from hypridle, which no longer listens for D-Bus inhibitors.
+    IdleMonitor {
+        id: afkThreeIdle
+
+        enabled: root.settingsLoaded && !root.externallyInhibited
+        timeout: 180
+        respectInhibitors: true
+
+        onIsIdleChanged: {
+            if (afkThreeIdle.isIdle) root.afkReminder(3)
+        }
+    }
+
+    IdleMonitor {
+        id: afkFiveIdle
+
+        enabled: root.settingsLoaded && !root.externallyInhibited
+        timeout: 300
+        respectInhibitors: true
+
+        onIsIdleChanged: {
+            if (afkFiveIdle.isIdle) root.afkReminder(5)
+        }
+    }
+
+    function afkReminder(minutes) {
+        Quickshell.execDetached([
+            "notify-send", "-i", "system-suspend-uninhibited", "AFK",
+            minutes + " minutes of inactivity has passed."
+        ])
+    }
+
     // ---------------- auto-lock ----------------
     // Nothing waits on the settings' defaults before the file's been read:
     // an idle monitor starts its delay over whenever its settings change.
     IdleMonitor {
         id: lockIdle
 
-        enabled: root.settingsLoaded && root.autoLock
+        enabled: root.settingsLoaded && root.autoLock && !root.externallyInhibited
         timeout: root.lockMinutes * 60
         respectInhibitors: true
 
@@ -121,7 +193,7 @@ Scope {
     IdleMonitor {
         id: lockWarningIdle
 
-        enabled: root.settingsLoaded && root.autoLock && root.lockMinutes >= 2
+        enabled: root.settingsLoaded && root.autoLock && root.lockMinutes >= 2 && !root.externallyInhibited
         timeout: (root.lockMinutes - 1) * 60
         respectInhibitors: true
 
@@ -140,7 +212,7 @@ Scope {
     IdleMonitor {
         id: sleepIdle
 
-        enabled: root.settingsLoaded && root.autoSleep
+        enabled: root.settingsLoaded && root.autoSleep && !root.externallyInhibited
         timeout: root.sleepMinutes * 60
         respectInhibitors: true
 
@@ -256,8 +328,11 @@ Scope {
     }
 
     // A monitor with a window keeping the computer awake counts as active
-    // the whole time. Hyprland doesn't announce that, so it's asked.
+    // the whole time. Hyprland doesn't announce that, so it's asked - and
+    // asked straight away when a D-Bus inhibitor comes or goes.
     Timer {
+        id: clientsTimer
+
         interval: 10000
         repeat: true
         triggeredOnStart: true
@@ -267,6 +342,10 @@ Scope {
             clientsProcess.running = false
             clientsProcess.running = true
         }
+    }
+
+    onExternalChanged: {
+        if (clientsTimer.running) clientsTimer.triggered()
     }
 
     Process {
@@ -283,7 +362,15 @@ Scope {
                     return
                 }
                 const monitors = Hyprland.monitors.values.map(m => ({ id: m.id, name: m.name }))
-                const inhibited = Logic.inhibitedMonitors(clients, monitors)
+                let inhibited = Logic.inhibitedMonitors(clients, monitors)
+
+                // D-Bus inhibitors count on the monitors their app's windows
+                // are on; one with no window to go by (or a systemd lock)
+                // keeps every monitor awake.
+                const external = Logic.monitorsForPids(clients, monitors, root.external.pids)
+                if (root.external.systemd || external.unmatched) inhibited = monitors.map(m => m.name)
+                else inhibited = inhibited.concat(external.names)
+
                 if (inhibited.length) root.stamps = Logic.stamp(root.stamps, inhibited, Date.now())
             }
         }

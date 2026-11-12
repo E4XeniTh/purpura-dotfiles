@@ -1,5 +1,6 @@
 .config/quickshell/helpers/auth
 .config/quickshell/helpers/cava_bridge
+.config/quickshell/helpers/idle_inhibit
 .config/quickshell/helpers/*.o
 
 # Runtime monitor layout, written by ScreenSettings.qml's Set Default
@@ -19,6 +20,7 @@
 .config/quickshell/nightlightsettings.json
 .config/quickshell/dropdownconsolesettings.json
 .config/quickshell/uiscalesettings.json
+.config/quickshell/powersettings.json
 .config/quickshell/shortcuts.json
 .config/hypr/shortcuts.lua
 

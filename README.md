@@ -157,7 +157,7 @@ cp -n .config/ZapZap/ZapZap.conf.example ~/.config/ZapZap/ZapZap.conf
 
 ## Build the helper binaries
 
-Two small C helpers need compiling locally - they're gitignored since
+Three small C helpers need compiling locally - they're gitignored since
 they're machine-specific. `purpura.sh` does this for you; by hand:
 
 - **`auth`**: the lock screen checks your real login password through
@@ -165,6 +165,11 @@ they're machine-specific. `purpura.sh` does this for you; by hand:
 - **`cava_bridge`**: feeds the default sink's audio into `libcava` for
   the dashboard's visualizer - not something a prebuilt binary can cover
   since it's linked against a specific fork of `libcava`.
+- **`idle_inhibit`**: answers apps that ask over D-Bus not to go idle
+  (`org.freedesktop.ScreenSaver.Inhibit` - browsers playing a video, among
+  others) and watches systemd idle inhibitor locks, so those hold off
+  auto-lock and auto-sleep too. Hyprland only sees Wayland inhibitors by
+  itself. The shell starts it and it keeps running across shell reloads.
 
 ```bash
 cd ~/.config/quickshell/helpers
@@ -172,8 +177,7 @@ make
 sudo cp ../pam.d/quickshell-auth /etc/pam.d/quickshell-auth
 ```
 
-Re-run `make` after pulling changes to `helpers/auth.c` or
-`helpers/cava_bridge.c`.
+Re-run `make` after pulling changes to any of the helpers' `.c` files.
 
 ## Dependencies and affected apps
 
@@ -191,7 +195,6 @@ package lists are the exact set):
 - `libcava` (AUR)
 - `libpulse`
 - `hyprpaper`
-- `hypridle` - `hypr/hypridle.conf`'s AFK reminders (locking and sleeping are the shell's own, Settings > Shell > Power)
 - `hyprshutdown`
 - `hyprpolkitagent` (or another polkit authentication agent)
 - `xdg-desktop-portal`

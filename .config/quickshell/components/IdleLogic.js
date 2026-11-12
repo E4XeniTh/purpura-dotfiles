@@ -91,6 +91,42 @@ function inhibitedMonitors(clients, monitors) {
     return names
 }
 
+// Where the apps behind D-Bus inhibitors (helpers/idle_inhibit) have their
+// windows: { names, unmatched } - unmatched when an inhibitor's process has
+// no window (a sandboxed app, a background service), so it can't be put
+// down to any one monitor.
+function monitorsForPids(clients, monitors, pids) {
+    const names = []
+    let unmatched = false
+    for (const pid of pids) {
+        const own = (clients || []).filter(client => client && client.pid === pid)
+        if (!own.length) {
+            unmatched = true
+            continue
+        }
+        for (const client of own) {
+            const monitor = monitors.find(m => m.id === client.monitor)
+            if (monitor && names.indexOf(monitor.name) < 0) names.push(monitor.name)
+        }
+    }
+    return { names: names, unmatched: unmatched }
+}
+
+// The D-Bus/systemd side of what's keeping the computer awake, from
+// helpers/idle_inhibit's state file: { pids, systemd, any }.
+function readExternal(text) {
+    let state = null
+    try {
+        state = JSON.parse(text)
+    } catch (e) {
+        return { pids: [], systemd: false, any: false }
+    }
+    const inhibitors = state && Array.isArray(state.inhibitors) ? state.inhibitors : []
+    const pids = inhibitors.map(i => Number(i.pid) || 0)
+    const systemd = !!(state && state.systemd === true)
+    return { pids: pids, systemd: systemd, any: inhibitors.length > 0 || systemd }
+}
+
 function sameList(a, b) {
     return a.length === b.length && a.every((item, i) => item === b[i])
 }

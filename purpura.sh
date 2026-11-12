@@ -48,7 +48,7 @@ PRESETS=(
 
 CORE_PACKAGES=(
     # compositor + session
-    hyprland hyprpaper hypridle hyprpolkitagent hyprsunset hyprshutdown
+    hyprland hyprpaper hyprpolkitagent hyprsunset hyprshutdown
     xdg-desktop-portal xdg-desktop-portal-hyprland
     # the shell
     quickshell qt6-5compat kservice
@@ -777,7 +777,7 @@ toggle_links() {
 # ---------------- helpers ----------------
 build_helpers() {
     local dir=$HOME/.config/quickshell/helpers pam=$HOME/.config/quickshell/pam.d/quickshell-auth
-    say "Lock screen + visualizer helpers"
+    say "Lock screen, visualizer and idle helpers"
     # Built one at a time so a missing libcava only costs the visualizer.
     if make -C "$dir" auth >/dev/null; then
         info "Built helpers/auth (the lock screen's password check)."
@@ -788,6 +788,11 @@ build_helpers() {
         info "Built helpers/cava_bridge (the dashboard's visualizer)."
     else
         warn "Building helpers/cava_bridge failed (needs libcava from the AUR) - the dashboard's visualizer stays empty until it builds: make -C ${dir/#$HOME/\~}"
+    fi
+    if make -C "$dir" idle_inhibit >/dev/null; then
+        info "Built helpers/idle_inhibit (keeps auto-lock and auto-sleep off while a video plays)."
+    else
+        warn "Building helpers/idle_inhibit failed - apps that ask over D-Bus not to go idle (browsers playing a video) won't stop auto-lock or auto-sleep until it builds: make -C ${dir/#$HOME/\~}"
     fi
     if ! cmp -s -- "$pam" /etc/pam.d/quickshell-auth; then
         info "Installing the lock screen's PAM config (needs sudo)."

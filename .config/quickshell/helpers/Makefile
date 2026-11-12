@@ -1,7 +1,7 @@
 CC ?= cc
 CFLAGS ?= -O2 -Wall -Wextra
 
-all: auth cava_bridge
+all: auth cava_bridge idle_inhibit
 
 auth: auth.c
 	$(CC) $(CFLAGS) -o auth auth.c -lpam
@@ -13,6 +13,11 @@ auth: auth.c
 cava_bridge: cava_bridge.c
 	$(CC) $(CFLAGS) -o cava_bridge cava_bridge.c $$(pkg-config --cflags --libs libcava libpulse-simple)
 
+# The D-Bus side of auto-lock/auto-sleep's "don't go idle" requests (see
+# idle_inhibit.c) - sd-bus, from libsystemd (systemd-libs).
+idle_inhibit: idle_inhibit.c
+	$(CC) $(CFLAGS) -o idle_inhibit idle_inhibit.c $$(pkg-config --cflags --libs libsystemd)
+
 .PHONY: all clean
 clean:
-	rm -f auth cava_bridge
+	rm -f auth cava_bridge idle_inhibit
