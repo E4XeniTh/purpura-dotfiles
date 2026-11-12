@@ -51,6 +51,7 @@ Scope {
 
     readonly property bool autoLock: root.settings.autoLock
     readonly property int lockMinutes: root.settings.lockMinutes
+    readonly property bool lockWarning: root.settings.lockWarning
     readonly property bool showTime: root.settings.showTime
     readonly property bool showMedia: root.settings.showMedia
     readonly property bool autoSleep: root.settings.autoSleep
@@ -69,6 +70,7 @@ Scope {
 
     function setAutoLock(on) { root.update({ autoLock: !!on }) }
     function setLockMinutes(minutes) { root.update(Logic.lockMinutesPatch(root.settings, minutes)) }
+    function setLockWarning(on) { root.update({ lockWarning: !!on }) }
     function setShowTime(on) { root.update({ showTime: !!on }) }
     function setShowMedia(on) { root.update({ showMedia: !!on }) }
     function setAutoSleep(on) { root.update({ autoSleep: !!on }) }
@@ -141,39 +143,6 @@ Scope {
         onTriggered: Quickshell.execDetached([Quickshell.shellDir + "/helpers/idle_inhibit", root.inhibitorsPath])
     }
 
-    // ---------------- AFK reminders ----------------
-    // Moved over from hypridle, which no longer listens for D-Bus inhibitors.
-    IdleMonitor {
-        id: afkThreeIdle
-
-        enabled: root.settingsLoaded && !root.externallyInhibited
-        timeout: 180
-        respectInhibitors: true
-
-        onIsIdleChanged: {
-            if (afkThreeIdle.isIdle) root.afkReminder(3)
-        }
-    }
-
-    IdleMonitor {
-        id: afkFiveIdle
-
-        enabled: root.settingsLoaded && !root.externallyInhibited
-        timeout: 300
-        respectInhibitors: true
-
-        onIsIdleChanged: {
-            if (afkFiveIdle.isIdle) root.afkReminder(5)
-        }
-    }
-
-    function afkReminder(minutes) {
-        Quickshell.execDetached([
-            "notify-send", "-i", "system-suspend-uninhibited", "AFK",
-            minutes + " minutes of inactivity has passed."
-        ])
-    }
-
     // ---------------- auto-lock ----------------
     // Nothing waits on the settings' defaults before the file's been read:
     // an idle monitor starts its delay over whenever its settings change.
@@ -189,11 +158,13 @@ Scope {
         }
     }
 
-    // A minute's warning, as hypridle used to give.
+    // A minute's warning ("Warn before auto-lock"), as hypridle used to
+    // give. Only with a delay of 2 minutes or more, so it has a minute to
+    // come before.
     IdleMonitor {
         id: lockWarningIdle
 
-        enabled: root.settingsLoaded && root.autoLock && root.lockMinutes >= 2 && !root.externallyInhibited
+        enabled: root.settingsLoaded && root.autoLock && root.lockWarning && root.lockMinutes >= 2 && !root.externallyInhibited
         timeout: (root.lockMinutes - 1) * 60
         respectInhibitors: true
 

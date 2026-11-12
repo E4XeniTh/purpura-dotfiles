@@ -14,6 +14,7 @@ function readSettings(store) {
     return {
         autoLock: s.autoLock !== false,
         lockMinutes: lockMinutes,
+        lockWarning: s.lockWarning !== false,
         showTime: s.showTime !== false,
         showMedia: s.showMedia !== false,
         autoSleep: s.autoSleep === true,

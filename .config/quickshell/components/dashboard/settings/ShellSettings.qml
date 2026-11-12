@@ -1857,6 +1857,32 @@ Item {
                         Item { Layout.fillWidth: true }
                     }
 
+                    // A notification a minute before it locks - so only with a
+                    // delay of 2 minutes or more.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        CheckRow {
+                            uiScale: root.uiScale
+                            text: "Warn before auto-lock"
+                            checked: !!root.idle && root.idle.lockWarning
+                            usable: powerCategoryContent.autoLock
+                            onToggled: root.idle.setLockWarning(!root.idle.lockWarning)
+                        }
+
+                        Text {
+                            visible: !!root.idle && root.idle.lockMinutes < 2
+                            text: "(needs 2 minutes or more)"
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
                     CheckRow {
                         Layout.fillWidth: true
                         Layout.leftMargin: Config.scaled(28, root.uiScale)
