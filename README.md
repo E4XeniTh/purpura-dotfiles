@@ -18,7 +18,8 @@ out to be copied straight into place.
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and the dashboard's now-playing card beside it while something plays. Authenticates via PAM |
-| **Auto-lock, dim and suspend** | Settings > Shell > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active) and suspends, counting down on the main monitor first |
+| **Auto-lock, dim and suspend** | Settings > Shell > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active if you like) and suspends, counting down on the main monitor first. The dim covers everything, the settings screen and the lock screen included |
+| **Focus mode** | META + BackSpace dims every monitor but the one the mouse is on. A dimmed one wakes when the mouse moves onto it, and the shortcut again ends it. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |

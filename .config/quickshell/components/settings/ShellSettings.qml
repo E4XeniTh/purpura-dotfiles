@@ -1886,7 +1886,6 @@ Item {
 
                     CheckRow {
                         Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
                         uiScale: root.uiScale
                         text: "Show time"
                         checked: !!root.idle && root.idle.showTime
@@ -1896,7 +1895,6 @@ Item {
 
                     CheckRow {
                         Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
                         uiScale: root.uiScale
                         text: "Show media player (if active)"
                         checked: !!root.idle && root.idle.showMedia
@@ -1962,11 +1960,12 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: Config.scaled(28, root.uiScale)
                                 wrapMode: Text.WordWrap
-                                text: "Every monitor dims after its own inactivity, without waiting for the lock - input while it has focus, or a window on it keeping the computer awake, counts - and names the monitors still active."
+                                text: "Every monitor dims after its own inactivity, without waiting for the lock - input while it has focus, or a window on it keeping the computer awake, counts."
                                 color: Config.fgcolordark
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, root.uiScale)
                             }
+                        }
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -1998,45 +1997,70 @@ Item {
 
                             Item { Layout.fillWidth: true }
                         }
+                    }
 
-                        // How dark the dimmed screens go: 50-100%.
-                        ColumnLayout {
-                            spacing: Config.scaled(6, root.uiScale)
-                            enabled: dimOptions.usable
-                            opacity: enabled ? 1 : 0.35
+                    // The two below are how any dim looks - Focus mode's too -
+                    // so they stay usable with auto-dim off.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
 
-                            RowLayout {
-                                Layout.preferredWidth: Config.scaled(392, root.uiScale)
-                                Layout.fillWidth: false
-                                spacing: Config.scaled(8, root.uiScale)
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Show active monitors"
+                            checked: !!root.idle && root.idle.dimShowActive
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setDimShowActive(!root.idle.dimShowActive)
+                        }
 
-                                Text {
-                                    text: "Dim opacity:"
-                                    color: Config.fgcolor
-                                    font.family: Config.fontfamily
-                                    font.pixelSize: Config.scaled(13, root.uiScale)
-                                    font.bold: true
-                                }
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            wrapMode: Text.WordWrap
+                            text: "Names the monitors still in use on the dimmed ones - with Per monitor, or in Focus mode."
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, root.uiScale)
+                        }
+                    }
 
-                                Item { Layout.fillWidth: true }
+                    // How dark the dimmed screens go: 50-100%.
+                    ColumnLayout {
+                        Layout.topMargin: Config.scaled(4, root.uiScale)
+                        spacing: Config.scaled(6, root.uiScale)
+                        enabled: powerCategoryContent.ready
+                        opacity: enabled ? 1 : 0.35
 
-                                Text {
-                                    text: (root.idle ? root.idle.dimOpacity : 100) + "%"
-                                    color: Config.fgcolor
-                                    font.family: Config.fontfamily
-                                    font.pixelSize: Config.scaled(13, root.uiScale)
-                                    font.bold: true
-                                }
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Dim opacity:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
                             }
 
-                            DeviceSlider {
-                                Layout.preferredWidth: Config.scaled(392, root.uiScale)
-                                uiScale: root.uiScale
-                                value: root.idle ? (root.idle.dimOpacity - 50) / 50 : 1
-                                onMoved: (newValue) => root.idle.setDimOpacity(50 + newValue * 50)
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: (root.idle ? root.idle.dimOpacity : 100) + "%"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
                             }
                         }
 
+                        DeviceSlider {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: root.idle ? (root.idle.dimOpacity - 50) / 50 : 1
+                            onMoved: (newValue) => root.idle.setDimOpacity(50 + newValue * 50)
                         }
                     }
 

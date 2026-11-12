@@ -33,6 +33,7 @@ function readSettings(store) {
         autoDim: s.autoDim === true,
         dimMinutes: wholeNumber(s.dimMinutes, 5, 1),
         dimOpacity: Math.min(100, wholeNumber(s.dimOpacity, 100, 50)),
+        dimShowActive: s.dimShowActive !== false,
         // `perMonitor` and `autoSleep` are what these were called when
         // auto-suspend was "auto-sleep" and per-monitor belonged to it.
         dimPerMonitor: s.dimPerMonitor !== undefined ? s.dimPerMonitor === true : s.perMonitor === true,
@@ -107,17 +108,23 @@ function suspendDelayLabel(s) {
 //              activity (input with it focused, or a window on it keeping
 //              the computer awake)
 //   locked     the lock screen's up
+//   forced     monitors dimmed by Focus mode, whatever their inactivity
 // Returns { state, actions, dimmed, active, countdown }:
 //   actions    any of "lock", "warn", "suspend"
 //   dimmed     the monitors that show the black screen
-//   active     with per-monitor dimming, the monitors still active
+//   active     with per-monitor dimming or Focus mode, the monitors still
+//              active
 //   countdown  seconds left before suspending - or, with every monitor
 //              dimmed before the lock, before locking - or -1
 //   countdownFor  "suspend", "lock" or ""
 function step(state, input) {
     const s = input.settings
     const t = thresholds(s)
-    const idle = input.idle
+    // In whole seconds, to the nearest, like every threshold. The ticks
+    // this runs on come a few milliseconds early or late: against unrounded
+    // time a countdown would show a second twice or skip one, and the lock
+    // could come a tick after its countdown had reached 1.
+    const idle = Math.round(input.idle)
     const names = input.monitors.map(m => m.name)
     const next = {
         phase: state.phase,
@@ -148,13 +155,17 @@ function step(state, input) {
         next.warnFired = false
     }
 
-    // Dim: every monitor together, or each by its own inactivity.
-    let dimmed = []
+    // Dim: every monitor together, or each by its own inactivity - and any
+    // Focus mode dimmed, whether auto-dim's on or not.
+    let byIdle = []
     if (t.dimAt !== null) {
-        if (s.dimPerMonitor) dimmed = input.monitors.filter(m => m.idle >= t.dimAt).map(m => m.name)
-        else if (idle >= t.dimAt) dimmed = names.slice()
+        if (s.dimPerMonitor) byIdle = input.monitors.filter(m => Math.round(m.idle) >= t.dimAt).map(m => m.name)
+        else if (idle >= t.dimAt) byIdle = names.slice()
     }
-    const stillActive = t.dimAt !== null && s.dimPerMonitor ? names.filter(name => dimmed.indexOf(name) < 0) : []
+    const forced = input.forced || []
+    const dimmed = names.filter(name => byIdle.indexOf(name) >= 0 || forced.indexOf(name) >= 0)
+    const byMonitor = (t.dimAt !== null && s.dimPerMonitor) || forced.some(name => names.indexOf(name) >= 0)
+    const stillActive = byMonitor ? names.filter(name => dimmed.indexOf(name) < 0) : []
 
     // In lock state: locked, or auto-lock's time is up (so a lock that
     // didn't come up can't hold everything after it back). Always, without
@@ -171,7 +182,7 @@ function step(state, input) {
     if (next.phase === "awake") {
         if (s.autoDim) {
             const allDimmed = names.length > 0 && dimmed.length === names.length && idle >= t.dimAt
-            if (allDimmed && !lockReached) lockCountdown = Math.max(1, Math.ceil(t.lockAt - idle))
+            if (allDimmed && !lockReached) lockCountdown = Math.max(1, t.lockAt - idle)
             ready = t.suspendDelay !== null && !next.held && allDimmed && lockReached
         } else if (t.suspendDelay !== null && !next.held) {
             ready = idle >= t.suspendAt - 30
@@ -183,10 +194,12 @@ function step(state, input) {
     // The minute's warning is already on screen as the lock countdown.
     if (lockCountdown >= 0 && actions.indexOf("warn") >= 0) actions.splice(actions.indexOf("warn"), 1)
 
+    // The time since, in whole seconds to the nearest, for the same reason
+    // as `idle` above.
     let countdown = lockCountdown
     let countdownFor = lockCountdown >= 0 ? "lock" : ""
     if (next.readySince !== null && next.readySince !== undefined) {
-        countdown = Math.max(0, Math.ceil(t.suspendDelay - (input.now - next.readySince) / 1000))
+        countdown = Math.max(0, t.suspendDelay - Math.round((input.now - next.readySince) / 1000))
         countdownFor = "suspend"
         if (countdown === 0) {
             next.phase = "suspended"
@@ -302,4 +315,16 @@ function readExternal(text) {
 
 function sameList(a, b) {
     return a.length === b.length && a.every((item, i) => item === b[i])
+}
+
+// ---------------- Focus mode ----------------
+// The monitors Focus mode dims: all but the one the mouse is on.
+function focusTargets(names, focused) {
+    return names.filter(name => name !== focused)
+}
+
+// Focus mode's monitors once `name` has been used (the mouse moved onto
+// it, or input while it has focus): that one's awake again.
+function focusWake(forced, name) {
+    return forced.filter(other => other !== name)
 }

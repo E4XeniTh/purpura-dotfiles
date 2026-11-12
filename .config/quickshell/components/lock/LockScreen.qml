@@ -5,6 +5,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
 import "../../Config.js" as Config
+import "../power"
 
 // Lock screen - a real Wayland session lock (ext-session-lock-v1, through
 // Quickshell's WlSessionLock). While it's up, Hyprland gives input to the
@@ -46,6 +47,10 @@ Scope {
     // effectivePrimaryName below for what happens if this is never
     // wired up, or points at a monitor that isn't actually connected.
     property var dashboard: null
+
+    // Idle.qml, from shell.qml: a monitor it's dimmed gets the dim drawn on
+    // top of the lock screen too (see "the dimmed screens" there).
+    property var idle: null
 
     // Survives a config reload, which a plain property wouldn't: reloading
     // with this back at false would unlock the session. It has to stay the
@@ -182,6 +187,24 @@ Scope {
                 sourceComponent: loginPromptComponent
 
                 property real uiScale: lockSurface.uiScale
+            }
+
+            // On top of everything above, when Idle.qml has this monitor
+            // dimmed. Made once the surface knows its monitor - Quickshell
+            // sets that just after making it - so it's made already dark,
+            // and a lock coming up on a dimmed monitor never shows it
+            // undimmed.
+            Loader {
+                anchors.fill: parent
+                z: 1000
+
+                active: !!lockSurface.screen
+
+                sourceComponent: DimView {
+                    idle: root.idle
+                    screenName: lockSurface.screen ? lockSurface.screen.name : ""
+                    uiScale: lockSurface.uiScale
+                }
             }
         }
     }
@@ -499,6 +522,8 @@ Scope {
                 // opening uncovers it rather than squeezing it - the same
                 // way the login box uncovers its own content.
                 Item {
+                    id: clockFace
+
                     anchors {
                         left: parent.left
                         right: parent.right
@@ -506,16 +531,40 @@ Scope {
                     }
                     height: prompt.sideBoxHeight
 
-                    Text {
-                        id: clockText
+                    // The time's characters spread out to fill the box's
+                    // width, keeping about the margin there is above and
+                    // below them: the space between them is whatever's left
+                    // once the characters themselves are measured.
+                    readonly property real margin: Config.scaled(28, prompt.uiScale)
+                    readonly property var characters: prompt.clockString.split("")
 
-                        anchors.centerIn: parent
+                    TextMetrics {
+                        id: clockMetrics
 
-                        text: Qt.formatDateTime(new Date(), "hh:mm")
-                        color: Config.fgcolor
+                        text: prompt.clockString
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(56, prompt.uiScale)
                         font.bold: true
+                    }
+
+                    Row {
+                        anchors.centerIn: parent
+
+                        spacing: clockFace.characters.length > 1
+                            ? Math.max(0, (clockFace.width - 2 * clockFace.margin - clockMetrics.advanceWidth) / (clockFace.characters.length - 1))
+                            : 0
+
+                        Repeater {
+                            model: clockFace.characters
+
+                            Text {
+                                required property string modelData
+
+                                text: modelData
+                                color: Config.fgcolor
+                                font: clockMetrics.font
+                            }
+                        }
                     }
                 }
 
@@ -531,12 +580,14 @@ Scope {
                 }
             }
 
+            property string clockString: Qt.formatDateTime(new Date(), "hh:mm")
+
             Timer {
                 interval: 1000
                 running: true
                 repeat: true
 
-                onTriggered: clockText.text = Qt.formatDateTime(new Date(), "hh:mm")
+                onTriggered: prompt.clockString = Qt.formatDateTime(new Date(), "hh:mm")
             }
 
             // ---------------- what's playing ----------------

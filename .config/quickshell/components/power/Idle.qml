@@ -27,9 +27,9 @@ import "IdleLogic.js" as Logic
 // active; once every monitor's dimmed, the primary one counts down to
 // suspending - first to locking, when they've all dimmed before the lock.
 //
-// The dimmed screens are layers drawn above the lock screen, taking the
-// mouse there too (Hyprland's above_lock layer rule, which this sets
-// itself - see applyLayerRule()), and hide the cursor while they're up.
+// The dimmed screens (DimView.qml) are drawn on top of everything - see
+// "the dimmed screens" below for how - and hide the cursor while they're
+// up. Focus mode dims every monitor but the one the mouse is on, on demand.
 //
 // Like NightLight.qml, this owns its settings file (powersettings.json),
 // and ShellSettings.qml's Power category is a view onto this object.
@@ -55,6 +55,7 @@ Scope {
     readonly property bool autoDim: root.settings.autoDim
     readonly property int dimMinutes: root.settings.dimMinutes
     readonly property int dimOpacity: root.settings.dimOpacity
+    readonly property bool dimShowActive: root.settings.dimShowActive
     readonly property bool dimPerMonitor: root.settings.dimPerMonitor
     readonly property bool autoSuspend: root.settings.autoSuspend
     readonly property int suspendMinutes: root.settings.suspendMinutes
@@ -79,6 +80,7 @@ Scope {
     function setDimMinutes(minutes) { root.update(Logic.minutesPatch("dimMinutes", minutes)) }
     function setDimOpacity(percent) { root.update(Logic.dimOpacityPatch(percent)) }
     function setDimPerMonitor(on) { root.update({ dimPerMonitor: !!on }) }
+    function setDimShowActive(on) { root.update({ dimShowActive: !!on }) }
     function setAutoSuspend(on) { root.update({ autoSuspend: !!on }) }
     function setSuspendMinutes(minutes) { root.update(Logic.minutesPatch("suspendMinutes", minutes)) }
     function setWakeUpLock(on) { root.update({ wakeUpLock: !!on }) }
@@ -160,12 +162,12 @@ Scope {
         }
     }
 
-    // Input alone, for per-monitor dimming: put down to the monitor with
-    // focus.
+    // Input alone, for per-monitor dimming and Focus mode: put down to the
+    // monitor with focus.
     IdleMonitor {
         id: inputIdle
 
-        enabled: root.settingsLoaded && root.autoDim && root.dimPerMonitor
+        enabled: root.settingsLoaded && ((root.autoDim && root.dimPerMonitor) || root.focusNames.length > 0)
         timeout: 1
         respectInhibitors: false
 
@@ -192,7 +194,9 @@ Scope {
 
         // The mouse moving onto another monitor is activity there.
         function onFocusedMonitorChanged() {
-            if (Hyprland.focusedMonitor) root.markActive(Hyprland.focusedMonitor.name)
+            if (!Hyprland.focusedMonitor) return
+            root.wakeFromFocus(Hyprland.focusedMonitor.name)
+            root.markActive(Hyprland.focusedMonitor.name)
         }
 
         function onRawEvent(event) {
@@ -250,6 +254,42 @@ Scope {
         }
     }
 
+    // ---------------- Focus mode ----------------
+    // Dims every monitor but the one the mouse is on, there and then. A
+    // dimmed one wakes when it's used - the mouse moving onto it, or input
+    // while it has focus - and the shortcut again ends it. Works whether
+    // auto-dim's on or not.
+    property var focusNames: []
+
+    function toggleFocusMode() {
+        if (root.focusNames.length) {
+            root.focusNames = []
+        } else {
+            const focused = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : root.primaryName
+            root.focusNames = Logic.focusTargets(Quickshell.screens.map(s => s.name), focused)
+        }
+        root.evaluate(false)
+    }
+
+    function wakeFromFocus(name) {
+        if (!name || root.focusNames.indexOf(name) < 0) return
+        root.focusNames = Logic.focusWake(root.focusNames, name)
+        root.evaluate(false)
+    }
+
+    GlobalShortcut {
+        name: "focusmode"
+        description: "Focus mode: dim every monitor but the one the mouse is on"
+
+        onPressed: root.toggleFocusMode()
+    }
+
+    IpcHandler {
+        target: "focusmode"
+
+        function toggle(): void { root.toggleFocusMode() }
+    }
+
     // ---------------- the stages ----------------
     property var stage: ({ phase: "awake", readySince: null, held: false, lockFired: false, warnFired: false })
     property var dimmedNames: []
@@ -257,6 +297,16 @@ Scope {
     property int countdown: -1
     property string countdownFor: ""
     readonly property string phase: root.stage.phase
+    readonly property bool locked: !!root.lockScreen && root.lockScreen.locked
+
+    // The lock screen's up - Hyprland's said so, once it's drawn it - and
+    // showing the dim's moon and text itself.
+    readonly property bool lockShown: root.locked && root.lockScreen.secure
+
+    // What `name` shows (DimView.qml).
+    function overlayFor(name) {
+        return Logic.overlay(name, root.phase, root.countdown, root.dimmedNames)
+    }
 
     // Wall-clock time of the last tick. Timers don't run while the computer
     // is suspended but the clock does, so a big gap between ticks means it's
@@ -282,13 +332,18 @@ Scope {
             if (!inputIdle.isIdle && Hyprland.focusedMonitor) stamps = Logic.stamp(stamps, [Hyprland.focusedMonitor.name], now)
             root.stamps = stamps
         }
+        if (root.focusNames.length && !inputIdle.isIdle && Hyprland.focusedMonitor
+                && root.focusNames.indexOf(Hyprland.focusedMonitor.name) >= 0) {
+            root.focusNames = Logic.focusWake(root.focusNames, Hyprland.focusedMonitor.name)
+        }
 
         const result = Logic.step(root.stage, {
             settings: root.settings,
             now: now,
             idle: Math.max(0, (now - root.lastActivity) / 1000),
             monitors: Logic.monitorIdle(names, root.stamps, now),
-            locked: !!root.lockScreen && root.lockScreen.locked
+            locked: root.locked,
+            forced: root.focusNames
         })
 
         root.stage = result.state
@@ -387,20 +442,32 @@ Scope {
     }
 
     // ---------------- the dimmed screens ----------------
-    // Above the lock screen too, so the countdown shows over it - and with
-    // the mouse there as well (2 rather than 1), so a dimmed screen gets to
-    // hide the cursor over the lock screen too. The keyboard still goes to
-    // the lock screen: Hyprland always gives it to the lock.
+    // Drawn twice: by these layers over the desktop, and by the lock screen
+    // on top of itself (DimView.qml in both), so the dim is always topmost:
+    //  - Among the layers, these come last (order -100 - Hyprland draws a
+    //    lower order later), so the dim covers the settings screen and every
+    //    other panel, blur and all.
+    //  - These aren't drawn above the lock: Hyprland draws such layers only
+    //    once the lock screen's surface is up, which would leave the frames
+    //    in between undimmed - a flicker every time it locks while dimmed.
+    //    Under the lock they stay drawn throughout, and the lock screen draws
+    //    its own dim over itself. Once it's up these leave the moon and the
+    //    text to it, so there's one of each - not before, or they'd blink
+    //    out for the frames it takes the lock screen to appear.
+    // Re-applied after every Hyprland config reload, which drops runtime
+    // rules. The first rule switches off the above-lock one earlier
+    // versions of this set.
     function applyLayerRule() {
         Quickshell.execDetached(["hyprctl", "eval",
-            "hl.layer_rule({ name = \"purpura-idle-above-lock\", match = { namespace = \"purpura-idle\" }, above_lock = 2 })"])
+            "hl.layer_rule({ name = \"purpura-idle-above-lock\", enabled = false })\n"
+            + "hl.layer_rule({ name = \"purpura-idle-on-top\", match = { namespace = \"purpura-idle\" }, order = -100 })"])
     }
 
     Component.onCompleted: root.applyLayerRule()
 
     readonly property string primaryName: root.lockScreen ? root.lockScreen.effectivePrimaryName : ""
 
-    // The per-monitor label's "dark red".
+    // The "active:" label's dark red.
     readonly property color darkRed: "#a11d1d"
 
     Variants {
@@ -411,12 +478,6 @@ Scope {
 
             property var modelData
             screen: modelData
-
-            readonly property string mode: Logic.overlay(win.modelData.name, root.phase, root.countdown, root.dimmedNames)
-            readonly property bool isPrimary: win.modelData.name === root.primaryName
-
-            // The shell-wide per-screen scale (see Config.uiScale).
-            readonly property real uiScale: Config.uiScale(win.modelData, root.shellScale)
 
             WlrLayershell.namespace: "purpura-idle"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -433,116 +494,17 @@ Scope {
             color: "transparent"
 
             // Stays up until it's faded out.
-            visible: win.mode !== "none" || content.opacity > 0
+            visible: dim.visible
 
-            Item {
-                id: content
+            DimView {
+                id: dim
 
                 anchors.fill: parent
 
-                readonly property bool shown: win.mode !== "none"
-
-                // A slow fade to black, and straight back on activity.
-                opacity: content.shown ? 1 : 0
-
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: content.shown ? 1500 : 300
-                        easing.type: Easing.InOutQuad
-                    }
-                }
-
-                // "Dim opacity": how dark the screen goes. The moon and the
-                // text stay solid.
-                Rectangle {
-                    anchors.fill: parent
-                    color: "black"
-                    opacity: root.dimOpacity / 100
-                }
-
-                Column {
-                    anchors.centerIn: parent
-
-                    spacing: Config.scaled(24, win.uiScale)
-
-                    // A crescent moon: a disc with another, offset disc
-                    // cut out of it. fgcolor once it's counting down to
-                    // suspending, the dimmer purple while only dimmed.
-                    Canvas {
-                        id: moon
-
-                        anchors.horizontalCenter: parent.horizontalCenter
-
-                        width: Config.scaled(160, win.uiScale)
-                        height: moon.width
-
-                        property color tint: win.mode === "dimmed" ? Config.fgcolordark : Config.fgcolor
-
-                        Behavior on tint {
-                            ColorAnimation { duration: 400 }
-                        }
-
-                        onTintChanged: moon.requestPaint()
-                        onWidthChanged: moon.requestPaint()
-                        Component.onCompleted: moon.requestPaint()
-
-                        onPaint: {
-                            const ctx = moon.getContext("2d")
-                            ctx.reset()
-                            const r = moon.width / 2
-                            ctx.fillStyle = moon.tint.toString()
-                            ctx.beginPath()
-                            ctx.arc(r, r, r * 0.9, 0, 2 * Math.PI)
-                            ctx.fill()
-                            ctx.globalCompositeOperation = "destination-out"
-                            ctx.beginPath()
-                            ctx.arc(r + r * 0.42, r - r * 0.28, r * 0.74, 0, 2 * Math.PI)
-                            ctx.fill()
-                            ctx.globalCompositeOperation = "source-over"
-                        }
-                    }
-
-                    // The countdown to locking or suspending - the primary
-                    // monitor only.
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-
-                        visible: win.isPrimary && root.countdown >= 0
-                        text: Logic.countdownText(root.countdown, root.countdownFor)
-                        color: Config.fgcolordark
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(15, win.uiScale)
-                        font.italic: true
-                    }
-
-                    // Per-monitor: which monitors are still active.
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-
-                        visible: win.mode === "dimmed" && root.activeNames.length > 0
-                        text: Logic.activeText(root.activeNames)
-                        color: root.darkRed
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(15, win.uiScale)
-                    }
-                }
-
-                // Hides the cursor on a dimmed screen - back to the arrow the
-                // moment it starts fading out - and keeps a click on it from
-                // landing on whatever's underneath.
-                //
-                // Hovering isn't activity, though: Qt sends hover events when
-                // this appears under a cursor that isn't moving, and on every
-                // frame of the fade in, which would wake the very monitor
-                // that was dimming. Real movement is input the idle monitors
-                // above see, put down to the monitor with focus - the one the
-                // mouse is on.
-                MouseArea {
-                    anchors.fill: parent
-                    acceptedButtons: Qt.AllButtons
-                    hoverEnabled: true
-                    cursorShape: content.shown ? Qt.BlankCursor : Qt.ArrowCursor
-                }
+                idle: root
+                screenName: win.modelData.name
+                uiScale: Config.uiScale(win.modelData, root.shellScale)
+                decorated: !root.lockShown
             }
         }
     }

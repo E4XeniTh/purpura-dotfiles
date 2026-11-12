@@ -287,6 +287,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + M", hl.dsp.global("quickshell:settingsscreen"), { description = "Settings" })
     hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"), { description = "Screenshot" })
     hl.bind(mainMod .. " + grave", hl.dsp.global("quickshell:dropdownconsole"), { description = "Dropdown console" })
+    hl.bind(mainMod .. " + BackSpace", hl.dsp.global("quickshell:focusmode"), { description = "Focus mode" })
 
     hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }), { description = "Go to workspace 1" })
     hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }), { description = "Go to workspace 2" })

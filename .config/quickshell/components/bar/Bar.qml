@@ -166,6 +166,12 @@ Scope {
             // instead of assuming a fixed one.
             readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
 
+            // Every button on the bar is this tall. Fixed rather than taken
+            // from a label's height: that depends on the font, which qt6ct
+            // (or any platform theme) can change for text with no family
+            // of its own, like the clock's.
+            readonly property real buttonHeight: Config.scaled(34, bar.uiScale)
+
             // Explicit (every other panel in this shell sets one too) so
             // Screenshot.qml can find this exact surface via `hyprctl
             // layers -j` and make it right-click-selectable like a
@@ -220,7 +226,7 @@ Scope {
                     border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
                     width: trayWidth < 16 ? 0 : trayWidth + Config.scaled(16, bar.uiScale)
-                    implicitHeight: Config.scaled(26 + 8, bar.uiScale)
+                    implicitHeight: bar.buttonHeight
                     anchors.margins: Config.scaled(10, bar.uiScale)
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
@@ -229,15 +235,14 @@ Scope {
                 }
 
                 // See WorkspaceRow.qml - sits to the left of the clock
-                // (the dashboard-open button), which sets its height
-                // here since layer-shell/anchors info all lives in this
-                // file. rightMargin is the usual 10px inset plus 32px of
+                // (the dashboard-open button), as tall as the bar's
+                // buttons. rightMargin is the usual 10px inset plus 32px of
                 // deliberate extra breathing room before the dashboard
                 // button specifically.
                 WorkspaceRow {
                     id: workspaceRow
                     uiScale: bar.uiScale
-                    height: clockCard.height
+                    height: bar.buttonHeight
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
                     anchors.rightMargin: Config.scaled(10 + 32, bar.uiScale)
@@ -263,7 +268,7 @@ Scope {
                     id: clockCard
                     anchors.centerIn: parent
                     width: clock.implicitWidth + Config.scaled(16, bar.uiScale)
-                    height: clock.implicitHeight + Config.scaled(4, bar.uiScale)
+                    height: bar.buttonHeight
                     border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
                     color: clockmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
@@ -343,8 +348,8 @@ Scope {
                     id: updaterButton
 
                     visible: root.showUpdater
-                    width: root.showUpdater ? Config.scaled(34, bar.uiScale) : 0
-                    height: root.showUpdater ? Config.scaled(34, bar.uiScale) : 0
+                    width: root.showUpdater ? bar.buttonHeight : 0
+                    height: root.showUpdater ? bar.buttonHeight : 0
 
                     anchors {
                         right: notificationButton.left
@@ -403,8 +408,8 @@ Scope {
 
                     border.width: Config.scaled(2, bar.uiScale)
                     border.color: Config.fgcolor
-                    width: Config.scaled(34, bar.uiScale)
-                    height: Config.scaled(34, bar.uiScale)
+                    width: bar.buttonHeight
+                    height: bar.buttonHeight
                     color: notifmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
                     MouseArea {
