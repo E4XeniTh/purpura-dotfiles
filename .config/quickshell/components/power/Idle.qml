@@ -25,7 +25,7 @@ import "IdleLogic.js" as Logic
 // input while it has focus (the mouse is on it), or a window on it
 // keeping the computer awake. A dimmed one names the monitors still
 // active; once every monitor's dimmed, the primary one counts down to
-// suspending.
+// suspending - first to locking, when they've all dimmed before the lock.
 //
 // The dimmed screens are layers drawn above the lock screen (Hyprland's
 // above_lock layer rule, which this sets itself - see applyLayerRule()).
@@ -254,6 +254,7 @@ Scope {
     property var dimmedNames: []
     property var activeNames: []
     property int countdown: -1
+    property string countdownFor: ""
     readonly property string phase: root.stage.phase
 
     // Wall-clock time of the last tick. Timers don't run while the computer
@@ -293,6 +294,7 @@ Scope {
         if (!Logic.sameList(result.dimmed, root.dimmedNames)) root.dimmedNames = result.dimmed
         if (!Logic.sameList(result.active, root.activeNames)) root.activeNames = result.active
         root.countdown = result.countdown
+        root.countdownFor = result.countdownFor
 
         for (const action of result.actions) {
             if (action === "lock" && root.lockScreen) root.lockScreen.lock()
@@ -496,12 +498,13 @@ Scope {
                         }
                     }
 
-                    // The countdown - the primary monitor only.
+                    // The countdown to locking or suspending - the primary
+                    // monitor only.
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
 
                         visible: win.isPrimary && root.countdown >= 0
-                        text: Logic.countdownText(root.countdown)
+                        text: Logic.countdownText(root.countdown, root.countdownFor)
                         color: Config.fgcolordark
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(15, win.uiScale)

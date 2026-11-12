@@ -10,8 +10,10 @@
 //            with a moon on them. Per monitor, each goes by its own
 //            inactivity, `dimMinutes` of it, without waiting for the lock:
 //            a monitor nobody's using dims while another is in use
-//   suspend  `suspendMinutes` after every monitor's dimmed - counted down
-//            on the primary monitor the whole time - or, without auto-dim,
+//   suspend  `suspendMinutes` after every monitor's dimmed and the screen's
+//            locked - counted down on the primary monitor the whole time,
+//            after counting down to the lock if every monitor dimmed before
+//            it (per-monitor dimming can) - or, without auto-dim,
 //            `suspendMinutes` after the lock (or without activity), with
 //            the screens going black for the last 30 seconds' countdown
 // Activity is input, or anything keeping the computer awake (a video
@@ -83,6 +85,7 @@ function dimDelayLabel(s) {
 }
 
 function suspendDelayLabel(s) {
+    if (s.autoDim && s.autoLock) return "min in lock & dim state"
     if (s.autoDim) return "min in dim state"
     if (s.autoLock) return "min in lock state"
     return "min of inactivity"
@@ -108,7 +111,9 @@ function suspendDelayLabel(s) {
 //   actions    any of "lock", "warn", "suspend"
 //   dimmed     the monitors that show the black screen
 //   active     with per-monitor dimming, the monitors still active
-//   countdown  seconds left before suspending, or -1
+//   countdown  seconds left before suspending - or, with every monitor
+//              dimmed before the lock, before locking - or -1
+//   countdownFor  "suspend", "lock" or ""
 function step(state, input) {
     const s = input.settings
     const t = thresholds(s)
@@ -151,34 +156,54 @@ function step(state, input) {
     }
     const stillActive = t.dimAt !== null && s.dimPerMonitor ? names.filter(name => dimmed.indexOf(name) < 0) : []
 
-    // Suspend: counted from every monitor being dimmed (and nothing at all
-    // keeping the computer awake), or the last 30 seconds before the delay
-    // without auto-dim.
+    // In lock state: locked, or auto-lock's time is up (so a lock that
+    // didn't come up can't hold everything after it back). Always, without
+    // auto-lock.
+    const lockReached = t.lockAt === null || input.locked || idle >= t.lockAt
+
+    // Suspend: counted from being in lock state with every monitor dimmed
+    // (and nothing at all keeping the computer awake), or the last 30
+    // seconds before the delay without auto-dim. Per-monitor dimming can
+    // dim every monitor before the lock; until the lock, the countdown is
+    // to that instead.
     let ready = false
-    if (t.suspendDelay !== null && !next.held && next.phase === "awake") {
-        if (s.autoDim) ready = names.length > 0 && dimmed.length === names.length && idle >= t.dimAt
-        else ready = idle >= t.suspendAt - 30
+    let lockCountdown = -1
+    if (next.phase === "awake") {
+        if (s.autoDim) {
+            const allDimmed = names.length > 0 && dimmed.length === names.length && idle >= t.dimAt
+            if (allDimmed && !lockReached) lockCountdown = Math.max(1, Math.ceil(t.lockAt - idle))
+            ready = t.suspendDelay !== null && !next.held && allDimmed && lockReached
+        } else if (t.suspendDelay !== null && !next.held) {
+            ready = idle >= t.suspendAt - 30
+        }
     }
     if (!ready) next.readySince = null
     else if (next.readySince === null || next.readySince === undefined) next.readySince = input.now
 
-    let countdown = -1
+    // The minute's warning is already on screen as the lock countdown.
+    if (lockCountdown >= 0 && actions.indexOf("warn") >= 0) actions.splice(actions.indexOf("warn"), 1)
+
+    let countdown = lockCountdown
+    let countdownFor = lockCountdown >= 0 ? "lock" : ""
     if (next.readySince !== null && next.readySince !== undefined) {
         countdown = Math.max(0, Math.ceil(t.suspendDelay - (input.now - next.readySince) / 1000))
+        countdownFor = "suspend"
         if (countdown === 0) {
             next.phase = "suspended"
             next.readySince = null
             countdown = -1
+            countdownFor = ""
             actions.push("suspend")
         }
     }
 
-    return { state: next, actions: actions, dimmed: dimmed, active: stillActive, countdown: countdown }
+    return { state: next, actions: actions, dimmed: dimmed, active: stillActive, countdown: countdown, countdownFor: countdownFor }
 }
 
 // What a monitor shows:
 //   "countdown"  black, the moon, and on the primary monitor the countdown
-//                (every monitor, once it's counting down or suspended)
+//                to locking or suspending (every monitor, once it's
+//                counting down or suspended)
 //   "dimmed"     black and a dimmer moon, with per-monitor dimming the
 //                names of those still active
 //   "none"
@@ -188,13 +213,15 @@ function overlay(name, phase, countdown, dimmed) {
     return "none"
 }
 
-function countdownText(seconds) {
+// `what` is step()'s countdownFor: "lock" or "suspend".
+function countdownText(seconds, what) {
+    const doing = what === "lock" ? "locking in " : "suspending in "
     if (seconds >= 60) {
         const m = Math.floor(seconds / 60)
         const sec = seconds % 60
-        return "suspending in " + m + ":" + (sec < 10 ? "0" : "") + sec + "..."
+        return doing + m + ":" + (sec < 10 ? "0" : "") + sec + "..."
     }
-    return "suspending in " + seconds + " second" + (seconds === 1 ? "" : "s") + "..."
+    return doing + seconds + " second" + (seconds === 1 ? "" : "s") + "..."
 }
 
 function activeText(names) {
