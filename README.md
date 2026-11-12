@@ -17,7 +17,7 @@ out to be copied straight into place.
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
-| **Lock screen** | Full-screen lock, authenticates via PAM |
+| **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and what's playing beside it. Authenticates via PAM |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -262,3 +262,8 @@ package lists are the exact set):
   that file only defines the primary display. Changes are saved to
   `~/.config/quickshell/monitors.json` (gitignored - machine-specific)
   and replayed by `scripts/apply-monitors.sh` on every login.
+- The lock screen is a real session lock, so if the shell ever dies while
+  it's up - or it won't take your password - the session stays locked.
+  To get back in, switch to another TTY (Ctrl+Alt+F3), log in, and run
+  `pkill -x 'qs|quickshell'; hyprctl --instance 0 eval 'hl.clear_crashed_lockscreen()'`,
+  then switch back and start the shell again (`qs` in a terminal).

@@ -110,6 +110,23 @@ say() { printf '\n\e[1m:: %s\e[0m\n' "$*"; }
 info() { printf '   %s\n' "$*"; }
 warn() { printf '\e[1;33m!!\e[0m %s\n' "$*" >&2; }
 
+# A new version makes the shell reload, and a reload is no time to have the
+# lock screen running: should the new version have changed how the lock
+# screen is put together, the reload would leave the session locked with
+# nothing to unlock it. So if the screen got locked while the packages
+# were updating, this waits for it to be unlocked. (Linked configs change
+# with the pull itself, so this comes before that.)
+wait_until_unlocked() {
+    local told=0
+    while [[ $(qs ipc call lockscreen isLocked 2>/dev/null) == true ]]; do
+        if ((!told)); then
+            info "The screen is locked - carrying on once it's unlocked."
+            told=1
+        fi
+        sleep 5
+    done
+}
+
 apply() {
     local dir before after installed
     say "Purpura"
@@ -118,6 +135,7 @@ apply() {
         warn "Couldn't find the checkout purpura was installed from. Run ./purpura.sh --install from it once, so the updater knows where it is."
         return 1
     fi
+    wait_until_unlocked
     info "Updating ${dir/#$HOME/\~}"
     before=$(git -C "$dir" rev-parse HEAD) || return 1
     # Fast-forward only: local commits or edits in the way are yours to sort

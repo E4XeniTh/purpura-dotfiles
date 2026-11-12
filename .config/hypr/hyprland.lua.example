@@ -403,11 +403,9 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
                    idle_inhibit = "always",
     })
 
-    -- Allow blur in Purpura Quickshell Lockscreen
-    hl.layer_rule({
-        match = { namespace = "lockscreen" },
-        blur = true,
-    })
+    -- The lock screen is a real session lock rather than a layer, so no rule
+    -- here: its blur is misc.session_lock_xray + session_lock_blur, which
+    -- the shell turns on itself (components/LockScreen.qml).
 
     -- Allow blur in Purpura Quickshell Powermenu
     hl.layer_rule({
