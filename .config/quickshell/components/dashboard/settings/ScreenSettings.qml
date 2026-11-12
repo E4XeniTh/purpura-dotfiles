@@ -14,13 +14,15 @@ import "../../../Config.js" as Config
 // host instead of coming from a PanelWindow.
 //
 // The right side: every monitor drawn to scale where it sits in
-// Hyprland's layout (MonitorLayout.qml - click to pick, drag to move),
-// switchable to the arrangement Set Default saved; under it, the
+// Hyprland's layout (MonitorLayout.qml - click to pick, drag to move);
+// under it, the
 // selected display's resolution and refresh rate (dropdowns of the modes
 // it reports, Preferred first), scale (a slider that only stops on
 // scales Hyprland accepts at that resolution), rotation, workspaces and
 // exact position. Resizing a display moves the ones beside and below it
 // along (keepNeighbours()), so displays that touched keep touching.
+// Show Default swaps the view for the arrangement Set Default saved,
+// read-only, with every editing control hidden or switched off.
 //
 // Reads via `hyprctl -j monitors all` (includes currently-disabled
 // monitors, unlike the plain `monitors` request) and writes via
@@ -519,8 +521,7 @@ Item {
     // can't just leave primary pointing at something about to go dark. If
     // this is the only enabled monitor left, there's no other one to hand
     // it to, so disabling is refused outright rather than leaving nothing
-    // enabled at all. Used by both the monitor cards (right-click) and the
-    // Enabled checkbox.
+    // enabled at all. The monitor cards' right-click.
     function toggleEnabled(name) {
         if (!name) return
         const enabling = !root.enabledFor(name)
@@ -731,7 +732,7 @@ Item {
     }
 
     // The same picture of what Set Default last saved (monitors.json), for
-    // the arrangement view's "Saved default" side.
+    // Show Default.
     readonly property var savedArrangement: {
         const rects = []
         for (const name of root.defaultMonitorNames) {
@@ -1692,8 +1693,8 @@ Item {
     readonly property bool hasRealMonitorsConfig: Object.keys(root.screensStore).some(k => !k.startsWith("__"))
 
     // Every real (non-"__") monitor name Set Default has ever
-    // remembered, alphabetical - used by the arrangement view's "Saved
-    // default" side (savedArrangement). Alphabetical rather than root.monitors' own
+    // remembered, alphabetical - used by Show Default
+    // (savedArrangement). Alphabetical rather than root.monitors' own
     // (hyprctl-reported, connection-order-dependent) ordering so the
     // list doesn't reshuffle itself around whenever monitors get
     // plugged in/out in a different order, and so it still lists a
@@ -1867,11 +1868,15 @@ Item {
                     font.bold: true
                 }
 
+                // Off while the right side shows the saved default, so
+                // nothing gets staged that isn't on screen.
                 ListView {
                     id: monitorList
 
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    enabled: !root.showingDefaults
+                    opacity: enabled ? 1 : 0.5
                     clip: true
                     spacing: Config.scaled(8, root.uiScale)
                     boundsBehavior: Flickable.StopAtBounds
@@ -1901,8 +1906,7 @@ Item {
                             root.selectMonitor(modelData.name)
                         }
                         // See toggleEnabled()/makePrimary() for the
-                        // fail-safes - shared with the Enabled checkbox
-                        // and Make Primary button on the right.
+                        // fail-safes.
                         onToggleEnabled: root.toggleEnabled(modelData.name)
                         onMakePrimary: root.makePrimary(modelData.name)
                         onBrightnessEdited: (value) => root.setPendingBrightness(modelData.name, value)
@@ -1927,52 +1931,40 @@ Item {
                 Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
-                // ---------------- arrangement header ----------------
+                // ---------------- show default ----------------
+                // Swaps the arrangement view over to what Set Default saved
+                // (and every login puts back), read-only: everything that
+                // edits is hidden or switched off until it's pressed again.
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
+                    spacing: Config.scaled(10, root.uiScale)
 
-                    Text {
-                        text: "Arrangement"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(14, root.uiScale)
-                        font.bold: true
-                    }
+                    DashCard {
+                        id: showDefaultButton
 
-                    // The layout as staged right now, or what Set Default
-                    // saved (and every login puts back).
-                    Repeater {
-                        model: ["Current", "Saved default"]
+                        Layout.preferredWidth: showDefaultText.implicitWidth + Config.scaled(24, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                        uiScale: root.uiScale
+                        color: (showDefaultMouse.containsMouse || root.showingDefaults) ? Config.fgcolorhover : Config.fillcolor
+                        border.color: root.showingDefaults ? Config.fgcolorlight : Config.fgcolor
 
-                        DashCard {
-                            id: viewTab
+                        Text {
+                            id: showDefaultText
+                            anchors.centerIn: parent
+                            text: root.showingDefaults ? "Hide Default" : "Show Default"
+                            color: root.showingDefaults ? Config.fgcolorlight : Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
 
-                            required property string modelData
-                            required property int index
-                            readonly property bool chosen: root.showingDefaults === (viewTab.index === 1)
-
-                            Layout.preferredWidth: viewTabText.implicitWidth + Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(26, root.uiScale)
-                            uiScale: root.uiScale
-                            color: (viewTabMouse.containsMouse || viewTab.chosen) ? Config.fgcolorhover : Config.fillcolor
-                            border.color: viewTab.chosen ? Config.fgcolorlight : Config.fgcolordark
-
-                            Text {
-                                id: viewTabText
-                                anchors.centerIn: parent
-                                text: viewTab.modelData
-                                color: viewTab.chosen ? Config.fgcolorlight : Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, root.uiScale)
-                                font.bold: true
-                            }
-
-                            MouseArea {
-                                id: viewTabMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.showingDefaults = viewTab.index === 1
+                        MouseArea {
+                            id: showDefaultMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.showingDefaults = !root.showingDefaults
                             }
                         }
                     }
@@ -1984,7 +1976,7 @@ Item {
                         text: !root.showingDefaults
                             ? "Click to pick, drag to move - snaps to the other displays"
                             : (root.defaultMonitorNames.length === 0 ? ""
-                                : (root.defaultsOutOfSync ? "Not what's set now - Set Default saves that" : "Same as what's set now"))
+                                : (root.defaultsOutOfSync ? "Saved default - not what's set now" : "Saved default - same as what's set now"))
                         color: Config.fgcolordark
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(12, root.uiScale)
@@ -2006,7 +1998,7 @@ Item {
                         monitors: root.showingDefaults ? root.savedArrangement : root.arrangement
                         interactive: !root.showingDefaults
                         emptyText: root.showingDefaults
-                            ? "Nothing saved yet. Set Default saves the arrangement you see under Current, and every login puts it back."
+                            ? "Nothing saved yet. Set Default saves the arrangement you set up here, and every login puts it back."
                             : "No displays found."
 
                         // Steals keyboard focus from the X/Y boxes, and
@@ -2033,9 +2025,12 @@ Item {
                 }
 
                 // ---------------- selected display ----------------
+                // Enabling and making primary are the cards' (right-click,
+                // double-click) - see the hint row.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: Config.scaled(4, root.uiScale)
+                    visible: !root.showingDefaults
                     spacing: Config.scaled(10, root.uiScale)
 
                     Text {
@@ -2054,85 +2049,6 @@ Item {
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
                     }
-
-                    // Same as right-clicking its card.
-                    RowLayout {
-                        visible: root.selectedName.length > 0
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.enabledFor(root.selectedName) ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    contentWrapper.forceActiveFocus()
-                                    root.toggleEnabled(root.selectedName)
-                                }
-                            }
-                        }
-
-                        Text {
-                            text: "Enabled"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    contentWrapper.forceActiveFocus()
-                                    root.toggleEnabled(root.selectedName)
-                                }
-                            }
-                        }
-                    }
-
-                    // Same as double-clicking its card.
-                    DashCard {
-                        id: primaryButton
-
-                        readonly property bool isPrimary: root.primaryMonitor === root.selectedName
-                        readonly property bool canPick: !primaryButton.isPrimary && root.enabledFor(root.selectedName)
-
-                        visible: root.selectedName.length > 0
-                        Layout.preferredWidth: primaryText.implicitWidth + Config.scaled(24, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                        uiScale: root.uiScale
-                        color: (primaryMouse.containsMouse && primaryButton.canPick) ? Config.fgcolorhover : Config.fillcolor
-                        border.color: primaryButton.isPrimary ? Config.fgcolorlight
-                            : (primaryButton.canPick ? Config.fgcolor : Config.fgcolordark)
-
-                        Text {
-                            id: primaryText
-                            anchors.centerIn: parent
-                            text: primaryButton.isPrimary ? "Primary display" : "Make primary"
-                            color: primaryButton.isPrimary ? Config.fgcolorlight
-                                : (primaryButton.canPick ? Config.fgcolor : Config.fgcolordark)
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            id: primaryMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            enabled: primaryButton.canPick
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.makePrimary(root.selectedName)
-                            }
-                        }
-                    }
                 }
 
                 // ---------------- settings form ----------------
@@ -2143,6 +2059,7 @@ Item {
                     id: displayForm
 
                     Layout.fillWidth: true
+                    visible: !root.showingDefaults
                     columns: rightColumn.width >= Config.scaled(840, root.uiScale) ? 4 : 2
                     columnSpacing: Config.scaled(14, root.uiScale)
                     rowSpacing: Config.scaled(10, root.uiScale)
@@ -2411,6 +2328,7 @@ Item {
                 // ---------------- identify / set default / apply ----------------
                 RowLayout {
                     Layout.fillWidth: true
+                    visible: !root.showingDefaults
                     Layout.topMargin: Config.scaled(6, root.uiScale)
 
                     DashCard {
