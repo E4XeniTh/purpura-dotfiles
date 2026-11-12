@@ -305,7 +305,7 @@ Scope {
 
     // What `name` shows (DimView.qml).
     function overlayFor(name) {
-        return Logic.overlay(name, root.phase, root.countdown, root.dimmedNames)
+        return Logic.overlay(name, root.phase, root.countdown, root.dimmedNames, root.primaryName, root.autoDim)
     }
 
     // Wall-clock time of the last tick. Timers don't run while the computer

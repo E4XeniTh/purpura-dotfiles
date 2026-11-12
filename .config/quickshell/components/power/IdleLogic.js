@@ -216,12 +216,15 @@ function step(state, input) {
 // What a monitor shows:
 //   "countdown"  black, the moon, and on the primary monitor the countdown
 //                to locking or suspending (every monitor, once it's
-//                counting down or suspended)
+//                counting down or suspended - but see "black")
+//   "black"      nothing but black, all the way: without auto-dim, every
+//                monitor but the primary while it counts down
 //   "dimmed"     black and a dimmer moon, with per-monitor dimming the
 //                names of those still active
 //   "none"
-function overlay(name, phase, countdown, dimmed) {
-    if (phase === "suspended" || countdown >= 0) return "countdown"
+// `primary` is the primary monitor's name, `autoDim` the setting.
+function overlay(name, phase, countdown, dimmed, primary, autoDim) {
+    if (phase === "suspended" || countdown >= 0) return autoDim || name === primary ? "countdown" : "black"
     if (dimmed.indexOf(name) >= 0) return "dimmed"
     return "none"
 }

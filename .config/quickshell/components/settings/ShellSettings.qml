@@ -2102,7 +2102,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.leftMargin: Config.scaled(28, root.uiScale)
                             wrapMode: Text.WordWrap
-                            text: "Counts down on the main monitor before suspending - once every monitor is dimmed, or for the last 30 seconds without auto-dim. Any input calls it off."
+                            text: "Counts down on the main monitor before suspending - once every monitor is dimmed, or for the last 30 seconds without auto-dim, with the other monitors black. Any input calls it off."
                             color: Config.fgcolordark
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(12, root.uiScale)

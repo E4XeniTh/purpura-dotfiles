@@ -7,7 +7,9 @@ import "IdleLogic.js" as Logic
 
 // One monitor's dimmed screen: black at the dim opacity, the moon - with a
 // padlock on the primary monitor while it's locked - and the countdown
-// (primary monitor) or the monitors still active.
+// (primary monitor) or the monitors still active. Or nothing but black:
+// the other monitors while the primary counts down to suspending without
+// auto-dim.
 //
 // Drawn in two places - by Idle.qml's layer over the desktop, and by the
 // lock screen on top of itself - so the dim is the topmost thing whether
@@ -31,6 +33,16 @@ Item {
     readonly property bool shown: root.mode !== "none"
     readonly property bool isPrimary: !!root.idle && root.screenName === root.idle.primaryName
 
+    // What it's drawn as: the mode, held through the fade out once that's
+    // "none", so nothing on it changes while it fades - an all-black
+    // monitor doesn't show the moon on its way out.
+    property string look: root.mode
+    onModeChanged: {
+        if (root.mode !== "none") root.look = root.mode
+    }
+    // Only the handler above sets it from here on.
+    Component.onCompleted: root.look = root.mode
+
     // A slow fade to black, and straight back on activity. Already dimmed
     // when it's created (a lock surface coming up on a dimmed monitor), it
     // starts out dark rather than fading in - so it needs its monitor
@@ -45,18 +57,18 @@ Item {
         }
     }
 
-    // "Dim opacity": how dark the screen goes. The moon and the text stay
-    // solid.
+    // How dark the screen goes: "Dim opacity", or all the way for "black".
+    // The moon and the text stay solid.
     Rectangle {
         anchors.fill: parent
         color: "black"
-        opacity: (root.idle ? root.idle.dimOpacity : 100) / 100
+        opacity: root.look === "black" ? 1 : (root.idle ? root.idle.dimOpacity : 100) / 100
     }
 
     Column {
         anchors.centerIn: parent
 
-        visible: root.decorated
+        visible: root.decorated && root.look !== "black"
         spacing: Config.scaled(24, root.uiScale)
 
         // A crescent moon: a disc with another, offset disc cut out of it.
@@ -70,7 +82,7 @@ Item {
             width: Config.scaled(160, root.uiScale)
             height: moon.width
 
-            property color tint: root.mode === "dimmed" ? Config.fgcolordark : Config.fgcolor
+            property color tint: root.look === "dimmed" ? Config.fgcolordark : Config.fgcolor
 
             Behavior on tint {
                 ColorAnimation { duration: 400 }
@@ -139,7 +151,7 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
 
-            visible: root.mode === "dimmed" && !!root.idle && root.idle.dimShowActive && root.idle.activeNames.length > 0
+            visible: root.look === "dimmed" && !!root.idle && root.idle.dimShowActive && root.idle.activeNames.length > 0
             text: root.idle ? Logic.activeText(root.idle.activeNames) : ""
             color: root.idle ? root.idle.darkRed : "darkred"
             font.family: Config.fontfamily
