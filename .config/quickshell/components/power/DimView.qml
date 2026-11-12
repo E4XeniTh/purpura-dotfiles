@@ -43,6 +43,12 @@ Item {
     // Only the handler above sets it from here on.
     Component.onCompleted: root.look = root.mode
 
+    // Up, or still fading out. A window holding this goes by this, never by
+    // `visible`: Quickshell deletes a layer window once it's hidden and
+    // takes this out of it, and an item outside any window never counts as
+    // visible - so a window waiting on `visible` would never come back.
+    readonly property bool active: root.shown || root.opacity > 0
+
     // A slow fade to black, and straight back on activity. Already dimmed
     // when it's created (a lock surface coming up on a dimmed monitor), it
     // starts out dark rather than fading in - so it needs its monitor

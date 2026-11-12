@@ -255,16 +255,15 @@ Scope {
     }
 
     // ---------------- Focus mode ----------------
-    // Dims every monitor but the one the mouse is on, there and then. A
-    // dimmed one wakes when it's used - the mouse moving onto it, or input
-    // while it has focus. The shortcut starts it over from wherever the
-    // mouse is, or ends it while every other monitor is still dimmed.
-    // Works whether auto-dim's on or not.
+    // Each press of the shortcut dims every monitor but the one the mouse
+    // is on, there and then. A dimmed one wakes when it's used - the mouse
+    // moving onto it, or input while it has focus. Works whether auto-dim's
+    // on or not.
     property var focusNames: []
 
-    function toggleFocusMode() {
+    function focusMode() {
         const focused = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : root.primaryName
-        root.focusNames = Logic.focusToggle(root.focusNames, Quickshell.screens.map(s => s.name), focused)
+        root.focusNames = Logic.focusTargets(Quickshell.screens.map(s => s.name), focused)
         root.evaluate(false)
     }
 
@@ -278,13 +277,13 @@ Scope {
         name: "focusmode"
         description: "Focus mode: dim every monitor but the one the mouse is on"
 
-        onPressed: root.toggleFocusMode()
+        onPressed: root.focusMode()
     }
 
     IpcHandler {
         target: "focusmode"
 
-        function toggle(): void { root.toggleFocusMode() }
+        function dim(): void { root.focusMode() }
     }
 
     // ---------------- the stages ----------------
@@ -490,8 +489,8 @@ Scope {
 
             color: "transparent"
 
-            // Stays up until it's faded out.
-            visible: dim.visible
+            // Stays up until it's faded out (see DimView's `active`).
+            visible: dim.active
 
             DimView {
                 id: dim
