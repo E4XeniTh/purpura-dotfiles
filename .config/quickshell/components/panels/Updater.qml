@@ -208,9 +208,7 @@ Scope {
     readonly property string purpuraVersions: {
         const p = root.purpura
         if (!p || p.state !== "ok") return ""
-        if (p.behind > 0) {
-            return p.installedShort + " -> " + p.latestShort + "  ·  " + p.behind + " new commit" + (p.behind === 1 ? "" : "s")
-        }
+        if (p.behind > 0) return p.installedShort + " -> " + p.latestShort
         return p.installedShort + "  ·  " + p.installedDate
     }
 
@@ -656,43 +654,48 @@ Scope {
                             color: Config.fgcolor
                         }
 
-                        RowLayout {
+                        Text {
                             Layout.fillWidth: true
-
-                            Text {
-                                Layout.fillWidth: true
-                                text: "Purpura"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: root.purpuraStatus
-                                color: root.purpuraUpdateAvailable ? Config.fgcolorlight : Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
-                                font.bold: root.purpuraUpdateAvailable
-                            }
+                            Layout.bottomMargin: Config.scaled(2, dropdownWindow.uiScale)
+                            text: "Purpura"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
+                            font.bold: true
                         }
 
-                        // installed -> newest, or just what's installed
+                        // Centred under the title: "up to date" / "update
+                        // available", and just below it the version -
+                        // installed -> newest, or what's installed and when.
+                        Text {
+                            Layout.fillWidth: true
+                            visible: text.length > 0
+                            text: root.purpuraStatus
+                            horizontalAlignment: Text.AlignHCenter
+                            color: root.purpuraUpdateAvailable ? Config.fgcolorlight : Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                            font.bold: root.purpuraUpdateAvailable
+                        }
+
                         Text {
                             Layout.fillWidth: true
                             visible: text.length > 0
                             text: root.purpuraVersions
+                            horizontalAlignment: Text.AlignHCenter
                             color: Config.fgcolorlight
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
                             elide: Text.ElideRight
                         }
 
-                        // The newest commit's own description.
+                        // The newest commit's own description, centred with
+                        // the version it belongs to.
                         Text {
                             Layout.fillWidth: true
                             visible: root.purpuraUpdateAvailable
                             text: root.purpura ? (root.purpura.latestSubject || "") : ""
+                            horizontalAlignment: Text.AlignHCenter
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
