@@ -257,17 +257,14 @@ Scope {
     // ---------------- Focus mode ----------------
     // Dims every monitor but the one the mouse is on, there and then. A
     // dimmed one wakes when it's used - the mouse moving onto it, or input
-    // while it has focus - and the shortcut again ends it. Works whether
-    // auto-dim's on or not.
+    // while it has focus. The shortcut starts it over from wherever the
+    // mouse is, or ends it while every other monitor is still dimmed.
+    // Works whether auto-dim's on or not.
     property var focusNames: []
 
     function toggleFocusMode() {
-        if (root.focusNames.length) {
-            root.focusNames = []
-        } else {
-            const focused = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : root.primaryName
-            root.focusNames = Logic.focusTargets(Quickshell.screens.map(s => s.name), focused)
-        }
+        const focused = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : root.primaryName
+        root.focusNames = Logic.focusToggle(root.focusNames, Quickshell.screens.map(s => s.name), focused)
         root.evaluate(false)
     }
 

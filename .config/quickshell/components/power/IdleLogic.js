@@ -326,6 +326,16 @@ function focusTargets(names, focused) {
     return names.filter(name => name !== focused)
 }
 
+// Focus mode's monitors once its shortcut's pressed with the mouse on
+// `focused`: every other one dimmed - unless that's just what it's doing
+// already, when the press ends it. So a press always starts it over from
+// where the mouse is, after some of the dimmed ones have been woken too.
+function focusToggle(current, names, focused) {
+    const targets = focusTargets(names, focused)
+    const same = targets.length === current.length && targets.every(name => current.indexOf(name) >= 0)
+    return same ? [] : targets
+}
+
 // Focus mode's monitors once `name` has been used (the mouse moved onto
 // it, or input while it has focus): that one's awake again.
 function focusWake(forced, name) {
