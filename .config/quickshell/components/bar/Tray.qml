@@ -284,10 +284,11 @@ Rectangle {
                                     text: entryDelegate.modelData.isSeparator ? "" : entryDelegate.modelData.text
                                     color: entryDelegate.modelData.enabled ? Config.fgcolor : Qt.rgba(1, 1, 1, 0.35)
                                     elide: Text.ElideRight
-                                    // The system's default font (no Config.fontfamily
-                                    // here), just scaled with the screen like the
-                                    // rest of the menu.
-                                    font.pointSize: (Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize : 10) * root.uiScale
+                                    // The shell's font at the qt6ct preset's size,
+                                    // scaled with the screen like the rest of the
+                                    // menu.
+                                    font.family: Config.fontfamily
+                                    font.pointSize: Config.fontpointsize * root.uiScale
                                 }
 
                                 MouseArea {

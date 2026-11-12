@@ -260,7 +260,10 @@ package lists are the exact set):
 ## Notes
 
 - Colors, font family, and notification timeout live in `Config.js` (base
-  of the quickshell config, imported as `Config` from any component). Edit
+  of the quickshell config, imported as `Config` from any component). The
+  font is the qt6ct preset's general font (Hack, 10pt), set for every bit of
+  text, so the shell looks the same with or without qt6ct - change both
+  together. Edit
   it and restart `qs` to re-theme the shell alone - or re-run
   `./purpura.sh --install --no-packages` to change the highlight everywhere
   at once (it remembers the current one in

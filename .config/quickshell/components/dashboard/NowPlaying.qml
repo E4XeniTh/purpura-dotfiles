@@ -62,6 +62,7 @@ Item {
                 visible: !root.player
                 text: "♪"
                 color: Config.fgcolor
+                font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(72, root.uiScale)
                 font.bold: true
                 elide: Text.ElideRight
@@ -88,6 +89,7 @@ Item {
             Layout.fillWidth: true
             text: root.player && root.player.trackTitle ? root.player.trackTitle : "No media detected"
             color: Config.fgcolor
+            font.family: Config.fontfamily
             font.pixelSize: Config.scaled(13, root.uiScale)
             font.bold: true
             elide: Text.ElideRight
@@ -98,6 +100,7 @@ Item {
             Layout.fillWidth: true
             text: root.player && root.player.trackArtist ? root.player.trackArtist : ""
             color: Config.fgcolor
+            font.family: Config.fontfamily
             font.pixelSize: Config.scaled(11, root.uiScale)
             elide: Text.ElideRight
             horizontalAlignment: Text.AlignHCenter

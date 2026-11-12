@@ -439,9 +439,11 @@ Scope {
                             width: Config.scaled(240, prompt.uiScale)
                             height: Config.scaled(30, prompt.uiScale)
 
-                            // The system's default font, scaled with the
-                            // screen like the rest of the prompt.
-                            font.pointSize: (Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize : 10) * prompt.uiScale
+                            // The shell's font at the qt6ct preset's size,
+                            // scaled with the screen like the rest of the
+                            // prompt.
+                            font.family: Config.fontfamily
+                            font.pointSize: Config.fontpointsize * prompt.uiScale
 
                             placeholderText: root.checking ? "Checking..." : "Password"
 

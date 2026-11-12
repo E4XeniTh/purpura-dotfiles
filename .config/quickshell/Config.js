@@ -21,7 +21,14 @@ var fgcolordarklight = Qt.darker(fgcolorlight, 1.3)
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
 var fgcolorred = "#ff0000"
 
+// The shell's font: the qt6ct preset's general font (Hack, 10pt - see
+// .config/qt6ct/qt6ct.conf), so the shell looks the same whether or not
+// it's running with qt6ct. Every bit of text uses the family. Most set
+// their own size; the point size is for the few that would otherwise take
+// the system's default (tray menus, the lock screen's password box).
+// Change these with the preset.
 var fontfamily = "Hack"
+var fontpointsize = 10
 
 var notificationtimeout = 5000
 

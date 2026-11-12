@@ -10,6 +10,7 @@ Text {
 
     text: Qt.formatDateTime(new Date(), "hh:mm")
 
+    font.family: Config.fontfamily
     font.pixelSize: Config.scaled(22, root.uiScale)
     color: Config.fgcolor
 
