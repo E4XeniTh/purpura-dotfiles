@@ -27,8 +27,9 @@ import "IdleLogic.js" as Logic
 // active; once every monitor's dimmed, the primary one counts down to
 // suspending - first to locking, when they've all dimmed before the lock.
 //
-// The dimmed screens are layers drawn above the lock screen (Hyprland's
-// above_lock layer rule, which this sets itself - see applyLayerRule()).
+// The dimmed screens are layers drawn above the lock screen, taking the
+// mouse there too (Hyprland's above_lock layer rule, which this sets
+// itself - see applyLayerRule()), and hide the cursor while they're up.
 //
 // Like NightLight.qml, this owns its settings file (powersettings.json),
 // and ShellSettings.qml's Power category is a view onto this object.
@@ -386,10 +387,13 @@ Scope {
     }
 
     // ---------------- the dimmed screens ----------------
-    // Above the lock screen too, so the countdown shows over it.
+    // Above the lock screen too, so the countdown shows over it - and with
+    // the mouse there as well (2 rather than 1), so a dimmed screen gets to
+    // hide the cursor over the lock screen too. The keyboard still goes to
+    // the lock screen: Hyprland always gives it to the lock.
     function applyLayerRule() {
         Quickshell.execDetached(["hyprctl", "eval",
-            "hl.layer_rule({ name = \"purpura-idle-above-lock\", match = { namespace = \"purpura-idle\" }, above_lock = 1 })"])
+            "hl.layer_rule({ name = \"purpura-idle-above-lock\", match = { namespace = \"purpura-idle\" }, above_lock = 2 })"])
     }
 
     Component.onCompleted: root.applyLayerRule()
@@ -523,16 +527,21 @@ Scope {
                     }
                 }
 
-                // Only here so a click on a dimmed screen can't land on
-                // whatever's underneath. It doesn't count hovering as
-                // activity: Qt sends hover events when this appears under a
-                // cursor that isn't moving, and on every frame of the fade
-                // in, which would wake the very monitor that was dimming.
-                // Real movement is input the idle monitors above see, put
-                // down to the monitor with focus - the one the mouse is on.
+                // Hides the cursor on a dimmed screen - back to the arrow the
+                // moment it starts fading out - and keeps a click on it from
+                // landing on whatever's underneath.
+                //
+                // Hovering isn't activity, though: Qt sends hover events when
+                // this appears under a cursor that isn't moving, and on every
+                // frame of the fade in, which would wake the very monitor
+                // that was dimming. Real movement is input the idle monitors
+                // above see, put down to the monitor with focus - the one the
+                // mouse is on.
                 MouseArea {
                     anchors.fill: parent
                     acceptedButtons: Qt.AllButtons
+                    hoverEnabled: true
+                    cursorShape: content.shown ? Qt.BlankCursor : Qt.ArrowCursor
                 }
             }
         }
