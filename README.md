@@ -18,7 +18,7 @@ out to be copied straight into place.
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and the dashboard's now-playing card beside it while something plays. Authenticates via PAM |
-| **Auto-lock and sleep** | Settings > Shell > Power: locks after a set time without input, and optionally sleeps later on - counting down over black screens first if you like, and per monitor if you like (each monitor waits out its own inactivity, and goes dark until the others have too) |
+| **Auto-lock, dim and suspend** | Settings > Shell > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active) and suspends, counting down on the main monitor first |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -38,7 +38,7 @@ scripts) and `components/`, by area:
 | `panels/` | Notifications, clipboard, screenshot picker, updater, dropdown console |
 | `osd/` | Volume, brightness, workspace and fullscreen-hint popups |
 | `lock/` | The lock screen |
-| `power/` | Power menu, auto-lock and auto-sleep |
+| `power/` | Power menu, auto-lock, auto-dim and auto-suspend |
 | `system/` | Shell-wide state with no UI of its own: UI scale, edge gaps, night light |
 | `common/` | Pieces several areas share |
 
@@ -188,7 +188,7 @@ they're machine-specific. `purpura.sh` does this for you; by hand:
 - **`idle_inhibit`**: answers apps that ask over D-Bus not to go idle
   (`org.freedesktop.ScreenSaver.Inhibit` - browsers playing a video, among
   others) and watches systemd idle inhibitor locks, so those hold off
-  auto-lock and auto-sleep too. Hyprland only sees Wayland inhibitors by
+  auto-lock, auto-dim and auto-suspend too. Hyprland only sees Wayland inhibitors by
   itself. The shell starts it and it keeps running across shell reloads.
 
 ```bash

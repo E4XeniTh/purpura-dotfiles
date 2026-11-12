@@ -6,31 +6,28 @@ import Quickshell.Hyprland
 import "../../Config.js" as Config
 import "IdleLogic.js" as Logic
 
-// Settings > Shell > Power at work: locking the screen after a while
-// without input, and putting the computer to sleep after a longer while.
-// The decisions themselves are in IdleLogic.js.
+// Settings > Shell > Power at work: locking the screen, dimming the
+// monitors and suspending the computer after a while without activity,
+// each stage counted from the one before it. The decisions themselves
+// are in IdleLogic.js (see there for the stages); this measures the
+// activity, carries out what they decide and draws the dimmed screens.
 //
-// Idleness comes from Hyprland (IdleMonitor, ext-idle-notify-v1), which
-// also counts anything keeping the computer awake - a Wayland idle
-// inhibitor, the idle_inhibit window rules in hyprland.lua - as activity.
-// Apps that ask over D-Bus instead (org.freedesktop.ScreenSaver - browsers
-// playing a video, among others) or hold a systemd idle inhibitor lock
-// are answered by helpers/idle_inhibit, and count too: see "kept awake
-// over D-Bus" below.
+// Activity is input, or anything keeping the computer awake: Hyprland
+// counts Wayland idle inhibitors and the idle_inhibit window rules in
+// hyprland.lua, and apps that ask over D-Bus instead
+// (org.freedesktop.ScreenSaver - browsers playing a video, among others)
+// or hold a systemd idle inhibitor lock are answered by
+// helpers/idle_inhibit (see "kept awake over D-Bus" below). How long
+// it's been since any of that is measured here a second at a time, so
+// changing a delay never starts the waiting over.
 //
-// Auto-sleep, by its two options:
-// - Countdown off: it sleeps the moment the delay is up.
-// - Countdown on: every monitor fades to black with a moon on it first,
-//   the primary one counting down; any input calls it off.
-// - Per-monitor on: each monitor waits for its own inactivity - input on
-//   it (it has focus: the mouse is on it), or a window on it keeping the
-//   computer awake, counts. One that's idle while others aren't fades to
-//   black with a dimmer moon and the names of those still active, and
-//   only once they're all idle does the countdown start (or, without it,
-//   the computer sleep).
-// - Wake up lock: it locks before it sleeps, so it wakes up locked.
+// With per-monitor dimming each monitor also has its own inactivity:
+// input while it has focus (the mouse is on it), or a window on it
+// keeping the computer awake. A dimmed one names the monitors still
+// active; once every monitor's dimmed, the primary one counts down to
+// suspending.
 //
-// The black screens are layers drawn above the lock screen (Hyprland's
+// The dimmed screens are layers drawn above the lock screen (Hyprland's
 // above_lock layer rule, which this sets itself - see applyLayerRule()).
 //
 // Like NightLight.qml, this owns its settings file (powersettings.json),
@@ -54,14 +51,18 @@ Scope {
     readonly property bool lockWarning: root.settings.lockWarning
     readonly property bool showTime: root.settings.showTime
     readonly property bool showMedia: root.settings.showMedia
-    readonly property bool autoSleep: root.settings.autoSleep
-    readonly property int sleepMinutes: root.settings.sleepMinutes
-    readonly property int minSleepMinutes: root.settings.minSleepMinutes
+    readonly property bool autoDim: root.settings.autoDim
+    readonly property int dimMinutes: root.settings.dimMinutes
+    readonly property int dimOpacity: root.settings.dimOpacity
+    readonly property bool dimPerMonitor: root.settings.dimPerMonitor
+    readonly property bool autoSuspend: root.settings.autoSuspend
+    readonly property int suspendMinutes: root.settings.suspendMinutes
     readonly property bool wakeUpLock: root.settings.wakeUpLock
     readonly property bool wakeUpLockForced: root.settings.wakeUpLockForced
-    readonly property bool perMonitor: root.settings.perMonitor
-    readonly property bool sleepCountdown: root.settings.countdown
-    readonly property int countdownSeconds: root.settings.countdownSeconds
+
+    // The delays' labels, which depend on what's on before them.
+    readonly property string dimDelayLabel: Logic.dimDelayLabel(root.settings)
+    readonly property string suspendDelayLabel: Logic.suspendDelayLabel(root.settings)
 
     function update(patch) {
         root.store = Object.assign({}, root.store, patch)
@@ -69,16 +70,17 @@ Scope {
     }
 
     function setAutoLock(on) { root.update({ autoLock: !!on }) }
-    function setLockMinutes(minutes) { root.update(Logic.lockMinutesPatch(root.settings, minutes)) }
+    function setLockMinutes(minutes) { root.update(Logic.minutesPatch("lockMinutes", minutes)) }
     function setLockWarning(on) { root.update({ lockWarning: !!on }) }
     function setShowTime(on) { root.update({ showTime: !!on }) }
     function setShowMedia(on) { root.update({ showMedia: !!on }) }
-    function setAutoSleep(on) { root.update({ autoSleep: !!on }) }
-    function setSleepMinutes(minutes) { root.update(Logic.sleepMinutesPatch(root.settings, minutes)) }
+    function setAutoDim(on) { root.update({ autoDim: !!on }) }
+    function setDimMinutes(minutes) { root.update(Logic.minutesPatch("dimMinutes", minutes)) }
+    function setDimOpacity(percent) { root.update(Logic.dimOpacityPatch(percent)) }
+    function setDimPerMonitor(on) { root.update({ dimPerMonitor: !!on }) }
+    function setAutoSuspend(on) { root.update({ autoSuspend: !!on }) }
+    function setSuspendMinutes(minutes) { root.update(Logic.minutesPatch("suspendMinutes", minutes)) }
     function setWakeUpLock(on) { root.update({ wakeUpLock: !!on }) }
-    function setPerMonitor(on) { root.update({ perMonitor: !!on }) }
-    function setSleepCountdown(on) { root.update({ countdown: !!on }) }
-    function setCountdownSeconds(seconds) { root.update(Logic.countdownSecondsPatch(seconds)) }
 
     // Not watched: this is the only writer, and reloading after our own
     // (debounced) write could clobber an edit made in between.
@@ -129,11 +131,6 @@ Scope {
 
     readonly property var external: Logic.readExternal(inhibitorsFile.text())
 
-    // While anything's inhibiting this way, the idle monitors below are
-    // switched off - and switched back on when it stops, which starts their
-    // delays over from then, the same as a Wayland inhibitor ending does.
-    readonly property bool externallyInhibited: root.external.any
-
     Timer {
         interval: 60000
         repeat: true
@@ -143,146 +140,50 @@ Scope {
         onTriggered: Quickshell.execDetached([Quickshell.shellDir + "/helpers/idle_inhibit", root.inhibitorsPath])
     }
 
-    // ---------------- auto-lock ----------------
-    // Nothing waits on the settings' defaults before the file's been read:
-    // an idle monitor starts its delay over whenever its settings change.
-    IdleMonitor {
-        id: lockIdle
+    // ---------------- activity ----------------
+    // When there was last activity anywhere (ms).
+    property real lastActivity: Date.now()
 
-        enabled: root.settingsLoaded && root.autoLock && !root.externallyInhibited
-        timeout: root.lockMinutes * 60
+    // Input in the last second, or a Wayland inhibitor/idle_inhibit rule
+    // keeping the computer awake: Hyprland only lets this go idle after a
+    // second without either.
+    IdleMonitor {
+        id: activityIdle
+
+        enabled: root.settingsLoaded
+        timeout: 1
         respectInhibitors: true
 
         onIsIdleChanged: {
-            if (lockIdle.isIdle && root.lockScreen) root.lockScreen.lock()
+            if (!activityIdle.isIdle) root.evaluate(false)
         }
     }
 
-    // A minute's warning ("Warn before auto-lock"), as hypridle used to
-    // give. Only with a delay of 2 minutes or more, so it has a minute to
-    // come before.
+    // Input alone, for per-monitor dimming: put down to the monitor with
+    // focus.
     IdleMonitor {
-        id: lockWarningIdle
+        id: inputIdle
 
-        enabled: root.settingsLoaded && root.autoLock && root.lockWarning && root.lockMinutes >= 2 && !root.externallyInhibited
-        timeout: (root.lockMinutes - 1) * 60
-        respectInhibitors: true
+        enabled: root.settingsLoaded && root.autoDim && root.dimPerMonitor
+        timeout: 1
+        respectInhibitors: false
 
         onIsIdleChanged: {
-            if (!lockWarningIdle.isIdle || (root.lockScreen && root.lockScreen.locked)) return
-            const minutes = root.lockMinutes - 1
-            Quickshell.execDetached([
-                "notify-send", "-i", "system-suspend-uninhibited", "AFK",
-                minutes + " minute" + (minutes === 1 ? "" : "s") + " of inactivity has passed.\nLocking screen in 1 minute."
-            ])
-        }
-    }
-
-    // ---------------- auto-sleep ----------------
-    // No input for the whole delay, with nothing keeping the computer awake.
-    IdleMonitor {
-        id: sleepIdle
-
-        enabled: root.settingsLoaded && root.autoSleep && !root.externallyInhibited
-        timeout: root.sleepMinutes * 60
-        respectInhibitors: true
-
-        onIsIdleChanged: root.evaluate(false)
-    }
-
-    property string phase: "awake"
-    property int countdownLeft: 0
-    property bool held: false
-
-    // Wall-clock time of the last tick. Timers don't run while the computer
-    // sleeps but the clock does, so a big gap between ticks means it's just
-    // woken up.
-    property real lastTick: 0
-
-    onAutoSleepChanged: root.evaluate(false)
-    onPerMonitorChanged: {
-        root.stamps = ({})
-        root.evaluate(false)
-    }
-
-    // Runs everything that changes with time: per-monitor idleness, the
-    // countdown, noticing a wake-up. Also called straight away whenever
-    // something it depends on changes.
-    function evaluate(tick) {
-        const now = Date.now()
-        const resumed = tick && root.lastTick > 0 && now - root.lastTick > 15000
-        if (tick) root.lastTick = now
-
-        const names = Quickshell.screens.map(s => s.name)
-        if (resumed) root.stamps = Logic.stamp({}, names, now)
-        else root.stamps = Logic.withDefaults(root.stamps, names, now)
-
-        const tracking = root.settingsLoaded && root.autoSleep && root.perMonitor
-        const idle = tracking ? Logic.idleMonitors(names, root.stamps, now, root.sleepMinutes * 60000) : []
-        const active = tracking ? names.filter(name => idle.indexOf(name) < 0) : []
-        if (!Logic.sameList(idle, root.idleNames)) root.idleNames = idle
-        if (!Logic.sameList(active, root.activeNames)) root.activeNames = active
-
-        const result = Logic.step({ phase: root.phase, left: root.countdownLeft, held: root.held }, {
-            autoSleep: root.settingsLoaded && root.autoSleep,
-            perMonitor: root.perMonitor,
-            countdown: root.sleepCountdown,
-            countdownSeconds: root.countdownSeconds,
-            globalIdle: sleepIdle.isIdle,
-            activeCount: active.length,
-            resumed: resumed,
-            tick: tick
-        })
-        root.phase = result.state.phase
-        root.countdownLeft = result.state.left
-        root.held = result.state.held
-        if (result.action === "sleep") root.goToSleep()
-    }
-
-    Timer {
-        id: ticker
-
-        interval: 1000
-        repeat: true
-        running: root.settingsLoaded && root.autoSleep
-
-        // A stale tick from before the last time it stopped isn't a wake-up.
-        onRunningChanged: root.lastTick = 0
-
-        onTriggered: {
-            if (inputIdle.enabled && !inputIdle.isIdle) root.stampFocused()
-            root.evaluate(true)
+            if (!inputIdle.isIdle) root.evaluate(false)
         }
     }
 
     // ---------------- per-monitor activity ----------------
     // Monitor name -> when it last had activity (ms).
     property var stamps: ({})
-    property var idleNames: []
-    property var activeNames: []
+
+    readonly property bool tracking: root.settingsLoaded && root.autoDim && root.dimPerMonitor
+    onTrackingChanged: root.stamps = ({})
 
     function markActive(name) {
-        if (!name || !root.perMonitor || !root.autoSleep) return
+        if (!name || !root.tracking) return
         root.stamps = Logic.stamp(root.stamps, [name], Date.now())
         root.evaluate(false)
-    }
-
-    function stampFocused() {
-        if (Hyprland.focusedMonitor) root.stamps = Logic.stamp(root.stamps, [Hyprland.focusedMonitor.name], Date.now())
-    }
-
-    // Any input at all, a second at a time, put down to the monitor with
-    // focus - the one the mouse is on.
-    IdleMonitor {
-        id: inputIdle
-
-        enabled: root.settingsLoaded && root.autoSleep && root.perMonitor
-        timeout: 1
-        respectInhibitors: false
-
-        onIsIdleChanged: {
-            if (!inputIdle.isIdle && Hyprland.focusedMonitor) root.markActive(Hyprland.focusedMonitor.name)
-        }
     }
 
     Connections {
@@ -307,7 +208,7 @@ Scope {
         interval: 10000
         repeat: true
         triggeredOnStart: true
-        running: root.settingsLoaded && root.autoSleep && root.perMonitor
+        running: root.tracking
 
         onTriggered: {
             clientsProcess.running = false
@@ -317,6 +218,7 @@ Scope {
 
     onExternalChanged: {
         if (clientsTimer.running) clientsTimer.triggered()
+        root.evaluate(false)
     }
 
     Process {
@@ -347,17 +249,88 @@ Scope {
         }
     }
 
-    // ---------------- sleeping ----------------
-    function goToSleep() {
+    // ---------------- the stages ----------------
+    property var stage: ({ phase: "awake", readySince: null, held: false, lockFired: false, warnFired: false })
+    property var dimmedNames: []
+    property var activeNames: []
+    property int countdown: -1
+    readonly property string phase: root.stage.phase
+
+    // Wall-clock time of the last tick. Timers don't run while the computer
+    // is suspended but the clock does, so a big gap between ticks means it's
+    // just woken up.
+    property real lastTick: 0
+
+    function evaluate(tick) {
+        if (!root.settingsLoaded) return
+        const now = Date.now()
+        const names = Quickshell.screens.map(s => s.name)
+
+        if (tick && root.lastTick > 0 && now - root.lastTick > 15000) {
+            // Woken up: everything starts over.
+            root.lastActivity = now
+            root.stamps = Logic.stamp({}, names, now)
+            root.stage = { phase: "awake", readySince: null, held: false, lockFired: false, warnFired: false }
+        }
+        if (tick) root.lastTick = now
+
+        if (!activityIdle.isIdle || root.external.any) root.lastActivity = now
+        if (root.tracking) {
+            let stamps = Logic.withDefaults(root.stamps, names, now)
+            if (!inputIdle.isIdle && Hyprland.focusedMonitor) stamps = Logic.stamp(stamps, [Hyprland.focusedMonitor.name], now)
+            root.stamps = stamps
+        }
+
+        const result = Logic.step(root.stage, {
+            settings: root.settings,
+            now: now,
+            idle: Math.max(0, (now - root.lastActivity) / 1000),
+            monitors: Logic.monitorIdle(names, root.stamps, now),
+            locked: !!root.lockScreen && root.lockScreen.locked
+        })
+
+        root.stage = result.state
+        if (!Logic.sameList(result.dimmed, root.dimmedNames)) root.dimmedNames = result.dimmed
+        if (!Logic.sameList(result.active, root.activeNames)) root.activeNames = result.active
+        root.countdown = result.countdown
+
+        for (const action of result.actions) {
+            if (action === "lock" && root.lockScreen) root.lockScreen.lock()
+            else if (action === "warn") root.warnBeforeLock()
+            else if (action === "suspend") root.suspendNow()
+        }
+    }
+
+    onSettingsChanged: root.evaluate(false)
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: root.settingsLoaded
+
+        onTriggered: root.evaluate(true)
+    }
+
+    // "Warn before auto-lock": a minute's notice, as hypridle used to give.
+    function warnBeforeLock() {
+        const minutes = root.lockMinutes - 1
+        Quickshell.execDetached([
+            "notify-send", "-i", "system-suspend-uninhibited", "AFK",
+            minutes + " minute" + (minutes === 1 ? "" : "s") + " of inactivity has passed.\nLocking screen in 1 minute."
+        ])
+    }
+
+    // ---------------- suspending ----------------
+    function suspendNow() {
         if (root.wakeUpLock && root.lockScreen && !root.lockScreen.locked) {
             root.lockScreen.lock()
             lockWaitTimer.restart()
         } else {
-            root.suspend()
+            root.runSuspend()
         }
     }
 
-    // Asleep locked: the lock goes up first, so waking up shows it rather
+    // Suspended locked: the lock goes up first, so waking up shows it rather
     // than the desktop. Hyprland confirms it's covering every screen within
     // a frame or two; this doesn't wait forever for that.
     Timer {
@@ -365,7 +338,7 @@ Scope {
 
         interval: 3000
 
-        onTriggered: root.suspend()
+        onTriggered: root.runSuspend()
     }
 
     Connections {
@@ -374,15 +347,15 @@ Scope {
         function onSecureChanged() {
             if (lockWaitTimer.running && root.lockScreen.secure) {
                 lockWaitTimer.stop()
-                root.suspend()
+                root.runSuspend()
             }
         }
     }
 
-    function suspend() {
+    function runSuspend() {
         lockWaitTimer.stop()
         // Woken up again before it got this far.
-        if (root.phase !== "asleep") return
+        if (root.phase !== "suspended") return
         suspendProcess.running = false
         suspendProcess.running = true
     }
@@ -400,18 +373,17 @@ Scope {
         // trying again before there's been some activity.
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) return
-            root.phase = "awake"
-            root.held = true
+            root.stage = Object.assign({}, root.stage, { phase: "awake", readySince: null, held: true })
             const reason = suspendErrors.text.trim()
             Quickshell.execDetached([
                 "notify-send", "-a", "Power", "-i", "system-suspend-symbolic",
-                "Couldn't put the computer to sleep",
+                "Couldn't suspend the computer",
                 reason || "systemctl suspend failed."
             ])
         }
     }
 
-    // ---------------- the black screens ----------------
+    // ---------------- the dimmed screens ----------------
     // Above the lock screen too, so the countdown shows over it.
     function applyLayerRule() {
         Quickshell.execDetached(["hyprctl", "eval",
@@ -434,7 +406,7 @@ Scope {
             property var modelData
             screen: modelData
 
-            readonly property string mode: Logic.overlay(win.modelData.name, root.phase, root.autoSleep && root.perMonitor, root.idleNames)
+            readonly property string mode: Logic.overlay(win.modelData.name, root.phase, root.countdown, root.dimmedNames)
             readonly property bool isPrimary: win.modelData.name === root.primaryName
 
             // The shell-wide per-screen scale (see Config.uiScale).
@@ -474,9 +446,12 @@ Scope {
                     }
                 }
 
+                // "Dim opacity": how dark the screen goes. The moon and the
+                // text stay solid.
                 Rectangle {
                     anchors.fill: parent
                     color: "black"
+                    opacity: root.dimOpacity / 100
                 }
 
                 Column {
@@ -485,8 +460,8 @@ Scope {
                     spacing: Config.scaled(24, win.uiScale)
 
                     // A crescent moon: a disc with another, offset disc
-                    // cut out of it. fgcolor while it's about to sleep,
-                    // the dimmer purple while waiting on other monitors.
+                    // cut out of it. fgcolor once it's counting down to
+                    // suspending, the dimmer purple while only dimmed.
                     Canvas {
                         id: moon
 
@@ -495,7 +470,7 @@ Scope {
                         width: Config.scaled(160, win.uiScale)
                         height: moon.width
 
-                        property color tint: win.mode === "waiting" ? Config.fgcolordark : Config.fgcolor
+                        property color tint: win.mode === "dimmed" ? Config.fgcolordark : Config.fgcolor
 
                         Behavior on tint {
                             ColorAnimation { duration: 400 }
@@ -525,19 +500,19 @@ Scope {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
 
-                        visible: win.isPrimary && root.phase === "countdown"
-                        text: Logic.countdownText(root.countdownLeft)
+                        visible: win.isPrimary && root.countdown >= 0
+                        text: Logic.countdownText(root.countdown)
                         color: Config.fgcolordark
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(15, win.uiScale)
                         font.italic: true
                     }
 
-                    // Per-monitor: which monitors are keeping it awake.
+                    // Per-monitor: which monitors are still active.
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
 
-                        visible: win.mode === "waiting"
+                        visible: win.mode === "dimmed" && root.activeNames.length > 0
                         text: Logic.activeText(root.activeNames)
                         color: root.darkRed
                         font.family: Config.fontfamily
@@ -545,10 +520,11 @@ Scope {
                     }
                 }
 
-                // The mouse moving over a black screen wakes it straight away
-                // (and a click on it can't land on whatever's underneath).
-                // Under the lock screen the lock gets the mouse instead, and
-                // the idle monitors notice the input on their own.
+                // The mouse moving over a dimmed screen wakes it straight
+                // away (and a click on it can't land on whatever's
+                // underneath). Under the lock screen the lock gets the mouse
+                // instead, and the idle monitors notice the input on their
+                // own.
                 MouseArea {
                     anchors.fill: parent
 

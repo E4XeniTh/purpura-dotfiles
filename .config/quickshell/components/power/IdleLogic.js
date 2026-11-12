@@ -2,31 +2,42 @@
 
 // The decisions behind Idle.qml (Settings > Shell > Power), kept apart from
 // the QML so they're plain functions of their inputs.
+//
+// Three stages, each counted from the one before it when that one's on:
+//   lock     after `lockMinutes` without activity
+//   dim      `dimMinutes` after that (or after `dimMinutes` without
+//            activity, with auto-lock off) - the monitors fade to black
+//            with a moon on them, each on its own with per-monitor on
+//   suspend  `suspendMinutes` after every monitor's dimmed - counted down
+//            on the primary monitor the whole time - or, without auto-dim,
+//            `suspendMinutes` after the lock (or without activity), with
+//            the screens going black for the last 30 seconds' countdown
+// Activity is input, or anything keeping the computer awake (a video
+// playing, an idle_inhibit window rule, a D-Bus inhibitor).
 
 // ---------------- settings ----------------
-// The stored settings (powersettings.json) with their defaults and limits:
-// auto-lock after at least a minute, auto-sleep at least 5 minutes after
-// the lock would, a countdown of 10-240 seconds.
+// The stored settings (powersettings.json) with their defaults and limits.
 function readSettings(store) {
     const s = store || {}
-    const lockMinutes = wholeNumber(s.lockMinutes, 10, 1)
-    const minSleepMinutes = lockMinutes + 5
+    const autoLock = s.autoLock !== false
     return {
-        autoLock: s.autoLock !== false,
-        lockMinutes: lockMinutes,
+        autoLock: autoLock,
+        lockMinutes: wholeNumber(s.lockMinutes, 10, 1),
         lockWarning: s.lockWarning !== false,
         showTime: s.showTime !== false,
         showMedia: s.showMedia !== false,
-        autoSleep: s.autoSleep === true,
-        minSleepMinutes: minSleepMinutes,
-        sleepMinutes: wholeNumber(s.sleepMinutes, 60, minSleepMinutes),
-        // Always on while auto-lock is: sleeping unlocked would otherwise
+        autoDim: s.autoDim === true,
+        dimMinutes: wholeNumber(s.dimMinutes, 5, 1),
+        dimOpacity: Math.min(100, wholeNumber(s.dimOpacity, 100, 50)),
+        // `perMonitor` and `autoSleep` are what these were called when
+        // auto-suspend was "auto-sleep" and per-monitor belonged to it.
+        dimPerMonitor: s.dimPerMonitor !== undefined ? s.dimPerMonitor === true : s.perMonitor === true,
+        autoSuspend: s.autoSuspend !== undefined ? s.autoSuspend === true : s.autoSleep === true,
+        suspendMinutes: wholeNumber(s.suspendMinutes, 30, 1),
+        // Always on while auto-lock is: suspending unlocked would otherwise
         // skip a lock the computer was about to get anyway.
-        wakeUpLock: s.autoLock !== false || s.wakeUpLock !== false,
-        wakeUpLockForced: s.autoLock !== false,
-        perMonitor: s.perMonitor === true,
-        countdown: s.countdown !== false,
-        countdownSeconds: Math.min(240, wholeNumber(s.countdownSeconds, 30, 10))
+        wakeUpLock: autoLock || s.wakeUpLock !== false,
+        wakeUpLockForced: autoLock
     }
 }
 
@@ -37,23 +48,154 @@ function wholeNumber(value, fallback, min) {
     return Math.max(min, isFinite(n) && n > 0 ? n : fallback)
 }
 
-// What to store for a new auto-lock delay. Auto-sleep's delay is stored as
-// it's shown, so a minimum it was raised to doesn't drop back down when
-// the lock's delay later does.
-function lockMinutesPatch(current, minutes) {
-    const lockMinutes = Math.max(1, Math.round(minutes))
+function minutesPatch(key, minutes) {
+    const patch = {}
+    patch[key] = Math.max(1, Math.round(minutes))
+    return patch
+}
+
+function dimOpacityPatch(percent) {
+    return { dimOpacity: Math.min(100, Math.max(50, Math.round(percent))) }
+}
+
+// The seconds without activity at which each stage starts (null when it's
+// off). `suspendDelay` counts from every monitor being dimmed when auto-dim
+// is on; `suspendAt` is only set without it.
+function thresholds(s) {
+    const lockAt = s.autoLock ? s.lockMinutes * 60 : null
+    const base = s.autoLock ? lockAt : 0
+    const dimAt = s.autoDim ? base + s.dimMinutes * 60 : null
     return {
-        lockMinutes: lockMinutes,
-        sleepMinutes: Math.max(current.sleepMinutes, lockMinutes + 5)
+        lockAt: lockAt,
+        warnAt: s.autoLock && s.lockWarning && s.lockMinutes >= 2 ? lockAt - 60 : null,
+        dimAt: dimAt,
+        suspendDelay: s.autoSuspend ? (s.autoDim ? s.suspendMinutes * 60 : 30) : null,
+        suspendAt: s.autoSuspend && !s.autoDim ? base + s.suspendMinutes * 60 : null
     }
 }
 
-function sleepMinutesPatch(current, minutes) {
-    return { sleepMinutes: Math.max(current.minSleepMinutes, Math.round(minutes)) }
+// The labels in the settings, which change with what's on above them.
+function dimDelayLabel(s) {
+    return s.autoLock ? "min in lock state" : "min of inactivity"
 }
 
-function countdownSecondsPatch(seconds) {
-    return { countdownSeconds: Math.min(240, Math.max(10, Math.round(seconds))) }
+function suspendDelayLabel(s) {
+    if (s.autoDim) return "min in dim state"
+    if (s.autoLock) return "min in lock state"
+    return "min of inactivity"
+}
+
+// ---------------- the stages ----------------
+// One step, run every second and whenever something changes. `state`:
+//   phase          "awake", or "suspended" (asked to suspend; until there's
+//                  activity again)
+//   readySince     when every monitor was last found dimmed (ms), null if not
+//   held           won't suspend again before there's been activity - set
+//                  when suspending didn't work
+//   lockFired, warnFired   this idle stretch's lock/warning has been done
+// `input`:
+//   settings   readSettings()
+//   now        ms
+//   idle       seconds since the last activity anywhere
+//   monitors   [{ name, idle }] - each monitor's own seconds without
+//              activity (input with it focused, or a window on it keeping
+//              the computer awake)
+//   locked     the lock screen's up
+// Returns { state, actions, dimmed, active, countdown }:
+//   actions    any of "lock", "warn", "suspend"
+//   dimmed     the monitors that show the black screen
+//   active     with per-monitor dimming, the monitors still active
+//   countdown  seconds left before suspending, or -1
+function step(state, input) {
+    const s = input.settings
+    const t = thresholds(s)
+    const idle = input.idle
+    const names = input.monitors.map(m => m.name)
+    const next = {
+        phase: state.phase,
+        readySince: state.readySince,
+        held: state.held,
+        lockFired: state.lockFired,
+        warnFired: state.warnFired
+    }
+    const actions = []
+
+    if (idle < 2) {
+        next.held = false
+        if (next.phase === "suspended") next.phase = "awake"
+    }
+
+    // Lock, and the warning a minute before it: once per idle stretch.
+    if (t.lockAt !== null && idle >= t.lockAt) {
+        if (!next.lockFired && !input.locked) actions.push("lock")
+        next.lockFired = true
+    } else {
+        next.lockFired = false
+    }
+    if (t.warnAt !== null && idle >= t.warnAt) {
+        // Not once it's locking anyway.
+        if (!next.warnFired && !input.locked && idle < t.lockAt) actions.push("warn")
+        next.warnFired = true
+    } else {
+        next.warnFired = false
+    }
+
+    // Dim: every monitor together, or each by its own inactivity.
+    let dimmed = []
+    if (t.dimAt !== null) {
+        if (s.dimPerMonitor) dimmed = input.monitors.filter(m => m.idle >= t.dimAt).map(m => m.name)
+        else if (idle >= t.dimAt) dimmed = names.slice()
+    }
+    const stillActive = t.dimAt !== null && s.dimPerMonitor ? names.filter(name => dimmed.indexOf(name) < 0) : []
+
+    // Suspend: counted from every monitor being dimmed (and nothing at all
+    // keeping the computer awake), or the last 30 seconds before the delay
+    // without auto-dim.
+    let ready = false
+    if (t.suspendDelay !== null && !next.held && next.phase === "awake") {
+        if (s.autoDim) ready = names.length > 0 && dimmed.length === names.length && idle >= t.dimAt
+        else ready = idle >= t.suspendAt - 30
+    }
+    if (!ready) next.readySince = null
+    else if (next.readySince === null || next.readySince === undefined) next.readySince = input.now
+
+    let countdown = -1
+    if (next.readySince !== null && next.readySince !== undefined) {
+        countdown = Math.max(0, Math.ceil(t.suspendDelay - (input.now - next.readySince) / 1000))
+        if (countdown === 0) {
+            next.phase = "suspended"
+            next.readySince = null
+            countdown = -1
+            actions.push("suspend")
+        }
+    }
+
+    return { state: next, actions: actions, dimmed: dimmed, active: stillActive, countdown: countdown }
+}
+
+// What a monitor shows:
+//   "countdown"  black, the moon, and on the primary monitor the countdown
+//                (every monitor, once it's counting down or suspended)
+//   "dimmed"     black and a dimmer moon, with per-monitor dimming the
+//                names of those still active
+//   "none"
+function overlay(name, phase, countdown, dimmed) {
+    if (phase === "suspended" || countdown >= 0) return "countdown"
+    if (dimmed.indexOf(name) >= 0) return "dimmed"
+    return "none"
+}
+
+function countdownText(seconds) {
+    if (seconds >= 60) {
+        const m = Math.floor(seconds / 60)
+        const sec = seconds % 60
+        return "suspending in " + m + ":" + (sec < 10 ? "0" : "") + sec + "..."
+    }
+    return "suspending in " + seconds + " second" + (seconds === 1 ? "" : "s") + "..."
+}
+
+function activeText(names) {
+    return names.length ? "active: " + names.join(", ") : ""
 }
 
 // ---------------- per-monitor activity ----------------
@@ -74,9 +216,9 @@ function withDefaults(stamps, names, now) {
     return missing.length ? stamp(stamps, missing, now) : stamps
 }
 
-// The monitors that have gone `delayMs` without activity.
-function idleMonitors(names, stamps, now, delayMs) {
-    return names.filter(name => stamps[name] !== undefined && now - stamps[name] >= delayMs)
+// [{ name, idle }] in seconds, from the stamps.
+function monitorIdle(names, stamps, now) {
+    return names.map(name => ({ name: name, idle: Math.max(0, (now - (stamps[name] !== undefined ? stamps[name] : now)) / 1000) }))
 }
 
 // The monitors with a window that keeps the computer awake on them (a video
@@ -130,79 +272,4 @@ function readExternal(text) {
 
 function sameList(a, b) {
     return a.length === b.length && a.every((item, i) => item === b[i])
-}
-
-// ---------------- sleeping ----------------
-// One step of auto-sleep. `state` is { phase, left, held }:
-//   phase  "awake", "countdown" (the screens are black and counting down),
-//          or "asleep" (asked to sleep; until there's activity again)
-//   left   seconds left on the countdown
-//   held   won't sleep again before there's been activity - set after
-//          waking up, or when sleeping didn't work
-// `input`:
-//   autoSleep, perMonitor, countdown, countdownSeconds   the settings
-//   globalIdle   no input for the whole delay, and nothing keeping the
-//                computer awake (the inhibitor-respecting idle monitor)
-//   activeCount  per-monitor: how many monitors still count as active
-//   resumed      the computer has just woken up
-//   tick         a second has passed (counts the countdown down)
-// Returns { state, action }, action being "sleep" or "".
-function step(state, input) {
-    const next = { phase: state.phase, left: state.left, held: state.held }
-    let action = ""
-
-    if (!input.autoSleep) return { state: { phase: "awake", left: 0, held: false }, action: action }
-
-    // Woken up: start over, and not straight back to sleep - a computer
-    // woken by its lid or power button hasn't seen any input yet.
-    if (input.resumed) return { state: { phase: "awake", left: 0, held: true }, action: action }
-
-    if (!input.globalIdle) next.held = false
-
-    const allIdle = input.globalIdle && (!input.perMonitor || input.activeCount === 0)
-
-    if (next.phase === "awake") {
-        if (allIdle && !next.held) {
-            if (input.countdown) {
-                next.phase = "countdown"
-                next.left = input.countdownSeconds
-            } else {
-                next.phase = "asleep"
-                action = "sleep"
-            }
-        }
-    } else if (next.phase === "countdown") {
-        if (!allIdle) {
-            next.phase = "awake"
-            next.left = 0
-        } else if (input.tick) {
-            next.left -= 1
-            if (next.left <= 0) {
-                next.phase = "asleep"
-                next.left = 0
-                action = "sleep"
-            }
-        }
-    } else if (next.phase === "asleep") {
-        if (!input.globalIdle) next.phase = "awake"
-    }
-
-    return { state: next, action: action }
-}
-
-// What a monitor shows: "presleep" (black, the moon, and on the primary
-// monitor the countdown), "waiting" (per-monitor: this one's idle, others
-// aren't yet) or "none".
-function overlay(name, phase, perMonitor, idleNames) {
-    if (phase === "countdown" || phase === "asleep") return "presleep"
-    if (perMonitor && idleNames.indexOf(name) >= 0) return "waiting"
-    return "none"
-}
-
-function countdownText(seconds) {
-    return "sleeping in " + seconds + " second" + (seconds === 1 ? "" : "s") + "..."
-}
-
-function activeText(names) {
-    return names.length ? "active: " + names.join(", ") : "kept awake by an app"
 }

@@ -24,7 +24,7 @@ Scope {
     showTime: idle.showTime
     showMedia: idle.showMedia
   }
-  // Settings > Shell > Power: auto-lock and auto-sleep.
+  // Settings > Shell > Power: auto-lock, auto-dim and auto-suspend.
   Idle { id: idle; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
   SettingsScreen {
     id: settingsScreen

@@ -804,9 +804,9 @@ build_helpers() {
         warn "Building helpers/cava_bridge failed (needs libcava from the AUR) - the dashboard's visualizer stays empty until it builds: make -C ${dir/#$HOME/\~}"
     fi
     if make -C "$dir" idle_inhibit >/dev/null; then
-        info "Built helpers/idle_inhibit (keeps auto-lock and auto-sleep off while a video plays)."
+        info "Built helpers/idle_inhibit (keeps auto-lock, auto-dim and auto-suspend off while a video plays)."
     else
-        warn "Building helpers/idle_inhibit failed - apps that ask over D-Bus not to go idle (browsers playing a video) won't stop auto-lock or auto-sleep until it builds: make -C ${dir/#$HOME/\~}"
+        warn "Building helpers/idle_inhibit failed - apps that ask over D-Bus not to go idle (browsers playing a video) won't hold off auto-lock, auto-dim or auto-suspend until it builds: make -C ${dir/#$HOME/\~}"
     fi
     if ! cmp -s -- "$pam" /etc/pam.d/quickshell-auth; then
         info "Installing the lock screen's PAM config (needs sudo)."

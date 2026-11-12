@@ -34,7 +34,7 @@ Scope {
     property alias locked: persist.locked
 
     // Once Hyprland confirms every screen is covered - Idle.qml waits for
-    // this before putting the computer to sleep locked.
+    // this before suspending the computer locked.
     readonly property bool secure: sessionLock.secure
 
     // Settings > Shell > Power, through Idle.qml: the clock above the

@@ -13,7 +13,7 @@ auth: auth.c
 cava_bridge: cava_bridge.c
 	$(CC) $(CFLAGS) -o cava_bridge cava_bridge.c $$(pkg-config --cflags --libs libcava libpulse-simple)
 
-# The D-Bus side of auto-lock/auto-sleep's "don't go idle" requests (see
+# The D-Bus side of auto-lock/dim/suspend's "don't go idle" requests (see
 # idle_inhibit.c) - sd-bus, from libsystemd (systemd-libs).
 idle_inhibit: idle_inhibit.c
 	$(CC) $(CFLAGS) -o idle_inhibit idle_inhibit.c $$(pkg-config --cflags --libs libsystemd)

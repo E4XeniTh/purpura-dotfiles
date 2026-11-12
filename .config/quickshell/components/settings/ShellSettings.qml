@@ -1777,10 +1777,10 @@ Item {
                 }
 
                 // ---------------- Power category ----------------
-                // Idle.qml's settings. It holds the boxes to their limits (a
-                // minute at least before locking, sleeping at least 5 minutes
-                // after that, a 10-240 second countdown), and they show what
-                // it kept.
+                // Idle.qml's settings: lock, dim and suspend, each counted
+                // from the stage before it when that one's on. It holds the
+                // boxes to their limits (a minute at least each, a dim
+                // opacity of 50-100%), and they show what it kept.
                 ColumnLayout {
                     id: powerCategoryContent
 
@@ -1790,8 +1790,8 @@ Item {
 
                     readonly property bool ready: !!root.idle
                     readonly property bool autoLock: !!root.idle && root.idle.autoLock
-                    readonly property bool autoSleep: !!root.idle && root.idle.autoSleep
-                    readonly property bool countdown: !!root.idle && root.idle.sleepCountdown
+                    readonly property bool autoDim: !!root.idle && root.idle.autoDim
+                    readonly property bool autoSuspend: !!root.idle && root.idle.autoSuspend
 
                     // ---------------- Lockscreen ----------------
                     ColumnLayout {
@@ -1904,14 +1904,14 @@ Item {
                         onToggled: root.idle.setShowMedia(!root.idle.showMedia)
                     }
 
-                    // ---------------- Sleep ----------------
+                    // ---------------- Dim ----------------
                     ColumnLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: Config.scaled(14, root.uiScale)
                         spacing: Config.scaled(4, root.uiScale)
 
                         Text {
-                            text: "Sleep"
+                            text: "Dim"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(16, root.uiScale)
@@ -1928,22 +1928,22 @@ Item {
                     CheckRow {
                         Layout.fillWidth: true
                         uiScale: root.uiScale
-                        text: "Auto-sleep"
-                        checked: powerCategoryContent.autoSleep
+                        text: "Auto-dim"
+                        checked: !!root.idle && root.idle.autoDim
                         usable: powerCategoryContent.ready
-                        onToggled: root.idle.setAutoSleep(!root.idle.autoSleep)
+                        onToggled: root.idle.setAutoDim(!root.idle.autoDim)
                     }
 
-                    // Everything under Auto-sleep: dark and locked while it's off.
+                    // Everything under Auto-dim: dark and locked while it's off.
                     ColumnLayout {
-                        id: sleepOptions
+                        id: dimOptions
 
                         Layout.fillWidth: true
                         Layout.leftMargin: Config.scaled(28, root.uiScale)
                         spacing: Config.scaled(10, root.uiScale)
 
-                        readonly property bool usable: powerCategoryContent.autoSleep
-                        readonly property color shownColor: sleepOptions.usable ? Config.fgcolor : Config.fgcolordark
+                        readonly property bool usable: powerCategoryContent.autoDim
+                        readonly property color shownColor: dimOptions.usable ? Config.fgcolor : Config.fgcolordark
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -1951,7 +1951,7 @@ Item {
 
                             Text {
                                 text: "after"
-                                color: sleepOptions.shownColor
+                                color: dimOptions.shownColor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
                                 font.bold: true
@@ -1959,25 +1959,168 @@ Item {
 
                             NumberBox {
                                 uiScale: root.uiScale
-                                value: root.idle ? root.idle.sleepMinutes : 60
-                                usable: sleepOptions.usable
-                                onCommitted: (value) => root.idle.setSleepMinutes(value)
+                                value: root.idle ? root.idle.dimMinutes : 5
+                                usable: dimOptions.usable
+                                onCommitted: (value) => root.idle.setDimMinutes(value)
                             }
 
+                            // Counted from the stage before it, when that one's on.
                             Text {
-                                text: "minutes of inactivity"
-                                color: sleepOptions.shownColor
+                                text: root.idle ? root.idle.dimDelayLabel : ""
+                                color: dimOptions.shownColor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
                                 font.bold: true
                             }
 
-                            // Auto-lock's delay plus 5 minutes.
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // How dark the dimmed screens go: 50-100%.
+                        ColumnLayout {
+                            spacing: Config.scaled(6, root.uiScale)
+                            enabled: dimOptions.usable
+                            opacity: enabled ? 1 : 0.35
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(392, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Dim opacity:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.idle ? root.idle.dimOpacity : 100) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(392, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.idle ? (root.idle.dimOpacity - 50) / 50 : 1
+                                onMoved: (newValue) => root.idle.setDimOpacity(50 + newValue * 50)
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Per monitor"
+                                checked: !!root.idle && root.idle.dimPerMonitor
+                                usable: dimOptions.usable
+                                onToggled: root.idle.setDimPerMonitor(!root.idle.dimPerMonitor)
+                            }
+
                             Text {
-                                text: "(at least " + (root.idle ? root.idle.minSleepMinutes : 15) + ")"
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Every monitor dims after its own inactivity - input while it has focus, or a window on it keeping the computer awake, counts - and names the monitors still active."
                                 color: Config.fgcolordark
                                 font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+                        }
+                    }
+
+                    // ---------------- Suspend ----------------
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(14, root.uiScale)
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        Text {
+                            text: "Suspend"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(16, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                            color: Config.fgcolor
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Auto-suspend"
+                            checked: powerCategoryContent.autoSuspend
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setAutoSuspend(!root.idle.autoSuspend)
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            wrapMode: Text.WordWrap
+                            text: "Counts down on the main monitor before suspending - once every monitor is dimmed, or for the last 30 seconds without auto-dim. Any input calls it off."
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, root.uiScale)
+                        }
+                    }
+
+                    // Everything under Auto-suspend: dark and locked while it's off.
+                    ColumnLayout {
+                        id: suspendOptions
+
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
+                        spacing: Config.scaled(10, root.uiScale)
+
+                        readonly property bool usable: powerCategoryContent.autoSuspend
+                        readonly property color shownColor: suspendOptions.usable ? Config.fgcolor : Config.fgcolordark
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "after"
+                                color: suspendOptions.shownColor
+                                font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            NumberBox {
+                                uiScale: root.uiScale
+                                value: root.idle ? root.idle.suspendMinutes : 30
+                                usable: suspendOptions.usable
+                                onCommitted: (value) => root.idle.setSuspendMinutes(value)
+                            }
+
+                            // Counted from the stage before it, when that one's on.
+                            Text {
+                                text: root.idle ? root.idle.suspendDelayLabel : ""
+                                color: suspendOptions.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
                             }
 
                             Item { Layout.fillWidth: true }
@@ -1992,8 +2135,7 @@ Item {
                                 uiScale: root.uiScale
                                 text: "Wake up lock"
                                 checked: !!root.idle && root.idle.wakeUpLock
-                                // Locked on while auto-lock is.
-                                usable: sleepOptions.usable && !(root.idle && root.idle.wakeUpLockForced)
+                                usable: suspendOptions.usable && !(root.idle && root.idle.wakeUpLockForced)
                                 onToggled: root.idle.setWakeUpLock(!root.idle.wakeUpLock)
                             }
 
@@ -2001,95 +2143,11 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: Config.scaled(28, root.uiScale)
                                 wrapMode: Text.WordWrap
-                                text: "Locks the screen before going to sleep, so the computer wakes up locked. Always on while auto-lock is."
+                                text: "Locks the screen before suspending, so the computer wakes up locked. Always on while auto-lock is."
                                 color: Config.fgcolordark
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, root.uiScale)
                             }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(4, root.uiScale)
-
-                            CheckRow {
-                                Layout.fillWidth: true
-                                uiScale: root.uiScale
-                                text: "Enable per-monitor"
-                                checked: !!root.idle && root.idle.perMonitor
-                                usable: sleepOptions.usable
-                                onToggled: root.idle.setPerMonitor(!root.idle.perMonitor)
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: Config.scaled(28, root.uiScale)
-                                wrapMode: Text.WordWrap
-                                text: "Every monitor waits out the inactivity on its own - input on it, or a window on it keeping "
-                                    + "the computer awake, counts. One that's done goes dark until the rest are too."
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, root.uiScale)
-                            }
-                        }
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(4, root.uiScale)
-
-                            CheckRow {
-                                Layout.fillWidth: true
-                                uiScale: root.uiScale
-                                text: "Enable sleep countdown"
-                                checked: powerCategoryContent.countdown
-                                usable: sleepOptions.usable
-                                onToggled: root.idle.setSleepCountdown(!root.idle.sleepCountdown)
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: Config.scaled(28, root.uiScale)
-                                wrapMode: Text.WordWrap
-                                text: "Fades every monitor to black and counts down first - any input calls it off."
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, root.uiScale)
-                            }
-                        }
-
-                        RowLayout {
-                            id: countdownRow
-
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Config.scaled(28, root.uiScale)
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            readonly property bool usable: sleepOptions.usable && powerCategoryContent.countdown
-                            readonly property color shownColor: countdownRow.usable ? Config.fgcolor : Config.fgcolordark
-
-                            NumberBox {
-                                uiScale: root.uiScale
-                                value: root.idle ? root.idle.countdownSeconds : 30
-                                usable: countdownRow.usable
-                                onCommitted: (value) => root.idle.setCountdownSeconds(value)
-                            }
-
-                            Text {
-                                text: "seconds"
-                                color: countdownRow.shownColor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: "(10-240)"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                            }
-
-                            Item { Layout.fillWidth: true }
                         }
                     }
                 }
