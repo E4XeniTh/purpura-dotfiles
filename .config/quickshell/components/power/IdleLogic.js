@@ -7,7 +7,9 @@
 //   lock     after `lockMinutes` without activity
 //   dim      `dimMinutes` after that (or after `dimMinutes` without
 //            activity, with auto-lock off) - the monitors fade to black
-//            with a moon on them, each on its own with per-monitor on
+//            with a moon on them. Per monitor, each goes by its own
+//            inactivity, `dimMinutes` of it, without waiting for the lock:
+//            a monitor nobody's using dims while another is in use
 //   suspend  `suspendMinutes` after every monitor's dimmed - counted down
 //            on the primary monitor the whole time - or, without auto-dim,
 //            `suspendMinutes` after the lock (or without activity), with
@@ -64,7 +66,8 @@ function dimOpacityPatch(percent) {
 function thresholds(s) {
     const lockAt = s.autoLock ? s.lockMinutes * 60 : null
     const base = s.autoLock ? lockAt : 0
-    const dimAt = s.autoDim ? base + s.dimMinutes * 60 : null
+    // Per monitor, dimming doesn't wait for the lock (see the top).
+    const dimAt = s.autoDim ? (s.dimPerMonitor ? 0 : base) + s.dimMinutes * 60 : null
     return {
         lockAt: lockAt,
         warnAt: s.autoLock && s.lockWarning && s.lockMinutes >= 2 ? lockAt - 60 : null,
@@ -76,7 +79,7 @@ function thresholds(s) {
 
 // The labels in the settings, which change with what's on above them.
 function dimDelayLabel(s) {
-    return s.autoLock ? "min in lock state" : "min of inactivity"
+    return s.autoLock && !s.dimPerMonitor ? "min in lock state" : "min of inactivity"
 }
 
 function suspendDelayLabel(s) {

@@ -1945,6 +1945,29 @@ Item {
                         readonly property bool usable: powerCategoryContent.autoDim
                         readonly property color shownColor: dimOptions.usable ? Config.fgcolor : Config.fgcolordark
 
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Per monitor"
+                                checked: !!root.idle && root.idle.dimPerMonitor
+                                usable: dimOptions.usable
+                                onToggled: root.idle.setDimPerMonitor(!root.idle.dimPerMonitor)
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Every monitor dims after its own inactivity, without waiting for the lock - input while it has focus, or a window on it keeping the computer awake, counts - and names the monitors still active."
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: Config.scaled(8, root.uiScale)
@@ -2014,28 +2037,6 @@ Item {
                             }
                         }
 
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(4, root.uiScale)
-
-                            CheckRow {
-                                Layout.fillWidth: true
-                                uiScale: root.uiScale
-                                text: "Per monitor"
-                                checked: !!root.idle && root.idle.dimPerMonitor
-                                usable: dimOptions.usable
-                                onToggled: root.idle.setDimPerMonitor(!root.idle.dimPerMonitor)
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                Layout.leftMargin: Config.scaled(28, root.uiScale)
-                                wrapMode: Text.WordWrap
-                                text: "Every monitor dims after its own inactivity - input while it has focus, or a window on it keeping the computer awake, counts - and names the monitors still active."
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, root.uiScale)
-                            }
                         }
                     }
 
