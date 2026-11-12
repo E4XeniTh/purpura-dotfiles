@@ -1,4 +1,4 @@
-// PAM-backed password check for the quickshell lock screen (components/Lock.qml).
+// PAM-backed password check for the quickshell lock screen (components/lock/LockScreen.qml).
 //
 // Reads one line (the candidate password) from stdin, authenticates the
 // given username against the "quickshell-auth" PAM service, and exits 0 on

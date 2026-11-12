@@ -1,7 +1,7 @@
 
 // Central shell config. Import from QML as:
-//   import "../Config.js" as Config      (from components/*.qml)
-//   import "../../Config.js" as Config   (from components/<subfolder>/*.qml)
+//   import "../../Config.js" as Config      (from components/<area>/*.qml)
+//   import "../../../Config.js" as Config   (from components/settings/<cards|controls>/*.qml)
 // then reference values as Config.fgcolor, Config.fillcolor, etc.
 //
 // Static values now - no more auto-following Hyprland's col.active_border
@@ -56,7 +56,7 @@ var barheight = 48
 // scale - so a 4K screen at scale 2 already reads as 1920x1080 here and
 // isn't scaled twice. Floored at 0.6 so text stays readable on small
 // screens. userScale is the global UI Scale from Settings > Shell
-// (components/UiScale.qml), multiplied on top; 1.0 when left out.
+// (components/system/UiScale.qml), multiplied on top; 1.0 when left out.
 function uiScale(screen, userScale) {
     const user = userScale > 0 ? userScale : 1
     if (!screen || !screen.width || !screen.height)

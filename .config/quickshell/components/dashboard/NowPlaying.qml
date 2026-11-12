@@ -5,7 +5,6 @@ import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Services.Mpris
 import Qt5Compat.GraphicalEffects
-import "../"
 import "../../Config.js" as Config
 
 // Media controls + album art. Loaded lazily via Loader from Dashboard.qml

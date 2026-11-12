@@ -1,8 +1,14 @@
 //@ pragma UseQApplication
 // shell.qml
 import Quickshell
-import "components"
+import "components/bar"
 import "components/dashboard"
+import "components/lock"
+import "components/osd"
+import "components/panels"
+import "components/power"
+import "components/settings"
+import "components/system"
 
 Scope {
   // Settings > Shell's global UI Scale - every component below that sizes

@@ -5,8 +5,8 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Qt5Compat.GraphicalEffects
 import QtQuick
-import "../"
 import "../../Config.js" as Config
+import "../common"
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as Tray.qml's context menu.

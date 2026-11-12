@@ -1,6 +1,6 @@
 #!/bin/bash
 # Replays the monitor layout saved by the quickshell Screen settings panel
-# (components/dashboard/settings/ScreenSettings.qml), one hyprctl eval
+# (components/settings/ScreenSettings.qml), one hyprctl eval
 # call per monitor entry's precomputed "line" field - each one is already
 # a full "hl.monitor({ ... })" Lua expression, since that's what
 # ScreenSettings.qml itself writes into every entry on Apply. This config

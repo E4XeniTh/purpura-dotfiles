@@ -2,7 +2,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
-import "../"
 import "../../Config.js" as Config
 
 // Current-month calendar, with month/year picker grids swapped in for the

@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell.Io
-import "../"
 import "../../Config.js" as Config
+import "../common"
 
 // CPU/GPU/VRAM/RAM usage meters for the dashboard's right column (see
 // Dashboard.qml) - four parallel sections, each a label + bracket-tagged

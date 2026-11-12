@@ -575,15 +575,29 @@ sync_stage() {
         cp -p -- "$src" "$dst"
     done < <(cd "$STAGE" && find . -type f -printf '%P\0' | sort -z)
 
-    info "$added added, $updated updated, $same already up to date."
-    if ((added + updated)); then
+    # The shell's own code is all the repo's, so anything in it the repo no
+    # longer has - moved elsewhere or deleted - goes too (into the backup):
+    # left behind, a moved file would clash with the one in its new place.
+    local shell_code=$HOME/.config/quickshell/components removed=0
+    if [[ -d $shell_code && $(realpath -m -- "$shell_code") != "$REPO"/* ]]; then
+        while IFS= read -r -d '' rel; do
+            [[ -e $STAGE/.config/quickshell/components/$rel ]] && continue
+            mkdir -p -- "$backup/.config/quickshell/components/$(dirname -- "$rel")"
+            mv -- "$shell_code/$rel" "$backup/.config/quickshell/components/$rel"
+            removed=$((removed + 1))
+        done < <(cd "$shell_code" && find . \( -type f -o -type l \) -printf '%P\0')
+        find "$shell_code" -mindepth 1 -type d -empty -delete
+    fi
+
+    info "$added added, $updated updated, $removed removed, $same already up to date."
+    if ((added + updated + removed)); then
         CONFIGS_CHANGED=1
     fi
     if ((${#SEEDED[@]})); then
         info "Created from their .example (yours to edit, never overwritten): ${SEEDED[*]}"
     fi
-    if ((updated)); then
-        info "Previous versions of the updated files: ${backup/#$HOME/\~}"
+    if ((updated + removed)); then
+        info "Previous versions of the updated and removed files: ${backup/#$HOME/\~}"
     fi
     if ((linked)); then
         warn "$linked files link into this checkout, so they keep their current colors - recoloring them would edit the repo itself. To recolor them, run ./purpura.sh --link first: it replaces those links with real copies."

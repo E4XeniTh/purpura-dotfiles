@@ -3,7 +3,6 @@ import Quickshell.Io
 import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
 import QtQuick
-import "../"
 import "../../Config.js" as Config
 
 // Current weather, or (left-click to toggle, plain fade - no stretch

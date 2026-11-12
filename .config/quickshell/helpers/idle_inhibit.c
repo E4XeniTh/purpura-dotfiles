@@ -1,5 +1,5 @@
 // idle_inhibit: the "please don't go idle" requests apps make over D-Bus,
-// for the shell's auto-lock and auto-sleep (components/Idle.qml).
+// for the shell's auto-lock and auto-sleep (components/power/Idle.qml).
 //
 // Hyprland itself only sees Wayland idle inhibitors and its own idle_inhibit
 // window rules. Plenty of apps - browsers playing a video among them - ask

@@ -1,7 +1,6 @@
 #!/bin/bash
 # Replays the peripheral settings saved by the quickshell Shell >
-# Peripherals settings panel (components/dashboard/settings/
-# ShellSettings.qml): mouse sensitivity via `hyprctl eval` - this config
+# Peripherals settings panel (components/settings/ShellSettings.qml): mouse sensitivity via `hyprctl eval` - this config
 # is parsed by hyprlang's Lua frontend, which rejects `hyprctl keyword`
 # outright ("keyword can't work with non-legacy parsers. Use eval."),
 # same reasoning apply-monitors.sh's own header comment explains - and
