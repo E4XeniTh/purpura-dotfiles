@@ -351,11 +351,12 @@ Scope {
                         rightMargin: Config.scaled(10, bar.uiScale)
                     }
 
-                    // fgcolorlight border/icon while updates are pending
-                    // AND the Updater settings category's own "highlight"
+                    // fgcolorlight border/icon while updates are pending -
+                    // packages, or purpura itself when it's followed - AND
+                    // the Updater settings category's own "highlight"
                     // toggle is on - a plain fgcolor otherwise, same as
                     // every other bar widget's resting state.
-                    readonly property bool highlighted: (root.updater ? root.updater.highlightOnUpdates && root.updater.updateCount > 0 : false)
+                    readonly property bool highlighted: (root.updater ? root.updater.highlightOnUpdates && root.updater.totalUpdates > 0 : false)
 
                     border.width: Config.scaled(2, bar.uiScale)
                     border.color: updaterButton.highlighted ? Config.fgcolorlight : Config.fgcolor

@@ -184,7 +184,11 @@ Item {
         return (raw !== undefined && !isNaN(n) && n > 0) ? n : 30
     }
 
+    // Off unless turned on, same as Updater.qml's own copy.
+    readonly property bool followPurpura: root.updaterStore.followPurpura === true
+
     function toggleHighlightOnUpdates() { root.setUpdaterSetting("highlightOnUpdates", !root.highlightOnUpdates) }
+    function toggleFollowPurpura() { root.setUpdaterSetting("followPurpura", !root.followPurpura) }
 
     onActiveChanged: if (root.active) { root.loadBarStore(); root.loadPeripheralsStore(); root.loadUpdaterStore() }
     Component.onCompleted: { root.loadBarStore(); root.loadPeripheralsStore(); root.loadUpdaterStore() }
@@ -930,6 +934,61 @@ Item {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    // ---------------- follow purpura ----------------
+                    // Purpura's own updates in the updater - see Updater.qml
+                    // and helpers/purpura-update.sh.
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: root.followPurpura ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+                                radius: 0
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.toggleFollowPurpura()
+                                }
+                            }
+
+                            Text {
+                                text: "Follow Purpura versioning"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.toggleFollowPurpura()
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            wrapMode: Text.WordWrap
+                            text: "Checks the checkout purpura was installed from for new commits: a notification for each new version, "
+                                + "its state under the updater's list, and right-clicking the updater installs it just before the firmware updates."
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, root.uiScale)
+                        }
                     }
 
                     // ---------------- update check interval ----------------

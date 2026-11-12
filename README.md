@@ -38,6 +38,7 @@ qs ipc call lockscreen lock            # lock only - no IPC unlock, see LockScre
 qs ipc call trayMenu hide              # no toggle/show - see Tray.qml
 qs ipc call clipboard toggle           # show / hide also work
 qs ipc call screenshot show            # toggle / hide also work, see Screenshot.qml
+qs ipc call updater check              # recheck now; toggle / show / hide work the dropdown
 ```
 
 ## Install
@@ -75,7 +76,30 @@ The installer:
 Re-run it whenever you like - e.g. `./purpura.sh --install --no-packages` to
 switch to another color. `./purpura.sh` on its own installs nothing and only
 shows the help, which lists the options (`--color HEX`, `--yes`,
-`--no-packages`, `--link`).
+`--no-packages`, `--update`, `--link`).
+
+### Staying up to date
+
+Turn on **Follow Purpura versioning** in Settings > Shell > Updater, and the
+updater keeps purpura itself current alongside your packages. A version is a
+commit of the checkout you installed from: the installer records which
+checkout and commit it installed (in `~/.local/state/purpura/`), and anything
+newer on that checkout's upstream branch is an update.
+
+- It's checked on the updater's own schedule (`git fetch`, never asking for
+  credentials), and you get a notification once per new version - clicking it
+  opens the updater.
+- The updater's dropdown shows purpura's state under the package list:
+  installed vs. newest version, and anything that would get in the way
+  (local commits or changes in the checkout, no network).
+- Right-clicking the updater button runs purpura's update just before the
+  firmware updates: a fast-forward `git pull` of the checkout, then
+  `./purpura.sh --update`, which installs the new configs and helpers, keeps
+  your color and keyboard layout, and only adds core packages that are
+  missing (never the optional apps).
+
+An install from before this needs one `./purpura.sh --install` (or `--link`)
+so the checkout gets recorded; linked configs are found without it.
 
 ### Linked to the repo
 

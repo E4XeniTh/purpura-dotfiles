@@ -48,7 +48,8 @@ Scope {
                 appIcon: n.appIcon,
                 image: n.image,
                 urgency: n.urgency,
-                screenshotFile: root.screenshotFileFrom(n.hints)
+                screenshotFile: root.screenshotFileFrom(n.hints),
+                opensUpdater: root.opensUpdater(n.hints)
             })
 
             while (historyModel.count > 50) {
@@ -109,6 +110,17 @@ Scope {
     // offers, which is deleted along with the row unless it's being saved.
     // Nothing else can offer one, so a file from outside the cache is ignored.
     readonly property string screenshotDir: (Quickshell.env("XDG_CACHE_HOME") || Quickshell.env("HOME") + "/.cache") + "/purpura/screenshots"
+
+    // Updater.qml's "Purpura update available" carries this hint: clicking
+    // it opens the updater's dropdown.
+    function opensUpdater(hints) {
+        const hint = hints["x-purpura-updater"]
+        return hint === true || hint === "true" || hint === 1
+    }
+
+    function showUpdater() {
+        if (root.updater) root.updater.dropdownOpen = true
+    }
 
     function screenshotFileFrom(hints) {
         const file = hints["x-purpura-screenshot"]
@@ -296,10 +308,12 @@ Scope {
                             }
                             const row = root.historyIndexOf(card.modelData.id)
                             if (row >= 0) root.saveScreenshot(row)
+                            const toUpdater = root.opensUpdater(card.modelData.hints)
                             const defaultAction = card.modelData.actions.find(a => a.identifier === "default")
                             if (defaultAction) defaultAction.invoke()
                             card.modelData.dismiss()
                             root.centerOpen = false
+                            if (toUpdater) root.showUpdater()
                         }
                     }
 
@@ -613,9 +627,11 @@ Scope {
                                 hoverEnabled: true
                                 acceptedButtons: Qt.LeftButton | Qt.RightButton
                                 onClicked: (mouse) => {
+                                    const toUpdater = mouse.button === Qt.LeftButton && !!historyModel.get(index).opensUpdater
                                     if (mouse.button === Qt.LeftButton) root.saveScreenshot(index)
                                     root.removeHistoryEntry(index)
                                     if (mouse.button === Qt.LeftButton) root.centerOpen = false
+                                    if (toUpdater) root.showUpdater()
                                 }
                             }
                         }

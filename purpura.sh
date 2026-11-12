@@ -17,6 +17,7 @@ RECOLOR=(python3 -I "$REPO/install/recolor.py")
 ASSUME_YES=0
 INSTALL=0
 INSTALL_PACKAGES=1
+CORE_ONLY=0
 TOGGLE_LINKS=0
 COLOR=""
 KB_LAYOUT=""
@@ -117,6 +118,7 @@ ask() {
 usage() {
     cat <<EOF
 Usage: ./purpura.sh --install [options]
+       ./purpura.sh --update
        ./purpura.sh --link
 
 With neither, it only shows this help.
@@ -132,6 +134,10 @@ finishes, so nothing stays in the old color. It warns and asks first.
   -c, --color HEX    highlight color, e.g. 00c8ff (skips the color menu)
   -y, --yes          don't ask anything, take the defaults
       --no-packages  skip installing packages, e.g. to just change color
+      --update       what the shell's updater runs after pulling a new
+                     version: --install --yes, keeping your color and
+                     keyboard layout, and only adding core packages that
+                     are missing (never the optional apps)
       --link         link the configs to this checkout instead of installing
                      anything, so editing the repo edits the live config; if
                      anything is linked already, every link is replaced with
@@ -153,6 +159,11 @@ parse_args() {
                 ;;
             --color=*) COLOR=${1#*=} ;;
             --install) INSTALL=1 ;;
+            --update)
+                INSTALL=1
+                ASSUME_YES=1
+                CORE_ONLY=1
+                ;;
             -y | --yes) ASSUME_YES=1 ;;
             --no-packages) INSTALL_PACKAGES=0 ;;
             --link) TOGGLE_LINKS=1 ;;
@@ -356,13 +367,17 @@ install_packages() {
     if [[ -n $(ls -A /sys/class/backlight 2>/dev/null) ]]; then
         wanted+=(brightnessctl) # a built-in panel ddcutil can't reach
     fi
-    for group in "${OPTIONAL_GROUPS[@]}"; do
-        IFS='|' read -r default question pkgs <<<"$group"
-        if ask "$question?" "$default"; then
-            read -ra extra <<<"$pkgs"
-            wanted+=("${extra[@]}")
-        fi
-    done
+    # --update can't know which optional groups were turned down before, so
+    # it leaves them all alone rather than install one by its default.
+    if ((!CORE_ONLY)); then
+        for group in "${OPTIONAL_GROUPS[@]}"; do
+            IFS='|' read -r default question pkgs <<<"$group"
+            if ask "$question?" "$default"; then
+                read -ra extra <<<"$pkgs"
+                wanted+=("${extra[@]}")
+            fi
+        done
+    fi
 
     local entry pkg prog
     for entry in "${SHIPPED_ELSEWHERE[@]}"; do
@@ -589,7 +604,22 @@ install_dotfiles() {
     sync_stage
     mkdir -p -- "$(dirname -- "$STATE_FILE")"
     printf '#%s\n' "$COLOR" >"$STATE_FILE"
+    record_install
     DOTFILES_INSTALLED=1
+}
+
+# Which checkout the configs came from, and at which commit - what the
+# shell's updater compares against that checkout's upstream once "Follow
+# Purpura versioning" is on (helpers/purpura-update.sh).
+record_install() {
+    local dir=${STATE_FILE%/*} commit
+    mkdir -p -- "$dir"
+    printf '%s\n' "$REPO" >"$dir/checkout"
+    if commit=$(git -C "$REPO" rev-parse HEAD 2>/dev/null); then
+        printf '%s\n' "$commit" >"$dir/commit"
+    else
+        rm -f -- "$dir/commit"
+    fi
 }
 
 # ---------------- linking ----------------
@@ -736,10 +766,12 @@ toggle_links() {
     for item in "${items[@]}"; do
         if [[ -L $HOME/$item ]]; then
             unlink_configs "${items[@]}"
+            record_install
             return
         fi
     done
     link_configs "${items[@]}"
+    record_install
 }
 
 # ---------------- helpers ----------------
