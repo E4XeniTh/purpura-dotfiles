@@ -17,7 +17,8 @@ out to be copied straight into place.
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
-| **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and what's playing beside it. Authenticates via PAM |
+| **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and the dashboard's now-playing card beside it while something plays. Authenticates via PAM |
+| **Auto-lock and sleep** | Settings > Shell > Power: locks after a set time without input, and optionally sleeps later on - counting down over black screens first if you like, and per monitor if you like (each monitor waits out its own inactivity, and goes dark until the others have too) |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -190,7 +191,7 @@ package lists are the exact set):
 - `libcava` (AUR)
 - `libpulse`
 - `hyprpaper`
-- `hypridle` - `hypr/hypridle.conf`'s AFK notifications, lock and suspend
+- `hypridle` - `hypr/hypridle.conf`'s AFK reminders (locking and sleeping are the shell's own, Settings > Shell > Power)
 - `hyprshutdown`
 - `hyprpolkitagent` (or another polkit authentication agent)
 - `xdg-desktop-portal`

@@ -40,6 +40,9 @@ Scope {
     // DropdownConsole.qml - handed on to the Shell tab's Dropdown Console category.
     property var dropdownConsole: null
 
+    // Idle.qml - handed on to the Shell tab's Power category.
+    property var idle: null
+
     // EdgeGaps.qml - the bar's top margin, for topOffset below.
     property var edgeGaps: null
 
@@ -478,6 +481,7 @@ Scope {
                                 active: root.open && root.currentTab === 0
                                 nightLight: root.nightLight
                                 dropdownConsole: root.dropdownConsole
+                                idle: root.idle
                                 uiScaleSetting: root.uiScaleSetting
                             }
 

@@ -19,9 +19,10 @@ import "../Config.js" as Config
 // itself - see applyLockLook().
 //
 // Only the primary monitor shows the avatar/password prompt, with the
-// clock above it and what's playing beside it. The keyboard follows the
-// mouse from monitor to monitor while locked, though, so every monitor
-// takes typing into the one shared password and checks it on Enter.
+// clock above it and what's playing beside it (each can be turned off in
+// Settings > Shell > Power). The keyboard follows the mouse from monitor
+// to monitor while locked, though, so every monitor takes typing into
+// the one shared password and checks it on Enter.
 Scope {
     id: root
 
@@ -29,8 +30,17 @@ Scope {
     // multiplied into every surface's Config.uiScale below.
     property real shellScale: 1.0
 
-    // Read by Bar.qml; PowerMenu.qml locks by setting it.
+    // Read by Bar.qml; PowerMenu.qml and Idle.qml lock by setting it.
     property alias locked: persist.locked
+
+    // Once Hyprland confirms every screen is covered - Idle.qml waits for
+    // this before putting the computer to sleep locked.
+    readonly property bool secure: sessionLock.secure
+
+    // Settings > Shell > Power, through Idle.qml: the clock above the
+    // login box, and what's playing beside it.
+    property bool showTime: true
+    property bool showMedia: true
 
     // Fed in from shell.qml (Dashboard's own primaryMonitor) - see
     // effectivePrimaryName below for what happens if this is never
@@ -472,7 +482,7 @@ Scope {
                 }
 
                 width: prompt.boxSize
-                height: prompt.extrasOpen ? prompt.sideBoxHeight : 0
+                height: prompt.extrasOpen && root.showTime ? prompt.sideBoxHeight : 0
                 visible: height > 0
 
                 color: Qt.rgba(0, 0, 0, 1)
@@ -530,9 +540,10 @@ Scope {
             }
 
             // ---------------- what's playing ----------------
-            // Just right of the login box, the clock's size, while
-            // something's playing - see LockMedia.qml. Loaded rather than
-            // written in here so that MPRIS going wrong only costs that box.
+            // Just right of the login box and as tall as it, while
+            // something's playing: the dashboard's now-playing card - see
+            // LockMedia.qml. Loaded rather than written in here so that
+            // MPRIS going wrong only costs that box.
             Loader {
                 anchors {
                     left: parent.horizontalCenter
@@ -540,12 +551,13 @@ Scope {
                     verticalCenter: parent.verticalCenter
                 }
 
+                active: root.showMedia
                 source: "LockMedia.qml"
 
-                // Read by LockMedia.qml.
+                // Read by LockMedia.qml - the dashboard card's 4:5 shape.
                 property real uiScale: prompt.uiScale
-                property real openWidth: prompt.boxSize
-                property real boxHeight: prompt.sideBoxHeight
+                property real openWidth: Math.round(prompt.boxSize * 0.8)
+                property real boxHeight: prompt.boxSize
                 property bool allowed: prompt.extrasOpen
             }
 

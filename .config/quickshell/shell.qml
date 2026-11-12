@@ -11,12 +11,21 @@ Scope {
   EdgeGaps { id: edgeGaps }
 
   PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
-  LockScreen { id: lockScreen; dashboard: dashboard; shellScale: uiScaleSetting.value }
+  LockScreen {
+    id: lockScreen
+    dashboard: dashboard
+    shellScale: uiScaleSetting.value
+    showTime: idle.showTime
+    showMedia: idle.showMedia
+  }
+  // Settings > Shell > Power: auto-lock and auto-sleep.
+  Idle { id: idle; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
   SettingsScreen {
     id: settingsScreen
     dashboard: dashboard
     nightLight: nightLight
     dropdownConsole: dropdownConsole
+    idle: idle
     edgeGaps: edgeGaps
     uiScaleSetting: uiScaleSetting
     shellScale: uiScaleSetting.value

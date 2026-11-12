@@ -28,7 +28,8 @@ import "../../../Config.js" as Config
 // directly too, same decoupled pattern. Night Light is the exception: its
 // schedule changes settings on its own, so NightLight.qml owns its file
 // and this category just drives that object (`nightLight`), as does Dropdown
-// Console with DropdownConsole.qml (`dropdownConsole`). The UI Scale
+// Console with DropdownConsole.qml (`dropdownConsole`) and Power with
+// Idle.qml (`idle`). The UI Scale
 // slider under the category list works the same way: UiScale.qml owns
 // its file and hands the value to every component through shell.qml, and
 // the slider here only calls its set() (`uiScaleSetting`).
@@ -44,6 +45,9 @@ Item {
 
     // DropdownConsole.qml, from shell.qml via SettingsScreen.qml.
     property var dropdownConsole: null
+
+    // Idle.qml, from shell.qml via SettingsScreen.qml - the Power category.
+    property var idle: null
 
     // UiScale.qml, from shell.qml via SettingsScreen.qml - the UI Scale
     // slider under the category list.
@@ -61,7 +65,8 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Dropdown Console.
+    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Dropdown Console,
+    // 5 = Power.
     property int currentCategory: 0
 
     // Night Light category's view of root.nightLight, with defaults for the
@@ -484,6 +489,32 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.currentCategory = 4
+                    }
+                }
+
+                DashCard {
+                    id: powerCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: powerCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 5 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Power"
+                        color: powerCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: powerCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 5
                     }
                 }
 
@@ -1740,6 +1771,295 @@ Item {
                                 }
                                 onAccepted: startupCommandInput.focus = false
                             }
+                        }
+                    }
+                }
+
+                // ---------------- Power category ----------------
+                // Idle.qml's settings. It holds the boxes to their limits (a
+                // minute at least before locking, sleeping at least 5 minutes
+                // after that, a 10-240 second countdown), and they show what
+                // it kept.
+                ColumnLayout {
+                    id: powerCategoryContent
+
+                    Layout.fillWidth: true
+                    visible: root.currentCategory === 5
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    readonly property bool ready: !!root.idle
+                    readonly property bool autoLock: !!root.idle && root.idle.autoLock
+                    readonly property bool autoSleep: !!root.idle && root.idle.autoSleep
+                    readonly property bool countdown: !!root.idle && root.idle.sleepCountdown
+
+                    // ---------------- Lockscreen ----------------
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        Text {
+                            text: "Lockscreen"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(16, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                            color: Config.fgcolor
+                        }
+                    }
+
+                    CheckRow {
+                        Layout.fillWidth: true
+                        uiScale: root.uiScale
+                        text: "Auto-lock"
+                        checked: powerCategoryContent.autoLock
+                        usable: powerCategoryContent.ready
+                        onToggled: root.idle.setAutoLock(!root.idle.autoLock)
+                    }
+
+                    RowLayout {
+                        id: lockDelayRow
+
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        readonly property color shownColor: powerCategoryContent.autoLock ? Config.fgcolor : Config.fgcolordark
+
+                        Text {
+                            text: "after"
+                            color: lockDelayRow.shownColor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        NumberBox {
+                            uiScale: root.uiScale
+                            value: root.idle ? root.idle.lockMinutes : 10
+                            usable: powerCategoryContent.autoLock
+                            onCommitted: (value) => root.idle.setLockMinutes(value)
+                        }
+
+                        Text {
+                            text: "minutes of inactivity"
+                            color: lockDelayRow.shownColor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    CheckRow {
+                        Layout.fillWidth: true
+                        uiScale: root.uiScale
+                        text: "Show time"
+                        checked: !!root.idle && root.idle.showTime
+                        usable: powerCategoryContent.ready
+                        onToggled: root.idle.setShowTime(!root.idle.showTime)
+                    }
+
+                    CheckRow {
+                        Layout.fillWidth: true
+                        uiScale: root.uiScale
+                        text: "Show media player (if active)"
+                        checked: !!root.idle && root.idle.showMedia
+                        usable: powerCategoryContent.ready
+                        onToggled: root.idle.setShowMedia(!root.idle.showMedia)
+                    }
+
+                    // ---------------- Sleep ----------------
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: Config.scaled(14, root.uiScale)
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        Text {
+                            text: "Sleep"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(16, root.uiScale)
+                            font.bold: true
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                            color: Config.fgcolor
+                        }
+                    }
+
+                    CheckRow {
+                        Layout.fillWidth: true
+                        uiScale: root.uiScale
+                        text: "Auto-sleep"
+                        checked: powerCategoryContent.autoSleep
+                        usable: powerCategoryContent.ready
+                        onToggled: root.idle.setAutoSleep(!root.idle.autoSleep)
+                    }
+
+                    // Everything under Auto-sleep: dark and locked while it's off.
+                    ColumnLayout {
+                        id: sleepOptions
+
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
+                        spacing: Config.scaled(10, root.uiScale)
+
+                        readonly property bool usable: powerCategoryContent.autoSleep
+                        readonly property color shownColor: sleepOptions.usable ? Config.fgcolor : Config.fgcolordark
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "after"
+                                color: sleepOptions.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            NumberBox {
+                                uiScale: root.uiScale
+                                value: root.idle ? root.idle.sleepMinutes : 60
+                                usable: sleepOptions.usable
+                                onCommitted: (value) => root.idle.setSleepMinutes(value)
+                            }
+
+                            Text {
+                                text: "minutes of inactivity"
+                                color: sleepOptions.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            // Auto-lock's delay plus 5 minutes.
+                            Text {
+                                text: "(at least " + (root.idle ? root.idle.minSleepMinutes : 15) + ")"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Wake up lock"
+                                checked: !!root.idle && root.idle.wakeUpLock
+                                usable: sleepOptions.usable
+                                onToggled: root.idle.setWakeUpLock(!root.idle.wakeUpLock)
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Locks the screen before going to sleep, so the computer wakes up locked."
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Enable per-monitor"
+                                checked: !!root.idle && root.idle.perMonitor
+                                usable: sleepOptions.usable
+                                onToggled: root.idle.setPerMonitor(!root.idle.perMonitor)
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Every monitor waits out the inactivity on its own - input on it, or a window on it keeping "
+                                    + "the computer awake, counts. One that's done goes dark until the rest are too."
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Enable sleep countdown"
+                                checked: powerCategoryContent.countdown
+                                usable: sleepOptions.usable
+                                onToggled: root.idle.setSleepCountdown(!root.idle.sleepCountdown)
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Fades every monitor to black and counts down first - any input calls it off."
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+                        }
+
+                        RowLayout {
+                            id: countdownRow
+
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            readonly property bool usable: sleepOptions.usable && powerCategoryContent.countdown
+                            readonly property color shownColor: countdownRow.usable ? Config.fgcolor : Config.fgcolordark
+
+                            NumberBox {
+                                uiScale: root.uiScale
+                                value: root.idle ? root.idle.countdownSeconds : 30
+                                usable: countdownRow.usable
+                                onCommitted: (value) => root.idle.setCountdownSeconds(value)
+                            }
+
+                            Text {
+                                text: "seconds"
+                                color: countdownRow.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Text {
+                                text: "(10-240)"
+                                color: Config.fgcolordark
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
                         }
                     }
                 }
