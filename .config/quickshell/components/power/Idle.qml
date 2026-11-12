@@ -520,17 +520,16 @@ Scope {
                     }
                 }
 
-                // The mouse moving over a dimmed screen wakes it straight
-                // away (and a click on it can't land on whatever's
-                // underneath). Under the lock screen the lock gets the mouse
-                // instead, and the idle monitors notice the input on their
-                // own.
+                // Only here so a click on a dimmed screen can't land on
+                // whatever's underneath. It doesn't count hovering as
+                // activity: Qt sends hover events when this appears under a
+                // cursor that isn't moving, and on every frame of the fade
+                // in, which would wake the very monitor that was dimming.
+                // Real movement is input the idle monitors above see, put
+                // down to the monitor with focus - the one the mouse is on.
                 MouseArea {
                     anchors.fill: parent
-
-                    hoverEnabled: true
-
-                    onPositionChanged: root.markActive(win.modelData.name)
+                    acceptedButtons: Qt.AllButtons
                 }
             }
         }
