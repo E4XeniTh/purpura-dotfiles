@@ -546,7 +546,6 @@ Scope {
                         text: prompt.clockString
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(56, prompt.uiScale)
-                        font.bold: true
                     }
 
                     Row {
