@@ -29,7 +29,7 @@ import "IdleLogic.js" as Logic
 //
 // The dimmed screens (DimView.qml) are drawn on top of everything - see
 // "the dimmed screens" below for how - and hide the cursor while they're
-// up. Focus mode dims every monitor but the one the mouse is on, on demand.
+// up. Manual dim (a shortcut) dims every monitor but the one the mouse is on.
 //
 // Like NightLight.qml, this owns its settings file (powersettings.json),
 // and ShellSettings.qml's Power category is a view onto this object.
@@ -162,12 +162,12 @@ Scope {
         }
     }
 
-    // Input alone, for per-monitor dimming and Focus mode: put down to the
+    // Input alone, for per-monitor dimming and Manual dim: put down to the
     // monitor with focus.
     IdleMonitor {
         id: inputIdle
 
-        enabled: root.settingsLoaded && ((root.autoDim && root.dimPerMonitor) || root.focusNames.length > 0)
+        enabled: root.settingsLoaded && ((root.autoDim && root.dimPerMonitor) || root.manualDimNames.length > 0)
         timeout: 1
         respectInhibitors: false
 
@@ -195,7 +195,7 @@ Scope {
         // The mouse moving onto another monitor is activity there.
         function onFocusedMonitorChanged() {
             if (!Hyprland.focusedMonitor) return
-            root.wakeFromFocus(Hyprland.focusedMonitor.name)
+            root.wakeManualDim(Hyprland.focusedMonitor.name)
             root.markActive(Hyprland.focusedMonitor.name)
         }
 
@@ -254,36 +254,44 @@ Scope {
         }
     }
 
-    // ---------------- Focus mode ----------------
+    // ---------------- Manual dim ----------------
     // Each press of the shortcut dims every monitor but the one the mouse
     // is on, there and then. A dimmed one wakes when it's used - the mouse
     // moving onto it, or input while it has focus. Works whether auto-dim's
     // on or not.
-    property var focusNames: []
+    property var manualDimNames: []
 
-    function focusMode() {
+    function manualDim() {
         const focused = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : root.primaryName
-        root.focusNames = Logic.focusTargets(Quickshell.screens.map(s => s.name), focused)
+        root.manualDimNames = Logic.manualDimTargets(Quickshell.screens.map(s => s.name), focused)
         root.evaluate(false)
     }
 
-    function wakeFromFocus(name) {
-        if (!name || root.focusNames.indexOf(name) < 0) return
-        root.focusNames = Logic.focusWake(root.focusNames, name)
+    function wakeManualDim(name) {
+        if (!name || root.manualDimNames.indexOf(name) < 0) return
+        root.manualDimNames = Logic.manualDimWake(root.manualDimNames, name)
         root.evaluate(false)
     }
 
     GlobalShortcut {
-        name: "focusmode"
-        description: "Focus mode: dim every monitor but the one the mouse is on"
+        name: "manualdim"
+        description: "Manual dim: dim every monitor but the one the mouse is on"
 
-        onPressed: root.focusMode()
+        onPressed: root.manualDim()
+    }
+
+    // Its old name, so a bind made before the rename still works.
+    GlobalShortcut {
+        name: "focusmode"
+        description: "Manual dim, under its old name (Focus mode)"
+
+        onPressed: root.manualDim()
     }
 
     IpcHandler {
-        target: "focusmode"
+        target: "manualdim"
 
-        function dim(): void { root.focusMode() }
+        function dim(): void { root.manualDim() }
     }
 
     // ---------------- the stages ----------------
@@ -328,9 +336,9 @@ Scope {
             if (!inputIdle.isIdle && Hyprland.focusedMonitor) stamps = Logic.stamp(stamps, [Hyprland.focusedMonitor.name], now)
             root.stamps = stamps
         }
-        if (root.focusNames.length && !inputIdle.isIdle && Hyprland.focusedMonitor
-                && root.focusNames.indexOf(Hyprland.focusedMonitor.name) >= 0) {
-            root.focusNames = Logic.focusWake(root.focusNames, Hyprland.focusedMonitor.name)
+        if (root.manualDimNames.length && !inputIdle.isIdle && Hyprland.focusedMonitor
+                && root.manualDimNames.indexOf(Hyprland.focusedMonitor.name) >= 0) {
+            root.manualDimNames = Logic.manualDimWake(root.manualDimNames, Hyprland.focusedMonitor.name)
         }
 
         const result = Logic.step(root.stage, {
@@ -339,7 +347,7 @@ Scope {
             idle: Math.max(0, (now - root.lastActivity) / 1000),
             monitors: Logic.monitorIdle(names, root.stamps, now),
             locked: root.locked,
-            forced: root.focusNames
+            forced: root.manualDimNames
         })
 
         root.stage = result.state

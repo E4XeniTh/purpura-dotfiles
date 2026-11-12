@@ -152,7 +152,7 @@ Item {
             font.italic: true
         }
 
-        // Per-monitor and Focus mode: which monitors are still active
+        // Per-monitor and Manual dim: which monitors are still active
         // ("Show active monitors").
         Text {
             anchors.horizontalCenter: parent.horizontalCenter

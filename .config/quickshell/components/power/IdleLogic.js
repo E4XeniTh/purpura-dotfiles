@@ -108,11 +108,11 @@ function suspendDelayLabel(s) {
 //              activity (input with it focused, or a window on it keeping
 //              the computer awake)
 //   locked     the lock screen's up
-//   forced     monitors dimmed by Focus mode, whatever their inactivity
+//   forced     monitors dimmed by Manual dim, whatever their inactivity
 // Returns { state, actions, dimmed, active, countdown }:
 //   actions    any of "lock", "warn", "suspend"
 //   dimmed     the monitors that show the black screen
-//   active     with per-monitor dimming or Focus mode, the monitors still
+//   active     with per-monitor dimming or Manual dim, the monitors still
 //              active
 //   countdown  seconds left before suspending - or, with every monitor
 //              dimmed before the lock, before locking - or -1
@@ -156,7 +156,7 @@ function step(state, input) {
     }
 
     // Dim: every monitor together, or each by its own inactivity - and any
-    // Focus mode dimmed, whether auto-dim's on or not.
+    // Manual dim dimmed, whether auto-dim's on or not.
     let byIdle = []
     if (t.dimAt !== null) {
         if (s.dimPerMonitor) byIdle = input.monitors.filter(m => Math.round(m.idle) >= t.dimAt).map(m => m.name)
@@ -320,14 +320,14 @@ function sameList(a, b) {
     return a.length === b.length && a.every((item, i) => item === b[i])
 }
 
-// ---------------- Focus mode ----------------
-// The monitors Focus mode dims: all but the one the mouse is on.
-function focusTargets(names, focused) {
+// ---------------- Manual dim ----------------
+// The monitors Manual dim dims: all but the one the mouse is on.
+function manualDimTargets(names, focused) {
     return names.filter(name => name !== focused)
 }
 
-// Focus mode's monitors once `name` has been used (the mouse moved onto
+// Manual dim's monitors once `name` has been used (the mouse moved onto
 // it, or input while it has focus): that one's awake again.
-function focusWake(forced, name) {
+function manualDimWake(forced, name) {
     return forced.filter(other => other !== name)
 }

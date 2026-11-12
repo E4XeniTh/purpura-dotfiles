@@ -1999,7 +1999,7 @@ Item {
                         }
                     }
 
-                    // The two below are how any dim looks - Focus mode's too -
+                    // The two below are how any dim looks - Manual dim's too -
                     // so they stay usable with auto-dim off.
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -2018,7 +2018,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.leftMargin: Config.scaled(28, root.uiScale)
                             wrapMode: Text.WordWrap
-                            text: "Names the monitors still in use on the dimmed ones - with Per monitor, or in Focus mode."
+                            text: "Names the monitors still in use on the dimmed ones - with Per monitor, or after a Manual dim."
                             color: Config.fgcolordark
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(12, root.uiScale)
