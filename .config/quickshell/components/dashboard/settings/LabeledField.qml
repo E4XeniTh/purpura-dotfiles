@@ -3,15 +3,16 @@ import "../"
 import "../../../Config.js" as Config
 
 // A small labeled numeric input box, DashCard-style border, used for the
-// resolution/position/scale fields in ScreenSettings.qml. Controlled
-// component - value is driven externally (so a monitor switch can
-// repopulate it).
+// position fields in ScreenSettings.qml. Controlled component - value is
+// driven externally (so a monitor switch can repopulate it). showLabel:
+// false drops the caption above the box, for a field labelled beside it.
 Item {
     id: root
 
     property string label: ""
     property string value: ""
     property real uiScale: 1.0
+    property bool showLabel: true
 
     signal edited(string text)
 
@@ -36,6 +37,7 @@ Item {
 
         Text {
             width: parent.width
+            visible: root.showLabel
             text: root.label
             color: Config.fgcolor
             font.family: Config.fontfamily

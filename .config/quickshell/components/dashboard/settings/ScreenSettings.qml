@@ -5,13 +5,22 @@ import Quickshell.Io
 import "../"
 import "../../../Config.js" as Config
 
-// Monitor list (left, 35%) + resolution/position/scale editor (right,
-// 65%) - one tab ("Display") of SettingsScreen.qml's fullscreen tabbed
-// panel (see there for the tab bar/coordinator, and for where the
+// Monitor list (left, 35%) + arrangement view and selected-display form
+// (right, 65%) - one tab ("Display") of SettingsScreen.qml's fullscreen
+// tabbed panel (see there for the tab bar/coordinator, and for where the
 // typed-input keyboard focus this used to request itself now comes
 // from). Embeddable Item instead of a standalone SettingsPanel popup:
 // panelWidth/uiScale/active are plain properties fed in from the tab
 // host instead of coming from a PanelWindow.
+//
+// The right side: every monitor drawn to scale where it sits in
+// Hyprland's layout (MonitorLayout.qml - click to pick, drag to move),
+// switchable to the arrangement Set Default saved; under it, the
+// selected display's resolution and refresh rate (dropdowns of the modes
+// it reports, Preferred first), scale (a slider that only stops on
+// scales Hyprland accepts at that resolution), rotation, workspaces and
+// exact position. Resizing a display moves the ones beside and below it
+// along (keepNeighbours()), so displays that touched keep touching.
 //
 // Reads via `hyprctl -j monitors all` (includes currently-disabled
 // monitors, unlike the plain `monitors` request) and writes via
@@ -165,18 +174,18 @@ Item {
     // Still monitor-selection-scoped (discarded on selectMonitor()) -
     // used for things that are genuinely tied to "whatever's currently
     // selected in this panel" rather than a specific monitor's own
-    // state: togglePreferredMode(). Geometry edits no longer rely on
+    // state: switching to Preferred (chooseResolution()). Geometry edits no longer rely on
     // this for correctness (see effectiveStateFor()) - only for also
     // marking the then-selected monitor as touched, alongside the
     // dedicated edited-keys loop in applyChanges().
     property bool selectedDirty: false
 
-    // Whether each monitor's mode toggle is set to "Preferred", keyed by
+    // Whether each monitor's resolution is set to "Preferred", keyed by
     // name - unlike `edited` above, this *is* remembered across
     // switching monitors (and across Apply): hyprctl's own monitor JSON
     // has no way to report "this is running in preferred mode" after
     // the fact, so there's nothing to re-derive it from on reselect -
-    // the toggle has to remember its own state itself. Also seeded from
+    // this has to remember the choice itself. Also seeded from
     // monitors.json on load (see screensStoreProcess) for monitors not
     // touched yet this session.
     property var preferredModes: ({})
@@ -491,24 +500,425 @@ Item {
         root.selectedDirty = true
     }
 
-    // Steps the selected monitor's rotation a quarter turn (clockwise for
-    // step = 1, back for -1), staged in root.edited like any geometry
-    // edit so it only takes effect on Apply. A flipped transform (4-7)
-    // keeps its flip and only has its rotation stepped.
-    function rotateSelected(step) {
+    // setEdited() for any monitor, not just the selected one - the
+    // arrangement view moves whichever monitor gets dragged, and resizing
+    // one monitor can shift its neighbours (see keepNeighbours()).
+    function setEditedFor(name, key, value) {
+        if (!name) return
+        const updated = Object.assign({}, root.edited)
+        const forName = Object.assign({}, updated[name] || {})
+        forName[key] = value
+        updated[name] = forName
+        root.edited = updated
+    }
+
+    // Enable/disable, with the fail-safes the bar and dashboard rely on:
+    // disabling the current primary first hands primary off to whichever
+    // OTHER monitor is still enabled (first match in root.monitors order) -
+    // they always need exactly one enabled monitor to live on, so this
+    // can't just leave primary pointing at something about to go dark. If
+    // this is the only enabled monitor left, there's no other one to hand
+    // it to, so disabling is refused outright rather than leaving nothing
+    // enabled at all. Used by both the monitor cards (right-click) and the
+    // Enabled checkbox.
+    function toggleEnabled(name) {
+        if (!name) return
+        const enabling = !root.enabledFor(name)
+        if (!enabling && name === root.primaryMonitor) {
+            const nextPrimary = root.monitors.find(m => m.name !== name && root.enabledFor(m.name))
+            if (!nextPrimary) return
+            root.primarySelected(nextPrimary.name)
+        }
+        root.setPendingEnabled(name, enabling)
+    }
+
+    // A disabled monitor still can't be made primary.
+    function makePrimary(name) {
+        if (name && root.enabledFor(name)) root.primarySelected(name)
+    }
+
+    // ---------------- modes, scales and the arrangement ----------------
+    // hyprctl lists the modes a monitor offers as "2560x1440@143.99Hz", its
+    // own preferred mode first (the kernel sorts that one to the front),
+    // which is what Hyprland's "preferred" picks.
+    function parseMode(text) {
+        const m = /^(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)@(\d+(?:\.\d+)?)Hz$/.exec(String(text).trim())
+        return m ? { w: Math.round(parseFloat(m[1])), h: Math.round(parseFloat(m[2])), refresh: parseFloat(m[3]) } : null
+    }
+
+    function modesFor(name) {
+        const base = root.baseFor(name)
+        if (!base || !Array.isArray(base.availableModes)) return []
+        return base.availableModes.map(root.parseMode).filter(m => m !== null)
+    }
+
+    function preferredModeFor(name) {
+        const modes = root.modesFor(name)
+        return modes.length > 0 ? modes[0] : null
+    }
+
+    // Whether this monitor runs (or, while off, would run once enabled)
+    // Hyprland's own "preferred" mode - the exact opposite of what
+    // effectiveStateFor() calls usesExplicitMode for an enabled monitor:
+    // Preferred chosen, or nothing typed, remembered or live to give a
+    // mode from (a display that's never been set up). The form and the
+    // arrangement view go by this, so they show what Apply will send.
+    function runsPreferredMode(name) {
+        if (root.preferredModes[name]) return true
+        const base = root.baseFor(name)
+        if (!base) return false
+        const e = root.edited[name] || {}
+        return !(!base.disabled || !!root.screensStore[name] || e.width !== undefined || e.height !== undefined)
+    }
+
+    // The mode a monitor actually runs (or will, once applied) - in
+    // Preferred mode that's the monitor's own preferred one, whatever was
+    // last typed or remembered for it.
+    function modeSizeFor(name, state) {
+        const preferred = root.preferredModeFor(name)
+        if (root.runsPreferredMode(name) && preferred) return { w: preferred.w, h: preferred.h }
+        if (state && state.width > 0 && state.height > 0) return { w: state.width, h: state.height }
+        return preferred ? { w: preferred.w, h: preferred.h } : { w: 1920, h: 1080 }
+    }
+
+    // Each distinct resolution on offer, biggest first - plus the monitor's
+    // current one, should that be a custom mode the list doesn't have.
+    function resolutionsFor(name) {
+        const seen = {}
+        const list = []
+        const add = (w, h) => {
+            const key = w + "x" + h
+            if (w > 0 && h > 0 && !seen[key]) {
+                seen[key] = true
+                list.push({ w, h })
+            }
+        }
+        for (const m of root.modesFor(name)) add(m.w, m.h)
+        const state = root.effectiveStateFor(name)
+        if (state && !root.runsPreferredMode(name)) add(state.width, state.height)
+        return list.sort((a, b) => (b.w * b.h - a.w * a.h) || (b.w - a.w))
+    }
+
+    // The refresh rates on offer at one resolution, fastest first - plus
+    // the current one if it isn't among them (a custom mode).
+    function refreshRatesFor(name, w, h) {
+        const rates = []
+        for (const m of root.modesFor(name)) {
+            if (m.w === w && m.h === h && !rates.some(r => Math.abs(r - m.refresh) < 0.005)) rates.push(m.refresh)
+        }
+        const state = root.effectiveStateFor(name)
+        if (state && state.width === w && state.height === h && state.refresh > 0
+                && !rates.some(r => Math.abs(r - state.refresh) < 0.5)) {
+            rates.push(state.refresh)
+        }
+        return rates.sort((a, b) => b - a)
+    }
+
+    // Every scale Hyprland takes as it is at this resolution, from 0.5 to
+    // 3: a multiple of 1/120 (what the fractional-scale protocol can
+    // express) that divides the mode into whole logical pixels. Anything
+    // else it swaps for the nearest scale that does, with a warning - this
+    // is the same floating-point check it makes (Monitor.cpp).
+    function scalesFor(w, h) {
+        if (!(w > 0 && h > 0)) return [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+        const scales = []
+        for (let k = 60; k <= 360; k++) {
+            const s = k / 120
+            const lw = w / s
+            const lh = h / s
+            if (lw === Math.round(lw) && lh === Math.round(lh)) scales.push(s)
+        }
+        return scales.length > 0 ? scales : [1]
+    }
+
+    function nearestIndex(list, value) {
+        let best = 0
+        for (let i = 1; i < list.length; i++) {
+            if (Math.abs(list[i] - value) < Math.abs(list[best] - value)) best = i
+        }
+        return best
+    }
+
+    function formatRefresh(rate) {
+        return String(Math.round(rate * 100) / 100)
+    }
+
+    function formatScale(scale) {
+        return String(Math.round(scale * 100) / 100)
+    }
+
+    function overlaps(a, b) {
+        return a.x < b.x + b.w - 0.5 && b.x < a.x + a.w - 0.5
+            && a.y < b.y + b.h - 0.5 && b.y < a.y + a.h - 0.5
+    }
+
+    // What each monitor's box in the arrangement view says under its name.
+    function rectLines(name, state, size) {
+        const lines = []
+        if (state.disabled) lines.push("OFF")
+        lines.push(size.w + " x " + size.h)
+        let detail = root.runsPreferredMode(name) ? "Preferred"
+            : (state.refresh > 0 ? root.formatRefresh(state.refresh) + " Hz" : "")
+        detail += (detail.length > 0 ? " · " : "") + root.formatScale(state.scale) + "x"
+        if (state.transform & 3) detail += " · " + ((state.transform & 3) * 90) + "°"
+        lines.push(detail)
+        const ws = root.workspacesFor(name).filter(n => n <= 5).slice().sort((a, b) => a - b)
+        if (ws.length > 0) lines.push("ws " + ws.join(" "))
+        return lines
+    }
+
+    // The arrangement view's model: each monitor's rectangle in Hyprland's
+    // layout (logical pixels - its mode divided by its scale, on its side
+    // when rotated), from the same effectiveStateFor() Apply sends, so the
+    // picture can't disagree with what Apply does. A monitor Hyprland will
+    // place by itself ("auto": newly enabled, never positioned) is drawn
+    // where that puts it, to the right of everything else - and so is a
+    // disabled one that has never had a position, instead of piled on top
+    // of another. Those are flagged `auto`; dragging one gives it a real
+    // position.
+    readonly property var arrangement: {
+        const placed = []
+        const parked = []
+        for (const m of root.monitors) {
+            const state = root.effectiveStateFor(m.name)
+            if (!state) continue
+            const size = root.modeSizeFor(m.name, state)
+            const turned = (state.transform & 1) === 1
+            const e = root.edited[m.name] || {}
+            const known = state.disabled
+                ? (!m.disabled || !!root.screensStore[m.name] || e.x !== undefined || e.y !== undefined)
+                : state.usesExplicitPosition
+            const rect = {
+                name: m.name,
+                x: state.x || 0,
+                y: state.y || 0,
+                w: (turned ? size.h : size.w) / state.scale,
+                h: (turned ? size.w : size.h) / state.scale,
+                enabled: !state.disabled,
+                primary: root.primaryMonitor === m.name,
+                selected: root.selectedName === m.name,
+                auto: !known,
+                warn: false,
+                lines: root.rectLines(m.name, state, size)
+            }
+            if (known) placed.push(rect)
+            else parked.push(rect)
+        }
+        let right = 0
+        for (const r of placed) right = Math.max(right, r.x + r.w)
+        for (const r of parked) {
+            r.x = right
+            r.y = 0
+            right += r.w
+        }
+        const all = placed.concat(parked)
+        const live = all.filter(r => r.enabled)
+        for (let i = 0; i < live.length; i++) {
+            for (let j = i + 1; j < live.length; j++) {
+                if (root.overlaps(live[i], live[j])) {
+                    live[i].warn = true
+                    live[j].warn = true
+                }
+            }
+        }
+        return all
+    }
+
+    readonly property var overlapping: root.arrangement.filter(r => r.warn).map(r => r.name)
+
+    function rectFor(name) {
+        return root.arrangement.find(r => r.name === name) || null
+    }
+
+    // The same picture of what Set Default last saved (monitors.json), for
+    // the arrangement view's "Saved default" side.
+    readonly property var savedArrangement: {
+        const rects = []
+        for (const name of root.defaultMonitorNames) {
+            const e = root.screensStore[name]
+            if (!e) continue
+            const preferred = root.preferredModeFor(name)
+            const size = (e.width > 0 && e.height > 0) ? { w: e.width, h: e.height }
+                : (preferred ? { w: preferred.w, h: preferred.h } : { w: 1920, h: 1080 })
+            const transform = Number.isInteger(e.transform) ? e.transform : 0
+            const scale = e.scale > 0 ? e.scale : 1
+            const turned = (transform & 1) === 1
+            const lines = []
+            if (e.disabled) lines.push("OFF")
+            lines.push(size.w + " x " + size.h)
+            let detail = e.mode === "preferred" ? "Preferred" : (e.refresh > 0 ? root.formatRefresh(e.refresh) + " Hz" : "")
+            detail += (detail.length > 0 ? " · " : "") + root.formatScale(scale) + "x"
+            if (transform & 3) detail += " · " + ((transform & 3) * 90) + "°"
+            lines.push(detail)
+            if (e.workspaces && e.workspaces.length > 0) lines.push("ws " + e.workspaces.join(" "))
+            rects.push({
+                name,
+                x: e.x || 0,
+                y: e.y || 0,
+                w: (turned ? size.h : size.w) / scale,
+                h: (turned ? size.w : size.h) / scale,
+                enabled: !e.disabled,
+                primary: root.screensStore.__primary === name,
+                selected: false,
+                auto: false,
+                warn: false,
+                lines
+            })
+        }
+        return rects
+    }
+
+    // Which arrangement the view shows - the staged one you can drag around,
+    // or the saved default. Back to the staged one every time the tab opens.
+    property bool showingDefaults: false
+
+    // A monitor that changes size (mode, scale, rotation) keeps its top-left
+    // corner, and everything that was to its right moves with its right
+    // edge, everything below it with its bottom edge - so displays that
+    // touched still touch, and the gaps between the rest stay as they were.
+    // Only for a monitor that's on: one being set up while disabled
+    // shouldn't shove the displays actually in use around.
+    function keepNeighbours(name, before) {
+        const after = root.rectFor(name)
+        if (!before || !after || !after.enabled || before.auto) return
+        const dw = after.w - before.w
+        const dh = after.h - before.h
+        if (Math.abs(dw) < 0.5 && Math.abs(dh) < 0.5) return
+        const others = root.arrangement.filter(r => r.name !== name && !r.auto)
+        for (const r of others) {
+            if (Math.abs(dw) >= 0.5 && r.x >= before.x + before.w - 0.5) root.setEditedFor(r.name, "x", Math.round(r.x + dw))
+            if (Math.abs(dh) >= 0.5 && r.y >= before.y + before.h - 0.5) root.setEditedFor(r.name, "y", Math.round(r.y + dh))
+        }
+    }
+
+    // A new mode can rule out the current scale (see scalesFor()) - moved
+    // to the nearest one it allows, rather than left for Hyprland to swap
+    // with a warning.
+    function fitScaleToMode() {
         const state = root.effectiveStateFor(root.selectedName)
         if (!state) return
-        const flip = state.transform & 4
-        const rotation = ((state.transform & 3) + step + 4) % 4
-        root.setEdited("transform", flip | rotation)
+        const size = root.modeSizeFor(root.selectedName, state)
+        const scales = root.scalesFor(size.w, size.h)
+        const nearest = scales[root.nearestIndex(scales, state.scale)]
+        if (Math.abs(nearest - state.scale) > 0.005) root.setEdited("scale", nearest)
     }
 
-    function togglePreferredMode() {
-        root.setPreferredMode(root.selectedName, !root.preferredModes[root.selectedName])
-        root.selectedDirty = true
+    // The selected monitor's resolution dropdown: 0 is Preferred, the rest
+    // index root.selectedResolutions. Picking a resolution keeps the current
+    // refresh rate if the new one offers it, and otherwise takes its
+    // fastest. Preferred also stages the preferred mode's own numbers, so
+    // the arrangement view and Set Default see the size it'll really be.
+    function chooseResolution(index) {
+        const name = root.selectedName
+        if (!name) return
+        const before = root.rectFor(name)
+        if (index === 0) {
+            const preferred = root.preferredModeFor(name)
+            root.setPreferredMode(name, true)
+            root.selectedDirty = true
+            if (preferred) {
+                root.setEdited("width", preferred.w)
+                root.setEdited("height", preferred.h)
+                root.setEdited("refresh", preferred.refresh)
+            }
+        } else {
+            const res = root.selectedResolutions[index - 1]
+            if (!res) return
+            const state = root.effectiveStateFor(name)
+            const rates = root.refreshRatesFor(name, res.w, res.h)
+            const current = state ? state.refresh : 0
+            const keep = rates.find(r => Math.abs(r - current) < 0.5)
+            root.setPreferredMode(name, false)
+            root.selectedDirty = true
+            root.setEdited("width", res.w)
+            root.setEdited("height", res.h)
+            if (rates.length > 0) root.setEdited("refresh", keep !== undefined ? keep : rates[0])
+        }
+        root.fitScaleToMode()
+        root.keepNeighbours(name, before)
     }
 
-    // What the input boxes actually show - a live hyprctl snapshot (or,
+    function chooseRefresh(index) {
+        const rate = root.selectedRates[index]
+        if (rate === undefined || root.selectedPreferred) return
+        root.setEdited("refresh", rate)
+    }
+
+    function chooseScale(scale) {
+        const name = root.selectedName
+        if (!name || Math.abs(scale - root.selectedScale) < 0.0001) return
+        const before = root.rectFor(name)
+        root.setEdited("scale", scale)
+        root.keepNeighbours(name, before)
+    }
+
+    // Quarter turns clockwise; a flipped transform (4-7) keeps its flip.
+    function chooseRotation(quarterTurns) {
+        const state = root.effectiveStateFor(root.selectedName)
+        if (!state) return
+        const next = (state.transform & 4) | (quarterTurns & 3)
+        if (next === state.transform) return
+        const before = root.rectFor(root.selectedName)
+        root.setEdited("transform", next)
+        root.keepNeighbours(root.selectedName, before)
+    }
+
+    // A drag in the arrangement view - the X/Y boxes follow it when it's
+    // the selected monitor.
+    function moveMonitor(name, x, y) {
+        // Let go where it started: nothing to stage.
+        const rect = root.rectFor(name)
+        if (rect && Math.round(rect.x) === x && Math.round(rect.y) === y) return
+        root.setEditedFor(name, "x", x)
+        root.setEditedFor(name, "y", y)
+        if (name === root.selectedName) root.displayFor = Object.assign({}, root.displayFor, { x, y })
+    }
+
+    // ---------------- the selected monitor, for the form ----------------
+    readonly property var selectedState: root.effectiveStateFor(root.selectedName)
+    readonly property var selectedBase: root.baseFor(root.selectedName)
+    readonly property string selectedDescription: {
+        const b = root.selectedBase
+        if (!b) return ""
+        const makeModel = [b.make, b.model].filter(s => s && String(s).length > 0).join(" ")
+        return makeModel.length > 0 ? makeModel : (b.description || "")
+    }
+    readonly property bool selectedPreferred: root.runsPreferredMode(root.selectedName)
+    readonly property var selectedSize: root.selectedState ? root.modeSizeFor(root.selectedName, root.selectedState) : ({ w: 0, h: 0 })
+    readonly property var selectedResolutions: root.resolutionsFor(root.selectedName)
+    readonly property var resolutionOptions: {
+        const preferred = root.preferredModeFor(root.selectedName)
+        const first = preferred ? "Preferred (" + preferred.w + " x " + preferred.h + ")" : "Preferred"
+        return [first].concat(root.selectedResolutions.map(r => r.w + " x " + r.h))
+    }
+    readonly property int resolutionIndex: {
+        if (root.selectedPreferred) return 0
+        const s = root.selectedSize
+        const i = root.selectedResolutions.findIndex(r => r.w === s.w && r.h === s.h)
+        return i >= 0 ? i + 1 : 0
+    }
+    readonly property var selectedRates: root.refreshRatesFor(root.selectedName, root.selectedSize.w, root.selectedSize.h)
+    readonly property var refreshOptions: root.selectedPreferred
+        ? ["Auto"]
+        : (root.selectedRates.length > 0 ? root.selectedRates.map(r => root.formatRefresh(r) + " Hz") : ["-"])
+    readonly property int refreshIndex: (root.selectedPreferred || !root.selectedState || root.selectedRates.length === 0
+                                         || !(root.selectedState.refresh > 0))
+        ? 0
+        : root.nearestIndex(root.selectedRates, root.selectedState.refresh)
+    readonly property real selectedScale: root.selectedState ? root.selectedState.scale : 1
+    readonly property var scaleOptions: root.scalesFor(root.selectedSize.w, root.selectedSize.h)
+    readonly property int scaleIndex: root.nearestIndex(root.scaleOptions, root.selectedScale)
+    readonly property int selectedTransform: root.selectedState ? root.selectedState.transform : 0
+    // What apps on it get to work with: the mode divided by the scale, on
+    // its side when rotated.
+    readonly property string selectedLogicalSize: {
+        const turned = (root.selectedTransform & 1) === 1
+        const w = Math.round((turned ? root.selectedSize.h : root.selectedSize.w) / root.selectedScale)
+        const h = Math.round((turned ? root.selectedSize.w : root.selectedSize.h) / root.selectedScale)
+        return w + " x " + h
+    }
+
+    // What the X/Y boxes actually show - a live hyprctl snapshot (or,
     // for a disabled monitor, its remembered monitors.json values) for
     // whichever monitor is currently selected. Cleared immediately on
     // selection (so a brief fetch-in-flight window never shows a
@@ -660,7 +1070,7 @@ Item {
         // persisting across monitor switches - see its declaration
         // above), any right-clicked enable/disable toggle, plus
         // whichever monitor is currently selected if selectedDirty
-        // (covers togglePreferredMode(), which doesn't touch
+        // (covers switching to Preferred, which needn't touch
         // root.edited at all) - not every monitor every time, which
         // used to trigger Hyprland's layout reflow for displays nobody
         // asked to change. (Workspace bindings below are NOT gated this
@@ -891,7 +1301,7 @@ Item {
             root.edited = ({})
             root.selectedDirty = false
             // preferredMode intentionally left as-is - Apply shouldn't
-            // flip the toggle back to "Manual" for the monitor you just
+            // flip the resolution back off Preferred for the monitor you just
             // applied.
         }
     }
@@ -1015,6 +1425,7 @@ Item {
     // triggers.
     onActiveChanged: {
         if (root.active) {
+            root.showingDefaults = false
             root.pendingEnabled = ({})
             root.pendingWorkspaces = ({})
             root.positionOverrides = ({})
@@ -1040,9 +1451,17 @@ Item {
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
                     }
+                    // The X/Y boxes show where the arrangement view draws
+                    // it - for a monitor Hyprland places by itself, the
+                    // spot that puts it, not hyprctl's placeholder.
                     const state = root.effectiveStateFor(root.selectedName)
+                    const rect = root.rectFor(root.selectedName)
                     root.displayFor = state
-                        ? { width: state.width, height: state.height, refresh: state.refresh, x: state.x, y: state.y, scale: state.scale }
+                        ? {
+                            width: state.width, height: state.height, refresh: state.refresh, scale: state.scale,
+                            x: rect ? rect.x : state.x,
+                            y: rect ? rect.y : state.y
+                        }
                         : {}
                 } catch (e) {
                     root.monitors = []
@@ -1273,8 +1692,8 @@ Item {
     readonly property bool hasRealMonitorsConfig: Object.keys(root.screensStore).some(k => !k.startsWith("__"))
 
     // Every real (non-"__") monitor name Set Default has ever
-    // remembered, alphabetical - used by the "Current default settings"
-    // listing below. Alphabetical rather than root.monitors' own
+    // remembered, alphabetical - used by the arrangement view's "Saved
+    // default" side (savedArrangement). Alphabetical rather than root.monitors' own
     // (hyprctl-reported, connection-order-dependent) ordering so the
     // list doesn't reshuffle itself around whenever monitors get
     // plugged in/out in a different order, and so it still lists a
@@ -1328,7 +1747,7 @@ Item {
                     // Seed preferredModes from what was last saved, for
                     // any monitor not already touched this session -
                     // otherwise a disabled monitor remembered as
-                    // "preferred" would show "Manual" until reselected
+                    // "preferred" would show a fixed resolution until reselected
                     // once quickshell restarts. Any leftover "__"-prefixed
                     // key from before the workspace-widget toggles moved
                     // to their own barsettings.json (see ShellSettings.qml)
@@ -1481,33 +1900,11 @@ Item {
                             contentWrapper.forceActiveFocus()
                             root.selectMonitor(modelData.name)
                         }
-                        // Fail-safes: disabling the current primary
-                        // first hands primary off to whichever OTHER
-                        // monitor is still enabled (first match in
-                        // root.monitors order) - the bar/dashboard
-                        // always need exactly one enabled monitor to
-                        // live on, so this can't just leave primary
-                        // pointing at something about to go dark. If
-                        // this is the only enabled monitor left, there's
-                        // no other one to hand it to, so disabling is
-                        // refused outright rather than leaving nothing
-                        // enabled at all. A disabled monitor still can't
-                        // be made primary in the first place (see
-                        // onMakePrimary below).
-                        onToggleEnabled: {
-                            const enabling = !root.enabledFor(modelData.name)
-                            if (!enabling && modelData.name === root.primaryMonitor) {
-                                const nextPrimary = root.monitors.find(m => m.name !== modelData.name && root.enabledFor(m.name))
-                                if (!nextPrimary) return
-                                root.primarySelected(nextPrimary.name)
-                            }
-                            root.setPendingEnabled(modelData.name, enabling)
-                        }
-                        onMakePrimary: {
-                            if (root.enabledFor(modelData.name)) {
-                                root.primarySelected(modelData.name)
-                            }
-                        }
+                        // See toggleEnabled()/makePrimary() for the
+                        // fail-safes - shared with the Enabled checkbox
+                        // and Make Primary button on the right.
+                        onToggleEnabled: root.toggleEnabled(modelData.name)
+                        onMakePrimary: root.makePrimary(modelData.name)
                         onBrightnessEdited: (value) => root.setPendingBrightness(modelData.name, value)
                     }
                 }
@@ -1520,286 +1917,502 @@ Item {
                 color: Config.fgcolor
             }
 
-            // ---------------- RIGHT: selected monitor's config ----------------
-            // Deliberately NOT Layout.fillHeight like leftColumn/
-            // monitorList above - this is a fixed set of form fields,
-            // not a scrollable list, so stretching it would just widen
-            // the gaps between fields rather than showing more useful
-            // content. Left top-aligned within contentRow's now-taller
-            // fillHeight instead.
+            // ---------------- RIGHT: arrangement + the selected display ----------------
+            // The arrangement view takes whatever height the form below
+            // leaves it; the form itself is a fixed set of rows.
             ColumnLayout {
                 id: rightColumn
 
                 Layout.preferredWidth: contentRow.rightWidth
-                Layout.alignment: Qt.AlignTop
-                spacing: Config.scaled(12, root.uiScale)
+                Layout.fillHeight: true
+                spacing: Config.scaled(10, root.uiScale)
 
-                // ---------------- mode toggle ----------------
+                // ---------------- arrangement header ----------------
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Config.scaled(8, root.uiScale)
 
                     Text {
-                        text: (root.selectedName.length > 0 ? root.selectedName : "Display") + " mode:"
+                        text: "Arrangement"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    // The layout as staged right now, or what Set Default
+                    // saved (and every login puts back).
+                    Repeater {
+                        model: ["Current", "Saved default"]
+
+                        DashCard {
+                            id: viewTab
+
+                            required property string modelData
+                            required property int index
+                            readonly property bool chosen: root.showingDefaults === (viewTab.index === 1)
+
+                            Layout.preferredWidth: viewTabText.implicitWidth + Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(26, root.uiScale)
+                            uiScale: root.uiScale
+                            color: (viewTabMouse.containsMouse || viewTab.chosen) ? Config.fgcolorhover : Config.fillcolor
+                            border.color: viewTab.chosen ? Config.fgcolorlight : Config.fgcolordark
+
+                            Text {
+                                id: viewTabText
+                                anchors.centerIn: parent
+                                text: viewTab.modelData
+                                color: viewTab.chosen ? Config.fgcolorlight : Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: viewTabMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.showingDefaults = viewTab.index === 1
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                        text: !root.showingDefaults
+                            ? "Click to pick, drag to move - snaps to the other displays"
+                            : (root.defaultMonitorNames.length === 0 ? ""
+                                : (root.defaultsOutOfSync ? "Not what's set now - Set Default saves that" : "Same as what's set now"))
+                        color: Config.fgcolordark
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(12, root.uiScale)
+                    }
+                }
+
+                // ---------------- arrangement view ----------------
+                DashCard {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: Config.scaled(150, root.uiScale)
+                    uiScale: root.uiScale
+                    border.color: Config.fgcolordark
+
+                    MonitorLayout {
+                        anchors.fill: parent
+                        anchors.margins: parent.border.width
+                        uiScale: root.uiScale
+                        monitors: root.showingDefaults ? root.savedArrangement : root.arrangement
+                        interactive: !root.showingDefaults
+                        emptyText: root.showingDefaults
+                            ? "Nothing saved yet. Set Default saves the arrangement you see under Current, and every login puts it back."
+                            : "No displays found."
+
+                        // Steals keyboard focus from the X/Y boxes, and
+                        // re-reads hyprctl like picking a card does (see
+                        // selectMonitor()) - only for a different monitor,
+                        // so dragging the selected one doesn't refetch.
+                        onPicked: (name) => {
+                            contentWrapper.forceActiveFocus()
+                            if (name !== root.selectedName) root.selectMonitor(name)
+                        }
+                        onMoved: (name, x, y) => root.moveMonitor(name, x, y)
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: !root.showingDefaults && root.overlapping.length > 0
+                    wrapMode: Text.WordWrap
+                    text: root.overlapping.join(", ") + " overlap. Drag them apart so they only touch."
+                    color: Config.fgcolorred
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(12, root.uiScale)
+                    font.bold: true
+                }
+
+                // ---------------- selected display ----------------
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Config.scaled(4, root.uiScale)
+                    spacing: Config.scaled(10, root.uiScale)
+
+                    Text {
+                        text: root.selectedName.length > 0 ? root.selectedName : "No display selected"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(16, root.uiScale)
                         font.bold: true
                     }
 
-                    DashCard {
-                        Layout.preferredWidth: Config.scaled(110, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(34, root.uiScale)
-                        uiScale: root.uiScale
-                        color: modeToggleMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: root.preferredModes[root.selectedName] ? "Preferred" : "Manual"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(14, root.uiScale)
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            id: modeToggleMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                contentWrapper.forceActiveFocus()
-                                root.togglePreferredMode()
-                            }
-                        }
-                    }
-
-                    // Rotation button: left-click turns the monitor 90
-                    // degrees clockwise, right-click turns it back. Staged
-                    // until Apply, like the fields below.
-                    DashCard {
-                        readonly property int monitorTransform: {
-                            const state = root.effectiveStateFor(root.selectedName)
-                            return state ? state.transform : 0
-                        }
-
-                        Layout.preferredWidth: Config.scaled(130, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(34, root.uiScale)
-                        uiScale: root.uiScale
-                        enabled: root.selectedName.length > 0
-                        color: rotateMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Rotate " + ((parent.monitorTransform & 3) * 90) + "°" + ((parent.monitorTransform & 4) ? " F" : "")
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(14, root.uiScale)
-                            font.bold: true
-                        }
-
-                        MouseArea {
-                            id: rotateMouseArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                            onClicked: (mouse) => {
-                                contentWrapper.forceActiveFocus()
-                                root.rotateSelected(mouse.button === Qt.RightButton ? -1 : 1)
-                            }
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                // Reduced to root.uiScale * 0.75 (both these rows and
-                // their "x"/"@"/","  separators) so the workspace pins,
-                // strict-widget and show-empty rows below all still fit
-                // without pushing the panel past the max-height clamp
-                // (see SettingsPanel.qml's maxAvailableHeight).
-                readonly property real geometryUiScale: root.uiScale * 0.75
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(10, root.uiScale)
-                    spacing: Config.scaled(6, root.uiScale)
-                    // Width/height/refresh are meaningless once the
-                    // monitor is set to hyprland's own "preferred" mode
-                    // token - faded out and disabled rather than
-                    // `visible: false`, which would drop the row from
-                    // rightColumn's layout entirely and make the whole
-                    // settings screen change height when the mode
-                    // toggle is flipped.
-                    opacity: root.preferredModes[root.selectedName] ? 0 : 1
-                    enabled: !root.preferredModes[root.selectedName]
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "Width"
-                        value: root.displayFor.width !== undefined ? String(root.displayFor.width) : ""
-                        onEdited: (text) => root.setEdited("width", parseInt(text, 10) || 0)
-                    }
-
                     Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: "x"
-                        color: Config.fgcolor
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        text: root.selectedDescription
+                        color: Config.fgcolordark
                         font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
-                        font.bold: true
+                        font.pixelSize: Config.scaled(13, root.uiScale)
                     }
 
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "Height"
-                        value: root.displayFor.height !== undefined ? String(root.displayFor.height) : ""
-                        onEdited: (text) => root.setEdited("height", parseInt(text, 10) || 0)
-                    }
+                    // Same as right-clicking its card.
+                    RowLayout {
+                        visible: root.selectedName.length > 0
+                        spacing: Config.scaled(8, root.uiScale)
 
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: "@"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "Refresh Rate"
-                        value: root.displayFor.refresh !== undefined ? String(root.displayFor.refresh) : ""
-                        onEdited: (text) => root.setEdited("refresh", parseFloat(text) || 60)
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(6, root.uiScale)
-                    spacing: Config.scaled(6, root.uiScale)
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "X Pos"
-                        value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
-                        onEdited: (text) => root.setEdited("x", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: "&"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "Y Pos"
-                        value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
-                        onEdited: (text) => root.setEdited("y", parseInt(text, 10) || 0)
-                    }
-
-                    Text {
-                        Layout.alignment: Qt.AlignBottom
-                        Layout.bottomMargin: Config.scaled(8, root.geometryUiScale)
-                        text: "@"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(16, root.geometryUiScale)
-                        font.bold: true
-                    }
-
-                    LabeledField {
-                        Layout.fillWidth: true
-                        uiScale: root.geometryUiScale
-                        label: "Scale"
-                        value: root.displayFor.scale !== undefined ? String(root.displayFor.scale) : ""
-                        onEdited: (text) => root.setEdited("scale", parseFloat(text) || 1)
-                    }
-                }
-
-                // ---------------- workspace pins (1-5) ----------------
-                // Binds the selected monitor to any of workspaces 1-5
-                // (hl.workspace_rule({ workspace, monitor })) - several
-                // can be lit at once, since Hyprland allows more than
-                // one workspace defaulting to the same monitor. Below
-                // the geometry rows now, its own row.
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(10, root.uiScale)
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Repeater {
-                        model: [1, 2, 3, 4, 5]
-
-                        DashCard {
-                            id: wsButton
-                            required property int modelData
-
-                            // Every workspace 1-5 always belongs to
-                            // exactly one monitor once Apply resolves it
-                            // (see seedDefaultWorkspacesIfFresh()/
-                            // resolveWorkspaceAssignment() above, and
-                            // toggleWorkspace()'s no-op-if-already-
-                            // bound guard) - so only two states are ever
-                            // meaningful here: bound to the monitor
-                            // currently selected in this panel (fgcolor),
-                            // or not (fgcolordark), whether that's
-                            // because it's owned elsewhere or - in
-                            // principle only - unowned entirely. Clicking
-                            // it either way still reassigns it here (see
-                            // toggleWorkspace()); this used to warn red
-                            // for "owned elsewhere" specifically, but
-                            // reassigning is the normal, expected way to
-                            // use these now, not something to flag.
-                            readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
-
-                            Layout.preferredWidth: Config.scaled(28, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                            uiScale: root.uiScale
-                            color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                            border.color: wsButton.bound ? Config.fgcolor : Config.fgcolordark
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: String(wsButton.modelData)
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.enabledFor(root.selectedName) ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
 
                             MouseArea {
-                                id: wsMouseArea
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: {
                                     contentWrapper.forceActiveFocus()
-                                    root.toggleWorkspace(root.selectedName, wsButton.modelData)
+                                    root.toggleEnabled(root.selectedName)
+                                }
+                            }
+                        }
+
+                        Text {
+                            text: "Enabled"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    contentWrapper.forceActiveFocus()
+                                    root.toggleEnabled(root.selectedName)
                                 }
                             }
                         }
                     }
 
-                    Item { Layout.fillWidth: true }
+                    // Same as double-clicking its card.
+                    DashCard {
+                        id: primaryButton
+
+                        readonly property bool isPrimary: root.primaryMonitor === root.selectedName
+                        readonly property bool canPick: !primaryButton.isPrimary && root.enabledFor(root.selectedName)
+
+                        visible: root.selectedName.length > 0
+                        Layout.preferredWidth: primaryText.implicitWidth + Config.scaled(24, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                        uiScale: root.uiScale
+                        color: (primaryMouse.containsMouse && primaryButton.canPick) ? Config.fgcolorhover : Config.fillcolor
+                        border.color: primaryButton.isPrimary ? Config.fgcolorlight
+                            : (primaryButton.canPick ? Config.fgcolor : Config.fgcolordark)
+
+                        Text {
+                            id: primaryText
+                            anchors.centerIn: parent
+                            text: primaryButton.isPrimary ? "Primary display" : "Make primary"
+                            color: primaryButton.isPrimary ? Config.fgcolorlight
+                                : (primaryButton.canPick ? Config.fgcolor : Config.fgcolordark)
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: primaryMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            enabled: primaryButton.canPick
+                            onClicked: {
+                                contentWrapper.forceActiveFocus()
+                                root.makePrimary(root.selectedName)
+                            }
+                        }
+                    }
                 }
 
-                // ---------------- bottom of right pane: identify + apply ----------------
+                // ---------------- settings form ----------------
+                // Two label/control pairs per row where there's room, one
+                // below the other where there isn't (a large UI Scale): the
+                // pairs are listed in reading order either way.
+                GridLayout {
+                    id: displayForm
+
+                    Layout.fillWidth: true
+                    columns: rightColumn.width >= Config.scaled(840, root.uiScale) ? 4 : 2
+                    columnSpacing: Config.scaled(14, root.uiScale)
+                    rowSpacing: Config.scaled(10, root.uiScale)
+                    enabled: root.selectedName.length > 0 && !!root.selectedState
+                    opacity: displayForm.enabled ? 1 : 0.5
+
+                    // ---------------- resolution + refresh rate ----------------
+                    Text {
+                        text: "Resolution"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        DropdownBox {
+                            Layout.preferredWidth: Config.scaled(230, root.uiScale)
+                            uiScale: root.uiScale
+                            maxVisibleRows: 10
+                            options: root.resolutionOptions
+                            currentIndex: root.resolutionIndex
+                            onActivated: (index) => {
+                                contentWrapper.forceActiveFocus()
+                                root.chooseResolution(index)
+                            }
+                        }
+
+                        // Hyprland picks the rate itself in Preferred mode.
+                        DropdownBox {
+                            Layout.preferredWidth: Config.scaled(110, root.uiScale)
+                            uiScale: root.uiScale
+                            maxVisibleRows: 10
+                            enabled: !root.selectedPreferred && root.selectedRates.length > 0
+                            opacity: enabled ? 1 : 0.5
+                            options: root.refreshOptions
+                            currentIndex: root.refreshIndex
+                            onActivated: (index) => {
+                                contentWrapper.forceActiveFocus()
+                                root.chooseRefresh(index)
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    // ---------------- rotation ----------------
+                    Text {
+                        text: "Rotation"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        Repeater {
+                            model: [0, 1, 2, 3]
+
+                            DashCard {
+                                id: turnButton
+
+                                required property int modelData
+                                readonly property bool chosen: (root.selectedTransform & 3) === turnButton.modelData
+
+                                Layout.preferredWidth: Config.scaled(52, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                uiScale: root.uiScale
+                                color: (turnMouse.containsMouse || turnButton.chosen) ? Config.fgcolorhover : Config.fillcolor
+                                border.color: turnButton.chosen ? Config.fgcolorlight : Config.fgcolor
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (turnButton.modelData * 90) + "°"
+                                    color: turnButton.chosen ? Config.fgcolorlight : Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: turnMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        contentWrapper.forceActiveFocus()
+                                        root.chooseRotation(turnButton.modelData)
+                                    }
+                                }
+                            }
+                        }
+
+                        // A mirrored transform (4-7) is only ever passed
+                        // through from hyprctl or monitors.json, never set
+                        // here - the buttons keep it.
+                        Text {
+                            visible: (root.selectedTransform & 4) !== 0
+                            text: "flipped"
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, root.uiScale)
+                        }
+                    }
+
+                    // ---------------- scale ----------------
+                    // Only stops on scales Hyprland takes as they are at
+                    // this resolution (see scalesFor()), so a scale never
+                    // gets swapped for another behind your back. Changes
+                    // live in the arrangement view while dragging.
+                    Text {
+                        text: "Scale"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(12, root.uiScale)
+
+                        DeviceSlider {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: Config.scaled(120, root.uiScale)
+                            Layout.preferredHeight: implicitHeight
+                            uiScale: root.uiScale
+                            value: root.scaleOptions.length > 1 ? root.scaleIndex / (root.scaleOptions.length - 1) : 0.5
+                            onMoved: (newValue) => {
+                                const options = root.scaleOptions
+                                const i = Math.max(0, Math.min(options.length - 1, Math.round(newValue * (options.length - 1))))
+                                root.chooseScale(options[i])
+                            }
+                        }
+
+                        // Fixed width, so the slider doesn't shift as the
+                        // numbers change length.
+                        Text {
+                            Layout.preferredWidth: Config.scaled(190, root.uiScale)
+                            text: root.formatScale(root.selectedScale) + "x  ·  " + root.selectedLogicalSize
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+                    }
+
+                    // ---------------- workspace pins (1-5) ----------------
+                    // Binds the selected monitor to any of workspaces 1-5
+                    // (hl.workspace_rule({ workspace, monitor })) - several
+                    // can be lit at once, since Hyprland allows more than
+                    // one workspace defaulting to the same monitor.
+                    Text {
+                        text: "Workspaces"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Repeater {
+                            model: [1, 2, 3, 4, 5]
+
+                            DashCard {
+                                id: wsButton
+                                required property int modelData
+
+                                // Every workspace 1-5 always belongs to
+                                // exactly one monitor once Apply resolves it
+                                // (see seedDefaultWorkspacesIfFresh()/
+                                // resolveWorkspaceAssignment() above, and
+                                // toggleWorkspace()'s no-op-if-already-
+                                // bound guard) - so only two states are ever
+                                // meaningful here: bound to the monitor
+                                // currently selected in this panel (fgcolor),
+                                // or not (fgcolordark). Clicking an unbound
+                                // one reassigns it here (see
+                                // toggleWorkspace()).
+                                readonly property bool bound: root.workspacesFor(root.selectedName).includes(modelData)
+
+                                Layout.preferredWidth: Config.scaled(28, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                uiScale: root.uiScale
+                                color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                border.color: wsButton.bound ? Config.fgcolor : Config.fgcolordark
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: String(wsButton.modelData)
+                                    color: wsButton.bound ? Config.fgcolor : Config.fgcolordark
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: wsMouseArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        contentWrapper.forceActiveFocus()
+                                        root.toggleWorkspace(root.selectedName, wsButton.modelData)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ---------------- position ----------------
+                    // For exact numbers - dragging in the arrangement view
+                    // fills these in. Hyprland's layout coordinates, in
+                    // logical pixels.
+                    Text {
+                        text: "Position"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Text {
+                            text: "X"
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        LabeledField {
+                            Layout.preferredWidth: Config.scaled(90, root.uiScale)
+                            uiScale: root.uiScale * 0.875
+                            showLabel: false
+                            value: root.displayFor.x !== undefined ? String(root.displayFor.x) : ""
+                            onEdited: (text) => root.setEdited("x", parseInt(text, 10) || 0)
+                        }
+
+                        Text {
+                            Layout.leftMargin: Config.scaled(6, root.uiScale)
+                            text: "Y"
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        LabeledField {
+                            Layout.preferredWidth: Config.scaled(90, root.uiScale)
+                            uiScale: root.uiScale * 0.875
+                            showLabel: false
+                            value: root.displayFor.y !== undefined ? String(root.displayFor.y) : ""
+                            onEdited: (text) => root.setEdited("y", parseInt(text, 10) || 0)
+                        }
+                    }
+                }
+
+                // ---------------- identify / set default / apply ----------------
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(14, root.uiScale)
+                    Layout.topMargin: Config.scaled(6, root.uiScale)
 
-                    // ---------------- bottom left: identify ----------------
                     DashCard {
                         Layout.preferredWidth: Config.scaled(100, root.uiScale)
                         Layout.preferredHeight: Config.scaled(32, root.uiScale)
@@ -1827,20 +2440,15 @@ Item {
 
                     Item { Layout.fillWidth: true }
 
-                    // ---------------- bottom right: set default + apply ----------------
                     // Set Default writes monitors.json (what replays at
                     // the next Hyprland login) - see setDefault()'s own
                     // comment. Left of Apply (which only ever dispatches
-                    // live now), same reading order as the two actions'
-                    // own scope: "what should happen every time" before
-                    // "what should happen right now".
+                    // live), same reading order as the two actions' own
+                    // scope: "what should happen every time" before "what
+                    // should happen right now".
                     DashCard {
                         id: setDefaultButton
 
-                        // Wider than Apply/Identify's shared 100 -
-                        // "Set Default" is noticeably longer than either
-                        // label and was crowding its own border at that
-                        // width.
                         Layout.preferredWidth: Config.scaled(120, root.uiScale)
                         Layout.preferredHeight: Config.scaled(32, root.uiScale)
                         Layout.rightMargin: Config.scaled(8, root.uiScale)
@@ -1880,7 +2488,6 @@ Item {
                         }
                     }
 
-                    // ---------------- bottom right: apply ----------------
                     DashCard {
                         id: applyButton
 
@@ -1915,168 +2522,6 @@ Item {
                             }
                         }
                     }
-                }
-
-                // ---------------- current default settings ----------------
-                // Read-only listing of exactly what's in monitors.json
-                // right now (i.e. what Set Default last wrote, replayed
-                // at every Hyprland login) - fills the space rightColumn
-                // otherwise leaves empty below the geometry form (it's
-                // Layout.alignment: Qt.AlignTop, not fillHeight, unlike
-                // leftColumn's monitor list). Every monitor Set Default
-                // has ever remembered is listed here, even one that's
-                // currently disconnected or disabled - that's the whole
-                // point of a "default" (e.g. a TV's position offset,
-                // preset once while it's off, so enabling it later and
-                // hitting Apply just works).
-                ColumnLayout {
-                    id: defaultsSection
-
-                    // 0.95, not root.uiScale directly - this table has 8
-                    // columns to fit across contentRow.rightWidth, tighter
-                    // than the geometry form's own 0.75 (see rightColumn's
-                    // own geometryUiScale) gets away with at only 3-5.
-                    // Column widths below scale off this same factor, so
-                    // bumping it grows both font and columns together.
-                    readonly property real defaultsUiScale: root.uiScale * 0.95
-
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    Layout.topMargin: Config.scaled(18, root.uiScale)
-                    spacing: Config.scaled(6, root.uiScale)
-
-                    Text {
-                        text: "Current default settings:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-                    }
-
-                    Text {
-                        visible: root.defaultMonitorNames.length === 0
-                        text: "Nothing set yet - use Set Default below."
-                        color: Config.fgcolordark
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(12, root.uiScale)
-                    }
-
-                    Repeater {
-                        model: root.defaultMonitorNames
-
-                        RowLayout {
-                            id: defaultRow
-                            required property string modelData
-                            readonly property var entry: root.screensStore[defaultRow.modelData]
-
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(4, defaultsSection.defaultsUiScale)
-
-                            Text {
-                                Layout.preferredWidth: Config.scaled(96, defaultsSection.defaultsUiScale)
-                                text: defaultRow.modelData + ":"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-
-                            Text {
-                                Layout.preferredWidth: Config.scaled(30, defaultsSection.defaultsUiScale)
-                                text: defaultRow.entry.disabled ? "OFF" : "ON"
-                                color: defaultRow.entry.disabled ? Config.fgcolordark : Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                                font.bold: true
-                            }
-
-                            Text {
-                                text: "|"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                Layout.preferredWidth: Config.scaled(150, defaultsSection.defaultsUiScale)
-                                // Ceil, not round - hyprctl reports a
-                                // display's actual negotiated refresh
-                                // rate as something like 59.992hz, never
-                                // exactly 60, and rounding to the
-                                // nearest whole number would occasionally
-                                // land one hz short of the rate it's
-                                // actually advertised/sold at.
-                                text: defaultRow.entry.width + " x " + defaultRow.entry.height + " @ " + Math.ceil(defaultRow.entry.refresh) + "hz"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                text: "|"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                Layout.preferredWidth: Config.scaled(90, defaultsSection.defaultsUiScale)
-                                text: defaultRow.entry.x + " & " + defaultRow.entry.y
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                text: "|"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                text: defaultRow.entry.scale + "x"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Text {
-                                text: "|"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            // Workspace numbers pinned to this monitor by
-                            // default (resolveWorkspaceAssignment()'s own
-                            // sorted output, from computeCurrentSnapshot()/
-                            // setDefault() - see their own comments), same
-                            // "1-5, space separated" shorthand as the
-                            // numbered buttons above.
-                            Text {
-                                text: (defaultRow.entry.workspaces || []).join(" ")
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-                    }
-
-                    // Which monitor Set Default saved as primary (its
-                    // "__primary" key, see setDefault()).
-                    Text {
-                        visible: !!root.screensStore.__primary
-                        text: "Primary: " + (root.screensStore.__primary || "")
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(12, defaultsSection.defaultsUiScale)
-                    }
-
-                    Item { Layout.fillHeight: true }
                 }
             }
         }
@@ -2123,6 +2568,13 @@ Item {
                 prefix: "Dbl"
                 iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
                 label: "Set as Primary"
+            }
+
+            HintItem {
+                uiScale: root.uiScale
+                prefix: "Drag"
+                iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
+                label: "Arrange Displays"
             }
 
             Item { Layout.fillWidth: true }

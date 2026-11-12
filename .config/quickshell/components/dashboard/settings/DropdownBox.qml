@@ -13,6 +13,9 @@ import "../../../Config.js" as Config
 // this item, because a z only counts among siblings: anything later in the
 // layout would still sit on top of a list hanging off this item, and take
 // its clicks. While it's open, a click anywhere else only closes it.
+//
+// maxVisibleRows caps how tall the open list gets: past that it scrolls,
+// opening with the current option in view. 0 shows every option at once.
 Item {
     id: root
 
@@ -20,6 +23,7 @@ Item {
     property var options: []
     property int currentIndex: 0
     property bool open: false
+    property int maxVisibleRows: 0
 
     signal activated(int index)
 
@@ -29,6 +33,9 @@ Item {
     // Options overlap the box and each other by one border, so the column
     // reads as single 2px lines.
     readonly property real listHeight: root.options.length * (root.rowHeight - root.borderWidth) + root.borderWidth
+    readonly property real shownListHeight: (root.maxVisibleRows > 0 && root.options.length > root.maxVisibleRows)
+        ? root.maxVisibleRows * (root.rowHeight - root.borderWidth) + root.borderWidth
+        : root.listHeight
 
     implicitWidth: Config.scaled(100, root.uiScale)
     implicitHeight: root.rowHeight
@@ -41,11 +48,13 @@ Item {
         if (!root.open) return
         const box = root.mapToItem(overlay, 0, 0)
         const below = box.y + root.rowHeight - root.borderWidth
-        const above = box.y + root.borderWidth - root.listHeight
+        const above = box.y + root.borderWidth - root.shownListHeight
         list.x = box.x
-        if (below + root.listHeight <= overlay.height) list.y = below
+        if (below + root.shownListHeight <= overlay.height) list.y = below
         else if (above >= 0) list.y = above
-        else list.y = Math.max(0, overlay.height - root.listHeight)
+        else list.y = Math.max(0, overlay.height - root.shownListHeight)
+        const centred = root.currentIndex * (root.rowHeight - root.borderWidth) - (root.shownListHeight - root.rowHeight) / 2
+        list.contentY = Math.max(0, Math.min(root.listHeight - root.shownListHeight, centred))
     }
 
     Rectangle {
@@ -135,60 +144,81 @@ Item {
             x: list.x
             y: list.y
             width: root.width
-            height: root.listHeight
+            height: root.shownListHeight
             color: "#000000"
         }
 
-        Column {
+        Flickable {
             id: list
 
             width: root.width
-            spacing: -root.borderWidth
+            height: root.shownListHeight
+            contentWidth: root.width
+            contentHeight: root.listHeight
+            clip: true
+            interactive: root.listHeight > root.shownListHeight
+            boundsBehavior: Flickable.StopAtBounds
 
-            Repeater {
-                model: root.options
+            Column {
+                width: root.width
+                spacing: -root.borderWidth
 
-                Rectangle {
-                    id: option
+                Repeater {
+                    model: root.options
 
-                    required property var modelData
-                    required property int index
+                    Rectangle {
+                        id: option
 
-                    width: root.width
-                    height: root.rowHeight
-                    color: optionMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.width: root.borderWidth
-                    border.color: option.index === root.currentIndex ? Config.fgcolorlight : Config.fgcolor
-                    // The highlighted option's border sits over its neighbours'.
-                    z: option.index === root.currentIndex ? 1 : 0
+                        required property var modelData
+                        required property int index
 
-                    Text {
-                        anchors {
-                            left: parent.left
-                            leftMargin: Config.scaled(8, root.uiScale)
-                            right: parent.right
-                            rightMargin: Config.scaled(8, root.uiScale)
-                            verticalCenter: parent.verticalCenter
+                        width: root.width
+                        height: root.rowHeight
+                        color: optionMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                        border.width: root.borderWidth
+                        border.color: option.index === root.currentIndex ? Config.fgcolorlight : Config.fgcolor
+                        // The highlighted option's border sits over its neighbours'.
+                        z: option.index === root.currentIndex ? 1 : 0
+
+                        Text {
+                            anchors {
+                                left: parent.left
+                                leftMargin: Config.scaled(8, root.uiScale)
+                                right: parent.right
+                                rightMargin: Config.scaled(8, root.uiScale)
+                                verticalCenter: parent.verticalCenter
+                            }
+                            elide: Text.ElideRight
+                            text: option.modelData
+                            color: option.border.color
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
                         }
-                        elide: Text.ElideRight
-                        text: option.modelData
-                        color: option.border.color
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-                    }
 
-                    MouseArea {
-                        id: optionMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            root.open = false
-                            root.activated(option.index)
+                        MouseArea {
+                            id: optionMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                root.open = false
+                                root.activated(option.index)
+                            }
                         }
                     }
                 }
             }
+        }
+
+        // Where a scrolling list is: a thin bar down its right edge, sized
+        // and placed by how much of the list is in view.
+        Rectangle {
+            visible: list.interactive
+            x: list.x + root.width - width - root.borderWidth
+            y: list.y + list.contentY / root.listHeight * root.shownListHeight
+            width: Config.scaled(3, root.uiScale)
+            height: root.shownListHeight * root.shownListHeight / root.listHeight
+            color: Config.fgcolorlight
         }
     }
 }
