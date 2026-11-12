@@ -53,6 +53,7 @@ Scope {
     readonly property int sleepMinutes: root.settings.sleepMinutes
     readonly property int minSleepMinutes: root.settings.minSleepMinutes
     readonly property bool wakeUpLock: root.settings.wakeUpLock
+    readonly property bool wakeUpLockForced: root.settings.wakeUpLockForced
     readonly property bool perMonitor: root.settings.perMonitor
     readonly property bool sleepCountdown: root.settings.countdown
     readonly property int countdownSeconds: root.settings.countdownSeconds

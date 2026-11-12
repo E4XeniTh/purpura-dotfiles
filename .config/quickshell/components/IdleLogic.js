@@ -19,7 +19,10 @@ function readSettings(store) {
         autoSleep: s.autoSleep === true,
         minSleepMinutes: minSleepMinutes,
         sleepMinutes: wholeNumber(s.sleepMinutes, 60, minSleepMinutes),
-        wakeUpLock: s.wakeUpLock !== false,
+        // Always on while auto-lock is: sleeping unlocked would otherwise
+        // skip a lock the computer was about to get anyway.
+        wakeUpLock: s.autoLock !== false || s.wakeUpLock !== false,
+        wakeUpLockForced: s.autoLock !== false,
         perMonitor: s.perMonitor === true,
         countdown: s.countdown !== false,
         countdownSeconds: Math.min(240, wholeNumber(s.countdownSeconds, 30, 10))

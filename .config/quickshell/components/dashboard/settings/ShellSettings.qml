@@ -1859,6 +1859,7 @@ Item {
 
                     CheckRow {
                         Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
                         uiScale: root.uiScale
                         text: "Show time"
                         checked: !!root.idle && root.idle.showTime
@@ -1868,6 +1869,7 @@ Item {
 
                     CheckRow {
                         Layout.fillWidth: true
+                        Layout.leftMargin: Config.scaled(28, root.uiScale)
                         uiScale: root.uiScale
                         text: "Show media player (if active)"
                         checked: !!root.idle && root.idle.showMedia
@@ -1963,7 +1965,8 @@ Item {
                                 uiScale: root.uiScale
                                 text: "Wake up lock"
                                 checked: !!root.idle && root.idle.wakeUpLock
-                                usable: sleepOptions.usable
+                                // Locked on while auto-lock is.
+                                usable: sleepOptions.usable && !(root.idle && root.idle.wakeUpLockForced)
                                 onToggled: root.idle.setWakeUpLock(!root.idle.wakeUpLock)
                             }
 
@@ -1971,7 +1974,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: Config.scaled(28, root.uiScale)
                                 wrapMode: Text.WordWrap
-                                text: "Locks the screen before going to sleep, so the computer wakes up locked."
+                                text: "Locks the screen before going to sleep, so the computer wakes up locked. Always on while auto-lock is."
                                 color: Config.fgcolordark
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, root.uiScale)
