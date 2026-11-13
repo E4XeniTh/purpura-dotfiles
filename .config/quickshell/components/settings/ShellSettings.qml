@@ -1765,7 +1765,7 @@ Item {
                             Layout.topMargin: -Config.scaled(6, root.uiScale)
                             uiScale: root.uiScale
                             indented: false
-                            text: "How gradually the tint comes and goes, whether turned on by hand or by the schedule."
+                            text: "How gradually the schedule brings the tint in and takes it away. Switched by hand above, it changes at once."
                         }
                     }
                 }

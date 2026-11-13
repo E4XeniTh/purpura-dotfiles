@@ -5,9 +5,10 @@ import "NightLightLogic.js" as Fade
 
 // Night light: tints the screen warm through hyprsunset, driven live over
 // `hyprctl hyprsunset`. A manual toggle, a strength, an optional daily
-// schedule, and a fade that eases the tint in or out over a set time
-// whenever it turns on or off - through hyprsunset's 100 K steps, with
-// Hyprland gliding between them (see NightLightLogic.js).
+// schedule, and a fade that eases the tint in or out over a set time when
+// the schedule turns it on or off - through hyprsunset's 100 K steps, with
+// Hyprland gliding between them (see NightLightLogic.js). Switched by hand,
+// it changes at once.
 //
 // Unlike the other settings categories, this owns its settings file
 // (nightlightsettings.json) instead of only reading it: the schedule flips
@@ -51,7 +52,17 @@ Scope {
         writeTimer.restart()
     }
 
+    // By hand: at once.
     function setEnabled(on) { root.update({ enabled: !!on }) }
+
+    // By the schedule: faded. onEnabledChanged runs inside update(), so the
+    // flag is still up when it looks.
+    property bool scheduleSwitching: false
+    function scheduleSetEnabled(on) {
+        root.scheduleSwitching = true
+        root.update({ enabled: !!on })
+        root.scheduleSwitching = false
+    }
     function setStrength(value) { root.update({ strength: Math.round(Math.max(0, Math.min(1, value)) * 100) / 100 }) }
     function setScheduled(on) { root.update({ scheduled: !!on }) }
     function setSchedule(start, end) { root.update({ scheduleStart: start, scheduleEnd: end }) }
@@ -121,10 +132,11 @@ Scope {
     // fade set to 0, and the last bit of fading out, from 6500 K to no tint.
     readonly property int quickGlideMs: 300
 
-    // A reversal partway through only takes the share of the fade time
-    // that's actually left to undo, so toggling twice quickly doesn't
-    // start a full-length fade back from almost nowhere.
-    function startFade() {
+    // `faded`: over the fade time, else the quick glide. A reversal
+    // partway through only takes the share of the fade time that's
+    // actually left to undo, so toggling twice quickly doesn't start a
+    // full-length fade back from almost nowhere.
+    function startFade(faded) {
         if (!root.started) return
         // Worked out here, from `enabled` itself, so it can't be a step
         // behind the change that called this.
@@ -132,7 +144,7 @@ Scope {
         const distance = Math.abs(target - root.currentMired)
         const full = Math.abs(root.miredFor(root.strength) - root.neutralMired)
         fadeTimer.stop()
-        if (root.fadeMs <= 0 || distance < 0.5 || full < 0.5) {
+        if (!faded || root.fadeMs <= 0 || distance < 0.5 || full < 0.5) {
             root.fading = false
             root.currentMired = target
             root.show(root.quickGlideMs)
@@ -174,14 +186,14 @@ Scope {
         }
     }
 
-    onEnabledChanged: root.startFade()
+    onEnabledChanged: root.startFade(root.scheduleSwitching)
 
     // Strength edits apply straight away (it's a live preview while
     // dragging); mid-fade, the fade carries on toward the new strength.
     onStrengthChanged: {
         if (!root.started || !root.enabled) return
         if (root.fading) {
-            root.startFade()
+            root.startFade(true)
         } else {
             root.currentMired = root.miredFor(root.strength)
             root.show(root.quickGlideMs)
@@ -209,7 +221,7 @@ Scope {
     function syncSchedule() {
         if (!root.scheduled) return
         root.lastInWindow = root.inWindow(root.minutesNow(), root.scheduleStart, root.scheduleEnd)
-        if (root.enabled !== root.lastInWindow) root.setEnabled(root.lastInWindow)
+        if (root.enabled !== root.lastInWindow) root.scheduleSetEnabled(root.lastInWindow)
     }
 
     onScheduledChanged: if (root.started) root.syncSchedule()
@@ -226,7 +238,7 @@ Scope {
             const inside = root.inWindow(root.minutesNow(), root.scheduleStart, root.scheduleEnd)
             if (inside !== root.lastInWindow) {
                 root.lastInWindow = inside
-                root.setEnabled(inside)
+                root.scheduleSetEnabled(inside)
             }
         }
     }
