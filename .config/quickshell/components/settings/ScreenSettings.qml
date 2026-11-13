@@ -223,11 +223,38 @@ Item {
     // monitor on a fresh setup or once a monitor gets disabled.
     property var pendingWorkspaces: ({})
 
+    // A monitor's pins: staged here, else what the last Apply this login
+    // pinned (liveworkspaces.json's "pins" - Apply doesn't touch
+    // monitors.json, so without this the buttons fell back to the saved
+    // default right after applying, and Set Default saw nothing new to
+    // save), else the saved default.
     function workspacesFor(name) {
         if (root.pendingWorkspaces[name] !== undefined) return root.pendingWorkspaces[name]
+        const live = root.liveWorkspaces[name]
+        if (live && Array.isArray(live.pins)) return live.pins
         const stored = root.screensStore[name]
         return (stored && stored.workspaces) ? stored.workspaces : []
     }
+
+    // liveworkspaces.json: per monitor, "workspaces" - what's live, read by
+    // WorkspaceRow.qml/WorkspaceOsd.qml - and "pins", what was picked with
+    // the buttons. They differ while a monitor's off: its pins are kept for
+    // when it's back, its workspaces are live on another monitor. Login
+    // (apply-monitors.sh) writes it fresh from monitors.json, with no pins.
+    property var liveWorkspacesWritten: null
+    readonly property var liveWorkspaces: {
+        if (root.liveWorkspacesWritten !== null) return root.liveWorkspacesWritten
+        try {
+            const parsed = JSON.parse(liveWorkspacesFile.text())
+            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
+        } catch (e) {
+            return {}
+        }
+    }
+    readonly property bool hasLivePins: Object.keys(root.liveWorkspaces).some(k => {
+        const entry = root.liveWorkspaces[k]
+        return entry && Array.isArray(entry.pins)
+    })
 
     // Reassigns workspace `num` to monitor `name`, stealing it from
     // whichever monitor currently owns it if any (only one monitor may
@@ -1281,8 +1308,12 @@ Item {
         // so it's never stale even before this session's first Apply.
         const liveWorkspacesSnapshot = {}
         for (const name in resolved) {
-            liveWorkspacesSnapshot[name] = { workspaces: resolved[name] }
+            liveWorkspacesSnapshot[name] = {
+                workspaces: resolved[name],
+                pins: root.workspacesFor(name).filter(num => num <= 5)
+            }
         }
+        root.liveWorkspacesWritten = liveWorkspacesSnapshot
         liveWorkspacesFile.setText(JSON.stringify(liveWorkspacesSnapshot, null, 2) + "\n")
 
         // Monitor enable/disable/geometry lines go out first. If any
@@ -1844,6 +1875,8 @@ Item {
     // changes while still on a fresh, unconfigured setup.
     function seedDefaultWorkspacesIfFresh() {
         if (root.hasRealMonitorsConfig) return
+        // Pinned by an Apply this login already - not fresh.
+        if (root.hasLivePins) return
         if (!root.effectivePrimaryName) return
         if (root.pendingWorkspaces[root.effectivePrimaryName] !== undefined) return
 
@@ -1914,15 +1947,20 @@ Item {
         preload: false
     }
 
-    // Write-only from here too - WorkspaceRow.qml/WorkspaceOsd.qml each
-    // read this file back themselves via their own watchChanges
-    // FileView, same split as monitorsFile/barSettingsFile above. See
-    // applyChanges()'s own comment on liveWorkspacesSnapshot for why
-    // this is a genuinely separate file from monitors.json now.
+    // WorkspaceRow.qml/WorkspaceOsd.qml read this file's "workspaces" back
+    // through their own watchChanges FileView; this one reads its "pins"
+    // (see liveWorkspaces) - watched too, since the bar's brightness menu
+    // applies through its own copy of this file. See applyChanges()'s own
+    // comment on liveWorkspacesSnapshot for why this is a separate file from
+    // monitors.json.
     FileView {
         id: liveWorkspacesFile
         path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
-        preload: false
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.liveWorkspacesWritten = null
     }
 
     // ---------------- DDC/CI + brightnessctl brightness ----------------
