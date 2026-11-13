@@ -13,7 +13,8 @@ import Quickshell.Hyprland
 // stays put.
 //
 // Also the input language shortcut (META + -): the next language, and an
-// OSD (LanguageOsd.qml) saying which one's on.
+// OSD (LanguageOsd.qml) saying which one's on - with only one language,
+// neither: nothing to switch to, and the OSD never shows.
 Scope {
     id: root
 
@@ -69,29 +70,61 @@ Scope {
         if (root.layoutLua !== "") Quickshell.execDetached(["hyprctl", "eval", root.layoutLua])
     }
 
+    // How many input languages there are: the ticked ones - or, none saved
+    // yet, how many Hyprland has (hyprland.lua's kb_layout), asked at
+    // startup and after every config reload.
+    property int liveLanguageCount: 0
+    readonly property int languageCount: root.layouts.length > 0 ? root.layouts.length : root.liveLanguageCount
+    readonly property bool multipleLanguages: root.languageCount > 1
+
+    function countLiveLanguages() {
+        liveLanguagesProcess.running = false
+        liveLanguagesProcess.running = true
+    }
+
+    Process {
+        id: liveLanguagesProcess
+
+        command: ["hyprctl", "devices", "-j"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const keyboards = JSON.parse(text).keyboards || []
+                    const main = keyboards.find(k => k.main) || keyboards[0]
+                    root.liveLanguageCount = main && main.layout
+                        ? String(main.layout).split(",").filter(code => code.trim().length > 0).length
+                        : 0
+                } catch (e) {
+                    root.liveLanguageCount = 0
+                }
+            }
+        }
+    }
+
     onPointerLuaChanged: Quickshell.execDetached(["hyprctl", "eval", root.pointerLua])
     onLayoutLuaChanged: {
         if (root.layoutLua !== "") Quickshell.execDetached(["hyprctl", "eval", root.layoutLua])
     }
 
-    Component.onCompleted: root.apply()
+    Component.onCompleted: {
+        root.apply()
+        root.countLiveLanguages()
+    }
 
     // ---------------- the input language shortcut ----------------
-    // With more than one language, the next one, named by Hyprland's
-    // "activelayout" event that follows (one per keyboard - they all say
-    // the same). With one, just which one it is.
+    // The next language, named by Hyprland's "activelayout" event that
+    // follows (one per keyboard - they all say the same). With only one
+    // language, nothing at all.
     property bool awaitingSwitch: false
     property bool shownSinceSwitch: false
 
     function nextLanguage() {
-        if (root.layouts.length > 1) {
-            root.awaitingSwitch = true
-            root.shownSinceSwitch = false
-            switchTimer.restart()
-            Quickshell.execDetached(["hyprctl", "switchxkblayout", "all", "next"])
-        } else {
-            root.showActiveLanguage()
-        }
+        if (!root.multipleLanguages) return
+        root.awaitingSwitch = true
+        root.shownSinceSwitch = false
+        switchTimer.restart()
+        Quickshell.execDetached(["hyprctl", "switchxkblayout", "all", "next"])
     }
 
     function showLanguage(name) {
@@ -139,6 +172,7 @@ Scope {
         function onRawEvent(event) {
             if (event.name === "configreloaded") {
                 root.apply()
+                root.countLiveLanguages()
             } else if (event.name === "activelayout" && root.awaitingSwitch) {
                 // "keyboard name,layout name" - the name itself can hold
                 // commas, the keyboard's can't.

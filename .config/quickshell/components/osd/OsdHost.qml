@@ -17,7 +17,8 @@ import "../../Config.js" as Config
 //
 // Each OSD decides when it shows (shouldShowOsd) and hands over its box as
 // a Component with uiScale (OSD size included) and borderScale (without)
-// properties; this lays them out, in `osds` order.
+// properties; this lays them out, in `osds` order. One with `available`
+// false is left out of the preview too.
 Scope {
     id: root
 
@@ -190,7 +191,8 @@ Scope {
 
                         required property var modelData
 
-                        readonly property bool shown: root.previewing || !!(osdLoader.modelData && osdLoader.modelData.shouldShowOsd)
+                        readonly property bool shown: !!osdLoader.modelData
+                            && ((root.previewing && osdLoader.modelData.available !== false) || osdLoader.modelData.shouldShowOsd)
 
                         // Faded in from nothing, even when it comes up with
                         // the window: the fade starts once it's made.

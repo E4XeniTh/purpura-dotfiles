@@ -81,7 +81,8 @@ Scope {
     dashboard: dashboard
   }
 
-  LanguageOsd { id: languageOsd }
+  // Never with just one input language.
+  LanguageOsd { id: languageOsd; available: inputDevices.multipleLanguages }
 
   // Shows the three above - size, place and stacking from Settings >
   // General > Shell > OSD - on the bar's monitor.

@@ -11,10 +11,17 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
+    // Only with more than one input language (shell.qml binds this to
+    // InputDevices.qml) - with one, it never shows, not even in the OSD
+    // settings' preview.
+    property bool available: true
+    onAvailableChanged: if (!root.available) root.shouldShowOsd = false
+
     property string language: ""
     property bool shouldShowOsd: false
 
     function show(name) {
+        if (!root.available) return
         root.language = name
         root.shouldShowOsd = true
         hideTimer.restart()
