@@ -574,7 +574,7 @@ Scope {
                             text: "yay/flatpak"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
+                            font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
                             font.bold: true
                         }
 
@@ -675,30 +675,32 @@ Scope {
                             color: Config.fgcolor
                         }
 
-                        Text {
+                        // The title, and "up to date" / "update available"
+                        // on the right, like the list's "N available".
+                        RowLayout {
                             Layout.fillWidth: true
                             Layout.bottomMargin: Config.scaled(2, dropdownWindow.uiScale)
-                            text: "purpura"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
-                            font.bold: true
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: "purpura"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
+                                font.bold: true
+                            }
+
+                            Text {
+                                text: root.purpuraStatus
+                                color: root.purpuraUpdateAvailable ? Config.fgcolorlight : Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                                font.bold: root.purpuraUpdateAvailable
+                            }
                         }
 
-                        // Centred under the title: "up to date" / "update
-                        // available", and just below it the version -
-                        // installed -> newest, or what's installed and when.
-                        Text {
-                            Layout.fillWidth: true
-                            visible: text.length > 0
-                            text: root.purpuraStatus
-                            horizontalAlignment: Text.AlignHCenter
-                            color: root.purpuraUpdateAvailable ? Config.fgcolorlight : Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
-                            font.bold: root.purpuraUpdateAvailable
-                        }
-
+                        // Centred below: the version - installed -> newest,
+                        // or what's installed and when.
                         Text {
                             Layout.fillWidth: true
                             visible: text.length > 0
