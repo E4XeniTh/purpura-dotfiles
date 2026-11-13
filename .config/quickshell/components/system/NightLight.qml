@@ -1,11 +1,13 @@
 import Quickshell
 import Quickshell.Io
 import QtQuick
+import "NightLightLogic.js" as Fade
 
 // Night light: tints the screen warm through hyprsunset, driven live over
 // `hyprctl hyprsunset`. A manual toggle, a strength, an optional daily
 // schedule, and a fade that eases the tint in or out over a set time
-// whenever it turns on or off.
+// whenever it turns on or off - through hyprsunset's 100 K steps, with
+// Hyprland gliding between them (see NightLightLogic.js).
 //
 // Unlike the other settings categories, this owns its settings file
 // (nightlightsettings.json) instead of only reading it: the schedule flips
@@ -104,69 +106,85 @@ Scope {
         return root.neutralMired + (root.warmestMired - root.neutralMired) * strength
     }
 
-    readonly property real targetMired: root.enabled ? root.miredFor(root.strength) : root.neutralMired
-
-    // What the screen is showing right now - eased toward targetMired
-    // while fading.
+    // What the screen is heading to - the end of a fade, or where it is.
     property real currentMired: root.neutralMired
 
     // ---------------- fade ----------------
     property bool fading: false
     property real fadeFrom: 0
+    property real fadeTo: 0
     property real fadeStartMs: 0
     property real fadeDurationMs: 0
+    property bool stepIsLast: false
+
+    // How quickly anything that isn't a fade glides: a strength change, a
+    // fade set to 0, and the last bit of fading out, from 6500 K to no tint.
+    readonly property int quickGlideMs: 300
 
     // A reversal partway through only takes the share of the fade time
     // that's actually left to undo, so toggling twice quickly doesn't
     // start a full-length fade back from almost nowhere.
     function startFade() {
         if (!root.started) return
-        const distance = Math.abs(root.targetMired - root.currentMired)
+        // Worked out here, from `enabled` itself, so it can't be a step
+        // behind the change that called this.
+        const target = root.enabled ? root.miredFor(root.strength) : root.neutralMired
+        const distance = Math.abs(target - root.currentMired)
         const full = Math.abs(root.miredFor(root.strength) - root.neutralMired)
-        const totalMs = root.fadeMs
-        if (totalMs <= 0 || distance < 0.5 || full < 0.5) {
+        fadeTimer.stop()
+        if (root.fadeMs <= 0 || distance < 0.5 || full < 0.5) {
             root.fading = false
-            fadeTimer.stop()
-            root.currentMired = root.targetMired
-            root.push()
+            root.currentMired = target
+            root.show(root.quickGlideMs)
             return
         }
         root.fadeFrom = root.currentMired
+        root.fadeTo = target
         root.fadeStartMs = Date.now()
-        root.fadeDurationMs = totalMs * Math.min(1, distance / full)
+        root.fadeDurationMs = root.fadeMs * Math.min(1, distance / full)
         root.fading = true
-        fadeTimer.restart()
-        root.tick()
+        root.step()
     }
 
-    // Progress comes from the clock, not a tick count, so a suspend mid-fade
-    // just finishes it on wake.
-    function tick() {
+    // The next step, and a wait until it's due. Timed off the clock, so a
+    // suspend mid-fade just finishes it on wake.
+    function step() {
         if (!root.fading) return
-        const progress = Math.min(1, (Date.now() - root.fadeStartMs) / root.fadeDurationMs)
-        root.currentMired = root.fadeFrom + (root.targetMired - root.fadeFrom) * progress
-        if (progress >= 1) {
-            root.fading = false
-            fadeTimer.stop()
-        }
-        root.push()
+        const next = Fade.nextStep(root.fadeFrom, root.fadeTo, root.fadeDurationMs,
+                                   Date.now() - root.fadeStartMs, Math.round(1e6 / root.currentMired))
+        root.currentMired = next.last ? root.fadeTo : 1e6 / next.kelvin
+        root.stepIsLast = next.last
+        root.send(next.kelvin, next.glideMs)
+        fadeTimer.interval = Math.max(1, Math.round(next.waitMs))
+        fadeTimer.restart()
     }
 
     Timer {
         id: fadeTimer
-        interval: 1000
-        repeat: true
-        onTriggered: root.tick()
+
+        repeat: false
+        onTriggered: {
+            if (!root.stepIsLast) {
+                root.step()
+                return
+            }
+            root.fading = false
+            // Faded out to 6500 K: now no tint at all.
+            if (!root.enabled) root.show(root.quickGlideMs)
+        }
     }
 
     onEnabledChanged: root.startFade()
 
     // Strength edits apply straight away (it's a live preview while
-    // dragging); mid-fade, tick() already eases toward the new target.
+    // dragging); mid-fade, the fade carries on toward the new strength.
     onStrengthChanged: {
-        if (root.started && root.enabled && !root.fading) {
-            root.currentMired = root.targetMired
-            root.push()
+        if (!root.started || !root.enabled) return
+        if (root.fading) {
+            root.startFade()
+        } else {
+            root.currentMired = root.miredFor(root.strength)
+            root.show(root.quickGlideMs)
         }
     }
 
@@ -240,14 +258,19 @@ Scope {
         if (root.started || !root.storeReady || !root.availabilityKnown) return
         root.syncSchedule()
         root.started = true
-        root.currentMired = root.targetMired
+        root.currentMired = root.enabled ? root.miredFor(root.strength) : root.neutralMired
         if (root.available) root.spawnDaemon()
     }
 
     // 0 = identity (no tint at all).
     function desiredKelvin() {
         if (!root.enabled && !root.fading) return 0
-        return Math.round(1e6 / root.currentMired / 10) * 10
+        return Math.round(1e6 / root.currentMired)
+    }
+
+    // Where things stand now, gliding there over `glideMs`.
+    function show(glideMs) {
+        root.send(root.desiredKelvin(), glideMs)
     }
 
     // Kept running for the whole session, even while off (at identity):
@@ -258,7 +281,7 @@ Scope {
     property int quickExits: 0
 
     // Off starts at a neutral 6500K and is switched to true identity over
-    // IPC once it's up (lastSentKelvin = -1 makes push() send it) - only
+    // IPC once it's up (lastSentKelvin = -1 makes send() send it) - only
     // `-t` and the IPC commands are relied on, not a startup identity flag.
     function spawnDaemon() {
         const k = root.desiredKelvin()
@@ -291,7 +314,13 @@ Scope {
         repeat: false
         onTriggered: {
             root.daemonUp = hyprsunsetProcess.running
-            root.push()
+            if (root.queued) {
+                const request = root.queued
+                root.queued = null
+                root.send(request.kelvin, request.glideMs)
+            } else {
+                root.show(root.quickGlideMs)
+            }
         }
     }
 
@@ -302,45 +331,66 @@ Scope {
         onTriggered: root.spawnDaemon()
     }
 
-    // One hyprctl call in flight at a time; anything that changes meanwhile
-    // goes out when it returns, so a fast slider drag sends at the rate
-    // hyprsunset can keep up with.
+    // ---------------- talking to hyprsunset ----------------
+    // Each change goes out with how long Hyprland should glide to it: its
+    // __internal_fadeCTM animation is set just before (a config reload puts
+    // it back to half a second; the next change sets it again). One at a
+    // time - a change asked for meanwhile waits, the latest replacing any
+    // older one - so a fast slider drag sends at the rate hyprsunset can
+    // keep up with.
     property int lastSentKelvin: -1
-    property int inFlightKelvin: -1
-    property bool sendQueued: false
+    property var queued: null
+    property var inFlight: null
 
-    function push() {
-        if (!root.daemonUp) return
-        const k = root.desiredKelvin()
-        if (k === root.lastSentKelvin) return
-        if (ipcProcess.running) {
-            root.sendQueued = true
+    function send(kelvin, glideMs) {
+        const request = { kelvin: kelvin, glideMs: glideMs }
+        if (!root.daemonUp || sendProcess.running) {
+            root.queued = request
             return
         }
-        ipcProcess.command = k === 0 ? ["hyprctl", "hyprsunset", "identity"] : ["hyprctl", "hyprsunset", "temperature", String(k)]
-        root.inFlightKelvin = k
-        ipcProcess.running = true
+        root.queued = null
+        if (kelvin === root.lastSentKelvin) return
+        // Tenths of a second, 0.1 - 10.
+        const speed = Math.max(1, Math.min(100, glideMs / 100))
+        sendProcess.command = ["sh", "-c", "hyprctl eval \"$1\" >/dev/null 2>&1; hyprctl hyprsunset $2", "nightlight",
+            "hl.animation({ leaf = \"__internal_fadeCTM\", enabled = true, speed = " + speed.toFixed(2) + ", bezier = \"linear\" })",
+            kelvin === 0 ? "identity" : "temperature " + kelvin]
+        root.inFlight = request
+        sendProcess.running = true
     }
 
     Process {
-        id: ipcProcess
+        id: sendProcess
+
         onExited: (exitCode, exitStatus) => {
+            const request = root.inFlight
+            root.inFlight = null
             if (exitCode === 0) {
-                root.lastSentKelvin = root.inFlightKelvin
-            } else {
-                ipcRetryTimer.restart()
+                root.lastSentKelvin = request.kelvin
+            } else if (!root.queued) {
+                // Try it again in a moment, unless something newer's waiting.
+                root.queued = request
+                sendRetryTimer.restart()
+                return
             }
-            if (root.sendQueued) {
-                root.sendQueued = false
-                root.push()
+            if (root.queued) {
+                const next = root.queued
+                root.queued = null
+                root.send(next.kelvin, next.glideMs)
             }
         }
     }
 
     Timer {
-        id: ipcRetryTimer
+        id: sendRetryTimer
+
         interval: 1000
         repeat: false
-        onTriggered: root.push()
+        onTriggered: {
+            if (!root.queued) return
+            const request = root.queued
+            root.queued = null
+            root.send(request.kelvin, request.glideMs)
+        }
     }
 }
