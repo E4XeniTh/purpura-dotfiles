@@ -165,7 +165,9 @@ Item {
                 Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
+                // Against the right edge, mirroring Playback across the divider.
                 Text {
+                    Layout.alignment: Qt.AlignRight
                     text: "Recording"
                     color: Config.fgcolor
                     font.family: Config.fontfamily
