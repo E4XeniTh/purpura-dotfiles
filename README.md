@@ -292,11 +292,14 @@ package lists are the exact set):
   against each item's own id/title, since apps aren't consistent about
   which of the two they actually set.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
-- Monitor layout (resolution, position, scale, on/off) is set from the
-  dashboard's Screen settings panel, not hardcoded in `hyprland.lua` -
-  that file only defines the primary display. Changes are saved to
-  `~/.config/quickshell/monitors.json` (gitignored - machine-specific)
-  and replayed by `scripts/apply-monitors.sh` on every login.
+- Monitor layout (resolution, position, scale, on/off, pinned
+  workspaces) is set in Settings > Display, not hardcoded in
+  `hyprland.lua` - that file only defines the primary display. Set
+  Default saves it to `~/.config/quickshell/monitors.json` (gitignored -
+  machine-specific), and `scripts/apply-monitors.sh` replays it on every
+  login: the monitors first, then, once they've settled, each pinned
+  workspace moved onto its monitor and every monitor switched to its
+  lowest pin, ending on the primary.
 - The lock screen is a real session lock, so if the shell ever dies while
   it's up - or it won't take your password - the session stays locked.
   To get back in, switch to another TTY (Ctrl+Alt+F3), log in, and run
