@@ -122,7 +122,7 @@ Item {
     // these back (and shows a preview whenever one changes).
     readonly property real osdSize: {
         const n = Number(root.barStore.osdSize)
-        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 0.8
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 1
     }
     readonly property var osdPositions: [
         { value: "top-left", label: "Top left" }, { value: "top", label: "Top-center" }, { value: "top-right", label: "Top right" },
@@ -133,13 +133,13 @@ Item {
     readonly property bool osdInCorner: root.osdPosition.endsWith("left") || root.osdPosition.endsWith("right")
     readonly property string osdStacking: root.osdInCorner || root.barStore.osdStacking === "vertical" ? "vertical" : "horizontal"
 
-    // 50 - 120% (80% unless set - see OsdHost.qml), in steps of 5.
+    // 50 - 120% (100% unless set - see OsdHost.qml), in steps of 5.
     function setOsdSize(size) { root.setBarSetting("osdSize", Math.round(Math.max(0.5, Math.min(1.2, size)) * 20) / 20) }
     function setOsdPosition(position) { root.setBarSetting("osdPosition", position) }
     function setOsdStacking(stacking) { if (!root.osdInCorner) root.setBarSetting("osdStacking", stacking) }
 
     // The workspace OSD's own size - WorkspaceOsd.qml reads it back. 50 -
-    // 120% like the others, but 100% unless set: the size it's always been.
+    // 120%, 100% unless set, like the others.
     readonly property real workspaceOsdSize: {
         const n = Number(root.barStore.workspaceOsdSize)
         return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 1

@@ -47,10 +47,10 @@ Scope {
         }
     }
 
-    // 50 - 120%, 80% unless set.
+    // 50 - 120%, 100% unless set.
     readonly property real size: {
         const n = Number(root.store.osdSize)
-        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 0.8
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 1
     }
     readonly property var positions: ["top-left", "top", "top-right", "bottom-left", "bottom", "bottom-right"]
     readonly property string position: root.positions.indexOf(root.store.osdPosition) >= 0 ? root.store.osdPosition : "bottom"
