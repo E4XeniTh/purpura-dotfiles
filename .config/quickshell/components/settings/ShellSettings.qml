@@ -138,6 +138,14 @@ Item {
     function setOsdPosition(position) { root.setBarSetting("osdPosition", position) }
     function setOsdStacking(stacking) { if (!root.osdInCorner) root.setBarSetting("osdStacking", stacking) }
 
+    // The workspace OSD's own size - WorkspaceOsd.qml reads it back. 50 -
+    // 120% like the others, but 100% unless set: the size it's always been.
+    readonly property real workspaceOsdSize: {
+        const n = Number(root.barStore.workspaceOsdSize)
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 1
+    }
+    function setWorkspaceOsdSize(size) { root.setBarSetting("workspaceOsdSize", Math.round(Math.max(0.5, Math.min(1.2, size)) * 20) / 20) }
+
     // ---------------- Input (peripheralsettings.json) ----------------
     property var peripheralsStore: ({})
 
@@ -721,10 +729,16 @@ Item {
                         visible: root.currentCategory === 0
                         spacing: Config.scaled(10, root.uiScale)
 
+                    // ---------------- Main Bar ----------------
+                    SectionHeader {
+                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "Main Bar"
+                    }
+
                     // ---------------- only managed workspaces in widget ----------------
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
                         spacing: Config.scaled(8, root.uiScale)
 
                         Rectangle {
@@ -810,49 +824,6 @@ Item {
                         text: "Pinned workspaces that haven't been opened yet still get a box in the bar's workspace list, to click straight to."
                     }
 
-                    // ---------------- show empty workspaces (osd) ----------------
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.showEmptyOsd ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleShowEmptyOsd()
-                            }
-                        }
-
-                        Text {
-                            text: "Show Empty Workspaces In OSD"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleShowEmptyOsd()
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        text: "The same for the workspace popup that shows for a moment when you switch workspace."
-                    }
                     Item {}
                     // ---------------- brightness control ----------------
                     RowLayout {
@@ -1154,6 +1125,77 @@ Item {
                             text: root.osdInCorner
                                 ? "How they line up when more than one shows at once - always one above the other in a corner."
                                 : "How they line up when more than one shows at once: one above the other, or side by side."
+                        }
+                    }
+
+
+                    // ---------------- Workspace OSD ----------------
+                    // The row of workspaces that shows for a moment when you switch
+                    // workspace (WorkspaceOsd.qml). Changing its size shows it for a
+                    // moment, as a preview.
+                    SectionHeader {
+                        uiScale: root.uiScale
+                        text: "Workspace OSD"
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        RowLayout {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.fillWidth: false
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            Text {
+                                text: "Workspace OSD Size:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            Text {
+                                text: Math.round(root.workspaceOsdSize * 100) + "%"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+                        }
+
+                        // 50 - 120%, in steps of 5.
+                        DeviceSlider {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            uiScale: root.uiScale
+                            value: (root.workspaceOsdSize - 0.5) / 0.7
+                            onMoved: (newValue) => root.setWorkspaceOsdSize(0.5 + newValue * 0.7)
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How big the row of workspaces is that shows for a moment when you switch workspace."
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Show Empty Workspaces In OSD"
+                            checked: root.showEmptyOsd
+                            onToggled: root.toggleShowEmptyOsd()
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            text: "Pinned workspaces that haven't been opened yet still get a box in it."
                         }
                     }
 

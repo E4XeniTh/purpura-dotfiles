@@ -73,6 +73,40 @@ Scope {
         }
     }
 
+    // Settings > General > Shell > Workspace OSD's size: 50 - 120%, 100%
+    // unless set. Borders, and where it sits, don't change with it - it
+    // grows upward from the same place.
+    readonly property real osdSize: {
+        const n = Number(root.barSettingsStore.workspaceOsdSize)
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 1
+    }
+
+    // A moment's look at it after the size changes, so the setting shows
+    // what it does - on every monitor with workspaces to show. Not while
+    // the shell's starting, when the size changes from the default to
+    // what's saved as the file is read.
+    property bool previewing: false
+    property bool settled: false
+
+    onOsdSizeChanged: {
+        if (!root.settled) return
+        root.previewing = true
+        previewTimer.restart()
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        onTriggered: root.settled = true
+    }
+
+    Timer {
+        id: previewTimer
+
+        interval: 2000
+        onTriggered: root.previewing = false
+    }
+
     // A single Apply dispatches many sequential hyprctl eval calls (see
     // ScreenSettings.qml), each firing a live Hyprland raw event the
     // instant it lands - without coalescing, each osdWindow's
@@ -112,8 +146,11 @@ Scope {
 
             // The shell-wide per-screen scale (see Config.uiScale), so
             // box/text/border sizes track this screen's own resolution
-            // instead of assuming a fixed one.
-            readonly property real uiScale: Config.uiScale(modelData, root.shellScale)
+            // instead of assuming a fixed one - and on top of it, for the
+            // boxes and text, the Workspace OSD size. Borders and the
+            // position go by baseScale alone.
+            readonly property real baseScale: Config.uiScale(modelData, root.shellScale)
+            readonly property real uiScale: osdWindow.baseScale * root.osdSize
 
             readonly property var hyprMonitor: Hyprland.monitorFor(modelData)
 
@@ -258,7 +295,7 @@ Scope {
                 onTriggered: osdWindow.reallyVisible = false
             }
 
-            visible: osdWindow.reallyVisible
+            visible: osdWindow.reallyVisible || (root.previewing && osdWindow.monitorWorkspaces.length > 0)
 
             WlrLayershell.namespace: "workspace-osd"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -270,7 +307,7 @@ Scope {
             // in the middle of the screen. Horizontally this still centers
             // itself the same way VolumeOsd does (no left/right anchors set).
             anchors.bottom: true
-            margins.bottom: modelData.height / 8 + Config.scaled(84, osdWindow.uiScale) + osdWindow.boxPadding
+            margins.bottom: modelData.height / 8 + Config.scaled(84 + 20, osdWindow.baseScale)
             exclusiveZone: 0
             color: "transparent"
 
@@ -295,7 +332,7 @@ Scope {
             Rectangle {
                 anchors.fill: parent
                 color: Config.fillcolor
-                border.width: Config.scaled(2, osdWindow.uiScale)
+                border.width: Config.scaled(2, osdWindow.baseScale)
                 border.color: Config.fgcolor
                 radius: 0
 
@@ -313,7 +350,7 @@ Scope {
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
                             color: Config.fillcolor
-                            border.width: Config.scaled(2, osdWindow.uiScale)
+                            border.width: Config.scaled(2, osdWindow.baseScale)
                             border.color: Config.fgcolor
                             radius: 0
 
@@ -343,7 +380,7 @@ Scope {
                     width: osdWindow.boxWidth
                     height: osdWindow.boxHeight
                     color: "transparent"
-                    border.width: Config.scaled(3, osdWindow.uiScale)
+                    border.width: Config.scaled(3, osdWindow.baseScale)
                     border.color: Config.fgcolorlight
                     radius: 0
                     visible: osdWindow.activeIndex >= 0
