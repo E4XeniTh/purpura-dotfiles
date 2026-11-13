@@ -156,7 +156,11 @@ Item {
 
             readonly property real fontSize: Math.max(Config.scaled(9, root.uiScale),
                                                       Math.min(Config.scaled(14, root.uiScale), box.height / 7))
-            readonly property color textColor: box.info.enabled ? Config.fgcolor : Config.fgcolordark
+            // Every bit of text goes by the monitor's state alone, like the
+            // monitor list's cards: primary, enabled, disabled. Picking one
+            // only lights up its background.
+            readonly property color textColor: box.info.primary ? Config.fgcolorlight
+                : (box.info.enabled ? Config.fgcolor : Config.fgcolordark)
 
             x: root.viewX + (box.held ? root.dragX : box.info.x) * root.viewScale
             y: root.viewY + (box.held ? root.dragY : box.info.y) * root.viewScale
@@ -170,7 +174,7 @@ Item {
             // The same border colors as the monitor list's cards
             // (MonitorCard.qml): primary, enabled, disabled - overlapping
             // another one shows red too.
-            border.width: Config.scaled(box.info.selected ? 3 : 2, root.uiScale)
+            border.width: Config.scaled(2, root.uiScale)
             border.color: box.info.warn ? Config.fgcolorred
                 : (box.info.primary ? Config.fgcolorlight
                 : (box.info.enabled ? Config.fgcolor : Config.fgcolorred))
@@ -190,7 +194,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                     text: box.modelData
-                    color: box.info.selected ? Config.fgcolorlight : box.textColor
+                    color: box.textColor
                     font.family: Config.fontfamily
                     font.pixelSize: box.fontSize * 1.15
                     font.bold: true
@@ -202,7 +206,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
                     text: "PRIMARY"
-                    color: Config.fgcolorlight
+                    color: box.textColor
                     font.family: Config.fontfamily
                     font.pixelSize: box.fontSize * 0.85
                     font.bold: true

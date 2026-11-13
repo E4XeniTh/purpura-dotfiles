@@ -49,7 +49,8 @@ DashCard {
                 text: root.device.nickname.length > 0 ? root.device.nickname
                     : root.device.description.length > 0 ? root.device.description
                     : root.device.name
-                color: Config.fgcolor
+                // fgcolorlight on the default device, like its border.
+                color: root.isPrimary ? Config.fgcolorlight : Config.fgcolor
                 font.bold: true
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(16, root.uiScale)

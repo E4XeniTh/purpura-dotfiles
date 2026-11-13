@@ -44,7 +44,11 @@ DashCard {
     signal makePrimary()
     signal brightnessEdited(real value)
 
+    // Selecting it only lights up the background; the text goes by its
+    // state alone - primary, enabled, disabled - as in the arrangement view.
     color: root.selected ? Config.fgcolorhover : Config.fillcolor
+    readonly property color textColor: root.isPrimary ? Config.fgcolorlight
+        : (root.pendingEnabled ? Config.fgcolor : Config.fgcolordark)
     border.color: root.isPrimary ? Config.fgcolorlight : (root.pendingEnabled ? Config.fgcolor : Config.fgcolorred)
 
     MouseArea {
@@ -101,7 +105,7 @@ DashCard {
                 Layout.fillWidth: true
                 Layout.maximumWidth: implicitWidth
                 text: root.name
-                color: Config.fgcolor
+                color: root.textColor
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(14, root.uiScale)
                 font.bold: true
