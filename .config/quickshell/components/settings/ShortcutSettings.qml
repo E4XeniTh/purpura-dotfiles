@@ -4,11 +4,16 @@ import Quickshell.Io
 import "../../Config.js" as Config
 import "../common"
 import "controls"
+import "ShortcutsMouse.js" as MouseLayout
 
-// Settings > Shortcuts: a full-size keyboard, one rectangle per key, with its
-// implicit size fitted around it for SettingsScreen.qml's floating window.
-// Clicking a key opens a panel listing its binds, each with edit and remove
-// buttons, and a + button for adding a new one.
+// Settings > Shortcuts: a full-size keyboard, one rectangle per key, and a
+// mouse beside it, with its implicit size fitted around both for
+// SettingsScreen.qml's floating window. Clicking a key or mouse button opens a
+// panel listing its binds, each with edit and remove buttons, and a + button
+// for adding a new one. The mouse has its buttons, wheel up and down, and
+// Forward and Back on its left side; the + below its wheel opens a panel of
+// the rest (a tilting wheel, extra buttons 6 - 16, the F13 - F24 keys some
+// mice send), where pressing a button finds it too. See ShortcutsMouse.js.
 // Add and Edit share one form, which changes nothing until it's saved, so
 // cancelling or leaving the tab or the settings screen discards it.
 //
@@ -70,7 +75,10 @@ Item {
     // Croatian QWERTZ on an ISO board (hyprland.lua's kb_layout). `sym` is
     // the keysym name Hyprland binds by, so another layout needs its own
     // symbols here. Sizes and positions are in key units.
-    readonly property real keyboardUnitsWide: 22.5
+    // The mouse's body starts a key out from the numpad (which ends at 22.5),
+    // leaving room for the side buttons sticking out of its left edge.
+    readonly property real mouseLeft: 23.5
+    readonly property real keyboardUnitsWide: root.mouseLeft + MouseLayout.bodyWidth
     readonly property real keyboardUnitsTall: 6.25
     readonly property var lockedKeySyms: ["Super_L", "Shift_L", "Shift_R", "Control_L", "Control_R", "Alt_L", "ISO_Level3_Shift"]
 
@@ -118,10 +126,24 @@ Item {
         return out
     }
 
+    // The mouse's parts, in the same units (`more` is its +), and what + offers.
+    readonly property var mouseButtons: MouseLayout.layout(root.mouseLeft)
+    readonly property var moreButtons: MouseLayout.moreButtons()
+    readonly property var moreSyms: root.moreButtons.map(b => b.sym)
+    readonly property var mouseNames: MouseLayout.namesBySym(root.mouseButtons.concat(root.moreButtons))
+
+    // A combo as it's shown: mouse parts by name ("SUPER + Left button").
+    function prettyCombo(combo) {
+        return MouseLayout.prettyCombo(combo, root.mouseNames)
+    }
+
     // ---------------- actions offered for a new bind ----------------
+    // `button` ones only for mouse buttons: they follow the mouse while it's held.
     readonly property var actions: [
         { label: "Run command", command: true },
         { label: "Close window", lua: "hl.dsp.window.close()" },
+        { label: "Drag window", lua: "hl.dsp.window.drag()", button: true },
+        { label: "Resize window", lua: "hl.dsp.window.resize()", button: true },
         { label: "Toggle floating", lua: "hl.dsp.window.float({ action = \"toggle\" })" },
         { label: "Maximize", lua: "hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })" },
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
@@ -139,7 +161,9 @@ Item {
         { label: "Next input language", lua: "hl.dsp.global(\"quickshell:inputlanguage\")" },
         { label: "Global shortcuts", global: true }
     ]
-    readonly property var actionLabels: root.actions.map(a => a.label)
+    readonly property bool selectedIsButton: !!root.selectedKey && MouseLayout.isButton(root.selectedKey.sym)
+    readonly property var formActions: root.actions.filter(a => !a.button || root.selectedIsButton)
+    readonly property var actionLabels: root.formActions.map(a => a.label)
     // The shell's workspaces stop at 5 (see WorkspaceRow.qml).
     readonly property var workspaceLabels: ["1", "2", "3", "4", "5"]
     readonly property var modifierNames: ["SUPER", "CTRL", "ALT", "SHIFT"]
@@ -275,18 +299,20 @@ Item {
     }
 
     // The key under the mouse and what its hint shows, one line per described
-    // bind.
+    // bind - for the mouse's +, those of everything it offers.
     property var hoveredKey: null
     readonly property var hoveredHintLines: {
         if (!root.hoveredKey) return []
-        const sym = root.hoveredKey.sym.toLowerCase()
+        const syms = (root.hoveredKey.more ? root.moreSyms : [root.hoveredKey.sym]).map(s => s.toLowerCase())
         return root.allBinds
-            .filter(b => b.description && b.key.toLowerCase() === sym)
-            .map(b => b.combo + ": " + b.description)
+            .filter(b => b.description && syms.indexOf(b.key.toLowerCase()) !== -1)
+            .map(b => root.prettyCombo(b.combo) + ": " + b.description)
     }
 
     // The key whose panel is open; null when closed.
     property var selectedKey: null
+    // The mouse's more-buttons panel, open instead of a key's.
+    property bool pickingButton: false
     readonly property var selectedBinds: root.selectedKey
         ? root.allBinds.filter(b => b.key.toLowerCase() === root.selectedKey.sym.toLowerCase())
         : []
@@ -308,7 +334,7 @@ Item {
     }
     readonly property int formGlobalIndex: Math.max(0, root.globalNames.indexOf(root.formGlobal))
     readonly property string formPickedGlobal: root.globalNames[root.formGlobalIndex] || ""
-    readonly property var formActionEntry: root.actions[root.formAction]
+    readonly property var formActionEntry: root.formActions[root.formAction] || root.formActions[0]
     readonly property string formCombo: root.selectedKey ? root.modifierNames
         .filter(m => root.formModifiers.indexOf(m) !== -1)
         .concat([root.selectedKey.sym])
@@ -332,7 +358,9 @@ Item {
     readonly property bool formEditingUnknownAction: !!root.editingBind && !root.editingBind.own
     readonly property bool formCanKeepAction: root.formEditingUnknownAction && root.isEditing({ combo: root.formCombo })
     readonly property bool formKeepsAction: root.formCanKeepAction && root.formActionUnchanged
-    readonly property bool formValid: (!root.formCommandEmpty && !root.formGlobalEmpty) || root.formKeepsAction
+    readonly property bool formNeedsModifier: !!root.selectedKey && MouseLayout.needsModifier(root.selectedKey.sym, root.formModifiers)
+    readonly property bool formValid: root.formKeepsAction
+        || (!root.formCommandEmpty && !root.formGlobalEmpty && !root.formNeedsModifier)
 
     function isEditing(bind) {
         return !!root.editingBind && root.comboKey(bind.combo) === root.comboKey(root.editingBind.combo)
@@ -340,7 +368,23 @@ Item {
 
     function openKey(key) {
         root.closeForm()
+        root.pickingButton = false
         root.selectedKey = key
+    }
+
+    function openPicker() {
+        root.closeForm()
+        root.selectedKey = null
+        root.pickingButton = true
+        morePanel.forceActiveFocus()
+    }
+
+    // A button pressed, a wheel turned or a key typed in the more-buttons
+    // panel: its binds, wherever it's drawn. Nothing for what isn't anywhere.
+    function pickSym(sym) {
+        if (!sym) return
+        const entry = root.mouseButtons.concat(root.moreButtons).find(b => b.sym === sym)
+        if (entry) root.openKey(entry)
     }
 
     function resetForm() {
@@ -395,8 +439,8 @@ Item {
                 // A Lua escape JSON doesn't have: shown as Lua below.
             }
         }
-        for (let i = 0; i < root.actions.length; i++) {
-            const action = root.actions[i]
+        for (let i = 0; i < root.formActions.length; i++) {
+            const action = root.formActions[i]
             if (action.lua === lua) {
                 root.formAction = i
                 return
@@ -411,7 +455,7 @@ Item {
         }
         const shortcut = lua.match(/^hl\.dsp\.global\("([^"]+)"\)$/)
         if (shortcut) {
-            root.formAction = root.actions.findIndex(a => a.global)
+            root.formAction = root.formActions.findIndex(a => a.global)
             root.formGlobal = shortcut[1]
             return
         }
@@ -429,6 +473,7 @@ Item {
         root.formOpen = false
         root.editingBind = null
         root.selectedKey = null
+        root.pickingButton = false
         root.forceActiveFocus()
     }
 
@@ -566,7 +611,7 @@ Item {
 
     onActiveChanged: {
         if (root.active) root.refresh()
-        else if (root.selectedKey) root.closeKey()
+        else if (root.selectedKey || root.pickingButton) root.closeKey()
     }
     Component.onCompleted: root.refresh()
 
@@ -823,7 +868,85 @@ Item {
         }
     }
 
-    // ---------------- keyboard ----------------
+    // A key on the keyboard, a part of the mouse or a button in the
+    // more-buttons panel, placed and sized by whoever uses it: lit by what's
+    // bound to it, and clicked to open its binds - the mouse's + opens the
+    // more-buttons panel instead, lit by everything in it.
+    component KeyCap: Rectangle {
+        id: cap
+
+        required property var modelData
+        // Whether hovering shows the hint above it - the more-buttons panel's
+        // have no room for one.
+        property bool hints: true
+        readonly property real labelWidth: capLabel.implicitWidth
+
+        readonly property var syms: cap.modelData.more ? root.moreSyms : [cap.modelData.sym]
+        readonly property bool bound: cap.syms.some(s => !!root.boundKeys[s.toLowerCase()])
+        readonly property bool described: cap.syms.some(s => !!root.describedKeys[s.toLowerCase()])
+        readonly property bool selected: root.selectedKey === cap.modelData || (!!cap.modelData.more && root.pickingButton)
+        readonly property bool locked: root.lockedKeySyms.indexOf(cap.modelData.sym) !== -1
+
+        color: capMouse.containsMouse || cap.selected ? Config.fgcolorhover : Config.fillcolor
+        border.width: cap.locked ? 0 : Config.scaled(2, root.uiScale)
+        border.color: cap.described ? Config.fgcolorlight : cap.bound ? Config.fgcolor : Config.fgcolordark
+
+        // On whole pixels: a Canvas blurs off them, where a Rectangle snaps.
+        Loader {
+            x: Math.round(cap.x) - cap.x
+            y: Math.round(cap.y) - cap.y
+            width: Math.round(cap.x + cap.width) - Math.round(cap.x)
+            height: Math.round(cap.y + cap.height) - Math.round(cap.y)
+            active: cap.locked
+            sourceComponent: lockedKeyShading
+        }
+
+        // Keeps the label readable over the hatching.
+        Rectangle {
+            anchors.centerIn: parent
+            visible: cap.locked
+            width: capLabel.contentWidth + Config.scaled(8, root.uiScale)
+            height: capLabel.contentHeight + Config.scaled(4, root.uiScale)
+            color: "#000000"
+        }
+
+        Text {
+            id: capLabel
+            anchors {
+                fill: parent
+                margins: Config.scaled(cap.modelData.small ? 2 : 4, root.uiScale)
+            }
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            // The mouse's small parts shrink their label to fit instead.
+            fontSizeMode: cap.modelData.small ? Text.Fit : Text.FixedSize
+            minimumPixelSize: Config.scaled(7, root.uiScale)
+            text: cap.modelData.label
+            color: cap.locked ? Config.fgcolordark : cap.described ? Config.fgcolorlight : Config.fgcolor
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(13, root.uiScale)
+            font.bold: true
+        }
+
+        MouseArea {
+            id: capMouse
+            anchors.fill: parent
+            enabled: !cap.locked
+            hoverEnabled: true
+            onClicked: {
+                if (cap.modelData.more) root.openPicker()
+                else root.openKey(cap.modelData)
+            }
+            onContainsMouseChanged: {
+                if (!cap.hints) return
+                if (containsMouse) root.hoveredKey = cap.modelData
+                else if (root.hoveredKey === cap.modelData) root.hoveredKey = null
+            }
+        }
+    }
+
+    // ---------------- keyboard and mouse ----------------
     Item {
         id: keyboard
 
@@ -837,74 +960,60 @@ Item {
         readonly property real unitWidth: root.keyUnit
         readonly property real unitHeight: root.keyUnit
 
+        // The mouse's body, behind its buttons, in an unbound key's colour:
+        // square shoulders, a round end. Open where the side buttons cover its
+        // left edge, which would otherwise show through them.
+        Canvas {
+            id: mouseBody
+
+            readonly property color ink: Config.fgcolordark
+            readonly property real line: Config.scaled(2, root.uiScale)
+            readonly property real unit: keyboard.unitWidth
+
+            x: Math.round(root.mouseLeft * keyboard.unitWidth)
+            width: Math.round((root.mouseLeft + MouseLayout.bodyWidth) * keyboard.unitWidth - keyboard.gap) - x
+            height: Math.round(MouseLayout.bodyHeight * keyboard.unitHeight - keyboard.gap)
+
+            onInkChanged: requestPaint()
+            onLineChanged: requestPaint()
+            onUnitChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+
+            onPaint: {
+                const ctx = getContext("2d")
+                const half = mouseBody.line / 2
+                const w = width - mouseBody.line
+                const h = height - mouseBody.line
+                const shoulder = Math.min(w / 2, MouseLayout.shoulder * mouseBody.unit)
+                const end = w / 2
+                const openFrom = MouseLayout.sideTop * mouseBody.unit - half
+                const openTo = MouseLayout.sideBottom * mouseBody.unit - keyboard.gap - half
+                ctx.reset()
+                ctx.translate(half, half)
+                ctx.strokeStyle = mouseBody.ink
+                ctx.lineWidth = mouseBody.line
+                ctx.beginPath()
+                ctx.moveTo(0, openFrom)
+                ctx.lineTo(0, shoulder)
+                ctx.arc(shoulder, shoulder, shoulder, Math.PI, Math.PI * 1.5)
+                ctx.lineTo(w - shoulder, 0)
+                ctx.arc(w - shoulder, shoulder, shoulder, Math.PI * 1.5, Math.PI * 2)
+                ctx.lineTo(w, h - end)
+                ctx.arc(w / 2, h - end, end, 0, Math.PI)
+                ctx.lineTo(0, openTo)
+                ctx.stroke()
+            }
+        }
+
         Repeater {
-            model: root.keys
+            model: root.keys.concat(root.mouseButtons)
 
-            delegate: Rectangle {
-                id: keyRect
-
-                required property var modelData
-
-                readonly property bool bound: !!root.boundKeys[keyRect.modelData.sym.toLowerCase()]
-                readonly property bool described: !!root.describedKeys[keyRect.modelData.sym.toLowerCase()]
-                readonly property bool selected: root.selectedKey === keyRect.modelData
-                readonly property bool locked: root.lockedKeySyms.indexOf(keyRect.modelData.sym) !== -1
-
-                x: keyRect.modelData.x * keyboard.unitWidth
-                y: keyRect.modelData.y * keyboard.unitHeight
-                width: keyRect.modelData.w * keyboard.unitWidth - keyboard.gap
-                height: keyRect.modelData.h * keyboard.unitHeight - keyboard.gap
-
-                color: keyMouse.containsMouse || keyRect.selected ? Config.fgcolorhover : Config.fillcolor
-                border.width: keyRect.locked ? 0 : Config.scaled(2, root.uiScale)
-                border.color: keyRect.described ? Config.fgcolorlight : keyRect.bound ? Config.fgcolor : Config.fgcolordark
-
-                // On whole pixels: a Canvas blurs off them, where a Rectangle snaps.
-                Loader {
-                    x: Math.round(keyRect.x) - keyRect.x
-                    y: Math.round(keyRect.y) - keyRect.y
-                    width: Math.round(keyRect.x + keyRect.width) - Math.round(keyRect.x)
-                    height: Math.round(keyRect.y + keyRect.height) - Math.round(keyRect.y)
-                    active: keyRect.locked
-                    sourceComponent: lockedKeyShading
-                }
-
-                // Keeps the label readable over the hatching.
-                Rectangle {
-                    anchors.centerIn: parent
-                    visible: keyRect.locked
-                    width: keyLabel.contentWidth + Config.scaled(8, root.uiScale)
-                    height: keyLabel.contentHeight + Config.scaled(4, root.uiScale)
-                    color: "#000000"
-                }
-
-                Text {
-                    id: keyLabel
-                    anchors {
-                        fill: parent
-                        margins: Config.scaled(4, root.uiScale)
-                    }
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    elide: Text.ElideRight
-                    text: keyRect.modelData.label
-                    color: keyRect.locked ? Config.fgcolordark : keyRect.described ? Config.fgcolorlight : Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(13, root.uiScale)
-                    font.bold: true
-                }
-
-                MouseArea {
-                    id: keyMouse
-                    anchors.fill: parent
-                    enabled: !keyRect.locked
-                    hoverEnabled: true
-                    onClicked: root.openKey(keyRect.modelData)
-                    onContainsMouseChanged: {
-                        if (containsMouse) root.hoveredKey = keyRect.modelData
-                        else if (root.hoveredKey === keyRect.modelData) root.hoveredKey = null
-                    }
-                }
+            delegate: KeyCap {
+                x: modelData.x * keyboard.unitWidth
+                y: modelData.y * keyboard.unitHeight
+                width: modelData.w * keyboard.unitWidth - keyboard.gap
+                height: modelData.h * keyboard.unitHeight - keyboard.gap
             }
         }
 
@@ -917,7 +1026,7 @@ Item {
             verticalAlignment: Text.AlignVCenter
             wrapMode: Text.Wrap
             elide: Text.ElideRight
-            text: root.applyError.length > 0 ? root.applyError : "Click a key to bind it"
+            text: root.applyError.length > 0 ? root.applyError : "Click a key or a mouse button to bind it"
             color: root.applyError.length > 0 ? Config.fgcolorred : Config.fgcolor
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(13, root.uiScale)
@@ -930,7 +1039,7 @@ Item {
             readonly property var key: root.hoveredKey
             readonly property real padding: Config.scaled(8, root.uiScale)
 
-            visible: root.hoveredHintLines.length > 0 && root.selectedKey === null
+            visible: root.hoveredHintLines.length > 0 && root.selectedKey === null && !root.pickingButton
             uiScale: root.uiScale
             color: "#ee000000"
             width: hintText.width + keyHint.padding * 2
@@ -956,7 +1065,7 @@ Item {
     // ---------------- key panel ----------------
     Rectangle {
         anchors.fill: parent
-        visible: root.selectedKey !== null
+        visible: root.selectedKey !== null || root.pickingButton
         color: Qt.rgba(0, 0, 0, 0.55)
 
         MouseArea {
@@ -1004,7 +1113,9 @@ Item {
             readonly property real innerWidth: width - padding * 2
 
             Text {
-                text: root.selectedKey ? "Key: " + root.selectedKey.label : ""
+                text: !root.selectedKey ? ""
+                    : root.selectedKey.mouse ? "Mouse: " + root.selectedKey.name
+                    : "Key: " + root.selectedKey.label
                 color: Config.fgcolorlight
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(16, root.uiScale)
@@ -1040,7 +1151,7 @@ Item {
                             verticalCenter: parent.verticalCenter
                         }
                         elide: Text.ElideRight
-                        text: bindRow.modelData.combo + "  -  " + (bindRow.modelData.description || bindRow.modelData.label)
+                        text: root.prettyCombo(bindRow.modelData.combo) + "  -  " + (bindRow.modelData.description || bindRow.modelData.label)
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1123,6 +1234,16 @@ Item {
                     }
                 }
 
+                Text {
+                    visible: root.formNeedsModifier
+                    width: panelColumn.innerWidth
+                    wrapMode: Text.Wrap
+                    text: "Left click needs a modifier: on its own it would take every click, this screen's too."
+                    color: Config.fgcolorred
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(13, root.uiScale)
+                }
+
                 Row {
                     spacing: Config.scaled(8, root.uiScale)
 
@@ -1189,7 +1310,7 @@ Item {
                             verticalCenter: parent.verticalCenter
                         }
                         elide: Text.ElideRight
-                        text: root.formCombo
+                        text: root.prettyCombo(root.formCombo)
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1212,6 +1333,133 @@ Item {
                             lit: true
                             enabled: root.formValid
                             onClicked: root.submitForm()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ---------------- more mouse buttons ----------------
+    // What the mouse's + opens: what the drawing has no room for, each
+    // opening its binds like any key. Pressing a button in the box - or turning
+    // the wheel, or an F13 - F24 key a mouse sends - finds it without knowing
+    // its number; it can't find what the shell never gets, like a button
+    // something else already takes.
+    DashCard {
+        id: morePanel
+
+        anchors {
+            horizontalCenter: parent.horizontalCenter
+            top: parent.top
+            topMargin: root.keyboardMargin
+        }
+
+        visible: root.pickingButton
+        uiScale: root.uiScale
+        color: "#ee000000"
+        width: Config.scaled(560, root.uiScale)
+        height: moreColumn.implicitHeight
+
+        Keys.onEscapePressed: root.closeKey()
+        Keys.onPressed: (event) => {
+            const sym = MouseLayout.functionKeySym(event.key)
+            if (sym.length === 0) return
+            event.accepted = true
+            root.pickSym(sym)
+        }
+
+        // Keeps a click on the panel's blank space from reaching the
+        // dismissing backdrop behind it.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        Column {
+            id: moreColumn
+
+            width: parent.width
+            padding: Config.scaled(16, root.uiScale)
+            spacing: Config.scaled(12, root.uiScale)
+
+            readonly property real innerWidth: width - padding * 2
+
+            Text {
+                text: "Mouse: more buttons"
+                color: Config.fgcolorlight
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(16, root.uiScale)
+                font.bold: true
+            }
+
+            Rectangle {
+                width: moreColumn.innerWidth
+                height: Config.scaled(64, root.uiScale)
+                color: captureMouse.containsMouse ? Config.fgcolorhover : "transparent"
+                border.width: Config.scaled(2, root.uiScale)
+                border.color: Config.fgcolorlight
+
+                Text {
+                    anchors {
+                        fill: parent
+                        margins: Config.scaled(8, root.uiScale)
+                    }
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    wrapMode: Text.Wrap
+                    text: "Press the button here - or tilt the wheel"
+                    color: Config.fgcolorlight
+                    font.family: Config.fontfamily
+                    font.pixelSize: Config.scaled(13, root.uiScale)
+                    font.bold: true
+                }
+
+                MouseArea {
+                    id: captureMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.AllButtons
+                    onPressed: (mouse) => root.pickSym(MouseLayout.pressedSym(mouse.button))
+                    // With natural scrolling the delta is turned around;
+                    // Hyprland names the wheel by which way it actually went.
+                    onWheel: (wheel) => {
+                        const turn = wheel.inverted ? -1 : 1
+                        root.pickSym(MouseLayout.wheelSym(wheel.angleDelta.x * turn, wheel.angleDelta.y * turn))
+                    }
+                }
+            }
+
+            Repeater {
+                model: MouseLayout.moreGroups
+
+                delegate: Column {
+                    id: moreGroup
+
+                    required property int index
+                    required property string modelData
+
+                    width: moreColumn.innerWidth
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    Text {
+                        text: moreGroup.modelData
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                    }
+
+                    Flow {
+                        width: moreGroup.width
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        Repeater {
+                            model: root.moreButtons.filter(b => b.group === moreGroup.index)
+
+                            delegate: KeyCap {
+                                hints: false
+                                height: Config.scaled(36, root.uiScale)
+                                width: Math.max(height, Math.ceil(labelWidth) + Config.scaled(16, root.uiScale))
+                            }
                         }
                     }
                 }
