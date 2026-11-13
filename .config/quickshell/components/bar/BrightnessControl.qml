@@ -30,8 +30,10 @@ import "../settings"
 //
 // Right-click opens a menu like the volume control's: every monitor but the
 // primary - by its port, or the name Settings > Display gave it - each with
-// a checkbox saying whether it's on - clicking one
-// switches it on or off at once - then Night Light's settings. A switch is
+// a checkbox saying whether it's on, then Night Light's settings. Clicking a
+// monitor switches it on or off at once and closes the menu, as picking a
+// device closes the volume control's; the switch carries on without it, and
+// reopening shows the checkbox it asked for until it's done. A switch is
 // the Display tab's own right click + Apply: that file is loaded out of
 // sight for as long as it takes (see monitorSwitch below), so workspace
 // pins, windows rescued off a monitor going dark and its remembered mode
@@ -490,7 +492,10 @@ Rectangle {
                                 id: monitorMouse
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.toggleMonitor(monitorEntry.modelData)
+                                onClicked: {
+                                    root.toggleMonitor(monitorEntry.modelData)
+                                    root.closeMenu()
+                                }
                             }
                         }
                     }
