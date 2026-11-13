@@ -122,7 +122,7 @@ Item {
     // these back (and shows a preview whenever one changes).
     readonly property real osdSize: {
         const n = Number(root.barStore.osdSize)
-        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.5, n)) : 1
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 0.8
     }
     readonly property var osdPositions: [
         { value: "top-left", label: "Top left" }, { value: "top", label: "Top" }, { value: "top-right", label: "Top right" },
@@ -133,7 +133,8 @@ Item {
     readonly property bool osdInCorner: root.osdPosition.endsWith("left") || root.osdPosition.endsWith("right")
     readonly property string osdStacking: root.osdInCorner || root.barStore.osdStacking === "vertical" ? "vertical" : "horizontal"
 
-    function setOsdSize(size) { root.setBarSetting("osdSize", Math.round(Math.max(0.5, Math.min(1.5, size)) * 20) / 20) }
+    // 50 - 120% (80% unless set - see OsdHost.qml), in steps of 5.
+    function setOsdSize(size) { root.setBarSetting("osdSize", Math.round(Math.max(0.5, Math.min(1.2, size)) * 20) / 20) }
     function setOsdPosition(position) { root.setBarSetting("osdPosition", position) }
     function setOsdStacking(stacking) { if (!root.osdInCorner) root.setBarSetting("osdStacking", stacking) }
 
@@ -1021,12 +1022,12 @@ Item {
                             }
                         }
 
-                        // 50 - 150%, in steps of 5.
+                        // 50 - 120%, in steps of 5.
                         DeviceSlider {
                             Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
-                            value: root.osdSize - 0.5
-                            onMoved: (newValue) => root.setOsdSize(0.5 + newValue)
+                            value: (root.osdSize - 0.5) / 0.7
+                            onMoved: (newValue) => root.setOsdSize(0.5 + newValue * 0.7)
                         }
 
                         SettingHint {
