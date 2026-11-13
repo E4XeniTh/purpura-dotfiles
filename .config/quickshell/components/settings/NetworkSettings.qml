@@ -12,9 +12,11 @@ import "controls"
 import "ConnectionsLogic.js" as Logic
 
 // Settings > Connections: everything this computer is connected through, as a
-// tree read left to right, and the details of whatever's picked in it.
+// directory tree, and the details of whatever's picked in it.
 //
-// The tree (left): this computer (user@host) branches into its devices -
+// The tree (left), a row each, top to bottom, every row indented under its
+// parent and hung off a line from it: this computer (user@host) branches
+// into its devices -
 // Solaar's Logitech peripherals, Wi-Fi, Bluetooth, ZeroTier, Ethernet - and
 // each device into the connections that exist through it: Wi-Fi networks that
 // are connected or remembered, paired Bluetooth devices, joined ZeroTier
@@ -25,8 +27,8 @@ import "ConnectionsLogic.js" as Logic
 // that's on or a plain connection, fgcolorlight for a connection that's
 // remembered too (disconnecting it leaves it forgettable), fgcolordark for one
 // that's only remembered, red for anything disabled. Something with a battery
-// - a laptop, a Solaar peripheral, a controller - draws its border as a ring
-// of segments lit up to its charge instead, red when it's low.
+// - a laptop, a Solaar peripheral, a controller - has a segmented bar and its
+// percentage beside its row, red when it's low.
 //
 // Left click picks a box for the details panel (right). Middle click renames
 // it - for this shell only (AliasStore.qml, connectionaliases.json): nothing
@@ -303,20 +305,25 @@ Item {
         })
     }
 
-    // Three columns sharing the tree's width, a box no narrower than a name
-    // needs and no wider than reads well.
-    readonly property var treeMetrics: {
-        const columnGap = Config.scaled(40, root.uiScale)
-        const fitted = (treeView.width - 2 * columnGap) / 3
-        return {
-            nodeWidth: Math.max(Config.scaled(130, root.uiScale), Math.min(Config.scaled(250, root.uiScale), fitted)),
-            nodeHeight: Config.scaled(46, root.uiScale),
-            columnGap: columnGap,
-            rowGap: Config.scaled(10, root.uiScale)
-        }
-    }
+    readonly property var treeMetrics: ({
+        rowHeight: Config.scaled(34, root.uiScale),
+        rowGap: Config.scaled(6, root.uiScale),
+        indent: Config.scaled(32, root.uiScale),
+        trunkInset: Config.scaled(14, root.uiScale)
+    })
 
-    readonly property var treeLayout: Logic.layoutTree(root.treeRoot, root.treeMetrics)
+    readonly property var treeLayout: Logic.layoutList(root.treeRoot, root.treeMetrics)
+
+    // Every box ends at the same right edge, so the battery bars beside them
+    // line up in a column - kept free whether anything has a battery or not,
+    // so nothing shifts when one connects. The boxes stop at a width that
+    // still reads well, but never narrower than the deepest row needs.
+    readonly property real batteryGap: Config.scaled(12, root.uiScale)
+    readonly property real batteryBarWidth: Config.scaled(110, root.uiScale)
+    readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + Config.scaled(52, root.uiScale)
+    readonly property real boxesRight: Math.max(
+        root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(180, root.uiScale),
+        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(640, root.uiScale)))
 
     readonly property var nodeByKey: {
         const map = {}
@@ -461,35 +468,37 @@ Item {
             Flickable {
                 id: treeView
 
-                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.55
+                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.64
                 Layout.fillHeight: true
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                contentWidth: Math.max(treeView.width, root.treeLayout.width)
-                contentHeight: Math.max(treeView.height, root.treeLayout.height + treeArea.pad * 2)
+                contentWidth: Math.max(treeView.width, treeArea.width + treeArea.pad * 2)
+                contentHeight: root.treeLayout.height + treeArea.pad * 2
 
-                // Centred in the room it has, scrolling once it outgrows it.
+                // Top left, as a directory listing is, scrolling once it
+                // outgrows the room.
                 Item {
                     id: treeArea
 
                     readonly property real pad: Config.scaled(8, root.uiScale)
 
-                    x: Math.max(0, Math.round((treeView.width - width) / 2))
-                    y: Math.max(treeArea.pad, Math.round((treeView.height - height) / 2))
-                    width: root.treeLayout.width
+                    x: treeArea.pad
+                    y: treeArea.pad
+                    width: root.boxesRight + root.batteryColumn
                     height: root.treeLayout.height
 
-                    // Straight lines from each box's right edge to its
-                    // children's left, lit to a connection that's up.
+                    // The tree's lines: each parent's trunk down from under
+                    // it, and an arm across to each child - lit to anything
+                    // that's on or connected.
                     Canvas {
-                        id: edgeCanvas
+                        id: lineCanvas
 
-                        readonly property var edges: root.treeLayout.edges
+                        readonly property var lines: root.treeLayout.lines
                         readonly property color lit: Config.fgcolor
                         readonly property color dim: Config.fgcolordark
 
                         anchors.fill: parent
-                        onEdgesChanged: requestPaint()
+                        onLinesChanged: requestPaint()
                         onLitChanged: requestPaint()
                         onDimChanged: requestPaint()
                         onWidthChanged: requestPaint()
@@ -498,14 +507,17 @@ Item {
                         onPaint: {
                             const ctx = getContext("2d")
                             ctx.reset()
-                            ctx.lineWidth = Config.scaled(2, root.uiScale)
-                            for (const e of edgeCanvas.edges) {
-                                const child = root.nodeByKey[e.to]
+                            const thickness = Config.scaled(2, root.uiScale)
+                            ctx.lineWidth = thickness
+                            // On whole pixels, so the lines stay sharp.
+                            const at = v => Math.round(v - thickness / 2) + thickness / 2
+                            for (const l of lineCanvas.lines) {
+                                const child = l.to ? root.nodeByKey[l.to] : null
                                 const role = child ? Logic.colorRole(child.state) : "dark"
-                                ctx.strokeStyle = role === "dark" || role === "red" ? edgeCanvas.dim : edgeCanvas.lit
+                                ctx.strokeStyle = role === "dark" || role === "red" ? lineCanvas.dim : lineCanvas.lit
                                 ctx.beginPath()
-                                ctx.moveTo(e.x1, e.y1)
-                                ctx.lineTo(e.x2, e.y2)
+                                ctx.moveTo(at(l.x1), at(l.y1))
+                                ctx.lineTo(at(l.x2), at(l.y2))
                                 ctx.stroke()
                             }
                         }
@@ -525,9 +537,11 @@ Item {
                             visible: !!treeNode.info
                             x: treeNode.info ? Math.round(treeNode.info.x) : 0
                             y: treeNode.info ? Math.round(treeNode.info.y) : 0
-                            width: root.treeMetrics.nodeWidth
-                            height: root.treeMetrics.nodeHeight
+                            width: root.boxesRight - x
+                            height: root.treeMetrics.rowHeight
                             uiScale: root.uiScale
+                            batteryGap: root.batteryGap
+                            batteryBarWidth: root.batteryBarWidth
 
                             title: treeNode.info ? treeNode.info.name : ""
                             subtitle: treeNode.info ? treeNode.info.subtitle : ""

@@ -2,9 +2,9 @@
 
 // Settings > Connections (NetworkSettings.qml), kept apart from it so it can
 // be tested on its own: what state each node of the tree is in and what that
-// looks like, what a right click does to it, the battery ring drawn round a
-// node, the tree's layout, the display names given to nodes, and the text
-// parsing behind the details panel.
+// looks like, what a right click does to it, when a battery counts as low,
+// the tree's layout, the display names given to nodes, and the text parsing
+// behind the details panel.
 
 // ---------------- states ----------------
 // on          a device that's enabled, or a node that's simply there (the host)
@@ -66,91 +66,58 @@ function rightClickAction(kind, state) {
     }
 }
 
-// ---------------- battery ring ----------------
-// A node with a battery has its border drawn as a ring of segments, lit up to
-// its charge, clockwise from the middle of the top edge - red when it's low.
+// ---------------- battery ----------------
+// A node with a battery has a segmented bar beside it, lit up to its charge -
+// red when it's low and not charging.
 var lowBattery = 0.11
 
 function batteryLow(fraction, charging) {
     return fraction < lowBattery && !charging
 }
 
-function litSegments(fraction, count) {
-    return Math.round(Math.max(0, Math.min(1, fraction)) * count)
-}
-
-// The point `d` along a w x h box's edge, clockwise from the top's middle.
-function edgePoint(w, h, d) {
-    const perimeter = 2 * (w + h)
-    d = ((d % perimeter) + perimeter) % perimeter
-    if (d <= w / 2) return [w / 2 + d, 0]
-    d -= w / 2
-    if (d <= h) return [w, d]
-    d -= h
-    if (d <= w) return [w - d, h]
-    d -= w
-    if (d <= h) return [0, h - d]
-    d -= h
-    return [d, 0]
-}
-
-// `count` segments round the edge, `gap` apart, each as the points to draw
-// through - corners included, so a segment bends round them.
-function ringSegments(w, h, count, gap) {
-    const perimeter = 2 * (w + h)
-    const step = perimeter / count
-    const corners = [w / 2, w / 2 + h, w / 2 + h + w, w / 2 + 2 * h + w]
-    const out = []
-    for (let i = 0; i < count; i++) {
-        const from = i * step + gap / 2
-        const to = (i + 1) * step - gap / 2
-        const points = [edgePoint(w, h, from)]
-        for (const c of corners) {
-            if (c > from && c < to) points.push(edgePoint(w, h, c))
-        }
-        points.push(edgePoint(w, h, to))
-        out.push(points)
-    }
-    return out
-}
-
 // ---------------- the tree ----------------
-// Left to right: a column per level, every leaf on a row of its own and each
-// parent level with the middle of its children, joined by straight lines from
-// a parent's right edge to its children's left. `root` is { key, children };
-// anything else on a node is carried over. Returns the placed nodes (with
-// depth, x, y and their parent's key), the lines, and the size of it all.
-function layoutTree(root, m) {
+// A directory tree: every node on a row of its own, top to bottom in order,
+// each indented a step (`indent`) past its parent and hung off a line - down
+// from under the parent (`trunkInset` in from its left edge), then across to
+// the row. `root` is { key, children }; anything else on a node is carried
+// over. Returns the placed nodes in order (with depth, row, x, y and their
+// parent's key), the lines to draw (`to` is the row an arm leads to, empty
+// for a parent's trunk), the deepest level, and the height of it all.
+function layoutList(root, m) {
     const nodes = []
-    const edges = []
-    const pitch = m.nodeHeight + m.rowGap
+    const lines = []
+    const pitch = m.rowHeight + m.rowGap
     let row = 0
+    let deepest = 0
 
     function place(node, depth, parentKey) {
-        const children = node.children || []
-        const x = depth * (m.nodeWidth + m.columnGap)
-        let y = 0
-        if (children.length === 0) y = row++ * pitch
-        const placedChildren = children.map(c => place(c, depth + 1, node.key))
-        if (placedChildren.length > 0)
-            y = (placedChildren[0].y + placedChildren[placedChildren.length - 1].y) / 2
-        const placed = Object.assign({}, node, { depth: depth, x: x, y: y, parentKey: parentKey })
+        const placed = Object.assign({}, node, {
+            depth: depth,
+            row: row,
+            x: depth * m.indent,
+            y: row * pitch,
+            parentKey: parentKey
+        })
         delete placed.children
         nodes.push(placed)
-        for (const c of placedChildren) {
-            edges.push({ from: node.key, to: c.key, x1: x + m.nodeWidth, y1: y + m.nodeHeight / 2, x2: c.x, y2: c.y + m.nodeHeight / 2 })
+        row++
+        deepest = Math.max(deepest, depth)
+
+        const children = node.children || []
+        if (children.length === 0) return placed
+        const trunk = placed.x + m.trunkInset
+        let lastMiddle = 0
+        for (const c of children) {
+            const child = place(c, depth + 1, node.key)
+            lastMiddle = child.y + m.rowHeight / 2
+            lines.push({ x1: trunk, y1: lastMiddle, x2: child.x, y2: lastMiddle, to: child.key })
         }
+        lines.push({ x1: trunk, y1: placed.y + m.rowHeight, x2: trunk, y2: lastMiddle, to: "" })
         return placed
     }
 
     place(root, 0, "")
-    const depth = nodes.reduce((most, n) => Math.max(most, n.depth), 0)
-    return {
-        nodes: nodes,
-        edges: edges,
-        width: (depth + 1) * m.nodeWidth + depth * m.columnGap,
-        height: Math.max(1, row) * pitch - m.rowGap
-    }
+    return { nodes: nodes, lines: lines, depth: deepest, height: row * pitch - m.rowGap }
 }
 
 // Connected first, then the strongest signal, then by name.

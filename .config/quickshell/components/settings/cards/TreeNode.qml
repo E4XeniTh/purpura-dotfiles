@@ -1,12 +1,14 @@
 import QtQuick
+import QtQuick.Layouts
 import "../../../Config.js" as Config
+import "../../common"
 import "../ConnectionsLogic.js" as Logic
 
-// One box of Settings > Connections' tree: a name over a smaller line saying
-// what state it's in, the border coloured by that state - or, for something
-// with a battery, drawn as a ring of segments lit up to its charge, red when
-// it's low. Name and border share the state's colour; selecting it only
-// lights the background.
+// One row of Settings > Connections' directory tree: a box with the name on
+// the left and what state it's in on the right, border and name in that
+// state's colour - selecting it only lights the background. Something with a
+// battery also has a segmented bar and its percentage just past the box's
+// right edge, red when it's low and not charging.
 //
 // Left click selects it, middle click renames it in place (Enter keeps the
 // name, Escape drops it), right click asks for its action - the page decides
@@ -23,6 +25,9 @@ Rectangle {
     property real battery: -1
     property bool charging: false
     property bool renaming: false
+    // How far past the box the battery bar starts, and how long it is.
+    property real batteryGap: Config.scaled(12, root.uiScale)
+    property real batteryBarWidth: Config.scaled(110, root.uiScale)
 
     signal clicked()
     signal renameRequested()
@@ -31,62 +36,25 @@ Rectangle {
     signal renameCancelled()
 
     readonly property bool hasBattery: root.battery >= 0
-    readonly property real line: Config.scaled(2, root.uiScale)
+    readonly property color batteryColor: Logic.batteryLow(root.battery, root.charging) ? Config.fgcolorred
+        : root.charging ? Config.fgcolorlight
+        : Config.fgcolor
 
     color: nodeMouse.containsMouse || root.selected ? Config.fgcolorhover : Config.fillcolor
-    border.width: root.hasBattery ? 0 : root.line
+    border.width: Config.scaled(2, root.uiScale)
     border.color: root.stateColor
 
-    Canvas {
-        id: ring
-
-        readonly property int count: 20
-        readonly property int lit: Logic.litSegments(root.battery, ring.count)
-        readonly property color litColor: Logic.batteryLow(root.battery, root.charging) ? Config.fgcolorred : root.stateColor
-        readonly property color dimColor: Config.fgcolordark
-
-        anchors.fill: parent
-        visible: root.hasBattery
-
-        onLitChanged: requestPaint()
-        onLitColorChanged: requestPaint()
-        onDimColorChanged: requestPaint()
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        onVisibleChanged: requestPaint()
-
-        onPaint: {
-            const ctx = getContext("2d")
-            ctx.reset()
-            if (!root.hasBattery) return
-            const half = root.line / 2
-            const segments = Logic.ringSegments(width - root.line, height - root.line, ring.count, root.line * 2)
-            ctx.translate(half, half)
-            ctx.lineWidth = root.line
-            for (let i = 0; i < segments.length; i++) {
-                const points = segments[i]
-                ctx.strokeStyle = i < ring.lit ? ring.litColor : ring.dimColor
-                ctx.beginPath()
-                ctx.moveTo(points[0][0], points[0][1])
-                for (let j = 1; j < points.length; j++) ctx.lineTo(points[j][0], points[j][1])
-                ctx.stroke()
-            }
-        }
-    }
-
-    Column {
+    RowLayout {
         anchors {
-            left: parent.left
-            right: parent.right
-            verticalCenter: parent.verticalCenter
+            fill: parent
             leftMargin: Config.scaled(10, root.uiScale)
             rightMargin: Config.scaled(10, root.uiScale)
         }
-        spacing: Config.scaled(2, root.uiScale)
+        spacing: Config.scaled(10, root.uiScale)
 
         Text {
             id: titleText
-            width: parent.width
+            Layout.fillWidth: true
             visible: !root.renaming
             text: root.title
             textFormat: Text.PlainText
@@ -99,7 +67,7 @@ Rectangle {
 
         TextInput {
             id: renameInput
-            width: parent.width
+            Layout.fillWidth: true
             visible: root.renaming
             color: Config.fgcolorlight
             selectionColor: Config.fgcolor
@@ -128,7 +96,7 @@ Rectangle {
         }
 
         Text {
-            width: parent.width
+            Layout.maximumWidth: root.width * 0.45
             visible: root.subtitle.length > 0
             text: root.subtitle
             textFormat: Text.PlainText
@@ -136,6 +104,33 @@ Rectangle {
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(11, root.uiScale)
             elide: Text.ElideRight
+        }
+    }
+
+    // The charge, beside the box.
+    Row {
+        x: root.width + root.batteryGap
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.hasBattery
+        spacing: Config.scaled(8, root.uiScale)
+
+        DigitalBar {
+            anchors.verticalCenter: parent.verticalCenter
+            uiScale: root.uiScale
+            targetWidth: root.batteryBarWidth
+            segmentCount: 10
+            barHeight: Config.scaled(14, root.uiScale)
+            value: Math.max(0, root.battery)
+            litColor: root.batteryColor
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: Math.round(Math.max(0, root.battery) * 100) + "%"
+            color: root.batteryColor
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(12, root.uiScale)
+            font.bold: true
         }
     }
 
