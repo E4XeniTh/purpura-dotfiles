@@ -94,7 +94,11 @@ function scaled(px, uiScale) {
 // the same generic icon regardless of percentage/charging). Used by
 // BatteryControl.qml (bar widget) instead of trusting UPower's own
 // iconName.
+// While charging it's always the empty one: Breeze draws the plug over the
+// battery's fill, and tinted one colour (ColorOverlay) the plug vanishes into
+// it - only the empty battery leaves it readable. The level shows beside it.
 function batteryIconName(percentage, charging) {
+    if (charging) return "battery-000-charging-symbolic"
     const clamped = Math.max(0, Math.min(100, Math.round(percentage)))
     const bucket = Math.floor(clamped / 10) * 10
     const base = "battery-" + String(bucket).padStart(3, "0")
