@@ -16,7 +16,8 @@ import "../../Config.js" as Config
 // of the space the bar reserves (exclusiveZone 0).
 //
 // Each OSD decides when it shows (shouldShowOsd) and hands over its box as
-// a Component with a uiScale property; this lays them out, in `osds` order.
+// a Component with uiScale (OSD size included) and borderScale (without)
+// properties; this lays them out, in `osds` order.
 Scope {
     id: root
 
@@ -211,6 +212,13 @@ Scope {
                             target: osdLoader.item
                             property: "uiScale"
                             value: win.uiScale
+                            when: !!osdLoader.item
+                        }
+
+                        Binding {
+                            target: osdLoader.item
+                            property: "borderScale"
+                            value: win.baseScale
                             when: !!osdLoader.item
                         }
                     }

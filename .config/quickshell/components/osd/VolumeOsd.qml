@@ -72,12 +72,15 @@ Scope {
 		id: volumeBox
 
 		property real uiScale: 1.0
+		// The border's own: the screen and shell scale without the OSD
+		// size, so the size setting never changes it.
+		property real borderScale: 1.0
 
 		width: Config.scaled(500, volumeBox.uiScale)
 		height: Config.scaled(84, volumeBox.uiScale)
 		color: Config.fillcolor
 		radius: 0
-		border.width: Config.scaled(2, volumeBox.uiScale)
+		border.width: Config.scaled(2, volumeBox.borderScale)
 		border.color: Config.fgcolor
 
 		Loader {

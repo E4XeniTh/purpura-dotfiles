@@ -57,12 +57,15 @@ Scope {
         id: brightnessBox
 
         property real uiScale: 1.0
+        // The border's own: the screen and shell scale without the OSD
+        // size, so the size setting never changes it.
+        property real borderScale: 1.0
 
         width: Config.scaled(500, brightnessBox.uiScale)
         height: Config.scaled(84, brightnessBox.uiScale)
         color: Config.fillcolor
         radius: 0
-        border.width: Config.scaled(2, brightnessBox.uiScale)
+        border.width: Config.scaled(2, brightnessBox.borderScale)
         border.color: Config.fgcolor
 
         RowLayout {
