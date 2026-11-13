@@ -56,9 +56,7 @@ Rectangle {
                 id: battIcon
                 anchors.fill: parent
                 // Config.batteryIconName buckets in 10% increments
-                // (battery-000 .. battery-100, "-charging" suffixed) -
-                // same scheme BatterySettings.qml uses for Solaar/
-                // Bluetooth devices, which UPower has no icon for at all.
+                // (battery-000 .. battery-100, "-charging" suffixed).
                 source: Quickshell.iconPath(
                     Config.batteryIconName(root.percentage * 100, root.charging),
                     "battery-missing-symbolic")

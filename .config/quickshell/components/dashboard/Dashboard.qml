@@ -475,13 +475,10 @@ Scope {
     }
 
     // ---------------- Solaar (Logitech Unifying/Bolt peripherals) ----------------
-    // Lifted up here rather than living on BatterySettings.qml directly
+    // Lives up here rather than on Settings > Connections (NetworkSettings.qml)
     // - a full `solaar show` walks every HID++ feature on every paired
     // peripheral (seconds, not milliseconds), so one shared poll beats
-    // one per BatterySettings instance wherever it ends up embedded
-    // (BatterySettings.qml itself is currently unused by Dashboard.qml -
-    // removed from the dashboard's own button row, kept on disk for a
-    // future main-bar battery widget). Also started at Quickshell
+    // one per page that shows the devices. Also started at Quickshell
     // startup instead of waiting for the panel to ever be opened, so
     // devices don't still be showing empty the first time someone
     // actually looks.

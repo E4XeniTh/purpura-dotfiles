@@ -10,10 +10,9 @@ import "../../Config.js" as Config
 // Two ways to size it: a fixed per-segment width (segmentWidth - the
 // compact bar widgets in Bar.qml use this, a fixed pixel count
 // regardless of container), or an explicit total width to fill
-// (targetWidth >= 0 - BatterySettings.qml's "long" rows use this
-// instead, since they need the bar to stretch to whatever space a
-// RowLayout gives it rather than a fixed segment count of fixed-size
-// blocks) - segmentWidth is derived from targetWidth instead whenever
+// (targetWidth >= 0 - Settings > Connections' battery bars use this
+// instead, since they stretch to whatever room the pane leaves rather
+// than being a fixed segment count of fixed-size blocks) - segmentWidth is derived from targetWidth instead whenever
 // that's set.
 Item {
     id: root
