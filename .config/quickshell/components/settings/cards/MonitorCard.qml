@@ -99,11 +99,10 @@ DashCard {
                 }
             }
 
-            // As wide as it needs (eliding when there isn't room), so the
-            // tag sits right after it.
+            // Takes the room the tag leaves, so the tag sits at the right
+            // edge and the name only elides when the card's too narrow.
             Text {
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
                 text: root.name
                 color: root.textColor
                 font.family: Config.fontfamily
@@ -117,8 +116,6 @@ DashCard {
                 uiScale: root.uiScale
                 label: "Primary"
             }
-
-            Item { Layout.fillWidth: true }
 
             // Scoped to just this row (not the whole card) so it
             // doesn't steal drag input from the brightness slider below.

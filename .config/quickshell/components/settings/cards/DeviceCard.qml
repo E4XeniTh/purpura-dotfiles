@@ -38,11 +38,10 @@ DashCard {
             width: parent.width
             spacing: Config.scaled(8, root.uiScale)
 
-            // As wide as it needs (eliding when there isn't room), so the
-            // tag sits right after it.
+            // Takes the room the tag leaves, so the tag sits at the right
+            // edge and the name only elides when the card's too narrow.
             Text {
                 Layout.fillWidth: true
-                Layout.maximumWidth: implicitWidth
                 // nickname is generally more human-readable than description,
                 // which is generally more human-readable than the raw name -
                 // fall back down that chain as each one turns out empty.
@@ -62,8 +61,6 @@ DashCard {
                 uiScale: root.uiScale
                 label: "Default"
             }
-
-            Item { Layout.fillWidth: true }
         }
 
         RowLayout {
