@@ -25,7 +25,9 @@ import "controls"
 // which hyprland.lua loads after its own binds, so a change survives
 // reloads and restarts. It's also applied right away through `hyprctl eval`
 // rather than a reload, because a reload reverts runtime-only state such as
-// the monitor layout.
+// the monitor layout. For the same reason hyprland.lua loads shortcuts.lua
+// with dofile: Hyprland watches every file loaded with require and reloads
+// the whole config whenever one is written.
 //
 // Removing or replacing a hyprland.lua bind can't edit that file, so the
 // combo goes on shortcuts.json's `removed` list, which shortcuts.lua
@@ -501,9 +503,10 @@ Item {
 
         root.saveStore({ binds: binds, removed: removed, descriptions: descriptions })
         // The new combo is unbound too, though nothing's on it as far as this tab
-        // knows: writing shortcuts.lua makes Hyprland reload, and if that gets in
-        // ahead of this eval the bind is already there. hl.bind would add a second
-        // one and both would fire, so a toggle would undo itself.
+        // knows: with an older hyprland.lua that still loads shortcuts.lua with
+        // require, writing it makes Hyprland reload, and if that gets in ahead of
+        // this eval the bind is already there. hl.bind would add a second one and
+        // both would fire, so a toggle would undo itself.
         const unbinds = replaced.map(b => b.combo).concat([combo]).map(c => "hl.unbind(" + root.luaString(c) + ")")
         root.applyLive(unbinds.concat(["hl.bind(" + root.luaString(combo) + ", " + lua + ")"]))
     }
