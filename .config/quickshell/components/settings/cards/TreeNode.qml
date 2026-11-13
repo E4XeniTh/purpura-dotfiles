@@ -147,7 +147,8 @@ Rectangle {
     // The charge, beside the box: its own box, bordered like this row and
     // joined to it by a line - an icon, the segmented bar, the percentage.
     // All red when it's low. While charging, a charging icon, and the bar
-    // slowly fills to the end, then drops back to the charge, over and over.
+    // lights one more segment every 0.33 s to the end, then drops back to
+    // the charge, over and over.
     readonly property bool batteryLow: Logic.batteryLow(root.battery, root.charging)
     readonly property color batteryFrameColor: root.batteryLow ? Config.fgcolorred : root.stateColor
     readonly property color batteryTextColor: root.batteryLow ? Config.fgcolorred
@@ -177,26 +178,23 @@ Rectangle {
         border.width: Config.scaled(2, root.uiScale)
         border.color: root.batteryFrameColor
 
-        // What the bar shows - the charge, or the charging sweep.
-        property real shown: Math.max(0, root.battery)
+        // The charging sweep: one more segment lit every 0.33 s up to the
+        // last, then straight back to the charge and on again - every step
+        // the same length, the restart included.
+        readonly property int chargeSegments: Math.round(Math.max(0, Math.min(1, root.battery)) * 20)
+        property int sweepSegments: batteryBox.chargeSegments
+        readonly property bool sweeping: root.hasBattery && root.charging && batteryBox.visible
+        readonly property real shown: batteryBox.sweeping ? batteryBox.sweepSegments / 20 : Math.max(0, root.battery)
 
-        SequentialAnimation {
-            running: root.hasBattery && root.charging && batteryBox.visible
-            loops: Animation.Infinite
-            onRunningChanged: if (!running) batteryBox.shown = Qt.binding(() => Math.max(0, root.battery))
+        onSweepingChanged: batteryBox.sweepSegments = batteryBox.chargeSegments
 
-            PropertyAction { target: batteryBox; property: "shown"; value: Math.max(0, root.battery) }
-            NumberAnimation {
-                target: batteryBox
-                property: "shown"
-                to: 1
-                // Slowly: about four seconds for an empty battery.
-                duration: Math.max(600, (1 - Math.max(0, root.battery)) * 4000)
-                easing.type: Easing.InOutSine
-            }
-            PauseAnimation { duration: 500 }
-            PropertyAction { target: batteryBox; property: "shown"; value: Math.max(0, root.battery) }
-            PauseAnimation { duration: 900 }
+        Timer {
+            interval: 330
+            repeat: true
+            running: batteryBox.sweeping
+            onTriggered: batteryBox.sweepSegments = batteryBox.sweepSegments >= 20
+                ? batteryBox.chargeSegments
+                : batteryBox.sweepSegments + 1
         }
 
         Row {
