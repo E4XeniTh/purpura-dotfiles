@@ -145,15 +145,13 @@ Rectangle {
     }
 
     // The charge, beside the box: its own box, bordered like this row and
-    // joined to it by a line - an icon, the segmented bar, the percentage.
-    // All red when it's low. While charging, a charging icon, and the bar
-    // lights one more segment every 0.33 s to the end, then drops back to
-    // the charge, over and over.
+    // joined to it by a line - an icon, the segmented bar, the percentage,
+    // all in the row's own colour, or all red when it's low. While charging
+    // (plugged in) a plug instead of the battery icon, and the bar lights one
+    // more segment every 0.33 s to the end, then drops back to the charge,
+    // over and over - nothing changes colour for it.
     readonly property bool batteryLow: Logic.batteryLow(root.battery, root.charging)
-    readonly property color batteryFrameColor: root.batteryLow ? Config.fgcolorred : root.stateColor
-    readonly property color batteryTextColor: root.batteryLow ? Config.fgcolorred
-        : root.charging ? Config.fgcolorlight
-        : root.stateColor
+    readonly property color batteryColor: root.batteryLow ? Config.fgcolorred : root.stateColor
     // Everything in the battery box but the bar: padding, icon, gaps and a
     // percentage wide enough for "100%".
     readonly property real batteryFixedWidth: Config.scaled(90, root.uiScale)
@@ -164,7 +162,7 @@ Rectangle {
         visible: root.hasBattery
         width: root.batteryGap
         height: Config.scaled(2, root.uiScale)
-        color: root.batteryFrameColor
+        color: root.batteryColor
     }
 
     Rectangle {
@@ -176,7 +174,7 @@ Rectangle {
         height: root.height
         color: Config.fillcolor
         border.width: Config.scaled(2, root.uiScale)
-        border.color: root.batteryFrameColor
+        border.color: root.batteryColor
 
         // The charging sweep: one more segment lit every 0.33 s up to the
         // last, then straight back to the charge and on again - every step
@@ -213,14 +211,52 @@ Rectangle {
                 IconImage {
                     id: batteryIcon
                     anchors.fill: parent
-                    source: Quickshell.iconPath(Config.batteryIconName(Math.max(0, root.battery) * 100, root.charging),
-                        root.charging ? "battery-good-charging-symbolic" : "battery-good-symbolic")
+                    visible: !root.charging
+                    source: Quickshell.iconPath(Config.batteryIconName(Math.max(0, root.battery) * 100, false),
+                        "battery-good-symbolic")
                 }
 
                 ColorOverlay {
                     anchors.fill: batteryIcon
+                    visible: batteryIcon.visible
                     source: batteryIcon
-                    color: root.batteryTextColor
+                    color: root.batteryColor
+                }
+
+                // Plugged in: a plug on its cable, drawn here - the icon
+                // theme (Breeze) has none.
+                Canvas {
+                    id: plugIcon
+
+                    readonly property color tint: root.batteryColor
+
+                    anchors.fill: parent
+                    visible: root.charging
+                    onTintChanged: requestPaint()
+                    onVisibleChanged: if (visible) requestPaint()
+                    onWidthChanged: requestPaint()
+
+                    onPaint: {
+                        const ctx = getContext("2d")
+                        ctx.reset()
+                        const u = width / 16
+                        ctx.fillStyle = plugIcon.tint
+                        // Prongs.
+                        ctx.fillRect(5 * u, 1 * u, 2 * u, 4 * u)
+                        ctx.fillRect(9 * u, 1 * u, 2 * u, 4 * u)
+                        // Body, narrowing to the cable.
+                        ctx.beginPath()
+                        ctx.moveTo(3 * u, 5 * u)
+                        ctx.lineTo(13 * u, 5 * u)
+                        ctx.lineTo(13 * u, 9 * u)
+                        ctx.lineTo(10 * u, 12 * u)
+                        ctx.lineTo(6 * u, 12 * u)
+                        ctx.lineTo(3 * u, 9 * u)
+                        ctx.closePath()
+                        ctx.fill()
+                        // Cable.
+                        ctx.fillRect(7 * u, 12 * u, 2 * u, 4 * u)
+                    }
                 }
             }
 
@@ -232,14 +268,14 @@ Rectangle {
                 segmentCount: 20
                 barHeight: Config.scaled(14, root.uiScale)
                 value: batteryBox.shown
-                litColor: root.batteryLow ? Config.fgcolorred : root.charging ? Config.fgcolorlight : Config.fgcolor
+                litColor: root.batteryColor
             }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Config.scaled(40, root.uiScale)
                 text: Math.round(Math.max(0, root.battery) * 100) + "%"
-                color: root.batteryTextColor
+                color: root.batteryColor
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(12, root.uiScale)
                 font.bold: true
