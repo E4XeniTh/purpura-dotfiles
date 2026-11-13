@@ -20,6 +20,7 @@ out to be copied straight into place.
 | **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and the dashboard's now-playing card beside it while something plays. Authenticates via PAM |
 | **Auto-lock, dim and suspend** | Settings > General > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active if you like) and suspends, counting down on the main monitor first. The dim covers everything, the settings screen and the lock screen included |
 | **Manual dim** | META + BackSpace dims every monitor but the one the mouse is on, each time it's pressed. A dimmed one wakes when the mouse moves onto it. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
+| **Mouse & input languages** | Settings > General > Input: mouse sensitivity and acceleration, and the keyboard languages you type in. With more than one, META + - switches to the next and shows which is on. Kept after Hyprland config reloads. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
@@ -40,7 +41,7 @@ scripts) and `components/`, by area:
 | `osd/` | Volume, brightness, workspace and fullscreen-hint popups |
 | `lock/` | The lock screen |
 | `power/` | Power menu, auto-lock, auto-dim and auto-suspend |
-| `system/` | Shell-wide state with no UI of its own: UI scale, edge gaps, night light |
+| `system/` | Shell-wide state with no UI of its own: UI scale, edge gaps, night light, input settings |
 | `common/` | Pieces several areas share |
 
 `./purpura.sh --install`/`--update` keeps `components/` exactly as the

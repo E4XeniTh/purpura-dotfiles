@@ -29,11 +29,10 @@ hl.on("hyprland.start", function()
 -- layout, not just the primary display.
 hl.exec_cmd("~/.config/hypr/scripts/apply-monitors.sh")
 hl.exec_cmd("/usr/lib/hyprpolkitagent/hyprpolkitagent")
--- Replays mouse sensitivity + whether Solaar autostarts at all, both
--- saved by the quickshell General > Input settings panel - see that
--- script for why Solaar's own launch (used to be a bare, unconditional
--- `hl.exec_cmd("solaar --window hide")` right here) now goes through it
--- instead.
+-- Replays the quickshell General > Input settings - mouse sensitivity and
+-- acceleration, the input languages, and whether Solaar autostarts at all
+-- (Solaar's launch used to be a bare, unconditional
+-- `hl.exec_cmd("solaar --window hide")` right here) - see that script.
 hl.exec_cmd("~/.config/hypr/scripts/apply-peripherals.sh")
 hl.exec_cmd("hyprpaper")
 hl.exec_cmd("xembedsniproxy")
@@ -174,8 +173,11 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
             kb_options = "",
             kb_rules = "",
             follow_mouse = 1,
-            sensitivity = -1, -- -1.0 - 1.0, 0 means no modification.
-            force_no_accel = true, -- no mouse acceleration
+            -- Settings > General > Input sets these three (and the
+            -- languages above, once any are ticked there) after this.
+            sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
+            accel_profile = "flat", -- no mouse acceleration
+            force_no_accel = false, -- would skip sensitivity too
             touchpad = {
                 natural_scroll = false,
             },
@@ -288,6 +290,7 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + X", hl.dsp.global("quickshell:screenshot"), { description = "Screenshot" })
     hl.bind(mainMod .. " + grave", hl.dsp.global("quickshell:dropdownconsole"), { description = "Dropdown console" })
     hl.bind(mainMod .. " + BackSpace", hl.dsp.global("quickshell:manualdim"), { description = "Manual dim" })
+    hl.bind(mainMod .. " + minus", hl.dsp.global("quickshell:inputlanguage"), { description = "Next input language" })
 
     hl.bind(mainMod .. " + 1", hl.dsp.focus({ workspace = 1 }), { description = "Go to workspace 1" })
     hl.bind(mainMod .. " + 2", hl.dsp.focus({ workspace = 2 }), { description = "Go to workspace 2" })

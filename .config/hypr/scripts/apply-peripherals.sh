@@ -1,33 +1,48 @@
 #!/bin/bash
-# Replays the peripheral settings saved by the quickshell Shell >
-# Input settings panel (components/settings/ShellSettings.qml): mouse sensitivity via `hyprctl eval` - this config
-# is parsed by hyprlang's Lua frontend, which rejects `hyprctl keyword`
-# outright ("keyword can't work with non-legacy parsers. Use eval."),
-# same reasoning apply-monitors.sh's own header comment explains - and
-# whether Solaar autostarts at all, replacing hyprland.lua's old
-# unconditional `hl.exec_cmd("solaar --window hide")` autostart line.
+# Replays the settings saved by the quickshell General > Input settings
+# panel (components/settings/ShellSettings.qml) at login, before the shell
+# is up - the shell's InputDevices.qml applies the same ones again once it
+# is, and after every config reload:
+#  - the mouse: sensitivity and acceleration, always. Acceleration off is
+#    libinput's flat profile rather than force_no_accel, which skips
+#    libinput - and with it sensitivity - altogether; flat at sensitivity 0
+#    moves the cursor as far as the mouse says, as force_no_accel did. No
+#    saved sensitivity is 0 (hyprland.lua's own value only ever had an
+#    effect without force_no_accel).
+#  - the input languages (kb_layout), once some are saved - until then
+#    hyprland.lua's own kb_layout stays.
+#  - whether Solaar starts (default yes), replacing hyprland.lua's old
+#    unconditional `hl.exec_cmd("solaar --window hide")` autostart line.
 #
-# Run once at startup (see hyprland.lua's autostart block), same as
-# apply-monitors.sh, so a setting changed through the panel survives a
-# restart. A missing settings file, or one with no mouseSensitivity key
-# yet (first run, before the panel's slider has ever been touched),
-# deliberately skips the sensitivity eval entirely rather than forcing
-# some hardcoded fallback - leaving hyprland.lua's own static `input.
-# sensitivity` default (set once, earlier, at config parse time) in
-# effect untouched. Solaar's own default (no key yet) is enabled,
-# matching hyprland.lua's previous unconditional behavior.
+# All through `hyprctl eval`: this config is parsed by hyprlang's Lua
+# frontend, which rejects `hyprctl keyword` outright ("keyword can't work
+# with non-legacy parsers. Use eval."), same as apply-monitors.sh.
+#
+# Run once at startup (see hyprland.lua's autostart block).
 CONF="$HOME/.config/quickshell/peripheralsettings.json"
 
 SOLAAR_ENABLED="true"
+SENSITIVITY="0"
+ACCEL_PROFILE="flat"
+LAYOUTS=""
 
 if [ -f "$CONF" ]; then
-    sensitivity=$(jq -r 'if has("mouseSensitivity") then .mouseSensitivity else empty end' "$CONF" 2>/dev/null)
-    if [ -n "$sensitivity" ] && [ "$sensitivity" != "null" ]; then
-        hyprctl eval "hl.config({ input = { sensitivity = $sensitivity } })"
-    fi
+    value=$(jq -r 'if (.mouseSensitivity | type) == "number"
+        then (if .mouseSensitivity < -1 then -1 elif .mouseSensitivity > 1 then 1 else .mouseSensitivity end)
+        else empty end' "$CONF" 2>/dev/null)
+    [ -n "$value" ] && SENSITIVITY="$value"
+
+    [ "$(jq -r '.mouseAcceleration == true' "$CONF" 2>/dev/null)" = "true" ] && ACCEL_PROFILE="adaptive"
+
+    LAYOUTS=$(jq -r 'if (.keyboardLayouts | type) == "array"
+        then [.keyboardLayouts[] | tostring | select(test("^[A-Za-z0-9_-]+$"))] | join(",")
+        else empty end' "$CONF" 2>/dev/null)
 
     value=$(jq -r 'if .solaarStartupEnabled == false then "false" else "true" end' "$CONF" 2>/dev/null)
     [ -n "$value" ] && SOLAAR_ENABLED="$value"
 fi
+
+hyprctl eval "hl.config({ input = { force_no_accel = false, accel_profile = \"$ACCEL_PROFILE\", sensitivity = $SENSITIVITY } })"
+[ -n "$LAYOUTS" ] && hyprctl eval "hl.config({ input = { kb_layout = \"$LAYOUTS\", kb_variant = \"\" } })"
 
 [ "$SOLAAR_ENABLED" = "false" ] || solaar --window hide &

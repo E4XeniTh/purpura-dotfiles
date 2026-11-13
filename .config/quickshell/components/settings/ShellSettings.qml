@@ -124,6 +124,12 @@ Item {
     function loadPeripheralsStore() {
         peripheralsStoreProcess.running = false
         peripheralsStoreProcess.running = true
+        liveLayoutProcess.running = false
+        liveLayoutProcess.running = true
+        if (root.availableLayouts.length === 0) {
+            layoutListProcess.running = false
+            layoutListProcess.running = true
+        }
     }
 
     function setPeripheralSetting(key, value) {
@@ -140,6 +146,57 @@ Item {
     // unconditional `hl.exec_cmd("solaar --window hide")` autostart line -
     // a fresh install with no peripheralsettings.json yet still starts it.
     readonly property bool solaarStartupEnabled: root.peripheralsStore.solaarStartupEnabled !== false
+    // Off by default - InputDevices.qml (which applies all of these) says
+    // what off means.
+    readonly property bool mouseAcceleration: root.peripheralsStore.mouseAcceleration === true
+
+    // The input languages (xkb layout codes), in order: the first is the
+    // one in use after login. Until some are saved, whatever Hyprland has
+    // now - hyprland.lua's kb_layout.
+    readonly property var keyboardLayouts: {
+        const saved = root.peripheralsStore.keyboardLayouts
+        if (Array.isArray(saved) && saved.length > 0) return saved.map(String)
+        return root.liveLayouts.length > 0 ? root.liveLayouts : ["us"]
+    }
+    property var liveLayouts: []
+    // Every layout xkb knows: [{ code, name }], by name.
+    property var availableLayouts: []
+    property string layoutSearch: ""
+
+    function layoutName(code) {
+        const known = root.availableLayouts.find(l => l.code === code)
+        return known ? known.name : code
+    }
+
+    // Ticked: added at the end. Unticked: gone - but never the last one.
+    function toggleLayout(code) {
+        const current = root.keyboardLayouts
+        if (current.indexOf(code) >= 0) {
+            if (current.length > 1) root.setPeripheralSetting("keyboardLayouts", current.filter(c => c !== code))
+        } else {
+            root.setPeripheralSetting("keyboardLayouts", current.concat([code]))
+        }
+    }
+
+    // To the front, so it's the one in use after login.
+    function makeLayoutFirst(code) {
+        const current = root.keyboardLayouts
+        if (current[0] === code) return
+        root.setPeripheralSetting("keyboardLayouts", [code].concat(current.filter(c => c !== code)))
+    }
+
+    // The language list: the ticked ones first, in their order, then the
+    // rest by name - narrowed to the search's matches (name or code).
+    readonly property var shownLayouts: {
+        const query = root.layoutSearch.trim().toLowerCase()
+        const chosen = root.keyboardLayouts
+        const matches = l => query.length === 0 || l.name.toLowerCase().indexOf(query) >= 0 || l.code.toLowerCase().indexOf(query) >= 0
+        const ticked = chosen.map(code => root.availableLayouts.find(l => l.code === code) || { code, name: code }).filter(matches)
+        const rest = root.availableLayouts.filter(l => chosen.indexOf(l.code) < 0 && matches(l))
+        return ticked.concat(rest)
+    }
+
+    function toggleMouseAcceleration() { root.setPeripheralSetting("mouseAcceleration", !root.mouseAcceleration) }
 
     // Live-dragged value, separate from mouseSensitivity (which only
     // updates once sensitivityApplyTimer's debounce actually writes it
@@ -248,13 +305,53 @@ Item {
         }
     }
 
-    // Write-only, same reasoning as barSettingsFile above - nothing else
-    // in the running shell reads peripheralsettings.json back, only
-    // apply-peripherals.sh at the next Hyprland startup.
+    // Write-only from here: InputDevices.qml reads it back and applies it
+    // (and apply-peripherals.sh at login).
     FileView {
         id: peripheralsSettingsFile
         path: Quickshell.env("HOME") + "/.config/quickshell/peripheralsettings.json"
         preload: false
+    }
+
+    // The input languages Hyprland has now (its main keyboard's), for
+    // before any are saved.
+    Process {
+        id: liveLayoutProcess
+        command: ["hyprctl", "devices", "-j"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const keyboards = JSON.parse(text).keyboards || []
+                    const main = keyboards.find(k => k.main) || keyboards[0]
+                    root.liveLayouts = main && main.layout
+                        ? String(main.layout).split(",").map(s => s.trim()).filter(s => /^[A-Za-z0-9_-]+$/.test(s))
+                        : []
+                } catch (e) {
+                    root.liveLayouts = []
+                }
+            }
+        }
+    }
+
+    // Every layout xkb knows, with its name - the "! layout" part of its
+    // rules list ("  hu              Hungarian").
+    Process {
+        id: layoutListProcess
+        command: ["sh", "-c", "f=/usr/share/X11/xkb/rules/evdev.lst; [ -r \"$f\" ] || f=/usr/share/X11/xkb/rules/base.lst; "
+            + "sed -n '/^! layout/,/^! /p' \"$f\""]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const list = []
+                for (const line of text.split("\n")) {
+                    const m = /^\s+([A-Za-z0-9_-]+)\s+(.+?)\s*$/.exec(line)
+                    // "custom" needs a hand-made xkb file - not one to tick.
+                    if (m && m[1] !== "custom") list.push({ code: m[1], name: m[2] })
+                }
+                root.availableLayouts = list.sort((a, b) => a.name.localeCompare(b.name))
+            }
+        }
     }
 
     // Same `cat`-via-Process idiom as barStoreProcess/peripheralsStoreProcess
@@ -283,27 +380,14 @@ Item {
         preload: false
     }
 
-    // Debounced real apply for the sensitivity slider - see
-    // stagedSensitivity's own comment above for why. `hyprctl eval`, not
-    // `keyword` - this config is parsed by hyprlang's Lua frontend, which
-    // rejects `keyword` outright (see apply-monitors.sh's own comment for
-    // the same reasoning), so re-invoking the same hl.config({ input =
-    // {...} }) call hyprland.lua's static config used at parse time is
-    // the only working live-apply path here too.
+    // Debounced save for the sensitivity slider - see stagedSensitivity's
+    // own comment above for why. InputDevices.qml puts it into Hyprland
+    // once it's saved.
     Timer {
         id: sensitivityApplyTimer
         interval: 330
         repeat: false
-        onTriggered: {
-            root.setPeripheralSetting("mouseSensitivity", root.stagedSensitivity)
-            sensitivityApplyProcess.command = ["hyprctl", "eval", "hl.config({ input = { sensitivity = " + root.stagedSensitivity + " } })"]
-            sensitivityApplyProcess.running = false
-            sensitivityApplyProcess.running = true
-        }
-    }
-
-    Process {
-        id: sensitivityApplyProcess
+        onTriggered: root.setPeripheralSetting("mouseSensitivity", root.stagedSensitivity)
     }
 
     // Immediate live effect for the Solaar Startup toggle, on top of the
@@ -644,6 +728,13 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "The bar's workspace list shows only workspaces 1-5 that are pinned to a monitor in Display settings, each on its own monitor."
+                }
+
                 // ---------------- show empty workspaces (widget) ----------------
                 RowLayout {
                     Layout.fillWidth: true
@@ -681,6 +772,13 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "Pinned workspaces that haven't been opened yet still get a box in the bar's workspace list, to click straight to."
+                }
+
                 // ---------------- show empty workspaces (osd) ----------------
                 RowLayout {
                     Layout.fillWidth: true
@@ -716,6 +814,13 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+                }
+
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "The same for the workspace popup that shows for a moment when you switch workspace."
                 }
                 Item {}
                 // ---------------- brightness control ----------------
@@ -755,6 +860,13 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "The brightness control on the bar."
+                }
+
                 // ---------------- show updater ----------------
                 RowLayout {
                     Layout.fillWidth: true
@@ -790,6 +902,13 @@ Item {
                     }
 
                     Item { Layout.fillWidth: true }
+                }
+
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "The updates button on the bar: left-click lists what's waiting, right-click updates everything."
                 }
 
                 // ---------------- fullscreen hint ----------------
@@ -829,9 +948,18 @@ Item {
                     Item { Layout.fillWidth: true }
                 }
 
+                SettingHint {
+                    // Close under the setting it's for, like the Power category's.
+                    Layout.topMargin: -Config.scaled(6, root.uiScale)
+                    uiScale: root.uiScale
+                    text: "A moment's reminder, when a window goes fullscreen, that META + D still opens the dashboard behind it."
+                }
+
                 } // barCategoryContent
 
                 // ---------------- Input category ----------------
+                // Saved to peripheralsettings.json; InputDevices.qml puts it
+                // all into Hyprland.
                 ColumnLayout {
                     id: peripheralsCategoryContent
 
@@ -839,48 +967,15 @@ Item {
                     visible: root.currentCategory === 1
                     spacing: Config.scaled(10, root.uiScale)
 
-                    // ---------------- solaar startup ----------------
-                    RowLayout {
-                        Layout.fillWidth: true
+                    // ---------------- Mouse ----------------
+                    SectionHeader {
                         Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.solaarStartupEnabled ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleSolaarStartup()
-                            }
-                        }
-
-                        Text {
-                            text: "Solaar Startup"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleSolaarStartup()
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
+                        uiScale: root.uiScale
+                        text: "Mouse"
                     }
 
-                    // ---------------- mouse sensitivity ----------------
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(4, root.uiScale)
                         spacing: Config.scaled(6, root.uiScale)
 
                         RowLayout {
@@ -918,6 +1013,252 @@ Item {
                                 root.stagedSensitivity = Math.round((newValue * 2 - 1) * 100) / 100
                                 sensitivityApplyTimer.restart()
                             }
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How far the cursor goes for the same mouse movement, from -1 (slowest) to 1 (fastest). At 0 with acceleration off, it goes exactly as far as the mouse reports."
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Mouse Acceleration"
+                            checked: root.mouseAcceleration
+                            onToggled: root.toggleMouseAcceleration()
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            text: "Moving the mouse faster takes the cursor further than the same distance moved slowly. Off, the cursor always goes the same distance - best for aiming."
+                        }
+                    }
+
+                    // ---------------- Keyboard ----------------
+                    SectionHeader {
+                        uiScale: root.uiScale
+                        text: "Keyboard"
+                    }
+
+                    Text {
+                        text: "Input Languages:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, root.uiScale)
+                        font.bold: true
+                    }
+
+                    // The ticked languages in order - the first, lit, is the
+                    // one in use after login. Clicking another puts it first;
+                    // its x takes it off (never the last one).
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        Repeater {
+                            model: root.keyboardLayouts
+
+                            DashCard {
+                                id: languageChip
+
+                                required property string modelData
+                                required property int index
+                                readonly property bool first: languageChip.index === 0
+
+                                uiScale: root.uiScale
+                                width: chipRow.implicitWidth + Config.scaled(16, root.uiScale)
+                                height: Config.scaled(28, root.uiScale)
+                                color: chipMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                border.color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
+
+                                MouseArea {
+                                    id: chipMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.makeLayoutFirst(languageChip.modelData)
+                                }
+
+                                Row {
+                                    id: chipRow
+
+                                    anchors.centerIn: parent
+                                    spacing: Config.scaled(8, root.uiScale)
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: root.layoutName(languageChip.modelData)
+                                        color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(12, root.uiScale)
+                                        font.bold: true
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        visible: root.keyboardLayouts.length > 1
+                                        text: "x"
+                                        color: removeMouse.containsMouse ? Config.fgcolorred : Config.fgcolordark
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(12, root.uiScale)
+                                        font.bold: true
+
+                                        MouseArea {
+                                            id: removeMouse
+                                            anchors.fill: parent
+                                            anchors.margins: -Config.scaled(4, root.uiScale)
+                                            hoverEnabled: true
+                                            onClicked: root.toggleLayout(languageChip.modelData)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Search, then tick.
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(30, root.uiScale)
+                        color: Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: layoutSearchInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                        TextInput {
+                            id: layoutSearchInput
+
+                            anchors.fill: parent
+                            anchors.leftMargin: Config.scaled(8, root.uiScale)
+                            anchors.rightMargin: Config.scaled(8, root.uiScale)
+                            verticalAlignment: TextInput.AlignVCenter
+                            clip: true
+                            color: Config.fgcolor
+                            selectionColor: Config.fgcolorhover
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            onTextEdited: root.layoutSearch = layoutSearchInput.text
+                        }
+
+                        Text {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Config.scaled(8, root.uiScale)
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: layoutSearchInput.text.length === 0
+                            text: "Search languages..."
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                        Layout.preferredHeight: Config.scaled(200, root.uiScale)
+                        color: Config.fillcolor
+                        border.width: Config.scaled(2, root.uiScale)
+                        border.color: Config.fgcolor
+
+                        ListView {
+                            id: layoutList
+
+                            anchors.fill: parent
+                            anchors.margins: Config.scaled(6, root.uiScale)
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            model: root.shownLayouts
+
+                            delegate: Rectangle {
+                                id: layoutRow
+
+                                required property var modelData
+                                readonly property bool ticked: root.keyboardLayouts.indexOf(layoutRow.modelData.code) >= 0
+
+                                width: layoutList.width
+                                height: Config.scaled(26, root.uiScale)
+                                color: layoutRowMouse.containsMouse ? Config.fgcolorhover : "transparent"
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: Config.scaled(4, root.uiScale)
+                                    anchors.rightMargin: Config.scaled(6, root.uiScale)
+                                    spacing: Config.scaled(8, root.uiScale)
+
+                                    Rectangle {
+                                        Layout.preferredWidth: Config.scaled(16, root.uiScale)
+                                        Layout.preferredHeight: Config.scaled(16, root.uiScale)
+                                        color: layoutRow.ticked ? Config.fgcolor : Config.fillcolor
+                                        border.width: Config.scaled(2, root.uiScale)
+                                        border.color: Config.fgcolor
+                                    }
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: layoutRow.modelData.name
+                                        color: layoutRow.ticked ? Config.fgcolorlight : Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: layoutRow.ticked
+                                        elide: Text.ElideRight
+                                    }
+
+                                    Text {
+                                        text: layoutRow.modelData.code
+                                        color: Config.fgcolordark
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(12, root.uiScale)
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: layoutRowMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.toggleLayout(layoutRow.modelData.code)
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: layoutList.count === 0
+                            text: root.availableLayouts.length === 0 ? "Loading..." : "No language matches."
+                            color: Config.fgcolordark
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+                    }
+
+                    SettingHint {
+                        uiScale: root.uiScale
+                        indented: false
+                        text: "Tick the languages you type in. With more than one, META + - switches to the next and shows which is on; the first (lit) is the one in use after login - click another to put it first."
+                    }
+
+                    // ---------------- the rest ----------------
+                    SectionHeader {
+                        uiScale: root.uiScale
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Solaar Startup"
+                            checked: root.solaarStartupEnabled
+                            onToggled: root.toggleSolaarStartup()
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            text: "Starts Solaar, for Logitech wireless devices, hidden in the tray at login. Turning it on or off starts or stops it now as well."
                         }
                     }
                 }
@@ -966,6 +1307,13 @@ Item {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "The updates button on the bar lights up while anything is waiting to update."
                     }
 
                     // ---------------- follow purpura ----------------
@@ -1109,6 +1457,14 @@ Item {
 
                         Item { Layout.fillWidth: true }
                     }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        indented: false
+                        text: "How often pacman, the AUR and flatpak are checked for updates - and purpura, when it's followed."
+                    }
                 }
 
                 // ---------------- Night Light category ----------------
@@ -1185,6 +1541,13 @@ Item {
                             Item { Layout.fillWidth: true }
                         }
 
+                        SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
+                            uiScale: root.uiScale
+                            text: "Tints every screen warm, which is easier on the eyes at night."
+                        }
+
                         // ---------------- strength ----------------
                         ColumnLayout {
                             Layout.topMargin: Config.scaled(4, root.uiScale)
@@ -1219,6 +1582,12 @@ Item {
                                 uiScale: root.uiScale
                                 value: root.nlStrength
                                 onMoved: (newValue) => root.nightLight.setStrength(newValue)
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "How warm the tint gets - further right is warmer."
                             }
                         }
 
@@ -1258,6 +1627,13 @@ Item {
                             }
 
                             Item { Layout.fillWidth: true }
+                        }
+
+                        SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
+                            uiScale: root.uiScale
+                            text: "Turns night light on and off by itself every day, between the two times below."
                         }
 
                         // Only interactable while scheduling is on.
@@ -1383,6 +1759,14 @@ Item {
 
                             Item { Layout.fillWidth: true }
                         }
+
+                        SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How gradually the tint comes and goes, whether turned on by hand or by the schedule."
+                        }
                     }
                 }
 
@@ -1429,6 +1813,12 @@ Item {
                             value: root.dropdownConsole ? root.dropdownConsole.widthPercent / 100 : 0
                             onMoved: (newValue) => root.dropdownConsole.setWidthPercent(newValue * 100)
                         }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How much of the screen's width the console takes."
+                        }
                     }
 
                     ColumnLayout {
@@ -1464,6 +1854,12 @@ Item {
                             uiScale: root.uiScale
                             value: root.dropdownConsole ? root.dropdownConsole.heightPercent / 100 : 0
                             onMoved: (newValue) => root.dropdownConsole.setHeightPercent(newValue * 100)
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How far down the screen the console reaches."
                         }
                     }
 
@@ -1506,6 +1902,12 @@ Item {
                             value: root.dropdownConsole ? (root.dropdownConsole.fontSize - minimum) / (maximum - minimum) : 0
                             onMoved: (newValue) => root.dropdownConsole.setFontSize(minimum + newValue * (maximum - minimum))
                         }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "The terminal's text size."
+                        }
                     }
 
                     ColumnLayout {
@@ -1541,6 +1943,12 @@ Item {
                             uiScale: root.uiScale
                             value: root.dropdownConsole ? root.dropdownConsole.opacityPercent / 100 : 0
                             onMoved: (newValue) => root.dropdownConsole.setOpacityPercent(newValue * 100)
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How solid the console's background is - lower shows more of what's behind it."
                         }
                     }
 
@@ -1583,6 +1991,13 @@ Item {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "Closes the console as soon as you click away from it."
                     }
 
                     RowLayout {
@@ -1683,6 +2098,14 @@ Item {
                         Item { Layout.fillWidth: true }
                     }
 
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        indented: false
+                        text: "While the console is closed, ends its terminal once it has sat at a prompt for this long. A command still running keeps it."
+                    }
+
                     RowLayout {
                         id: autokillNotificationRow
 
@@ -1725,6 +2148,13 @@ Item {
                         }
 
                         Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "A notification when the terminal is ended that way."
                     }
 
                     ColumnLayout {
@@ -1772,6 +2202,12 @@ Item {
                                 }
                                 onAccepted: startupCommandInput.focus = false
                             }
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "Typed into every new terminal as it starts, e.g. cd ~/project && claude. A new one starts the first time the console opens, and after the last one ended."
                         }
                     }
                 }

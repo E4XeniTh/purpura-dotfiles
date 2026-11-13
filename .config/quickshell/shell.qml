@@ -38,6 +38,9 @@ Scope {
     shellScale: uiScaleSetting.value
   }
   NightLight { id: nightLight }
+  // Settings > General > Input: mouse and input languages, and the input
+  // language shortcut with its OSD.
+  InputDevices { id: inputDevices; osd: languageOsd }
   Dashboard {
     id: dashboard
     powerMenu: powerMenu
@@ -83,5 +86,6 @@ Scope {
   }
 
   WorkspaceOsd { shellScale: uiScaleSetting.value }
+  LanguageOsd { id: languageOsd; shellScale: uiScaleSetting.value }
   FullscreenHintOsd { dashboard: dashboard; shellScale: uiScaleSetting.value }
 }

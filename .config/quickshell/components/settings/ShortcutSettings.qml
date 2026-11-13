@@ -134,6 +134,7 @@ Item {
         { label: "Screenshot", lua: "hl.dsp.global(\"quickshell:screenshot\")" },
         { label: "Dropdown console", lua: "hl.dsp.global(\"quickshell:dropdownconsole\")" },
         { label: "Manual dim", lua: "hl.dsp.global(\"quickshell:manualdim\")" },
+        { label: "Next input language", lua: "hl.dsp.global(\"quickshell:inputlanguage\")" },
         { label: "Global shortcuts", global: true }
     ]
     readonly property var actionLabels: root.actions.map(a => a.label)
