@@ -82,8 +82,8 @@ The installer:
   fastfetch logo. The repo itself stays purple - only the installed copies
   are recolored (`install/recolor.py`)
 - installs the packages listed below from the Arch repos and the AUR
-  (offering to set up `yay` if you have no AUR helper), asking about the
-  optional app groups first
+  (offering to set up `yay` if you have no AUR helper): rofi, Dolphin, fish
+  and fastfetch come along, and only Solaar is asked about first
 - copies the configs into `~/.config`, backing up every file it changes
   to `~/.config/purpura-backups/<date>/` first
 - creates `hyprland.lua`, `hyprpaper.conf` and `ZapZap.conf` from their
@@ -118,7 +118,7 @@ newer on that checkout's upstream branch is an update.
 - Right-clicking the updater button runs purpura's update just before the
   firmware updates: a fast-forward `git pull` of the checkout, then
   `./purpura.sh --update`, which installs the new configs and helpers, keeps
-  your color and keyboard layout, and only adds core packages that are
+  your color, and only adds core packages that are
   missing (never the optional apps).
 - The dropdown's **Update:** buttons run one step on its own - packages,
   flatpak, firmware or purpura - or **everything**, the same as
