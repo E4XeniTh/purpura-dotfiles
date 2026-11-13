@@ -37,6 +37,10 @@ DashCard {
     // silently on Apply, so it's hidden entirely rather than shown
     // broken.
     required property bool supportsBrightness
+    // The slider (and its separator) shows only for a display that can
+    // take it and is on - disabled, or about to be on Apply, there's
+    // nothing to set the brightness of.
+    readonly property bool showsBrightness: root.supportsBrightness && root.pendingEnabled
     property real uiScale: 1.0
 
     signal clicked()
@@ -122,7 +126,7 @@ DashCard {
         }
 
         Rectangle {
-            visible: root.supportsBrightness
+            visible: root.showsBrightness
             Layout.fillWidth: true
             Layout.preferredHeight: Config.scaled(1, root.uiScale)
             color: root.border.color
@@ -130,7 +134,7 @@ DashCard {
 
 
         DeviceSlider {
-            visible: root.supportsBrightness
+            visible: root.showsBrightness
             Layout.fillWidth: true
             // Thinner/smaller than the volume OSD's own slider - this
             // is a secondary control buried in a small list card.
