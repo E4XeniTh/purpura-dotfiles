@@ -32,7 +32,8 @@ Rectangle {
     property bool renaming: false
     // How far past the box the battery bar starts, and how long it is.
     property real batteryGap: Config.scaled(12, root.uiScale)
-    property real batteryBarWidth: Config.scaled(110, root.uiScale)
+    // The battery box's width, from the end of the line to the pane's edge.
+    property real batteryBoxWidth: Config.scaled(320, root.uiScale)
 
     signal clicked()
     signal renameRequested()
@@ -53,9 +54,6 @@ Rectangle {
     }
 
     readonly property bool hasBattery: root.battery >= 0
-    readonly property color batteryColor: Logic.batteryLow(root.battery, root.charging) ? Config.fgcolorred
-        : root.charging ? Config.fgcolorlight
-        : Config.fgcolor
 
     color: nodeMouse.containsMouse || root.selected ? Config.fgcolorhover : Config.fillcolor
     border.width: Config.scaled(2, root.uiScale)
@@ -146,34 +144,108 @@ Rectangle {
         }
     }
 
-    // The charge, beside the box.
-    Row {
-        x: root.width + root.batteryGap
+    // The charge, beside the box: its own box, bordered like this row and
+    // joined to it by a line - an icon, the segmented bar, the percentage.
+    // All red when it's low. While charging, a charging icon, and the bar
+    // slowly fills to the end, then drops back to the charge, over and over.
+    readonly property bool batteryLow: Logic.batteryLow(root.battery, root.charging)
+    readonly property color batteryFrameColor: root.batteryLow ? Config.fgcolorred : root.stateColor
+    readonly property color batteryTextColor: root.batteryLow ? Config.fgcolorred
+        : root.charging ? Config.fgcolorlight
+        : root.stateColor
+    // Everything in the battery box but the bar: padding, icon, gaps and a
+    // percentage wide enough for "100%".
+    readonly property real batteryFixedWidth: Config.scaled(90, root.uiScale)
+
+    Rectangle {
+        x: root.width
         anchors.verticalCenter: parent.verticalCenter
         visible: root.hasBattery
-        spacing: Config.scaled(8, root.uiScale)
+        width: root.batteryGap
+        height: Config.scaled(2, root.uiScale)
+        color: root.batteryFrameColor
+    }
 
-        DigitalBar {
-            anchors.verticalCenter: parent.verticalCenter
-            uiScale: root.uiScale
-            targetWidth: root.batteryBarWidth
-            // 5% each.
-            segmentCount: 20
-            barHeight: Config.scaled(14, root.uiScale)
-            value: Math.max(0, root.battery)
-            litColor: root.batteryColor
+    Rectangle {
+        id: batteryBox
+
+        x: root.width + root.batteryGap
+        visible: root.hasBattery
+        width: root.batteryBoxWidth
+        height: root.height
+        color: Config.fillcolor
+        border.width: Config.scaled(2, root.uiScale)
+        border.color: root.batteryFrameColor
+
+        // What the bar shows - the charge, or the charging sweep.
+        property real shown: Math.max(0, root.battery)
+
+        SequentialAnimation {
+            running: root.hasBattery && root.charging && batteryBox.visible
+            loops: Animation.Infinite
+            onRunningChanged: if (!running) batteryBox.shown = Qt.binding(() => Math.max(0, root.battery))
+
+            PropertyAction { target: batteryBox; property: "shown"; value: Math.max(0, root.battery) }
+            NumberAnimation {
+                target: batteryBox
+                property: "shown"
+                to: 1
+                // Slowly: about four seconds for an empty battery.
+                duration: Math.max(600, (1 - Math.max(0, root.battery)) * 4000)
+                easing.type: Easing.InOutSine
+            }
+            PauseAnimation { duration: 500 }
+            PropertyAction { target: batteryBox; property: "shown"; value: Math.max(0, root.battery) }
+            PauseAnimation { duration: 900 }
         }
 
-        // A fixed width that fits "100%", so the page can leave exactly that
-        // much room after the bar (NetworkSettings.qml's batteryPercentRoom).
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            width: Config.scaled(40, root.uiScale)
-            text: Math.round(Math.max(0, root.battery) * 100) + "%"
-            color: root.batteryColor
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(12, root.uiScale)
-            font.bold: true
+        Row {
+            anchors {
+                left: parent.left
+                leftMargin: Config.scaled(8, root.uiScale)
+                verticalCenter: parent.verticalCenter
+            }
+            spacing: Config.scaled(8, root.uiScale)
+
+            Item {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Config.scaled(18, root.uiScale)
+                height: Config.scaled(18, root.uiScale)
+
+                IconImage {
+                    id: batteryIcon
+                    anchors.fill: parent
+                    source: Quickshell.iconPath(Config.batteryIconName(Math.max(0, root.battery) * 100, root.charging),
+                        root.charging ? "battery-good-charging-symbolic" : "battery-good-symbolic")
+                }
+
+                ColorOverlay {
+                    anchors.fill: batteryIcon
+                    source: batteryIcon
+                    color: root.batteryTextColor
+                }
+            }
+
+            DigitalBar {
+                anchors.verticalCenter: parent.verticalCenter
+                uiScale: root.uiScale
+                targetWidth: Math.max(0, root.batteryBoxWidth - root.batteryFixedWidth)
+                // 5% each.
+                segmentCount: 20
+                barHeight: Config.scaled(14, root.uiScale)
+                value: batteryBox.shown
+                litColor: root.batteryLow ? Config.fgcolorred : root.charging ? Config.fgcolorlight : Config.fgcolor
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Config.scaled(40, root.uiScale)
+                text: Math.round(Math.max(0, root.battery) * 100) + "%"
+                color: root.batteryTextColor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(12, root.uiScale)
+                font.bold: true
+            }
         }
     }
 

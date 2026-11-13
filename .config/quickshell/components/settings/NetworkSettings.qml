@@ -234,10 +234,25 @@ Item {
         })
     }
 
+    // A battery UPower knows by the device's address - a DualSense or
+    // DualShock's (the kernel's ps-controller-battery-<address>), which BlueZ
+    // itself doesn't report - or null.
+    function upowerBatteryFor(address) {
+        const want = String(address || "").toLowerCase()
+        if (want.length === 0) return null
+        for (const dev of UPower.devices.values) {
+            if (dev.isLaptopBattery) continue
+            if (String(dev.nativePath || "").toLowerCase().indexOf(want) !== -1) return dev
+        }
+        return null
+    }
+
     function bluetoothDeviceNode(adapter, d) {
         const changing = d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting
         const state = Logic.bluetoothDeviceState({ changing: changing, connected: d.connected, paired: d.paired })
-        const battery = d.batteryAvailable ? d.battery : -1
+        const upower = !d.batteryAvailable && d.connected ? root.upowerBatteryFor(d.address) : null
+        const battery = d.batteryAvailable ? d.battery : upower && upower.ready ? upower.percentage : -1
+        const charging = !!upower && (upower.state === UPowerDeviceState.Charging || upower.state === UPowerDeviceState.PendingCharge)
         const systemName = d.name.length > 0 ? d.name : d.deviceName.length > 0 ? d.deviceName : d.address
         const subtitle = state === "busy" ? (d.connected ? "disconnecting…" : "connecting…")
             : d.connected ? "connected" + (battery >= 0 ? " · " + root.percent(battery) : "")
@@ -246,6 +261,7 @@ Item {
             state: state,
             subtitle: subtitle,
             battery: battery,
+            charging: charging,
             icons: Logic.nodeIcons("btDevice", { icon: d.icon })
         })
     }
@@ -344,17 +360,16 @@ Item {
     // not, so nothing shifts when one connects. The boxes stop at a width
     // that still reads well, but never narrower than the deepest row needs,
     // and always leave the bars at least minBatteryBar.
-    readonly property real batteryGap: Config.scaled(12, root.uiScale)
-    // TreeNode.qml's gap after the bar and its percentage's width.
-    readonly property real batteryPercentRoom: Config.scaled(48, root.uiScale)
-    readonly property real minBatteryBar: Config.scaled(230, root.uiScale)
+    readonly property real batteryGap: Config.scaled(16, root.uiScale)
+    // The battery box (TreeNode.qml): its bar at least 230, plus 90 of icon,
+    // percentage and padding.
+    readonly property real minBatteryBox: Config.scaled(230 + 90, root.uiScale)
     readonly property real treeRoom: treeView.width - treeArea.pad * 2
     readonly property real boxesRight: Math.max(
         root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(240, root.uiScale),
-        Math.min(root.treeRoom - root.batteryGap - root.minBatteryBar - root.batteryPercentRoom, Config.scaled(540, root.uiScale)))
-    readonly property real batteryBarWidth: Math.max(root.minBatteryBar,
-        root.treeRoom - root.boxesRight - root.batteryGap - root.batteryPercentRoom)
-    readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + root.batteryPercentRoom
+        Math.min(root.treeRoom - root.batteryGap - root.minBatteryBox, Config.scaled(540, root.uiScale)))
+    readonly property real batteryBoxWidth: Math.max(root.minBatteryBox, root.treeRoom - root.boxesRight - root.batteryGap)
+    readonly property real batteryColumn: root.batteryGap + root.batteryBoxWidth
 
     readonly property var nodeByKey: {
         const map = {}
@@ -398,8 +413,14 @@ Item {
 
     property string renamingKey: ""
 
+    // This computer and Solaar keep their names.
+    function canRename(node) {
+        return !!node && node.kind !== "host" && node.kind !== "solaarHub"
+    }
+
     function startRename(key) {
         root.selectedKey = key
+        if (!root.canRename(root.nodeByKey[key])) return
         root.renamingKey = key
     }
 
@@ -499,7 +520,7 @@ Item {
             Flickable {
                 id: treeView
 
-                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.6
+                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.66
                 Layout.fillHeight: true
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
@@ -572,7 +593,7 @@ Item {
                             height: root.treeMetrics.rowHeight
                             uiScale: root.uiScale
                             batteryGap: root.batteryGap
-                            batteryBarWidth: root.batteryBarWidth
+                            batteryBoxWidth: root.batteryBoxWidth
 
                             title: treeNode.info ? treeNode.info.name : ""
                             subtitle: treeNode.info ? treeNode.info.subtitle : ""

@@ -347,7 +347,7 @@ Item {
             add("Bonded", root.yesNo(r.bonded))
             add("Trusted", root.yesNo(r.trusted))
             if (r.blocked) add("Blocked", "yes")
-            if (r.batteryAvailable) add("Battery", root.page.percent(r.battery))
+            if (root.node.battery >= 0) add("Battery", root.page.percent(root.node.battery) + (root.node.charging ? " · charging" : ""))
             add("Adapter", r.adapter ? r.adapter.name : "")
             break
         case "ztService":
@@ -409,8 +409,10 @@ Item {
             break
         }
         }
-        add("Rename", "rename")
-        if (n.name !== n.systemName) add("Use system name", "resetName")
+        if (root.page.canRename(n)) {
+            add("Rename", "rename")
+            if (n.name !== n.systemName) add("Use system name", "resetName")
+        }
         return out
     }
 
