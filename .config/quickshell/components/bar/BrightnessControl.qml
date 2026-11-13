@@ -29,7 +29,8 @@ import "../settings"
 // had already taken effect.
 //
 // Right-click opens a menu like the volume control's: every monitor but the
-// primary, each with a checkbox saying whether it's on - clicking one
+// primary - by its port, or the name Settings > Display gave it - each with
+// a checkbox saying whether it's on - clicking one
 // switches it on or off at once - then Night Light's settings. A switch is
 // the Display tab's own right click + Apply: that file is loaded out of
 // sight for as long as it takes (see monitorSwitch below), so workspace
@@ -225,10 +226,10 @@ Rectangle {
         return root.requested[m.name] !== undefined ? root.requested[m.name] : !m.disabled
     }
 
-    // Make and model, as the Display tab shows the monitor selected there.
-    function monitorModel(m) {
-        const makeModel = [m.make, m.model].filter(s => s && String(s).length > 0).join(" ")
-        return makeModel.length > 0 ? makeModel : (m.description || "")
+    // What Settings > Display calls it - its port unless it's been renamed.
+    AliasStore {
+        id: monitorNames
+        file: "monitoraliases.json"
     }
 
     function refreshMonitors() {
@@ -455,32 +456,18 @@ Rectangle {
                             }
 
                             Text {
-                                id: monitorName
                                 anchors {
                                     left: parent.left
+                                    right: monitorBox.left
                                     verticalCenter: parent.verticalCenter
                                     leftMargin: Config.scaled(10, root.uiScale)
+                                    rightMargin: Config.scaled(10, root.uiScale)
                                 }
-                                text: monitorEntry.modelData.name
+                                text: monitorNames.name(monitorEntry.modelData.name, monitorEntry.modelData.name)
                                 textFormat: Text.PlainText
                                 color: monitorEntry.isOn ? Config.fgcolor : Config.fgcolordarklight
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
-                            }
-
-                            Text {
-                                anchors {
-                                    left: monitorName.right
-                                    right: monitorBox.left
-                                    verticalCenter: parent.verticalCenter
-                                    leftMargin: Config.scaled(8, root.uiScale)
-                                    rightMargin: Config.scaled(10, root.uiScale)
-                                }
-                                text: root.monitorModel(monitorEntry.modelData)
-                                textFormat: Text.PlainText
-                                color: Config.fgcolorhint
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(11, root.uiScale)
                                 elide: Text.ElideRight
                             }
 

@@ -138,6 +138,17 @@ Item {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     }
 
+    // The names given to displays here (middle-click a card), kept by
+    // output name - everything else still goes by the port.
+    AliasStore {
+        id: monitorNames
+        file: "monitoraliases.json"
+    }
+
+    function displayName(name) {
+        return monitorNames.name(name, name)
+    }
+
     function baseFor(name) {
         for (const m of root.monitors) {
             if (m.name === name) return m
@@ -2006,6 +2017,7 @@ Item {
                         height: contentRow.cardHeight
                         uiScale: root.uiScale
                         name: modelData.name
+                        names: monitorNames
                         selected: root.selectedName === modelData.name
                         pendingEnabled: root.enabledFor(modelData.name)
                         isPrimary: root.primaryMonitor === modelData.name
@@ -2111,6 +2123,7 @@ Item {
                         anchors.fill: parent
                         anchors.margins: parent.border.width
                         uiScale: root.uiScale
+                        displayNames: monitorNames
                         monitors: root.showingDefaults ? root.savedArrangement : root.arrangement
                         interactive: !root.showingDefaults
                         emptyText: root.showingDefaults
@@ -2137,7 +2150,7 @@ Item {
                     Layout.fillWidth: true
                     visible: !root.showingDefaults && root.overlapping.length > 0
                     wrapMode: Text.WordWrap
-                    text: root.overlapping.join(", ") + " overlap. Drag them apart so they only touch."
+                    text: root.overlapping.map(n => root.displayName(n)).join(", ") + " overlap. Drag them apart so they only touch."
                     color: Config.fgcolorred
                     font.family: Config.fontfamily
                     font.pixelSize: Config.scaled(12, root.uiScale)
@@ -2155,17 +2168,21 @@ Item {
                     spacing: Config.scaled(10, root.uiScale)
 
                     Text {
-                        text: root.selectedName.length > 0 ? root.selectedName : "No display selected"
+                        text: root.selectedName.length > 0 ? root.displayName(root.selectedName) : "No display selected"
+                        textFormat: Text.PlainText
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(16, root.uiScale)
                         font.bold: true
                     }
 
+                    // The port too, once it's been renamed.
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
-                        text: root.selectedDescription
+                        text: (root.selectedName.length > 0 && monitorNames.hasAlias(root.selectedName)
+                            ? root.selectedName + (root.selectedDescription.length > 0 ? " · " : "") : "")
+                            + root.selectedDescription
                         color: Config.fgcolorhint
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
@@ -2648,6 +2665,12 @@ Item {
                 prefix: "Drag"
                 iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
                 label: "Arrange Displays"
+            }
+
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic", "input-mouse-symbolic")
+                label: "Rename (here only)"
             }
 
             Item { Layout.fillWidth: true }

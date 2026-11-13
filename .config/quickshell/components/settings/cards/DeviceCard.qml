@@ -39,6 +39,12 @@ DashCard {
 
     property bool renaming: false
 
+    // Once it's over the card gives up the keyboard - hidden, the name box
+    // would keep it, and Escape would never reach Settings to close it.
+    onRenamingChanged: {
+        if (!root.renaming) renameInput.focus = false
+    }
+
     function startRename() {
         if (!root.names) return
         root.renaming = true

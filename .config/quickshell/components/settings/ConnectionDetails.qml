@@ -199,6 +199,7 @@ Item {
     // ---------------- facts ----------------
     readonly property var kindLabels: ({
         host: "This computer",
+        solaarHub: "Solaar",
         solaar: "Logitech device",
         wifiDevice: "Wi-Fi device",
         wifiNetwork: "Wi-Fi network",
@@ -268,6 +269,18 @@ Item {
                 if (b.changeRate > 0) add("Power", b.changeRate.toFixed(1) + " W")
                 if (b.healthSupported) add("Battery health", Math.round(b.healthPercentage) + "%")
             }
+            break
+        }
+        case "solaarHub": {
+            const devices = root.page.solaarDevices
+            add("Devices", String(devices.length))
+            const receivers = []
+            for (const d of devices) {
+                if (d.receiver && receivers.indexOf(d.receiver) === -1) receivers.push(d.receiver)
+            }
+            add("Receivers", receivers)
+            const low = devices.filter(d => d.percentage >= 0 && Logic.batteryLow(d.percentage, d.charging))
+            add("Low battery", low.map(d => root.page.names.name("solaar:" + d.name, d.name)))
             break
         }
         case "solaar":
@@ -371,6 +384,7 @@ Item {
             if (Bluetooth.adapters.values.length > 0)
                 add(root.anyBluetoothOn ? "Turn Bluetooth off" : "Turn Bluetooth on", "bluetoothPower", { lit: root.anyBluetoothOn })
             break
+        case "solaarHub":
         case "solaar":
             add("Refresh", "solaarRefresh")
             add("Open Solaar", "solaarOpen")
@@ -1018,8 +1032,8 @@ Item {
                 visible: text.length > 0
                 text: root.kind === "ztService" || root.kind === "ztNetwork"
                     ? "Joining and leaving ZeroTier networks needs root: sudo zerotier-cli join <network id>. Stopping or starting the service asks for your password."
-                    : root.kind === "solaar"
-                    ? "Read from Solaar once a minute. Solaar's own window has the device's settings."
+                    : root.kind === "solaar" || root.kind === "solaarHub"
+                    ? "Read from Solaar once a minute. Solaar's own window has the devices' settings."
                     : ""
                 color: Config.fgcolorhint
                 font.family: Config.fontfamily

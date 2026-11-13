@@ -1,14 +1,17 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
+import Quickshell.Widgets
+import Qt5Compat.GraphicalEffects
 import "../../../Config.js" as Config
 import "../../common"
 import "../ConnectionsLogic.js" as Logic
 
-// One row of Settings > Connections' directory tree: a box with the name on
-// the left and what state it's in on the right, border and name in that
-// state's colour - selecting it only lights the background. Something with a
-// battery also has a segmented bar and its percentage just past the box's
-// right edge, red when it's low and not charging.
+// One row of Settings > Connections' directory tree: a box with an icon and
+// the name on the left and what state it's in on the right, border, icon and
+// name in that state's colour - selecting it only lights the background.
+// Something with a battery also has a segmented bar and its percentage just
+// past the box's right edge, red when it's low and not charging.
 //
 // Left click selects it, middle click renames it in place (Enter keeps the
 // name, Escape drops it), right click asks for its action - the page decides
@@ -19,6 +22,8 @@ Rectangle {
     property real uiScale: 1.0
     property string title: ""
     property string subtitle: ""
+    // Icon names to try, best first - the first the icon theme has is shown.
+    property var icons: []
     property color stateColor: Config.fgcolor
     property bool selected: false
     // Its charge, 0 - 1, or below 0 for no battery.
@@ -34,6 +39,18 @@ Rectangle {
     signal actionRequested()
     signal renamed(string name)
     signal renameCancelled()
+
+    // Looked up again only when the names change, not every time the tree
+    // is rebuilt around this row.
+    readonly property string iconKey: (root.icons || []).join("|")
+    readonly property string iconSource: {
+        if (root.iconKey.length === 0) return ""
+        for (const name of root.iconKey.split("|")) {
+            const path = Quickshell.iconPath(name, true)
+            if (path.length > 0) return path
+        }
+        return ""
+    }
 
     readonly property bool hasBattery: root.battery >= 0
     readonly property color batteryColor: Logic.batteryLow(root.battery, root.charging) ? Config.fgcolorred
@@ -51,6 +68,28 @@ Rectangle {
             rightMargin: Config.scaled(10, root.uiScale)
         }
         spacing: Config.scaled(10, root.uiScale)
+
+        // Fixed-size box, not a direct RowLayout child with its own anchors -
+        // IconImage/ColorOverlay need anchors.fill. Kept when no icon's found,
+        // so names still line up.
+        Item {
+            Layout.preferredWidth: Config.scaled(18, root.uiScale)
+            Layout.preferredHeight: Config.scaled(18, root.uiScale)
+
+            IconImage {
+                id: nodeIcon
+                anchors.fill: parent
+                visible: root.iconSource.length > 0
+                source: root.iconSource
+            }
+
+            ColorOverlay {
+                anchors.fill: nodeIcon
+                visible: nodeIcon.visible
+                source: nodeIcon
+                color: root.stateColor
+            }
+        }
 
         Text {
             id: titleText
@@ -134,8 +173,13 @@ Rectangle {
         }
     }
 
+    // Once it's over the box gives up the keyboard - hidden, it would keep
+    // it, and Escape would never reach Settings to close it.
     onRenamingChanged: {
-        if (!root.renaming) return
+        if (!root.renaming) {
+            renameInput.focus = false
+            return
+        }
         renameInput.text = root.title
         renameInput.selectAll()
         renameInput.forceActiveFocus()

@@ -62,6 +62,13 @@ Scope {
     // `dashboard` instance shell.qml passes it), to decide which
     // screen's bar shows the tray.
     property bool identifying: false
+
+    // What Settings > Display calls each monitor, for Identify's labels.
+    AliasStore {
+        id: monitorNames
+        file: "monitoraliases.json"
+    }
+
     property string primaryMonitor: "DP-1"
 
     // primaryMonitor defaults to a hardcoded output name until
@@ -1248,16 +1255,43 @@ Scope {
             color: "transparent"
 
             DashCard {
+                id: identifyCard
+
                 anchors.fill: parent
                 uiScale: identifyWindow.uiScale
 
-                Text {
+                readonly property string port: modelData ? modelData.name : ""
+                readonly property string given: monitorNames.name(port, port)
+
+                // The name it's been given in Settings > Display, with the
+                // port under it - or just the port.
+                Column {
                     anchors.centerIn: parent
-                    text: modelData ? modelData.name : ""
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(48, identifyWindow.uiScale)
-                    font.bold: true
+                    width: parent.width - Config.scaled(24, identifyWindow.uiScale)
+                    spacing: Config.scaled(4, identifyWindow.uiScale)
+
+                    Text {
+                        width: parent.width
+                        horizontalAlignment: Text.AlignHCenter
+                        text: identifyCard.given
+                        textFormat: Text.PlainText
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(identifyCard.given !== identifyCard.port ? 36 : 48, identifyWindow.uiScale)
+                        font.bold: true
+                        elide: Text.ElideRight
+                    }
+
+                    Text {
+                        width: parent.width
+                        visible: identifyCard.given !== identifyCard.port
+                        horizontalAlignment: Text.AlignHCenter
+                        text: identifyCard.port
+                        color: Config.fgcolorhint
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(20, identifyWindow.uiScale)
+                        font.bold: true
+                    }
                 }
             }
         }

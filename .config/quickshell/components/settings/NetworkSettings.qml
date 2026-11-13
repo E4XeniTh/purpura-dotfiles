@@ -15,13 +15,13 @@ import "ConnectionsLogic.js" as Logic
 // directory tree, and the details of whatever's picked in it.
 //
 // The tree (left), a row each, top to bottom, every row indented under its
-// parent and hung off a line from it: this computer (user@host) branches
-// into its devices -
-// Solaar's Logitech peripherals, Wi-Fi, Bluetooth, ZeroTier, Ethernet - and
-// each device into the connections that exist through it: Wi-Fi networks that
-// are connected or remembered, paired Bluetooth devices, joined ZeroTier
-// networks, the wired connection. Networks only in range, and Bluetooth
-// devices nearby but not paired, are in the details panel's lists instead.
+// parent and hung off a line from it, with an icon before its name: this
+// computer (user@host) branches into its devices - Solaar, Wi-Fi, Bluetooth,
+// ZeroTier, Ethernet - and each device into what's connected through it:
+// Solaar's Logitech peripherals, Wi-Fi networks that are connected or
+// remembered, paired Bluetooth devices, joined ZeroTier networks, the wired
+// connection. Networks only in range, and Bluetooth devices nearby but not
+// paired, are in the details panel's lists instead.
 //
 // A box's border says its state (ConnectionsLogic.js): fgcolor for a device
 // that's on or a plain connection, fgcolorlight for a connection that's
@@ -159,6 +159,8 @@ Item {
             subtitle: "",
             battery: -1,
             charging: false,
+            // Icon names to try, best first (ConnectionsLogic.js).
+            icons: Logic.nodeIcons(kind, {}),
             children: []
         }, fields)
     }
@@ -174,7 +176,25 @@ Item {
         return root.makeNode(key, "solaar:" + d.name, "solaar", d.name, d, {
             subtitle: parts.join(" · "),
             battery: d.percentage,
-            charging: d.charging
+            charging: d.charging,
+            icons: Logic.nodeIcons("solaar", { kind: d.kind })
+        })
+    }
+
+    // Solaar itself, with the peripherals it sees under it.
+    function solaarHubNode() {
+        const children = []
+        // Two peripherals of the same name still get a box each.
+        const seen = {}
+        for (const d of root.solaarDevices) {
+            seen[d.name] = (seen[d.name] || 0) + 1
+            children.push(root.solaarNode(d, "solaar:" + d.name + (seen[d.name] > 1 ? "#" + seen[d.name] : "")))
+        }
+        const count = root.solaarDevices.length
+        const low = root.solaarDevices.filter(d => d.percentage >= 0 && Logic.batteryLow(d.percentage, d.charging)).length
+        return root.makeNode("solaar", "solaar", "solaarHub", "Solaar", null, {
+            subtitle: "Logitech · " + count + (count === 1 ? " device" : " devices") + (low > 0 ? " · " + low + " low" : ""),
+            children: children
         })
     }
 
@@ -188,7 +208,8 @@ Item {
         return root.makeNode("wifi:" + dev.name + ":" + n.name, "wifi:" + n.name, "wifiNetwork", n.name, n, {
             state: state,
             subtitle: subtitle,
-            device: dev
+            device: dev,
+            icons: Logic.nodeIcons("wifiNetwork", { signal: n.signalStrength })
         })
     }
 
@@ -208,6 +229,7 @@ Item {
                 : !enabled ? "Wi-Fi · disabled"
                 : current ? "Wi-Fi · " + aliasStore.name("wifi:" + current.name, current.name)
                 : "Wi-Fi · not connected",
+            icons: Logic.nodeIcons("wifiDevice", { off: !enabled }),
             children: networks
         })
     }
@@ -223,7 +245,8 @@ Item {
         return root.makeNode("bt:" + adapter.adapterId + ":" + d.address, "bt:" + d.address, "btDevice", systemName, d, {
             state: state,
             subtitle: subtitle,
-            battery: battery
+            battery: battery,
+            icons: Logic.nodeIcons("btDevice", { icon: d.icon })
         })
     }
 
@@ -238,6 +261,7 @@ Item {
         return root.makeNode("btadapter:" + a.adapterId, "btadapter:" + a.adapterId, "btAdapter", a.name, a, {
             state: Logic.deviceState(enabled),
             subtitle: blocked ? "Bluetooth · blocked" : !a.enabled ? "Bluetooth · off" : "Bluetooth · " + connected + " connected",
+            icons: Logic.nodeIcons("btAdapter", { off: !enabled }),
             children: devices
         })
     }
@@ -261,7 +285,8 @@ Item {
         return root.makeNode("wired:" + dev.name + ":" + n.name, "wired:" + n.name, "wiredNetwork", n.name, n, {
             state: state,
             subtitle: state === "busy" ? (n.connected ? "disconnecting…" : "connecting…") : n.connected ? "connected" : "disconnected",
-            device: dev
+            device: dev,
+            icons: Logic.nodeIcons("wiredNetwork", { off: !n.connected })
         })
     }
 
@@ -274,18 +299,14 @@ Item {
                 : !link ? "Ethernet · cable unplugged"
                 : dev.linkSpeed > 0 ? "Ethernet · " + dev.linkSpeed + " Mbit/s"
                 : "Ethernet",
+            icons: Logic.nodeIcons("wiredDevice", { off: !enabled, unplugged: !link }),
             children: dev.networks.values.map(n => root.wiredNetworkNode(dev, n))
         })
     }
 
     readonly property var treeRoot: {
         const children = []
-        // Two peripherals of the same name still get a box each.
-        const seen = {}
-        for (const d of root.solaarDevices) {
-            seen[d.name] = (seen[d.name] || 0) + 1
-            children.push(root.solaarNode(d, "solaar:" + d.name + (seen[d.name] > 1 ? "#" + seen[d.name] : "")))
-        }
+        if (root.solaarDevices.length > 0) children.push(root.solaarHubNode())
         const devices = Networking.devices.values
         for (const dev of devices) {
             if (dev.type === DeviceType.Wifi) children.push(root.wifiDeviceNode(dev))
@@ -301,15 +322,18 @@ Item {
             subtitle: battery >= 0 ? "battery " + root.percent(battery) + (root.laptopCharging ? " · charging" : "") : "this computer",
             battery: battery,
             charging: root.laptopCharging,
+            icons: Logic.nodeIcons("host", { laptop: !!root.laptopBattery }),
             children: children
         })
     }
 
+    // A child's trunk comes down from under its parent's icon (TreeNode.qml:
+    // 10 in from the box's edge, 18 wide).
     readonly property var treeMetrics: ({
         rowHeight: Config.scaled(34, root.uiScale),
-        rowGap: Config.scaled(6, root.uiScale),
-        indent: Config.scaled(32, root.uiScale),
-        trunkInset: Config.scaled(14, root.uiScale)
+        rowGap: Config.scaled(12, root.uiScale),
+        indent: Config.scaled(44, root.uiScale),
+        trunkInset: Config.scaled(19, root.uiScale)
     })
 
     readonly property var treeLayout: Logic.layoutList(root.treeRoot, root.treeMetrics)
@@ -319,11 +343,11 @@ Item {
     // so nothing shifts when one connects. The boxes stop at a width that
     // still reads well, but never narrower than the deepest row needs.
     readonly property real batteryGap: Config.scaled(12, root.uiScale)
-    readonly property real batteryBarWidth: Config.scaled(110, root.uiScale)
+    readonly property real batteryBarWidth: Config.scaled(170, root.uiScale)
     readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + Config.scaled(52, root.uiScale)
     readonly property real boxesRight: Math.max(
-        root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(180, root.uiScale),
-        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(640, root.uiScale)))
+        root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(240, root.uiScale),
+        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(440, root.uiScale)))
 
     readonly property var nodeByKey: {
         const map = {}
@@ -468,7 +492,7 @@ Item {
             Flickable {
                 id: treeView
 
-                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.64
+                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.55
                 Layout.fillHeight: true
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
@@ -545,6 +569,7 @@ Item {
 
                             title: treeNode.info ? treeNode.info.name : ""
                             subtitle: treeNode.info ? treeNode.info.subtitle : ""
+                            icons: treeNode.info ? treeNode.info.icons : []
                             stateColor: root.stateColor(treeNode.info ? treeNode.info.state : "on")
                             battery: treeNode.info ? treeNode.info.battery : -1
                             charging: treeNode.info ? treeNode.info.charging : false

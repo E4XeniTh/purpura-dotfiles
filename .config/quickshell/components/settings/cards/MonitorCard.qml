@@ -21,10 +21,42 @@ import "../controls"
 // panel - see Dashboard.qml) - also staged, not live: dragging it only
 // stores a pending value (brightnessEdited), actually sent to the
 // monitor on Apply, same as everything else here.
+//
+// Middle-clicking renames it in place, for the shell only (`names`, an
+// AliasStore.qml over monitoraliases.json, kept by output name - Hyprland
+// and monitors.json still go by the port): Enter keeps the name, Escape
+// drops it, and a blank one goes back to the port's. A renamed display
+// still shows its port, dimmed, after the new name.
 DashCard {
     id: root
 
     required property string name
+    // The shell's names for displays, kept by output name - or null.
+    property var names: null
+    readonly property string displayName: root.names ? root.names.name(root.name, root.name) : root.name
+    readonly property bool renamed: root.displayName !== root.name
+
+    property bool renaming: false
+
+    // Once it's over the card gives up the keyboard - hidden, the name box
+    // would keep it, and Escape would never reach Settings to close it.
+    onRenamingChanged: {
+        if (!root.renaming) renameInput.focus = false
+    }
+
+    function startRename() {
+        if (!root.names) return
+        root.renaming = true
+        renameInput.text = root.displayName
+        renameInput.selectAll()
+        renameInput.forceActiveFocus()
+    }
+
+    function finishRename(newName) {
+        if (!root.renaming) return
+        root.renaming = false
+        root.names.rename(root.name, newName, root.name)
+    }
     required property bool pendingEnabled
     required property bool selected
     required property bool isPrimary
@@ -57,10 +89,12 @@ DashCard {
 
     MouseArea {
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         onClicked: (mouse) => {
             if (mouse.button === Qt.LeftButton) {
                 root.clicked()
+            } else if (mouse.button === Qt.MiddleButton) {
+                root.startRename()
             } else {
                 root.toggleEnabled()
             }
@@ -73,7 +107,7 @@ DashCard {
         // just another enable/disable, as if they'd been slower.
         onDoubleClicked: (mouse) => {
             if (mouse.button === Qt.LeftButton) root.makePrimary()
-            else root.toggleEnabled()
+            else if (mouse.button === Qt.RightButton) root.toggleEnabled()
         }
     }
 
@@ -108,16 +142,62 @@ DashCard {
                 }
             }
 
-            // Takes the room the tag leaves, so the tag sits at the right
-            // edge and the name only elides when the card's too narrow.
+            // The name and, once renamed, the port after it - together
+            // they take the room the tag leaves, so the tag sits at the
+            // right edge and only the port elides when the card's narrow.
             Text {
-                Layout.fillWidth: true
-                text: root.name
+                id: nameText
+                Layout.fillWidth: !root.renamed
+                Layout.maximumWidth: root.renamed ? headerRow.width * 0.6 : headerRow.width
+                visible: !root.renaming
+                text: root.displayName
+                textFormat: Text.PlainText
                 color: root.textColor
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(14, root.uiScale)
                 font.bold: true
                 elide: Text.ElideRight
+            }
+
+            Text {
+                Layout.fillWidth: true
+                visible: root.renamed && !root.renaming
+                text: root.name
+                textFormat: Text.PlainText
+                color: Config.fgcolorhint
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(12, root.uiScale)
+                elide: Text.ElideRight
+            }
+
+            TextInput {
+                id: renameInput
+
+                Layout.fillWidth: true
+                visible: root.renaming
+                color: Config.fgcolorlight
+                selectionColor: Config.fgcolor
+                selectedTextColor: "#000000"
+                font: nameText.font
+                selectByMouse: true
+                clip: true
+
+                onAccepted: root.finishRename(renameInput.text)
+                Keys.onEscapePressed: root.renaming = false
+                // Clicking away keeps what was typed.
+                onActiveFocusChanged: {
+                    if (!activeFocus && root.renaming) root.finishRename(renameInput.text)
+                }
+
+                Rectangle {
+                    anchors {
+                        left: parent.left
+                        right: parent.right
+                        top: parent.bottom
+                    }
+                    height: Config.scaled(1, root.uiScale)
+                    color: Config.fgcolorlight
+                }
             }
 
             Tag {

@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import "../../Config.js" as Config
 import "IdleLogic.js" as Logic
+import "../common"
 
 // Settings > General > Power at work: locking the screen, dimming the
 // monitors and suspending the computer after a while without activity,
@@ -298,6 +299,13 @@ Scope {
     property var stage: ({ phase: "awake", readySince: null, held: false, lockFired: false, warnFired: false })
     property var dimmedNames: []
     property var activeNames: []
+    // The same, by the names given to them in Settings > Display.
+    readonly property var activeLabels: root.activeNames.map(n => monitorNames.name(n, n))
+
+    AliasStore {
+        id: monitorNames
+        file: "monitoraliases.json"
+    }
     property int countdown: -1
     property string countdownFor: ""
     readonly property string phase: root.stage.phase

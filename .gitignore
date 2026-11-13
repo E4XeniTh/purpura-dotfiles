@@ -24,6 +24,7 @@
 .config/quickshell/shortcuts.json
 .config/quickshell/connectionaliases.json
 .config/quickshell/audioaliases.json
+.config/quickshell/monitoraliases.json
 .config/hypr/shortcuts.lua
 
 .config/ZapZap/ZapZap.conf

@@ -378,6 +378,75 @@ function bluetoothKind(icon) {
     return bluetoothKinds[icon] || (icon ? icon.replace(/-/g, " ") : "")
 }
 
+// ---------------- icons ----------------
+// The icon names a row tries, best first. The row tints its icon in the
+// row's colour, so every symbolic name goes before any plain one: a plain
+// icon tinted is just a silhouette.
+function themed(names) {
+    const out = []
+    for (const n of names) {
+        if (out.indexOf(n + "-symbolic") === -1) out.push(n + "-symbolic")
+    }
+    for (const n of names) {
+        if (out.indexOf(n) === -1) out.push(n)
+    }
+    return out
+}
+
+// Solaar's "Kind:" to an icon.
+var solaarKindIcons = {
+    mouse: "input-mouse",
+    trackball: "input-mouse",
+    touchpad: "input-touchpad",
+    keyboard: "input-keyboard",
+    numpad: "input-keyboard",
+    headset: "audio-headset",
+    remote: "input-gaming"
+}
+
+// A Wi-Fi signal (0 - 1) as the icon themes' bars: freedesktop's words, and
+// Breeze's percentages.
+function wifiSignalIcons(strength) {
+    if (!(strength > 0)) return ["network-wireless-offline", "network-wireless-signal-none", "network-wireless-0"]
+    const word = strength >= 0.75 ? "excellent" : strength >= 0.5 ? "good" : strength >= 0.25 ? "ok" : "weak"
+    const percent = Math.min(100, Math.max(20, Math.round(strength * 5) * 20))
+    return ["network-wireless-signal-" + word, "network-wireless-" + percent]
+}
+
+// `info` carries what the icon depends on: laptop (host), kind (a Solaar
+// device's), icon (a Bluetooth device's own, e.g. "input-gaming"), signal
+// (a Wi-Fi network's), off (an adapter or device that's disabled), unplugged
+// (an Ethernet port).
+function nodeIcons(kind, info) {
+    const i = info || {}
+    switch (kind) {
+    case "host":
+        return themed(i.laptop ? ["computer-laptop", "laptop", "computer"] : ["computer"])
+    case "solaarHub":
+        return themed(["preferences-desktop-peripherals", "input-mouse"])
+    case "solaar":
+        return themed([solaarKindIcons[String(i.kind || "").toLowerCase()] || "input-mouse", "input-mouse"])
+    case "wifiDevice":
+        return themed(i.off ? ["network-wireless-disconnected", "network-wireless-offline", "network-wireless"] : ["network-wireless"])
+    case "wifiNetwork":
+        return themed(wifiSignalIcons(i.signal).concat(["network-wireless"]))
+    case "btAdapter":
+        return themed([i.off ? "bluetooth-disabled" : "bluetooth-active", "bluetooth", "preferences-system-bluetooth"])
+    case "btDevice":
+        return themed((i.icon ? [i.icon] : []).concat(["bluetooth", "preferences-system-bluetooth"]))
+    case "ztService":
+        return themed(["network-vpn"])
+    case "ztNetwork":
+        return themed(["network-workgroup", "network-vpn"])
+    case "wiredDevice":
+        return themed(i.off || i.unplugged ? ["network-wired-disconnected", "network-wired"] : ["network-wired"])
+    case "wiredNetwork":
+        return themed(i.off ? ["network-wired-disconnected", "network-wired"] : ["network-wired-activated", "network-wired"])
+    default:
+        return []
+    }
+}
+
 // "5180 MHz" as "5 GHz" - Wi-Fi's bands by frequency.
 function band(frequency) {
     const mhz = parseInt(frequency, 10)

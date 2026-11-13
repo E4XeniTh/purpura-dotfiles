@@ -33,6 +33,10 @@ Item {
 
     clip: true
 
+    // What to call each display (ScreenSettings' AliasStore over
+    // monitoraliases.json) - or null for the output names.
+    property var displayNames: null
+
     // Delegates are keyed by name, so they survive `monitors` being rebuilt
     // and can animate from where they were.
     property var names: []
@@ -196,7 +200,8 @@ Item {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
-                    text: box.modelData
+                    text: root.displayNames ? root.displayNames.name(box.modelData, box.modelData) : box.modelData
+                    textFormat: Text.PlainText
                     color: box.textColor
                     font.family: Config.fontfamily
                     font.pixelSize: box.fontSize * 1.15

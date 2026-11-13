@@ -158,7 +158,7 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
 
             visible: root.look === "dimmed" && !!root.idle && root.idle.dimShowActive && root.idle.activeNames.length > 0
-            text: root.idle ? Logic.activeText(root.idle.activeNames) : ""
+            text: root.idle ? Logic.activeText(root.idle.activeLabels) : ""
             color: root.idle ? root.idle.darkRed : "darkred"
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(15, root.uiScale)
