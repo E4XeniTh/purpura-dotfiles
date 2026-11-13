@@ -125,8 +125,8 @@ Item {
         return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.2, n)) : 0.8
     }
     readonly property var osdPositions: [
-        { value: "top-left", label: "Top left" }, { value: "top", label: "Top" }, { value: "top-right", label: "Top right" },
-        { value: "bottom-left", label: "Bottom left" }, { value: "bottom", label: "Bottom" }, { value: "bottom-right", label: "Bottom right" }
+        { value: "top-left", label: "Top left" }, { value: "top", label: "Top-center" }, { value: "top-right", label: "Top right" },
+        { value: "bottom-left", label: "Bottom left" }, { value: "bottom", label: "Bottom-center" }, { value: "bottom-right", label: "Bottom right" }
     ]
     readonly property string osdPosition: root.osdPositions.some(p => p.value === root.barStore.osdPosition) ? root.barStore.osdPosition : "bottom"
     // Corners only stack vertically.
