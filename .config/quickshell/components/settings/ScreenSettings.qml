@@ -19,8 +19,9 @@ import "controls"
 // Hyprland's layout (MonitorLayout.qml - click to pick, drag to move);
 // under it, the
 // selected display's resolution and refresh rate (dropdowns of the modes
-// it reports, Preferred first - the monitor's preferred resolution at the
-// fastest refresh rate it offers there), scale (a slider that only stops on
+// it reports, or the Preferred button beside them - the monitor's
+// preferred resolution at the fastest refresh rate it offers there), scale
+// (a slider that only stops on
 // scales Hyprland accepts at that resolution), rotation, workspaces and
 // exact position. Resizing a display moves the ones beside and below it
 // along (keepNeighbours()), so displays that touched keep touching.
@@ -179,7 +180,7 @@ Item {
     // Still monitor-selection-scoped (discarded on selectMonitor()) -
     // used for things that are genuinely tied to "whatever's currently
     // selected in this panel" rather than a specific monitor's own
-    // state: switching to Preferred (chooseResolution()). Geometry edits no longer rely on
+    // state: switching Preferred on or off (togglePreferred()). Geometry edits no longer rely on
     // this for correctness (see effectiveStateFor()) - only for also
     // marking the then-selected monitor as touched, alongside the
     // dedicated edited-keys loop in applyChanges().
@@ -826,37 +827,45 @@ Item {
         if (Math.abs(nearest - state.scale) > 0.005) root.setEdited("scale", nearest)
     }
 
-    // The selected monitor's resolution dropdown: 0 is Preferred, the rest
-    // index root.selectedResolutions. Picking a resolution keeps the current
+    // The selected monitor's resolution dropdown: an index into
+    // root.selectedResolutions. Picking a resolution keeps the current
     // refresh rate if the new one offers it, and otherwise takes its
-    // fastest. Preferred also stages the numbers it runs at (the preferred
-    // resolution, fastest refresh rate), so the arrangement view and Set
-    // Default see what it'll really be.
+    // fastest.
     function chooseResolution(index) {
         const name = root.selectedName
         if (!name) return
+        const res = root.selectedResolutions[index]
+        if (!res) return
         const before = root.rectFor(name)
-        if (index === 0) {
-            const run = root.preferredRunModeFor(name)
-            root.setPreferredMode(name, true)
-            root.selectedDirty = true
-            if (run) {
-                root.setEdited("width", run.w)
-                root.setEdited("height", run.h)
-                root.setEdited("refresh", run.refresh)
-            }
-        } else {
-            const res = root.selectedResolutions[index - 1]
-            if (!res) return
-            const state = root.effectiveStateFor(name)
-            const rates = root.refreshRatesFor(name, res.w, res.h)
-            const current = state ? state.refresh : 0
-            const keep = rates.find(r => Math.abs(r - current) < 0.5)
-            root.setPreferredMode(name, false)
-            root.selectedDirty = true
-            root.setEdited("width", res.w)
-            root.setEdited("height", res.h)
-            if (rates.length > 0) root.setEdited("refresh", keep !== undefined ? keep : rates[0])
+        const state = root.effectiveStateFor(name)
+        const rates = root.refreshRatesFor(name, res.w, res.h)
+        const current = state ? state.refresh : 0
+        const keep = rates.find(r => Math.abs(r - current) < 0.5)
+        root.setPreferredMode(name, false)
+        root.selectedDirty = true
+        root.setEdited("width", res.w)
+        root.setEdited("height", res.h)
+        if (rates.length > 0) root.setEdited("refresh", keep !== undefined ? keep : rates[0])
+        root.fitScaleToMode()
+        root.keepNeighbours(name, before)
+    }
+
+    // The Preferred button. Either way it stages the numbers Preferred runs
+    // at (the preferred resolution, fastest refresh rate), so the
+    // arrangement view and Set Default see what it'll really be - and
+    // switching it off leaves the dropdowns on that same mode, to change
+    // from there.
+    function togglePreferred() {
+        const name = root.selectedName
+        if (!name) return
+        const before = root.rectFor(name)
+        const run = root.preferredRunModeFor(name)
+        root.setPreferredMode(name, !root.selectedPreferred)
+        root.selectedDirty = true
+        if (run) {
+            root.setEdited("width", run.w)
+            root.setEdited("height", run.h)
+            root.setEdited("refresh", run.refresh)
         }
         root.fitScaleToMode()
         root.keepNeighbours(name, before)
@@ -910,27 +919,20 @@ Item {
     readonly property bool selectedPreferred: root.runsPreferredMode(root.selectedName)
     readonly property var selectedSize: root.selectedState ? root.modeSizeFor(root.selectedName, root.selectedState) : ({ w: 0, h: 0 })
     readonly property var selectedResolutions: root.resolutionsFor(root.selectedName)
-    readonly property var resolutionOptions: {
-        const preferred = root.preferredModeFor(root.selectedName)
-        const first = preferred ? "Preferred (" + preferred.w + " x " + preferred.h + ")" : "Preferred"
-        return [first].concat(root.selectedResolutions.map(r => r.w + " x " + r.h))
-    }
+    // The dropdowns (hidden while Preferred is on).
+    readonly property var resolutionOptions: root.selectedResolutions.length > 0
+        ? root.selectedResolutions.map(r => r.w + " x " + r.h)
+        : ["-"]
     readonly property int resolutionIndex: {
-        if (root.selectedPreferred) return 0
         const s = root.selectedSize
         const i = root.selectedResolutions.findIndex(r => r.w === s.w && r.h === s.h)
-        return i >= 0 ? i + 1 : 0
+        return i >= 0 ? i : 0
     }
     readonly property var selectedRates: root.refreshRatesFor(root.selectedName, root.selectedSize.w, root.selectedSize.h)
-    // On Preferred, just the rate it runs at.
-    readonly property var refreshOptions: {
-        if (root.selectedPreferred) {
-            const run = root.preferredRunModeFor(root.selectedName)
-            return [run ? root.formatRefresh(run.refresh) + " Hz" : "Auto"]
-        }
-        return root.selectedRates.length > 0 ? root.selectedRates.map(r => root.formatRefresh(r) + " Hz") : ["-"]
-    }
-    readonly property int refreshIndex: (root.selectedPreferred || !root.selectedState || root.selectedRates.length === 0
+    readonly property var refreshOptions: root.selectedRates.length > 0
+        ? root.selectedRates.map(r => root.formatRefresh(r) + " Hz")
+        : ["-"]
+    readonly property int refreshIndex: (!root.selectedState || root.selectedRates.length === 0
                                          || !(root.selectedState.refresh > 0))
         ? 0
         : root.nearestIndex(root.selectedRates, root.selectedState.refresh)
@@ -2118,8 +2120,12 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
+                        // The dropdowns go while Preferred's on, leaving the
+                        // Preferred button right by the label.
                         DropdownBox {
                             Layout.preferredWidth: Config.scaled(230, root.uiScale)
+                            visible: !root.selectedPreferred
+                            enabled: root.selectedResolutions.length > 0
                             uiScale: root.uiScale
                             maxVisibleRows: 10
                             options: root.resolutionOptions
@@ -2130,18 +2136,48 @@ Item {
                             }
                         }
 
-                        // Hyprland picks the rate itself in Preferred mode.
                         DropdownBox {
                             Layout.preferredWidth: Config.scaled(110, root.uiScale)
+                            visible: !root.selectedPreferred
                             uiScale: root.uiScale
                             maxVisibleRows: 10
-                            enabled: !root.selectedPreferred && root.selectedRates.length > 0
+                            enabled: root.selectedRates.length > 0
                             opacity: enabled ? 1 : 0.5
                             options: root.refreshOptions
                             currentIndex: root.refreshIndex
                             onActivated: (index) => {
                                 contentWrapper.forceActiveFocus()
                                 root.chooseRefresh(index)
+                            }
+                        }
+
+                        // On/off, lit like the Rotation buttons when on.
+                        DashCard {
+                            id: preferredButton
+
+                            Layout.preferredWidth: Config.scaled(100, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                            uiScale: root.uiScale
+                            color: (preferredMouse.containsMouse || root.selectedPreferred) ? Config.fgcolorhover : Config.fillcolor
+                            border.color: root.selectedPreferred ? Config.fgcolorlight : Config.fgcolor
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "Preferred"
+                                color: root.selectedPreferred ? Config.fgcolorlight : Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                id: preferredMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    contentWrapper.forceActiveFocus()
+                                    root.togglePreferred()
+                                }
                             }
                         }
 
