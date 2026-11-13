@@ -379,7 +379,7 @@ Rectangle {
             left: root.menuMarginLeft
         }
 
-        implicitWidth: Math.max(root.width, Config.scaled(240, root.uiScale))
+        implicitWidth: root.width
         implicitHeight: Math.max(menuColumn.height + Config.scaled(10, root.uiScale), 1)
 
         color: "transparent"

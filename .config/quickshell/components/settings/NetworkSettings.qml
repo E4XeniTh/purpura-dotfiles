@@ -343,11 +343,11 @@ Item {
     // so nothing shifts when one connects. The boxes stop at a width that
     // still reads well, but never narrower than the deepest row needs.
     readonly property real batteryGap: Config.scaled(12, root.uiScale)
-    readonly property real batteryBarWidth: Config.scaled(170, root.uiScale)
+    readonly property real batteryBarWidth: Config.scaled(230, root.uiScale)
     readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + Config.scaled(52, root.uiScale)
     readonly property real boxesRight: Math.max(
         root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(240, root.uiScale),
-        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(440, root.uiScale)))
+        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(540, root.uiScale)))
 
     readonly property var nodeByKey: {
         const map = {}
@@ -492,7 +492,7 @@ Item {
             Flickable {
                 id: treeView
 
-                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.55
+                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.6
                 Layout.fillHeight: true
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
