@@ -382,6 +382,12 @@ function bluetoothKind(icon) {
 // The icon names a row tries, best first. The row tints its icon in the
 // row's colour, so every symbolic name goes before any plain one: a plain
 // icon tinted is just a silhouette.
+//
+// The first name for every kind is one Breeze (this setup's icon theme) has
+// as -symbolic. Qt looks a missing name up again with its last part dropped
+// ("input-gaming-symbolic", then "input-gaming") and so can land on a
+// full-colour icon long before reaching a later, better name - tinted, a
+// blob.
 function themed(names) {
     const out = []
     for (const n of names) {
@@ -400,17 +406,30 @@ var solaarKindIcons = {
     touchpad: "input-touchpad",
     keyboard: "input-keyboard",
     numpad: "input-keyboard",
-    headset: "audio-headset",
-    remote: "input-gaming"
+    headset: "audio-headset"
 }
 
-// A Wi-Fi signal (0 - 1) as the icon themes' bars: freedesktop's words, and
-// Breeze's percentages.
-function wifiSignalIcons(strength) {
-    if (!(strength > 0)) return ["network-wireless-offline", "network-wireless-signal-none", "network-wireless-0"]
-    const word = strength >= 0.75 ? "excellent" : strength >= 0.5 ? "good" : strength >= 0.25 ? "ok" : "weak"
-    const percent = Math.min(100, Math.max(20, Math.round(strength * 5) * 20))
-    return ["network-wireless-signal-" + word, "network-wireless-" + percent]
+// BlueZ's device icons (freedesktop names) to ones Breeze has as symbolic.
+var bluetoothIcons = {
+    "input-gaming": "input-gamepad",
+    "input-mouse": "input-mouse",
+    "input-keyboard": "input-keyboard",
+    "input-tablet": "input-tablet",
+    "audio-headset": "audio-headset",
+    "audio-headphones": "audio-headphones",
+    "audio-card": "audio-speakers",
+    "audio-speakers": "audio-speakers",
+    "phone": "phone",
+    "computer": "computer",
+    "video-display": "monitor",
+    "camera-photo": "camera-photo",
+    "printer": "printer"
+}
+
+// A Wi-Fi signal (0 - 1) as the icon theme's bars.
+function wifiSignalIcon(strength) {
+    if (!(strength > 0)) return "network-wireless-signal-none"
+    return "network-wireless-signal-" + (strength >= 0.75 ? "excellent" : strength >= 0.5 ? "good" : strength >= 0.25 ? "ok" : "weak")
 }
 
 // `info` carries what the icon depends on: laptop (host), kind (a Solaar
@@ -421,19 +440,19 @@ function nodeIcons(kind, info) {
     const i = info || {}
     switch (kind) {
     case "host":
-        return themed(i.laptop ? ["computer-laptop", "laptop", "computer"] : ["computer"])
+        return themed(i.laptop ? ["computer-laptop", "computer"] : ["computer"])
     case "solaarHub":
-        return themed(["preferences-desktop-peripherals", "input-mouse"])
+        return themed(["input-mouse"])
     case "solaar":
         return themed([solaarKindIcons[String(i.kind || "").toLowerCase()] || "input-mouse", "input-mouse"])
     case "wifiDevice":
-        return themed(i.off ? ["network-wireless-disconnected", "network-wireless-offline", "network-wireless"] : ["network-wireless"])
+        return themed(i.off ? ["network-wireless-disconnected", "network-wireless"] : ["network-wireless"])
     case "wifiNetwork":
-        return themed(wifiSignalIcons(i.signal).concat(["network-wireless"]))
+        return themed([wifiSignalIcon(i.signal), "network-wireless"])
     case "btAdapter":
-        return themed([i.off ? "bluetooth-disabled" : "bluetooth-active", "bluetooth", "preferences-system-bluetooth"])
+        return themed(i.off ? ["preferences-system-bluetooth-inactive", "preferences-system-bluetooth"] : ["preferences-system-bluetooth"])
     case "btDevice":
-        return themed((i.icon ? [i.icon] : []).concat(["bluetooth", "preferences-system-bluetooth"]))
+        return themed((bluetoothIcons[i.icon] ? [bluetoothIcons[i.icon]] : []).concat(["preferences-system-bluetooth"]))
     case "ztService":
         return themed(["network-vpn"])
     case "ztNetwork":

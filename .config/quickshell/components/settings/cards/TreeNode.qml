@@ -24,6 +24,9 @@ Rectangle {
     property string subtitle: ""
     // Icon names to try, best first - the first the icon theme has is shown.
     property var icons: []
+    // Still waiting for its first answer: "loading" and a spinning circle
+    // at the right, in place of the subtitle.
+    property bool loading: false
     property color stateColor: Config.fgcolor
     property bool selected: false
     // Its charge, 0 - 1, or below 0 for no battery.
@@ -134,13 +137,59 @@ Rectangle {
 
         Text {
             Layout.maximumWidth: root.width * 0.45
-            visible: root.subtitle.length > 0
+            visible: root.subtitle.length > 0 && !root.loading
             text: root.subtitle
             textFormat: Text.PlainText
             color: Config.fgcolorhint
             font.family: Config.fontfamily
             font.pixelSize: Config.scaled(11, root.uiScale)
             elide: Text.ElideRight
+        }
+
+        Text {
+            visible: root.loading
+            text: "loading"
+            color: Config.fgcolorhint
+            font.family: Config.fontfamily
+            font.pixelSize: Config.scaled(11, root.uiScale)
+        }
+
+        Item {
+            id: spinner
+
+            Layout.preferredWidth: Config.scaled(14, root.uiScale)
+            Layout.preferredHeight: Config.scaled(14, root.uiScale)
+            visible: root.loading
+
+            // Three quarters of a ring, turning.
+            Canvas {
+                id: spinnerArc
+
+                readonly property color tint: root.stateColor
+
+                anchors.fill: parent
+                onTintChanged: requestPaint()
+                onWidthChanged: requestPaint()
+
+                onPaint: {
+                    const ctx = getContext("2d")
+                    ctx.reset()
+                    const thickness = Config.scaled(2, root.uiScale)
+                    ctx.lineWidth = thickness
+                    ctx.strokeStyle = spinnerArc.tint
+                    ctx.beginPath()
+                    ctx.arc(width / 2, height / 2, width / 2 - thickness, 0, Math.PI * 1.5)
+                    ctx.stroke()
+                }
+
+                RotationAnimator on rotation {
+                    from: 0
+                    to: 360
+                    duration: 900
+                    loops: Animation.Infinite
+                    running: spinner.visible
+                }
+            }
         }
     }
 

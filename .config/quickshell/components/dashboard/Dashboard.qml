@@ -486,6 +486,9 @@ Scope {
     // gates, so the `solaar` binary is never even invoked
     // once while integration is turned off, not just "run but ignored".
     property var solaarDevices: []
+    // Whether a `solaar show` has finished since startup - or failed to
+    // start at all (not installed), which is just as final.
+    property bool solaarLoaded: false
 
     // How often Connections asks Solaar while it's open, in seconds - picked
     // in the Solaar entry's details, kept in solaarsettings.json.
@@ -535,6 +538,10 @@ Scope {
     Process {
         id: solaarProcess
         command: ["solaar", "show"]
+
+        // After the devices are read (Quickshell ends the stream first), and
+        // also when it couldn't start at all.
+        onRunningChanged: if (!running) root.solaarLoaded = true
 
         stdout: StdioCollector {
             onStreamFinished: root.solaarDevices = SolaarParse.parse(text)

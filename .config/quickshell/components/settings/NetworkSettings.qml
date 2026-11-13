@@ -88,6 +88,28 @@ Item {
     // ---------------- Solaar ----------------
     readonly property var solaarDevices: root.dashboardRoot ? root.dashboardRoot.solaarDevices : []
 
+    // Settings > General > Input's "Solaar Startup" - Solaar's expected to
+    // be running, so its entry shows (loading) before the first answer.
+    FileView {
+        id: peripheralsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/peripheralsettings.json"
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+    }
+
+    readonly property bool solaarStartupEnabled: {
+        try {
+            return JSON.parse(peripheralsFile.text()).solaarStartupEnabled !== false
+        } catch (e) {
+            // No file yet: the setting's default, on.
+            return true
+        }
+    }
+    readonly property bool solaarLoading: Config.solaarEnabled && root.solaarStartupEnabled
+        && !!root.dashboardRoot && !root.dashboardRoot.solaarLoaded
+
     function refreshSolaar() {
         if (root.dashboardRoot) root.dashboardRoot.refreshSolaar()
     }
@@ -211,7 +233,8 @@ Item {
         const count = root.solaarDevices.length
         const low = root.solaarDevices.filter(d => d.percentage >= 0 && Logic.batteryLow(d.percentage, d.charging)).length
         return root.makeNode("solaar", "solaar", "solaarHub", "Solaar", null, {
-            subtitle: "Logitech · " + count + (count === 1 ? " device" : " devices") + (low > 0 ? " · " + low + " low" : ""),
+            subtitle: root.solaarLoading ? "" : "Logitech · " + count + (count === 1 ? " device" : " devices") + (low > 0 ? " · " + low + " low" : ""),
+            loading: root.solaarLoading,
             children: children
         })
     }
@@ -340,7 +363,7 @@ Item {
 
     readonly property var treeRoot: {
         const children = []
-        if (root.solaarDevices.length > 0) children.push(root.solaarHubNode())
+        if (root.solaarDevices.length > 0 || root.solaarLoading) children.push(root.solaarHubNode())
         const devices = Networking.devices.values
         for (const dev of devices) {
             if (dev.type === DeviceType.Wifi) children.push(root.wifiDeviceNode(dev))
@@ -616,6 +639,7 @@ Item {
                             title: treeNode.info ? treeNode.info.name : ""
                             subtitle: treeNode.info ? treeNode.info.subtitle : ""
                             icons: treeNode.info ? treeNode.info.icons : []
+                            loading: treeNode.info ? !!treeNode.info.loading : false
                             stateColor: root.stateColor(treeNode.info ? treeNode.info.state : "on")
                             battery: treeNode.info ? treeNode.info.battery : -1
                             charging: treeNode.info ? treeNode.info.charging : false

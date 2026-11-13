@@ -80,7 +80,7 @@ Scope {
                 IconImage {
                     id: brightIcon
                     anchors.fill: parent
-                    source: Quickshell.iconPath("display-brightness-symbolic", "video-display-symbolic")
+                    source: Quickshell.iconPath("video-display-brightness-symbolic", "monitor-symbolic")
                 }
 
                 ColorOverlay {

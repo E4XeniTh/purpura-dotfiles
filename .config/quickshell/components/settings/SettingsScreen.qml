@@ -375,7 +375,7 @@ Scope {
                                     model: [
                                         { label: "General", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
-                                        { label: "Display", icon: "video-display-symbolic" },
+                                        { label: "Display", icon: "monitor-symbolic" },
                                         { label: "Connections", icon: "network-wired-symbolic" },
                                         { label: "Shortcuts", icon: "input-keyboard-symbolic" }
                                     ]

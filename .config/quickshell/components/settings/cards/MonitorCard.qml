@@ -132,7 +132,7 @@ DashCard {
                 IconImage {
                     id: monitorIcon
                     anchors.fill: parent
-                    source: Quickshell.iconPath("video-display-symbolic")
+                    source: Quickshell.iconPath("monitor-symbolic")
                 }
 
                 ColorOverlay {
