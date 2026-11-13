@@ -48,7 +48,8 @@ DashCard {
         return root.stream.name
     }
 
-    border.color: Config.fgcolor
+    // Dark, like the sound devices that aren't the default (DeviceCard.qml).
+    border.color: Config.fgcolordark
 
     ColumnLayout {
         anchors {
