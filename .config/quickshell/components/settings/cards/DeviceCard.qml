@@ -9,7 +9,8 @@ import "../controls"
 
 // One playback/recording device: name + mute button + volume slider inside
 // a DashCard. Right-clicking anywhere on the card - including over the
-// name, the mute icon, or the slider - selects it as the primary device.
+// name, the mute icon, or the slider - makes it the default device, which
+// gets an fgcolorlight border and a [Default] tag by its name.
 // Left click is reserved for the mute icon/slider: this card's own
 // MouseArea only accepts the right button, so left-button presses it
 // doesn't accept fall through to whichever of those sits underneath.
@@ -19,15 +20,12 @@ DashCard {
     required property var device
     property bool isPrimary: false
     property real uiScale: 1.0
-    // VolumeOsd.qml reuses this card for the single default device and
-    // wants its name centered instead of left-aligned.
-    property bool centered: false
 
     signal selected()
 
     readonly property bool muted: root.device.audio ? root.device.audio.muted : false
 
-    border.color: isPrimary ? Config.fgcolor : Config.fgcolordark
+    border.color: root.isPrimary ? Config.fgcolorlight : Config.fgcolordark
 
     Column {
         anchors {
@@ -36,20 +34,35 @@ DashCard {
         }
         spacing: Config.scaled(8, root.uiScale)
 
-        Text {
+        RowLayout {
             width: parent.width
-            // nickname is generally more human-readable than description,
-            // which is generally more human-readable than the raw name -
-            // fall back down that chain as each one turns out empty.
-            text: root.device.nickname.length > 0 ? root.device.nickname
-                : root.device.description.length > 0 ? root.device.description
-                : root.device.name
-            color: Config.fgcolor
-            font.bold: true
-            font.family: Config.fontfamily
-            font.pixelSize: Config.scaled(16, root.uiScale)
-            elide: Text.ElideRight
-            horizontalAlignment: root.centered ? Text.AlignHCenter : Text.AlignLeft
+            spacing: Config.scaled(8, root.uiScale)
+
+            // As wide as it needs (eliding when there isn't room), so the
+            // tag sits right after it.
+            Text {
+                Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
+                // nickname is generally more human-readable than description,
+                // which is generally more human-readable than the raw name -
+                // fall back down that chain as each one turns out empty.
+                text: root.device.nickname.length > 0 ? root.device.nickname
+                    : root.device.description.length > 0 ? root.device.description
+                    : root.device.name
+                color: Config.fgcolor
+                font.bold: true
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(16, root.uiScale)
+                elide: Text.ElideRight
+            }
+
+            Tag {
+                visible: root.isPrimary
+                uiScale: root.uiScale
+                label: "Default"
+            }
+
+            Item { Layout.fillWidth: true }
         }
 
         RowLayout {

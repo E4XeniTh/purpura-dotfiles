@@ -11,8 +11,10 @@ import "../controls"
 // its config in the right-hand form); right-click toggles a pending
 // activate/deactivate flag, reflected only in border color - nothing is
 // actually enabled/disabled until Apply is pressed. Double-click marks it
-// primary (fgcolorlight border, overriding the enabled/disabled color -
-// see ScreenSettings.qml for what "primary" actually does).
+// primary (fgcolorlight border, overriding the enabled/disabled color, and
+// a [Primary] tag by the name - see ScreenSettings.qml for what "primary"
+// actually does). The arrangement view (MonitorLayout.qml) colors its
+// monitors' borders the same way.
 //
 // Below the icon/label row is a thin brightness slider (ddcutil for an
 // external DDC/CI display, brightnessctl for a laptop's own internal
@@ -43,7 +45,7 @@ DashCard {
     signal brightnessEdited(real value)
 
     color: root.selected ? Config.fgcolorhover : Config.fillcolor
-    border.color: root.isPrimary ? Config.fgcolorlight : (root.pendingEnabled ? Config.fgcolor : "red")
+    border.color: root.isPrimary ? Config.fgcolorlight : (root.pendingEnabled ? Config.fgcolor : Config.fgcolorred)
 
     MouseArea {
         anchors.fill: parent
@@ -93,8 +95,11 @@ DashCard {
                 }
             }
 
+            // As wide as it needs (eliding when there isn't room), so the
+            // tag sits right after it.
             Text {
                 Layout.fillWidth: true
+                Layout.maximumWidth: implicitWidth
                 text: root.name
                 color: Config.fgcolor
                 font.family: Config.fontfamily
@@ -102,6 +107,14 @@ DashCard {
                 font.bold: true
                 elide: Text.ElideRight
             }
+
+            Tag {
+                visible: root.isPrimary
+                uiScale: root.uiScale
+                label: "Primary"
+            }
+
+            Item { Layout.fillWidth: true }
 
             // Scoped to just this row (not the whole card) so it
             // doesn't steal drag input from the brightness slider below.

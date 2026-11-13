@@ -167,10 +167,13 @@ Item {
             clip: true
 
             color: (box.info.selected || box.hovered || box.held) ? Config.fgcolorhover : Config.fillcolor
+            // The same border colors as the monitor list's cards
+            // (MonitorCard.qml): primary, enabled, disabled - overlapping
+            // another one shows red too.
             border.width: Config.scaled(box.info.selected ? 3 : 2, root.uiScale)
             border.color: box.info.warn ? Config.fgcolorred
-                : (box.info.selected ? Config.fgcolorlight
-                : (box.info.enabled ? Config.fgcolor : Config.fgcolordark))
+                : (box.info.primary ? Config.fgcolorlight
+                : (box.info.enabled ? Config.fgcolor : Config.fgcolorred))
 
             Behavior on x { enabled: root.settled && !root.dragging; NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
             Behavior on y { enabled: root.settled && !root.dragging; NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
