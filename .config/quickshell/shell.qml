@@ -74,18 +74,23 @@ Scope {
   VolumeOsd {
     id: volumeOsd
     selectedSinkId: dashboard.audioSelectedSinkId
-    brightnessOsd: brightnessOsd
-    shellScale: uiScaleSetting.value
   }
 
   BrightnessOsd {
     id: brightnessOsd
     dashboard: dashboard
-    volumeOsd: volumeOsd
+  }
+
+  LanguageOsd { id: languageOsd }
+
+  // Shows the three above - size, place and stacking from Settings >
+  // General > Shell > OSD - on the bar's monitor.
+  OsdHost {
     shellScale: uiScaleSetting.value
+    screenName: mainBar.effectivePrimaryName
+    osds: [volumeOsd, brightnessOsd, languageOsd]
   }
 
   WorkspaceOsd { shellScale: uiScaleSetting.value }
-  LanguageOsd { id: languageOsd; shellScale: uiScaleSetting.value }
   FullscreenHintOsd { dashboard: dashboard; shellScale: uiScaleSetting.value }
 }

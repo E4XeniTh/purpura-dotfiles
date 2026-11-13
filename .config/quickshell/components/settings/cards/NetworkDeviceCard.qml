@@ -67,7 +67,7 @@ DashCard {
             Text {
                 Layout.fillWidth: true
                 text: root.device ? DeviceType.toString(root.device.type) : ""
-                color: Config.fgcolordark
+                color: Config.fgcolorhint
                 font.family: Config.fontfamily
                 font.pixelSize: Config.scaled(12, root.uiScale)
                 elide: Text.ElideRight

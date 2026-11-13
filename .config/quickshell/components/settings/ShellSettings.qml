@@ -69,6 +69,7 @@ Item {
     // 0 = Shell, 1 = Input, 2 = Updater, 3 = Night Light, 4 = Dropdown Console,
     // 5 = Power.
     property int currentCategory: 0
+    onCurrentCategoryChanged: categoryScroll.contentY = 0
 
     // Night Light category's view of root.nightLight, with defaults for the
     // moment before it's wired up.
@@ -79,8 +80,7 @@ Item {
     readonly property bool nlScheduled: !!root.nightLight && root.nightLight.scheduled
     readonly property int nlStart: root.nightLight ? root.nightLight.scheduleStart : 21 * 60
     readonly property int nlEnd: root.nightLight ? root.nightLight.scheduleEnd : 7 * 60
-    readonly property int nlFadeAmount: root.nightLight ? root.nightLight.fadeAmount : 5
-    readonly property string nlFadeUnit: root.nightLight ? root.nightLight.fadeUnit : "minutes"
+    readonly property int nlFadeIndex: root.nightLight ? root.nightLight.fadeIndex : 3
 
     function formatDuration(minutes) {
         const h = Math.floor(minutes / 60)
@@ -117,6 +117,25 @@ Item {
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
     function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
     function toggleShowFullscreenHint() { root.setBarSetting("showFullscreenHint", !root.showFullscreenHint) }
+
+    // The volume, brightness and input language OSDs - OsdHost.qml reads
+    // these back (and shows a preview whenever one changes).
+    readonly property real osdSize: {
+        const n = Number(root.barStore.osdSize)
+        return isFinite(n) && n > 0 ? Math.max(0.5, Math.min(1.5, n)) : 1
+    }
+    readonly property var osdPositions: [
+        { value: "top-left", label: "Top left" }, { value: "top", label: "Top" }, { value: "top-right", label: "Top right" },
+        { value: "bottom-left", label: "Bottom left" }, { value: "bottom", label: "Bottom" }, { value: "bottom-right", label: "Bottom right" }
+    ]
+    readonly property string osdPosition: root.osdPositions.some(p => p.value === root.barStore.osdPosition) ? root.barStore.osdPosition : "bottom"
+    // Corners only stack vertically.
+    readonly property bool osdInCorner: root.osdPosition.endsWith("left") || root.osdPosition.endsWith("right")
+    readonly property string osdStacking: root.osdInCorner || root.barStore.osdStacking === "vertical" ? "vertical" : "horizontal"
+
+    function setOsdSize(size) { root.setBarSetting("osdSize", Math.round(Math.max(0.5, Math.min(1.5, size)) * 20) / 20) }
+    function setOsdPosition(position) { root.setBarSetting("osdPosition", position) }
+    function setOsdStacking(stacking) { if (!root.osdInCorner) root.setBarSetting("osdStacking", stacking) }
 
     // ---------------- Input (peripheralsettings.json) ----------------
     property var peripheralsStore: ({})
@@ -675,303 +694,303 @@ Item {
             }
 
             // ---------------- RIGHT: current category's settings ----------------
-            ColumnLayout {
-                id: categoryContent
+            // Scrolls when a category's taller than the panel - only then.
+            Flickable {
+                id: categoryScroll
 
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: Config.scaled(10, root.uiScale)
+                clip: true
+                contentWidth: width
+                contentHeight: categoryContent.implicitHeight
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: contentHeight > height
 
-                // ---------------- Shell category ----------------
                 ColumnLayout {
-                    id: barCategoryContent
+                    id: categoryContent
 
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 0
+                    width: categoryScroll.width
                     spacing: Config.scaled(10, root.uiScale)
 
-                // ---------------- only managed workspaces in widget ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(8, root.uiScale)
-                    spacing: Config.scaled(8, root.uiScale)
+                    // ---------------- Shell category ----------------
+                    ColumnLayout {
+                        id: barCategoryContent
 
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.strictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
+                        Layout.fillWidth: true
+                        visible: root.currentCategory === 0
+                        spacing: Config.scaled(10, root.uiScale)
 
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleStrictWorkspaceWidget()
-                        }
-                    }
-
-                    Text {
-                        text: "Only Managed Workspaces In Widget"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleStrictWorkspaceWidget()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "The bar's workspace list shows only workspaces 1-5 that are pinned to a monitor in Display settings, each on its own monitor."
-                }
-
-                // ---------------- show empty workspaces (widget) ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showEmptyWidget ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowEmptyWidget()
-                        }
-                    }
-
-                    Text {
-                        text: "Show Empty Workspaces In Widget"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowEmptyWidget()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "Pinned workspaces that haven't been opened yet still get a box in the bar's workspace list, to click straight to."
-                }
-
-                // ---------------- show empty workspaces (osd) ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showEmptyOsd ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowEmptyOsd()
-                        }
-                    }
-
-                    Text {
-                        text: "Show Empty Workspaces In OSD"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowEmptyOsd()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "The same for the workspace popup that shows for a moment when you switch workspace."
-                }
-                Item {}
-                // ---------------- brightness control ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showBrightnessControl ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowBrightnessControl()
-                        }
-                    }
-
-                    Text {
-                        text: "Show Brightness Control Widget"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowBrightnessControl()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "The brightness control on the bar."
-                }
-
-                // ---------------- show updater ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showUpdater ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowUpdater()
-                        }
-                    }
-
-                    Text {
-                        text: "Show Updater Widget"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowUpdater()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "The updates button on the bar: left-click lists what's waiting, right-click updates everything."
-                }
-
-                // ---------------- fullscreen hint ----------------
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Config.scaled(8, root.uiScale)
-
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                        color: root.showFullscreenHint ? Config.fgcolor : Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
-                        radius: 0
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowFullscreenHint()
-                        }
-                    }
-
-                    Text {
-                        text: "Show fullscreen hint"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: root.toggleShowFullscreenHint()
-                        }
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
-
-                SettingHint {
-                    // Close under the setting it's for, like the Power category's.
-                    Layout.topMargin: -Config.scaled(6, root.uiScale)
-                    uiScale: root.uiScale
-                    text: "A moment's reminder, when a window goes fullscreen, that META + D still opens the dashboard behind it."
-                }
-
-                } // barCategoryContent
-
-                // ---------------- Input category ----------------
-                // Saved to peripheralsettings.json; InputDevices.qml puts it
-                // all into Hyprland.
-                ColumnLayout {
-                    id: peripheralsCategoryContent
-
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 1
-                    spacing: Config.scaled(10, root.uiScale)
-
-                    // ---------------- Mouse ----------------
-                    SectionHeader {
+                    // ---------------- only managed workspaces in widget ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
                         Layout.topMargin: Config.scaled(8, root.uiScale)
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.strictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleStrictWorkspaceWidget()
+                            }
+                        }
+
+                        Text {
+                            text: "Only Managed Workspaces In Widget"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleStrictWorkspaceWidget()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
                         uiScale: root.uiScale
-                        text: "Mouse"
+                        text: "The bar's workspace list shows only workspaces 1-5 that are pinned to a monitor in Display settings, each on its own monitor."
+                    }
+
+                    // ---------------- show empty workspaces (widget) ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.showEmptyWidget ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowEmptyWidget()
+                            }
+                        }
+
+                        Text {
+                            text: "Show Empty Workspaces In Widget"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowEmptyWidget()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "Pinned workspaces that haven't been opened yet still get a box in the bar's workspace list, to click straight to."
+                    }
+
+                    // ---------------- show empty workspaces (osd) ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.showEmptyOsd ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowEmptyOsd()
+                            }
+                        }
+
+                        Text {
+                            text: "Show Empty Workspaces In OSD"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowEmptyOsd()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "The same for the workspace popup that shows for a moment when you switch workspace."
+                    }
+                    Item {}
+                    // ---------------- brightness control ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.showBrightnessControl ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowBrightnessControl()
+                            }
+                        }
+
+                        Text {
+                            text: "Show Brightness Control Widget"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowBrightnessControl()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "The brightness control on the bar."
+                    }
+
+                    // ---------------- show updater ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.showUpdater ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowUpdater()
+                            }
+                        }
+
+                        Text {
+                            text: "Show Updater Widget"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowUpdater()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "The updates button on the bar: left-click lists what's waiting, right-click updates everything."
+                    }
+
+                    // ---------------- fullscreen hint ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            color: root.showFullscreenHint ? Config.fgcolor : Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+                            radius: 0
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowFullscreenHint()
+                            }
+                        }
+
+                        Text {
+                            text: "Show fullscreen hint"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleShowFullscreenHint()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "A moment's reminder, when a window goes fullscreen, that META + D still opens the dashboard behind it."
+                    }
+
+                    // ---------------- OSD ----------------
+                    // The volume, brightness and input language popups. Every
+                    // change shows them all for a moment, as a preview.
+                    SectionHeader {
+                        uiScale: root.uiScale
+                        text: "OSD"
                     }
 
                     ColumnLayout {
@@ -984,7 +1003,7 @@ Item {
                             spacing: Config.scaled(8, root.uiScale)
 
                             Text {
-                                text: "Mouse Sensitivity:"
+                                text: "OSD Size:"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -994,7 +1013,7 @@ Item {
                             Item { Layout.fillWidth: true }
 
                             Text {
-                                text: root.stagedSensitivity.toFixed(2)
+                                text: Math.round(root.osdSize * 100) + "%"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1002,555 +1021,162 @@ Item {
                             }
                         }
 
+                        // 50 - 150%, in steps of 5.
                         DeviceSlider {
                             Layout.preferredWidth: Config.scaled(420, root.uiScale)
                             uiScale: root.uiScale
-                            // Maps hyprland.lua's -1.0 - 1.0 sensitivity
-                            // range onto DeviceSlider's own fixed 0.0 - 1.0
-                            // control range.
-                            value: (root.stagedSensitivity + 1) / 2
-                            onMoved: (newValue) => {
-                                root.stagedSensitivity = Math.round((newValue * 2 - 1) * 100) / 100
-                                sensitivityApplyTimer.restart()
+                            value: root.osdSize - 0.5
+                            onMoved: (newValue) => root.setOsdSize(0.5 + newValue)
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "How big the volume, brightness and input language popups are."
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, root.uiScale)
+
+                        Text {
+                            text: "OSD Position:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        // Laid out like the screen: the top three, then the bottom.
+                        GridLayout {
+                            columns: 3
+                            columnSpacing: Config.scaled(6, root.uiScale)
+                            rowSpacing: Config.scaled(6, root.uiScale)
+
+                            Repeater {
+                                model: root.osdPositions
+
+                                DashCard {
+                                    id: positionButton
+
+                                    required property var modelData
+                                    readonly property bool chosen: root.osdPosition === positionButton.modelData.value
+
+                                    Layout.preferredWidth: Config.scaled(130, root.uiScale)
+                                    Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                    uiScale: root.uiScale
+                                    color: (positionMouse.containsMouse || positionButton.chosen) ? Config.fgcolorhover : Config.fillcolor
+                                    border.color: positionButton.chosen ? Config.fgcolorlight : Config.fgcolor
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: positionButton.modelData.label
+                                        color: positionButton.chosen ? Config.fgcolorlight : Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+
+                                    MouseArea {
+                                        id: positionMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.setOsdPosition(positionButton.modelData.value)
+                                    }
+                                }
                             }
                         }
 
                         SettingHint {
                             uiScale: root.uiScale
                             indented: false
-                            text: "How far the cursor goes for the same mouse movement, from -1 (slowest) to 1 (fastest). At 0 with acceleration off, it goes exactly as far as the mouse reports."
+                            text: "Where they show, on the bar's monitor. Along the top they sit under the bar."
                         }
                     }
 
                     ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        CheckRow {
-                            Layout.fillWidth: true
-                            uiScale: root.uiScale
-                            text: "Mouse Acceleration"
-                            checked: root.mouseAcceleration
-                            onToggled: root.toggleMouseAcceleration()
-                        }
-
-                        SettingHint {
-                            uiScale: root.uiScale
-                            text: "Moving the mouse faster takes the cursor further than the same distance moved slowly. Off, the cursor always goes the same distance - best for aiming."
-                        }
-                    }
-
-                    // ---------------- Keyboard ----------------
-                    SectionHeader {
-                        uiScale: root.uiScale
-                        text: "Keyboard"
-                    }
-
-                    Text {
-                        text: "Input Languages:"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-                    }
-
-                    // The ticked languages in order - the first, lit, is the
-                    // one in use after login. Clicking another puts it first;
-                    // its x takes it off (never the last one).
-                    Flow {
                         Layout.fillWidth: true
                         spacing: Config.scaled(6, root.uiScale)
 
-                        Repeater {
-                            model: root.keyboardLayouts
-
-                            DashCard {
-                                id: languageChip
-
-                                required property string modelData
-                                required property int index
-                                readonly property bool first: languageChip.index === 0
-
-                                uiScale: root.uiScale
-                                width: chipRow.implicitWidth + Config.scaled(16, root.uiScale)
-                                height: Config.scaled(28, root.uiScale)
-                                color: chipMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                border.color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
-
-                                MouseArea {
-                                    id: chipMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.makeLayoutFirst(languageChip.modelData)
-                                }
-
-                                Row {
-                                    id: chipRow
-
-                                    anchors.centerIn: parent
-                                    spacing: Config.scaled(8, root.uiScale)
-
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: root.layoutName(languageChip.modelData)
-                                        color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
-                                        font.family: Config.fontfamily
-                                        font.pixelSize: Config.scaled(12, root.uiScale)
-                                        font.bold: true
-                                    }
-
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        visible: root.keyboardLayouts.length > 1
-                                        text: "x"
-                                        color: removeMouse.containsMouse ? Config.fgcolorred : Config.fgcolordark
-                                        font.family: Config.fontfamily
-                                        font.pixelSize: Config.scaled(12, root.uiScale)
-                                        font.bold: true
-
-                                        MouseArea {
-                                            id: removeMouse
-                                            anchors.fill: parent
-                                            anchors.margins: -Config.scaled(4, root.uiScale)
-                                            hoverEnabled: true
-                                            onClicked: root.toggleLayout(languageChip.modelData)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Search, then tick.
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(30, root.uiScale)
-                        color: Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: layoutSearchInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
-
-                        TextInput {
-                            id: layoutSearchInput
-
-                            anchors.fill: parent
-                            anchors.leftMargin: Config.scaled(8, root.uiScale)
-                            anchors.rightMargin: Config.scaled(8, root.uiScale)
-                            verticalAlignment: TextInput.AlignVCenter
-                            clip: true
-                            color: Config.fgcolor
-                            selectionColor: Config.fgcolorhover
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            onTextEdited: root.layoutSearch = layoutSearchInput.text
-                        }
-
                         Text {
-                            anchors.left: parent.left
-                            anchors.leftMargin: Config.scaled(8, root.uiScale)
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: layoutSearchInput.text.length === 0
-                            text: "Search languages..."
-                            color: Config.fgcolordark
+                            text: "OSD Stacking:"
+                            color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
                         }
-                    }
 
-                    Rectangle {
-                        Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                        Layout.preferredHeight: Config.scaled(200, root.uiScale)
-                        color: Config.fillcolor
-                        border.width: Config.scaled(2, root.uiScale)
-                        border.color: Config.fgcolor
+                        // Locked to vertical in a corner.
+                        RowLayout {
+                            spacing: Config.scaled(6, root.uiScale)
+                            enabled: !root.osdInCorner
+                            opacity: enabled ? 1 : 0.5
 
-                        ListView {
-                            id: layoutList
+                            Repeater {
+                                model: [{ value: "vertical", label: "Vertical" }, { value: "horizontal", label: "Horizontal" }]
 
-                            anchors.fill: parent
-                            anchors.margins: Config.scaled(6, root.uiScale)
-                            clip: true
-                            boundsBehavior: Flickable.StopAtBounds
-                            model: root.shownLayouts
+                                DashCard {
+                                    id: stackingButton
 
-                            delegate: Rectangle {
-                                id: layoutRow
+                                    required property var modelData
+                                    readonly property bool chosen: root.osdStacking === stackingButton.modelData.value
 
-                                required property var modelData
-                                readonly property bool ticked: root.keyboardLayouts.indexOf(layoutRow.modelData.code) >= 0
-
-                                width: layoutList.width
-                                height: Config.scaled(26, root.uiScale)
-                                color: layoutRowMouse.containsMouse ? Config.fgcolorhover : "transparent"
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: Config.scaled(4, root.uiScale)
-                                    anchors.rightMargin: Config.scaled(6, root.uiScale)
-                                    spacing: Config.scaled(8, root.uiScale)
-
-                                    Rectangle {
-                                        Layout.preferredWidth: Config.scaled(16, root.uiScale)
-                                        Layout.preferredHeight: Config.scaled(16, root.uiScale)
-                                        color: layoutRow.ticked ? Config.fgcolor : Config.fillcolor
-                                        border.width: Config.scaled(2, root.uiScale)
-                                        border.color: Config.fgcolor
-                                    }
+                                    Layout.preferredWidth: Config.scaled(130, root.uiScale)
+                                    Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                    uiScale: root.uiScale
+                                    color: (stackingMouse.containsMouse || stackingButton.chosen) ? Config.fgcolorhover : Config.fillcolor
+                                    border.color: stackingButton.chosen ? Config.fgcolorlight : Config.fgcolor
 
                                     Text {
-                                        Layout.fillWidth: true
-                                        text: layoutRow.modelData.name
-                                        color: layoutRow.ticked ? Config.fgcolorlight : Config.fgcolor
+                                        anchors.centerIn: parent
+                                        text: stackingButton.modelData.label
+                                        color: stackingButton.chosen ? Config.fgcolorlight : Config.fgcolor
                                         font.family: Config.fontfamily
                                         font.pixelSize: Config.scaled(13, root.uiScale)
-                                        font.bold: layoutRow.ticked
-                                        elide: Text.ElideRight
+                                        font.bold: true
                                     }
 
-                                    Text {
-                                        text: layoutRow.modelData.code
-                                        color: Config.fgcolordark
-                                        font.family: Config.fontfamily
-                                        font.pixelSize: Config.scaled(12, root.uiScale)
+                                    MouseArea {
+                                        id: stackingMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.setOsdStacking(stackingButton.modelData.value)
                                     }
-                                }
-
-                                MouseArea {
-                                    id: layoutRowMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.toggleLayout(layoutRow.modelData.code)
                                 }
                             }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            visible: layoutList.count === 0
-                            text: root.availableLayouts.length === 0 ? "Loading..." : "No language matches."
-                            color: Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                        }
-                    }
-
-                    SettingHint {
-                        uiScale: root.uiScale
-                        indented: false
-                        text: "Tick the languages you type in. With more than one, META + - switches to the next and shows which is on; the first (lit) is the one in use after login - click another to put it first."
-                    }
-
-                    // ---------------- the rest ----------------
-                    SectionHeader {
-                        uiScale: root.uiScale
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        CheckRow {
-                            Layout.fillWidth: true
-                            uiScale: root.uiScale
-                            text: "Solaar Startup"
-                            checked: root.solaarStartupEnabled
-                            onToggled: root.toggleSolaarStartup()
                         }
 
                         SettingHint {
                             uiScale: root.uiScale
-                            text: "Starts Solaar, for Logitech wireless devices, hidden in the tray at login. Turning it on or off starts or stops it now as well."
+                            indented: false
+                            text: root.osdInCorner
+                                ? "How they line up when more than one shows at once - always one above the other in a corner."
+                                : "How they line up when more than one shows at once: one above the other, or side by side."
                         }
                     }
-                }
 
-                // ---------------- Updater category ----------------
-                ColumnLayout {
-                    id: updaterCategoryContent
+                    } // barCategoryContent
 
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 2
-                    spacing: Config.scaled(10, root.uiScale)
-
-                    // ---------------- highlight on updates ----------------
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleHighlightOnUpdates()
-                            }
-                        }
-
-                        Text {
-                            text: "Highlight Button When Updates Available"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.toggleHighlightOnUpdates()
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        text: "The updates button on the bar lights up while anything is waiting to update."
-                    }
-
-                    // ---------------- follow purpura ----------------
-                    // Purpura's own updates in the updater - see Updater.qml
-                    // and helpers/purpura-update.sh.
+                    // ---------------- Input category ----------------
+                    // Saved to peripheralsettings.json; InputDevices.qml puts it
+                    // all into Hyprland.
                     ColumnLayout {
+                        id: peripheralsCategoryContent
+
                         Layout.fillWidth: true
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Rectangle {
-                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: root.followPurpura ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
-                                radius: 0
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.toggleFollowPurpura()
-                                }
-                            }
-
-                            Text {
-                                text: "Follow Purpura versioning"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.toggleFollowPurpura()
-                                }
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Config.scaled(28, root.uiScale)
-                            wrapMode: Text.WordWrap
-                            text: "Checks the checkout purpura was installed from for new commits: a notification for each new version, "
-                                + "its state under the updater's list, and right-clicking the updater installs it just before the firmware updates."
-                            color: Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(12, root.uiScale)
-                        }
-                    }
-
-                    // ---------------- update check interval ----------------
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(4, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        Text {
-                            text: "Check for updates every"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(60, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                            color: Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: intervalInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
-
-                            TextInput {
-                                id: intervalInput
-
-                                anchors {
-                                    fill: parent
-                                    margins: Config.scaled(6, root.uiScale)
-                                }
-                                horizontalAlignment: TextInput.AlignHCenter
-                                verticalAlignment: TextInput.AlignVCenter
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                selectByMouse: true
-                                clip: true
-
-                                // Positive whole numbers only.
-                                validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
-
-                                // Guards the programmatic resync below
-                                // from being mistaken for a user edit by
-                                // onTextChanged - same reasoning
-                                // LabeledField.qml's own `syncing` flag
-                                // has for the exact same pattern.
-                                property bool syncing: false
-                                text: String(root.checkIntervalMinutes)
-
-                                Connections {
-                                    target: root
-                                    function onCheckIntervalMinutesChanged() {
-                                        intervalInput.syncing = true
-                                        intervalInput.text = String(root.checkIntervalMinutes)
-                                        intervalInput.syncing = false
-                                    }
-                                }
-
-                                // Committed live, on every keystroke that
-                                // actually parses to a positive integer -
-                                // an empty/in-progress edit (e.g. the
-                                // field momentarily cleared while
-                                // retyping) is just left unsaved rather
-                                // than persisting 0/NaN, root.
-                                // checkIntervalMinutes's own fallback
-                                // covers it meanwhile.
-                                onTextChanged: {
-                                    if (intervalInput.syncing) return
-                                    const n = parseInt(intervalInput.text, 10)
-                                    if (!isNaN(n) && n > 0) {
-                                        root.setUpdaterSetting("checkIntervalMinutes", n)
-                                    }
-                                }
-
-                                onAccepted: intervalInput.focus = false
-                            }
-                        }
-
-                        Text {
-                            text: "minutes"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        indented: false
-                        text: "How often pacman, the AUR and flatpak are checked for updates - and purpura, when it's followed."
-                    }
-                }
-
-                // ---------------- Night Light category ----------------
-                ColumnLayout {
-                    id: nightLightCategoryContent
-
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 3
-                    spacing: Config.scaled(10, root.uiScale)
-
-                    Text {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
-                        visible: !!root.nightLight && root.nightLight.availabilityKnown && !root.nlUsable
-                        text: root.nightLight && root.nightLight.failed
-                            ? "hyprsunset keeps exiting right after it starts, so night light is unavailable."
-                            : "Night light needs hyprsunset: sudo pacman -S hyprsunset"
-                        color: Config.fgcolorred
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(13, root.uiScale)
-                        font.bold: true
-                        wrapMode: Text.WordWrap
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
+                        visible: root.currentCategory === 1
                         spacing: Config.scaled(10, root.uiScale)
-                        enabled: root.nlUsable
-                        opacity: enabled ? 1 : 0.35
 
-                        // ---------------- on/off ----------------
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Rectangle {
-                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: root.nlEnabled ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
-                                radius: 0
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.nightLight.setEnabled(!root.nlEnabled)
-                                }
-                            }
-
-                            Text {
-                                text: "Night Light"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: root.nightLight.setEnabled(!root.nlEnabled)
-                                }
-                            }
-
-                            Text {
-                                visible: root.nlFading
-                                text: root.nlEnabled ? "(fading in)" : "(fading out)"
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
-                        SettingHint {
-                            // Close under the setting it's for, like the Power category's.
-                            Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        // ---------------- Mouse ----------------
+                        SectionHeader {
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
                             uiScale: root.uiScale
-                            text: "Tints every screen warm, which is easier on the eyes at night."
+                            text: "Mouse"
                         }
 
-                        // ---------------- strength ----------------
                         ColumnLayout {
-                            Layout.topMargin: Config.scaled(4, root.uiScale)
+                            Layout.fillWidth: true
                             spacing: Config.scaled(6, root.uiScale)
 
                             RowLayout {
@@ -1559,7 +1185,7 @@ Item {
                                 spacing: Config.scaled(8, root.uiScale)
 
                                 Text {
-                                    text: "Strength:"
+                                    text: "Mouse Sensitivity:"
                                     color: Config.fgcolor
                                     font.family: Config.fontfamily
                                     font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1569,7 +1195,7 @@ Item {
                                 Item { Layout.fillWidth: true }
 
                                 Text {
-                                    text: Math.round(root.nlStrength * 100) + "%"
+                                    text: root.stagedSensitivity.toFixed(2)
                                     color: Config.fgcolor
                                     font.family: Config.fontfamily
                                     font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1580,18 +1206,280 @@ Item {
                             DeviceSlider {
                                 Layout.preferredWidth: Config.scaled(420, root.uiScale)
                                 uiScale: root.uiScale
-                                value: root.nlStrength
-                                onMoved: (newValue) => root.nightLight.setStrength(newValue)
+                                // Maps hyprland.lua's -1.0 - 1.0 sensitivity
+                                // range onto DeviceSlider's own fixed 0.0 - 1.0
+                                // control range.
+                                value: (root.stagedSensitivity + 1) / 2
+                                onMoved: (newValue) => {
+                                    root.stagedSensitivity = Math.round((newValue * 2 - 1) * 100) / 100
+                                    sensitivityApplyTimer.restart()
+                                }
                             }
 
                             SettingHint {
                                 uiScale: root.uiScale
                                 indented: false
-                                text: "How warm the tint gets - further right is warmer."
+                                text: "How far the cursor goes for the same mouse movement, from -1 (slowest) to 1 (fastest). At 0 with acceleration off, it goes exactly as far as the mouse reports."
                             }
                         }
 
-                        // ---------------- scheduled ----------------
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Mouse Acceleration"
+                                checked: root.mouseAcceleration
+                                onToggled: root.toggleMouseAcceleration()
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                text: "Moving the mouse faster takes the cursor further than the same distance moved slowly. Off, the cursor always goes the same distance - best for aiming."
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                text: "You do NOT want this in first person shooters."
+                                color: "#a11d1d"
+                                font.bold: true
+                            }
+                        }
+
+                        // ---------------- Keyboard ----------------
+                        SectionHeader {
+                            uiScale: root.uiScale
+                            text: "Keyboard"
+                        }
+
+                        Text {
+                            text: "Input Languages:"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+                        }
+
+                        // The ticked languages in order - the first, lit, is the
+                        // one in use after login. Clicking another puts it first;
+                        // its x takes it off (never the last one).
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            Repeater {
+                                model: root.keyboardLayouts
+
+                                DashCard {
+                                    id: languageChip
+
+                                    required property string modelData
+                                    required property int index
+                                    readonly property bool first: languageChip.index === 0
+
+                                    uiScale: root.uiScale
+                                    width: chipRow.implicitWidth + Config.scaled(16, root.uiScale)
+                                    height: Config.scaled(28, root.uiScale)
+                                    color: chipMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                    border.color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
+
+                                    MouseArea {
+                                        id: chipMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.makeLayoutFirst(languageChip.modelData)
+                                    }
+
+                                    Row {
+                                        id: chipRow
+
+                                        anchors.centerIn: parent
+                                        spacing: Config.scaled(8, root.uiScale)
+
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: root.layoutName(languageChip.modelData)
+                                            color: languageChip.first ? Config.fgcolorlight : Config.fgcolor
+                                            font.family: Config.fontfamily
+                                            font.pixelSize: Config.scaled(12, root.uiScale)
+                                            font.bold: true
+                                        }
+
+                                        Text {
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: root.keyboardLayouts.length > 1
+                                            text: "x"
+                                            color: removeMouse.containsMouse ? Config.fgcolorred : Config.fgcolorhint
+                                            font.family: Config.fontfamily
+                                            font.pixelSize: Config.scaled(12, root.uiScale)
+                                            font.bold: true
+
+                                            MouseArea {
+                                                id: removeMouse
+                                                anchors.fill: parent
+                                                anchors.margins: -Config.scaled(4, root.uiScale)
+                                                hoverEnabled: true
+                                                onClicked: root.toggleLayout(languageChip.modelData)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Search, then tick.
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(30, root.uiScale)
+                            color: Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: layoutSearchInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                            TextInput {
+                                id: layoutSearchInput
+
+                                anchors.fill: parent
+                                anchors.leftMargin: Config.scaled(8, root.uiScale)
+                                anchors.rightMargin: Config.scaled(8, root.uiScale)
+                                verticalAlignment: TextInput.AlignVCenter
+                                clip: true
+                                color: Config.fgcolor
+                                selectionColor: Config.fgcolorhover
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                onTextEdited: root.layoutSearch = layoutSearchInput.text
+                            }
+
+                            Text {
+                                anchors.left: parent.left
+                                anchors.leftMargin: Config.scaled(8, root.uiScale)
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: layoutSearchInput.text.length === 0
+                                text: "Search languages..."
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(200, root.uiScale)
+                            color: Config.fillcolor
+                            border.width: Config.scaled(2, root.uiScale)
+                            border.color: Config.fgcolor
+
+                            ListView {
+                                id: layoutList
+
+                                anchors.fill: parent
+                                anchors.margins: Config.scaled(6, root.uiScale)
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+                                model: root.shownLayouts
+
+                                delegate: Rectangle {
+                                    id: layoutRow
+
+                                    required property var modelData
+                                    readonly property bool ticked: root.keyboardLayouts.indexOf(layoutRow.modelData.code) >= 0
+
+                                    width: layoutList.width
+                                    height: Config.scaled(26, root.uiScale)
+                                    color: layoutRowMouse.containsMouse ? Config.fgcolorhover : "transparent"
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: Config.scaled(4, root.uiScale)
+                                        anchors.rightMargin: Config.scaled(6, root.uiScale)
+                                        spacing: Config.scaled(8, root.uiScale)
+
+                                        Rectangle {
+                                            Layout.preferredWidth: Config.scaled(16, root.uiScale)
+                                            Layout.preferredHeight: Config.scaled(16, root.uiScale)
+                                            color: layoutRow.ticked ? Config.fgcolor : Config.fillcolor
+                                            border.width: Config.scaled(2, root.uiScale)
+                                            border.color: Config.fgcolor
+                                        }
+
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: layoutRow.modelData.name
+                                            color: layoutRow.ticked ? Config.fgcolorlight : Config.fgcolor
+                                            font.family: Config.fontfamily
+                                            font.pixelSize: Config.scaled(13, root.uiScale)
+                                            font.bold: layoutRow.ticked
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Text {
+                                            text: layoutRow.modelData.code
+                                            color: Config.fgcolorhint
+                                            font.family: Config.fontfamily
+                                            font.pixelSize: Config.scaled(12, root.uiScale)
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: layoutRowMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.toggleLayout(layoutRow.modelData.code)
+                                    }
+                                }
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                visible: layoutList.count === 0
+                                text: root.availableLayouts.length === 0 ? "Loading..." : "No language matches."
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            indented: false
+                            text: "Tick the languages you type in. With more than one, META + - switches to the next and shows which is on; the first (lit) is the one in use after login - click another to put it first."
+                        }
+
+                        // ---------------- the rest ----------------
+                        SectionHeader {
+                            uiScale: root.uiScale
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Solaar Startup"
+                                checked: root.solaarStartupEnabled
+                                onToggled: root.toggleSolaarStartup()
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                text: "Starts Solaar, for Logitech wireless devices, in the background at login. Turning it on or off starts or stops it now as well."
+                            }
+                        }
+                    }
+
+                    // ---------------- Updater category ----------------
+                    ColumnLayout {
+                        id: updaterCategoryContent
+
+                        Layout.fillWidth: true
+                        visible: root.currentCategory === 2
+                        spacing: Config.scaled(10, root.uiScale)
+
+                        // ---------------- highlight on updates ----------------
                         RowLayout {
                             Layout.fillWidth: true
                             Layout.topMargin: Config.scaled(8, root.uiScale)
@@ -1600,7 +1488,7 @@ Item {
                             Rectangle {
                                 Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: root.nlScheduled ? Config.fgcolor : Config.fillcolor
+                                color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
                                 border.width: Config.scaled(2, root.uiScale)
                                 border.color: Config.fgcolor
                                 radius: 0
@@ -1608,12 +1496,12 @@ Item {
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                    onClicked: root.toggleHighlightOnUpdates()
                                 }
                             }
 
                             Text {
-                                text: "Scheduled Night Light"
+                                text: "Highlight Button When Updates Available"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1622,7 +1510,7 @@ Item {
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                    onClicked: root.toggleHighlightOnUpdates()
                                 }
                             }
 
@@ -1633,59 +1521,72 @@ Item {
                             // Close under the setting it's for, like the Power category's.
                             Layout.topMargin: -Config.scaled(6, root.uiScale)
                             uiScale: root.uiScale
-                            text: "Turns night light on and off by itself every day, between the two times below."
+                            text: "The updates button on the bar lights up while anything is waiting to update."
                         }
 
-                        // Only interactable while scheduling is on.
+                        // ---------------- follow purpura ----------------
+                        // Purpura's own updates in the updater - see Updater.qml
+                        // and helpers/purpura-update.sh.
                         ColumnLayout {
-                            Layout.topMargin: Config.scaled(4, root.uiScale)
-                            spacing: Config.scaled(6, root.uiScale)
-                            enabled: root.nlScheduled
-                            opacity: enabled ? 1 : 0.35
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
 
                             RowLayout {
-                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                                Layout.fillWidth: false
+                                Layout.fillWidth: true
                                 spacing: Config.scaled(8, root.uiScale)
 
+                                Rectangle {
+                                    Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                    Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                    color: root.followPurpura ? Config.fgcolor : Config.fillcolor
+                                    border.width: Config.scaled(2, root.uiScale)
+                                    border.color: Config.fgcolor
+                                    radius: 0
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.toggleFollowPurpura()
+                                    }
+                                }
+
                                 Text {
-                                    text: "From " + scheduleSlider.format(scheduleSlider.previewStart)
-                                        + " to " + scheduleSlider.format(scheduleSlider.previewEnd)
+                                    text: "Follow Purpura versioning"
                                     color: Config.fgcolor
                                     font.family: Config.fontfamily
                                     font.pixelSize: Config.scaled(13, root.uiScale)
                                     font.bold: true
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.toggleFollowPurpura()
+                                    }
                                 }
 
                                 Item { Layout.fillWidth: true }
-
-                                Text {
-                                    text: root.formatDuration(scheduleSlider.previewLength)
-                                    color: Config.fgcolor
-                                    font.family: Config.fontfamily
-                                    font.pixelSize: Config.scaled(13, root.uiScale)
-                                    font.bold: true
-                                }
                             }
 
-                            TimeRangeSlider {
-                                id: scheduleSlider
-                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                                uiScale: root.uiScale
-                                startMinutes: root.nlStart
-                                endMinutes: root.nlEnd
-                                onCommitted: (start, end) => root.nightLight.setSchedule(start, end)
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Checks the checkout purpura was installed from for new commits: a notification for each new version, "
+                                    + "its state under the updater's list, and right-clicking the updater installs it just before the firmware updates."
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
                             }
                         }
 
-                        // ---------------- fade duration ----------------
+                        // ---------------- update check interval ----------------
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            Layout.topMargin: Config.scaled(4, root.uiScale)
                             spacing: Config.scaled(8, root.uiScale)
 
                             Text {
-                                text: "Fade in/out over"
+                                text: "Check for updates every"
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
@@ -1697,10 +1598,10 @@ Item {
                                 Layout.preferredHeight: Config.scaled(28, root.uiScale)
                                 color: Config.fillcolor
                                 border.width: Config.scaled(2, root.uiScale)
-                                border.color: fadeInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+                                border.color: intervalInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
 
                                 TextInput {
-                                    id: fadeInput
+                                    id: intervalInput
 
                                     anchors {
                                         fill: parent
@@ -1713,48 +1614,53 @@ Item {
                                     font.pixelSize: Config.scaled(13, root.uiScale)
                                     selectByMouse: true
                                     clip: true
+
+                                    // Positive whole numbers only.
                                     validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
 
-                                    // Same programmatic-resync guard as
-                                    // intervalInput above.
+                                    // Guards the programmatic resync below
+                                    // from being mistaken for a user edit by
+                                    // onTextChanged - same reasoning
+                                    // LabeledField.qml's own `syncing` flag
+                                    // has for the exact same pattern.
                                     property bool syncing: false
-                                    text: String(root.nlFadeAmount)
+                                    text: String(root.checkIntervalMinutes)
 
                                     Connections {
                                         target: root
-                                        function onNlFadeAmountChanged() {
-                                            fadeInput.syncing = true
-                                            fadeInput.text = String(root.nlFadeAmount)
-                                            fadeInput.syncing = false
+                                        function onCheckIntervalMinutesChanged() {
+                                            intervalInput.syncing = true
+                                            intervalInput.text = String(root.checkIntervalMinutes)
+                                            intervalInput.syncing = false
                                         }
                                     }
 
-                                    // 0 is valid here (instant), unlike
-                                    // the update interval; an empty field
-                                    // mid-edit is just left unsaved.
+                                    // Committed live, on every keystroke that
+                                    // actually parses to a positive integer -
+                                    // an empty/in-progress edit (e.g. the
+                                    // field momentarily cleared while
+                                    // retyping) is just left unsaved rather
+                                    // than persisting 0/NaN, root.
+                                    // checkIntervalMinutes's own fallback
+                                    // covers it meanwhile.
                                     onTextChanged: {
-                                        if (fadeInput.syncing || !root.nightLight) return
-                                        const n = parseInt(fadeInput.text, 10)
-                                        if (!isNaN(n) && n >= 0) root.nightLight.setFadeAmount(n)
+                                        if (intervalInput.syncing) return
+                                        const n = parseInt(intervalInput.text, 10)
+                                        if (!isNaN(n) && n > 0) {
+                                            root.setUpdaterSetting("checkIntervalMinutes", n)
+                                        }
                                     }
 
-                                    onAccepted: fadeInput.focus = false
+                                    onAccepted: intervalInput.focus = false
                                 }
                             }
 
-                            DropdownBox {
-                                Layout.preferredWidth: Config.scaled(100, root.uiScale)
-                                uiScale: root.uiScale
-                                options: ["minutes", "seconds"]
-                                currentIndex: root.nlFadeUnit === "seconds" ? 1 : 0
-                                onActivated: (index) => root.nightLight.setFadeUnit(index === 1 ? "seconds" : "minutes")
-                            }
-
                             Text {
-                                text: "(0 = instant)"
-                                color: Config.fgcolordark
+                                text: "minutes"
+                                color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
                             }
 
                             Item { Layout.fillWidth: true }
@@ -1765,619 +1671,1021 @@ Item {
                             Layout.topMargin: -Config.scaled(6, root.uiScale)
                             uiScale: root.uiScale
                             indented: false
-                            text: "How gradually the schedule brings the tint in and takes it away. Switched by hand above, it changes at once."
+                            text: "How often pacman, the AUR and flatpak are checked for updates - and purpura, when it's followed."
                         }
                     }
-                }
 
-                // ---------------- Dropdown Console category ----------------
-                ColumnLayout {
-                    id: consoleCategoryContent
-
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 4
-                    spacing: Config.scaled(10, root.uiScale)
-
+                    // ---------------- Night Light category ----------------
                     ColumnLayout {
+                        id: nightLightCategoryContent
+
                         Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(6, root.uiScale)
-
-                        RowLayout {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.fillWidth: false
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "Width:"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Text {
-                                text: (root.dropdownConsole ? root.dropdownConsole.widthPercent : 0) + "%"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-                        }
-
-                        DeviceSlider {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            uiScale: root.uiScale
-                            value: root.dropdownConsole ? root.dropdownConsole.widthPercent / 100 : 0
-                            onMoved: (newValue) => root.dropdownConsole.setWidthPercent(newValue * 100)
-                        }
-
-                        SettingHint {
-                            uiScale: root.uiScale
-                            indented: false
-                            text: "How much of the screen's width the console takes."
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(6, root.uiScale)
-
-                        RowLayout {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.fillWidth: false
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "Height:"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Text {
-                                text: (root.dropdownConsole ? root.dropdownConsole.heightPercent : 0) + "%"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-                        }
-
-                        DeviceSlider {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            uiScale: root.uiScale
-                            value: root.dropdownConsole ? root.dropdownConsole.heightPercent / 100 : 0
-                            onMoved: (newValue) => root.dropdownConsole.setHeightPercent(newValue * 100)
-                        }
-
-                        SettingHint {
-                            uiScale: root.uiScale
-                            indented: false
-                            text: "How far down the screen the console reaches."
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(6, root.uiScale)
-
-                        RowLayout {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.fillWidth: false
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "Font Size:"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Text {
-                                text: (root.dropdownConsole ? root.dropdownConsole.fontSize : 0) + "pt"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-                        }
-
-                        DeviceSlider {
-                            id: consoleFontSlider
-
-                            readonly property int minimum: root.dropdownConsole ? root.dropdownConsole.minFontSize : 0
-                            readonly property int maximum: root.dropdownConsole ? root.dropdownConsole.maxFontSize : 1
-
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            uiScale: root.uiScale
-                            value: root.dropdownConsole ? (root.dropdownConsole.fontSize - minimum) / (maximum - minimum) : 0
-                            onMoved: (newValue) => root.dropdownConsole.setFontSize(minimum + newValue * (maximum - minimum))
-                        }
-
-                        SettingHint {
-                            uiScale: root.uiScale
-                            indented: false
-                            text: "The terminal's text size."
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(6, root.uiScale)
-
-                        RowLayout {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.fillWidth: false
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "Opacity:"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Text {
-                                text: (root.dropdownConsole ? root.dropdownConsole.opacityPercent : 0) + "%"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-                        }
-
-                        DeviceSlider {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            uiScale: root.uiScale
-                            value: root.dropdownConsole ? root.dropdownConsole.opacityPercent / 100 : 0
-                            onMoved: (newValue) => root.dropdownConsole.setOpacityPercent(newValue * 100)
-                        }
-
-                        SettingHint {
-                            uiScale: root.uiScale
-                            indented: false
-                            text: "How solid the console's background is - lower shows more of what's behind it."
-                        }
-                    }
-
-                    Item {
-                        Layout.preferredHeight: Config.scaled(14, root.uiScale)
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autoHideEnabled
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: parent.on ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
-                            }
-                        }
+                        visible: root.currentCategory === 3
+                        spacing: Config.scaled(10, root.uiScale)
 
                         Text {
-                            text: "Auto-hide when unfocused"
-                            color: Config.fgcolor
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            visible: !!root.nightLight && root.nightLight.availabilityKnown && !root.nlUsable
+                            text: root.nightLight && root.nightLight.failed
+                                ? "hyprsunset keeps exiting right after it starts, so night light is unavailable."
+                                : "Night light needs hyprsunset: sudo pacman -S hyprsunset"
+                            color: Config.fgcolorred
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
                             font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
-                            }
+                            wrapMode: Text.WordWrap
                         }
 
-                        Item { Layout.fillWidth: true }
-                    }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(10, root.uiScale)
+                            enabled: root.nlUsable
+                            opacity: enabled ? 1 : 0.35
 
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        text: "Closes the console as soon as you click away from it."
-                    }
+                            // ---------------- on/off ----------------
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Config.scaled(8, root.uiScale)
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(8, root.uiScale)
+                                Rectangle {
+                                    Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                    Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                    color: root.nlEnabled ? Config.fgcolor : Config.fillcolor
+                                    border.width: Config.scaled(2, root.uiScale)
+                                    border.color: Config.fgcolor
+                                    radius: 0
 
-                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: parent.on ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
-                            }
-                        }
-
-                        Text {
-                            text: "Autokill when inactive / in background"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    RowLayout {
-                        id: autokillDelayRow
-
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        // Dark and locked while autokill is off.
-                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
-                        readonly property int minutes: root.dropdownConsole ? root.dropdownConsole.autokillMinutes : 30
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(70, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                            color: Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: !autokillDelayRow.on ? Config.fgcolordark
-                                : autokillDelayInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
-
-                            TextInput {
-                                id: autokillDelayInput
-
-                                anchors {
-                                    fill: parent
-                                    margins: Config.scaled(6, root.uiScale)
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.nightLight.setEnabled(!root.nlEnabled)
+                                    }
                                 }
-                                enabled: autokillDelayRow.on
-                                horizontalAlignment: TextInput.AlignHCenter
-                                verticalAlignment: TextInput.AlignVCenter
+
+                                Text {
+                                    text: "Night Light"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.nightLight.setEnabled(!root.nlEnabled)
+                                    }
+                                }
+
+                                Text {
+                                    visible: root.nlFading
+                                    text: root.nlEnabled ? "(fading in)" : "(fading out)"
+                                    color: Config.fgcolorhint
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            SettingHint {
+                                // Close under the setting it's for, like the Power category's.
+                                Layout.topMargin: -Config.scaled(6, root.uiScale)
+                                uiScale: root.uiScale
+                                text: "Tints every screen warm, which is easier on the eyes at night."
+                            }
+
+                            // ---------------- strength ----------------
+                            ColumnLayout {
+                                Layout.topMargin: Config.scaled(4, root.uiScale)
+                                spacing: Config.scaled(6, root.uiScale)
+
+                                RowLayout {
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    Layout.fillWidth: false
+                                    spacing: Config.scaled(8, root.uiScale)
+
+                                    Text {
+                                        text: "Strength:"
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    Text {
+                                        text: Math.round(root.nlStrength * 100) + "%"
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+                                }
+
+                                DeviceSlider {
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    uiScale: root.uiScale
+                                    value: root.nlStrength
+                                    onMoved: (newValue) => root.nightLight.setStrength(newValue)
+                                }
+
+                                SettingHint {
+                                    uiScale: root.uiScale
+                                    indented: false
+                                    text: "How warm the tint gets - further right is warmer."
+                                }
+                            }
+
+                            // ---------------- scheduled ----------------
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Config.scaled(8, root.uiScale)
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Rectangle {
+                                    Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                    Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                    color: root.nlScheduled ? Config.fgcolor : Config.fillcolor
+                                    border.width: Config.scaled(2, root.uiScale)
+                                    border.color: Config.fgcolor
+                                    radius: 0
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                    }
+                                }
+
+                                Text {
+                                    text: "Scheduled Night Light"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: root.nightLight.setScheduled(!root.nlScheduled)
+                                    }
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+
+                            SettingHint {
+                                // Close under the setting it's for, like the Power category's.
+                                Layout.topMargin: -Config.scaled(6, root.uiScale)
+                                uiScale: root.uiScale
+                                text: "Turns night light on and off by itself every day, between the two times below."
+                            }
+
+                            // Only interactable while scheduling is on.
+                            ColumnLayout {
+                                Layout.topMargin: Config.scaled(4, root.uiScale)
+                                spacing: Config.scaled(6, root.uiScale)
+                                enabled: root.nlScheduled
+                                opacity: enabled ? 1 : 0.35
+
+                                RowLayout {
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    Layout.fillWidth: false
+                                    spacing: Config.scaled(8, root.uiScale)
+
+                                    Text {
+                                        text: "From " + scheduleSlider.format(scheduleSlider.previewStart)
+                                            + " to " + scheduleSlider.format(scheduleSlider.previewEnd)
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    Text {
+                                        text: root.formatDuration(scheduleSlider.previewLength)
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+                                }
+
+                                TimeRangeSlider {
+                                    id: scheduleSlider
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    uiScale: root.uiScale
+                                    startMinutes: root.nlStart
+                                    endMinutes: root.nlEnd
+                                    onCommitted: (start, end) => root.nightLight.setSchedule(start, end)
+                                }
+                            }
+
+                            // ---------------- fade ----------------
+                            // Ten lengths, 30 seconds to an hour (NightLight.qml's
+                            // fadeStops) - the slider snaps to them.
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: Config.scaled(8, root.uiScale)
+                                spacing: Config.scaled(6, root.uiScale)
+
+                                RowLayout {
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    Layout.fillWidth: false
+                                    spacing: Config.scaled(8, root.uiScale)
+
+                                    Text {
+                                        text: "Fade In/Out:"
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+
+                                    Item { Layout.fillWidth: true }
+
+                                    Text {
+                                        text: root.nightLight ? root.nightLight.fadeLabel(root.nlFadeIndex) : ""
+                                        color: Config.fgcolor
+                                        font.family: Config.fontfamily
+                                        font.pixelSize: Config.scaled(13, root.uiScale)
+                                        font.bold: true
+                                    }
+                                }
+
+                                DeviceSlider {
+                                    readonly property int stops: root.nightLight ? root.nightLight.fadeStops.length : 10
+
+                                    Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                    uiScale: root.uiScale
+                                    value: root.nlFadeIndex / (stops - 1)
+                                    onMoved: (newValue) => root.nightLight.setFadeIndex(newValue * (stops - 1))
+                                }
+
+                                SettingHint {
+                                    uiScale: root.uiScale
+                                    indented: false
+                                    text: "How gradually the schedule brings the tint in and takes it away. Switched by hand above, it changes at once."
+                                }
+                            }
+                        }
+                    }
+
+                    // ---------------- Dropdown Console category ----------------
+                    ColumnLayout {
+                        id: consoleCategoryContent
+
+                        Layout.fillWidth: true
+                        visible: root.currentCategory === 4
+                        spacing: Config.scaled(10, root.uiScale)
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Width:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.dropdownConsole ? root.dropdownConsole.widthPercent : 0) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.dropdownConsole ? root.dropdownConsole.widthPercent / 100 : 0
+                                onMoved: (newValue) => root.dropdownConsole.setWidthPercent(newValue * 100)
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "How much of the screen's width the console takes."
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Height:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.dropdownConsole ? root.dropdownConsole.heightPercent : 0) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.dropdownConsole ? root.dropdownConsole.heightPercent / 100 : 0
+                                onMoved: (newValue) => root.dropdownConsole.setHeightPercent(newValue * 100)
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "How far down the screen the console reaches."
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Font Size:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.dropdownConsole ? root.dropdownConsole.fontSize : 0) + "pt"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                id: consoleFontSlider
+
+                                readonly property int minimum: root.dropdownConsole ? root.dropdownConsole.minFontSize : 0
+                                readonly property int maximum: root.dropdownConsole ? root.dropdownConsole.maxFontSize : 1
+
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.dropdownConsole ? (root.dropdownConsole.fontSize - minimum) / (maximum - minimum) : 0
+                                onMoved: (newValue) => root.dropdownConsole.setFontSize(minimum + newValue * (maximum - minimum))
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "The terminal's text size."
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Opacity:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.dropdownConsole ? root.dropdownConsole.opacityPercent : 0) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.dropdownConsole ? root.dropdownConsole.opacityPercent / 100 : 0
+                                onMoved: (newValue) => root.dropdownConsole.setOpacityPercent(newValue * 100)
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "How solid the console's background is - lower shows more of what's behind it."
+                            }
+                        }
+
+                        Item {
+                            Layout.preferredHeight: Config.scaled(14, root.uiScale)
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autoHideEnabled
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: parent.on ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
+                                }
+                            }
+
+                            Text {
+                                text: "Auto-hide when unfocused"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
+                            uiScale: root.uiScale
+                            text: "Closes the console as soon as you click away from it."
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: parent.on ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
+                                }
+                            }
+
+                            Text {
+                                text: "Autokill when inactive / in background"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        RowLayout {
+                            id: autokillDelayRow
+
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            // Dark and locked while autokill is off.
+                            readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
+                            readonly property int minutes: root.dropdownConsole ? root.dropdownConsole.autokillMinutes : 30
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(70, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                color: Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: !autokillDelayRow.on ? Config.fgcolordark
+                                    : autokillDelayInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                                TextInput {
+                                    id: autokillDelayInput
+
+                                    anchors {
+                                        fill: parent
+                                        margins: Config.scaled(6, root.uiScale)
+                                    }
+                                    enabled: autokillDelayRow.on
+                                    horizontalAlignment: TextInput.AlignHCenter
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    color: autokillDelayRow.on ? Config.fgcolor : Config.fgcolordark
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    selectByMouse: true
+                                    clip: true
+                                    validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
+                                    text: String(autokillDelayRow.minutes)
+
+                                    // Saves on Enter or on leaving the box, not on
+                                    // each keystroke, so a value being typed can't
+                                    // get snapped to the minimum halfway through.
+                                    // Then shows what was really saved, which is
+                                    // the old value if the box was left empty.
+                                    onEditingFinished: {
+                                        const typed = parseInt(autokillDelayInput.text, 10)
+                                        if (!isNaN(typed)) root.dropdownConsole.setAutokillMinutes(typed)
+                                        autokillDelayInput.text = String(autokillDelayRow.minutes)
+                                    }
+                                    onAccepted: autokillDelayInput.focus = false
+                                }
+                            }
+
+                            Text {
+                                text: "minute delay"
                                 color: autokillDelayRow.on ? Config.fgcolor : Config.fgcolordark
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(13, root.uiScale)
-                                selectByMouse: true
-                                clip: true
-                                validator: RegularExpressionValidator { regularExpression: /^[0-9]*$/ }
-                                text: String(autokillDelayRow.minutes)
-
-                                // Saves on Enter or on leaving the box, not on
-                                // each keystroke, so a value being typed can't
-                                // get snapped to the minimum halfway through.
-                                // Then shows what was really saved, which is
-                                // the old value if the box was left empty.
-                                onEditingFinished: {
-                                    const typed = parseInt(autokillDelayInput.text, 10)
-                                    if (!isNaN(typed)) root.dropdownConsole.setAutokillMinutes(typed)
-                                    autokillDelayInput.text = String(autokillDelayRow.minutes)
-                                }
-                                onAccepted: autokillDelayInput.focus = false
+                                font.bold: true
                             }
-                        }
 
-                        Text {
-                            text: "minute delay"
-                            color: autokillDelayRow.on ? Config.fgcolor : Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        indented: false
-                        text: "While the console is closed, ends its terminal once it has sat at a prompt for this long. A command still running keeps it."
-                    }
-
-                    RowLayout {
-                        id: autokillNotificationRow
-
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        // Dark and locked while autokill is off, like the delay.
-                        readonly property bool usable: autokillDelayRow.on
-                        readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillNotification
-                        readonly property color shownColor: usable ? Config.fgcolor : Config.fgcolordark
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: autokillNotificationRow.on ? autokillNotificationRow.shownColor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: autokillNotificationRow.shownColor
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: autokillNotificationRow.usable
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
-                            }
-                        }
-
-                        Text {
-                            text: "Show auto-kill notification"
-                            color: autokillNotificationRow.shownColor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-
-                            MouseArea {
-                                anchors.fill: parent
-                                enabled: autokillNotificationRow.usable
-                                hoverEnabled: true
-                                onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
-                            }
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    SettingHint {
-                        // Close under the setting it's for, like the Power category's.
-                        Layout.topMargin: -Config.scaled(6, root.uiScale)
-                        uiScale: root.uiScale
-                        text: "A notification when the terminal is ended that way."
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(6, root.uiScale)
-
-                        Text {
-                            text: "Execute on new instance:"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Rectangle {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.preferredHeight: Config.scaled(28, root.uiScale)
-                            color: Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: startupCommandInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
-
-                            TextInput {
-                                id: startupCommandInput
-
-                                anchors {
-                                    fill: parent
-                                    margins: Config.scaled(6, root.uiScale)
-                                }
-                                verticalAlignment: TextInput.AlignVCenter
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                selectByMouse: true
-                                clip: true
-                                text: root.dropdownConsole ? root.dropdownConsole.startupCommand : ""
-
-                                // Saved on Enter or on leaving the box, like the
-                                // autokill delay. Only a console started after
-                                // that runs it.
-                                onEditingFinished: {
-                                    if (!root.dropdownConsole) return
-                                    root.dropdownConsole.setStartupCommand(startupCommandInput.text)
-                                    startupCommandInput.text = root.dropdownConsole.startupCommand
-                                }
-                                onAccepted: startupCommandInput.focus = false
-                            }
+                            Item { Layout.fillWidth: true }
                         }
 
                         SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
                             uiScale: root.uiScale
                             indented: false
-                            text: "Typed into every new terminal as it starts, e.g. cd ~/project && claude. A new one starts the first time the console opens, and after the last one ended."
-                        }
-                    }
-                }
-
-                // ---------------- Power category ----------------
-                // Idle.qml's settings: lock, dim and suspend, each counted
-                // from the stage before it when that one's on. It holds the
-                // boxes to their limits (a minute at least each, a dim
-                // opacity of 50-100%), and they show what it kept.
-                ColumnLayout {
-                    id: powerCategoryContent
-
-                    Layout.fillWidth: true
-                    visible: root.currentCategory === 5
-                    spacing: Config.scaled(10, root.uiScale)
-
-                    readonly property bool ready: !!root.idle
-                    readonly property bool autoLock: !!root.idle && root.idle.autoLock
-                    readonly property bool autoDim: !!root.idle && root.idle.autoDim
-                    readonly property bool autoSuspend: !!root.idle && root.idle.autoSuspend
-
-                    // ---------------- Lockscreen ----------------
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(8, root.uiScale)
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        Text {
-                            text: "Lockscreen"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(16, root.uiScale)
-                            font.bold: true
+                            text: "While the console is closed, ends its terminal once it has sat at a prompt for this long. A command still running keeps it."
                         }
 
-                        Rectangle {
+                        RowLayout {
+                            id: autokillNotificationRow
+
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                            color: Config.fgcolor
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            // Dark and locked while autokill is off, like the delay.
+                            readonly property bool usable: autokillDelayRow.on
+                            readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillNotification
+                            readonly property color shownColor: usable ? Config.fgcolor : Config.fgcolordark
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                                color: autokillNotificationRow.on ? autokillNotificationRow.shownColor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: autokillNotificationRow.shownColor
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: autokillNotificationRow.usable
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
+                                }
+                            }
+
+                            Text {
+                                text: "Show auto-kill notification"
+                                color: autokillNotificationRow.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: autokillNotificationRow.usable
+                                    hoverEnabled: true
+                                    onClicked: root.dropdownConsole.setAutokillNotification(!autokillNotificationRow.on)
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
                         }
-                    }
 
-                    CheckRow {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        text: "Auto-lock"
-                        checked: powerCategoryContent.autoLock
-                        usable: powerCategoryContent.ready
-                        onToggled: root.idle.setAutoLock(!root.idle.autoLock)
-                    }
-
-                    RowLayout {
-                        id: lockDelayRow
-
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        readonly property color shownColor: powerCategoryContent.autoLock ? Config.fgcolor : Config.fgcolordark
-
-                        Text {
-                            text: "after"
-                            color: lockDelayRow.shownColor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        NumberBox {
+                        SettingHint {
+                            // Close under the setting it's for, like the Power category's.
+                            Layout.topMargin: -Config.scaled(6, root.uiScale)
                             uiScale: root.uiScale
-                            value: root.idle ? root.idle.lockMinutes : 10
-                            usable: powerCategoryContent.autoLock
-                            onCommitted: (value) => root.idle.setLockMinutes(value)
+                            text: "A notification when the terminal is ended that way."
                         }
 
-                        Text {
-                            text: "minutes of inactivity"
-                            color: lockDelayRow.shownColor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    // A notification a minute before it locks - so only with a
-                    // delay of 2 minutes or more.
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
-                        spacing: Config.scaled(8, root.uiScale)
-
-                        CheckRow {
-                            uiScale: root.uiScale
-                            text: "Warn before auto-lock"
-                            checked: !!root.idle && root.idle.lockWarning
-                            usable: powerCategoryContent.autoLock
-                            onToggled: root.idle.setLockWarning(!root.idle.lockWarning)
-                        }
-
-                        Text {
-                            visible: !!root.idle && root.idle.lockMinutes < 2
-                            text: "(needs 2 minutes or more)"
-                            color: Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(13, root.uiScale)
-                        }
-
-                        Item { Layout.fillWidth: true }
-                    }
-
-                    CheckRow {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        text: "Show time"
-                        checked: !!root.idle && root.idle.showTime
-                        usable: powerCategoryContent.ready
-                        onToggled: root.idle.setShowTime(!root.idle.showTime)
-                    }
-
-                    CheckRow {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        text: "Show media player (if active)"
-                        checked: !!root.idle && root.idle.showMedia
-                        usable: powerCategoryContent.ready
-                        onToggled: root.idle.setShowMedia(!root.idle.showMedia)
-                    }
-
-                    // ---------------- Dim ----------------
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(14, root.uiScale)
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        Text {
-                            text: "Dim"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(16, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Rectangle {
+                        ColumnLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                            color: Config.fgcolor
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(6, root.uiScale)
+
+                            Text {
+                                text: "Execute on new instance:"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.preferredHeight: Config.scaled(28, root.uiScale)
+                                color: Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: startupCommandInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
+
+                                TextInput {
+                                    id: startupCommandInput
+
+                                    anchors {
+                                        fill: parent
+                                        margins: Config.scaled(6, root.uiScale)
+                                    }
+                                    verticalAlignment: TextInput.AlignVCenter
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    selectByMouse: true
+                                    clip: true
+                                    text: root.dropdownConsole ? root.dropdownConsole.startupCommand : ""
+
+                                    // Saved on Enter or on leaving the box, like the
+                                    // autokill delay. Only a console started after
+                                    // that runs it.
+                                    onEditingFinished: {
+                                        if (!root.dropdownConsole) return
+                                        root.dropdownConsole.setStartupCommand(startupCommandInput.text)
+                                        startupCommandInput.text = root.dropdownConsole.startupCommand
+                                    }
+                                    onAccepted: startupCommandInput.focus = false
+                                }
+                            }
+
+                            SettingHint {
+                                uiScale: root.uiScale
+                                indented: false
+                                text: "Typed into every new terminal as it starts, e.g. cd ~/project && claude. A new one starts the first time the console opens, and after the last one ended."
+                            }
                         }
                     }
 
-                    CheckRow {
-                        Layout.fillWidth: true
-                        uiScale: root.uiScale
-                        text: "Auto-dim"
-                        checked: !!root.idle && root.idle.autoDim
-                        usable: powerCategoryContent.ready
-                        onToggled: root.idle.setAutoDim(!root.idle.autoDim)
-                    }
-
-                    // Everything under Auto-dim: dark and locked while it's off.
+                    // ---------------- Power category ----------------
+                    // Idle.qml's settings: lock, dim and suspend, each counted
+                    // from the stage before it when that one's on. It holds the
+                    // boxes to their limits (a minute at least each, a dim
+                    // opacity of 50-100%), and they show what it kept.
                     ColumnLayout {
-                        id: dimOptions
+                        id: powerCategoryContent
 
                         Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
+                        visible: root.currentCategory === 5
                         spacing: Config.scaled(10, root.uiScale)
 
-                        readonly property bool usable: powerCategoryContent.autoDim
-                        readonly property color shownColor: dimOptions.usable ? Config.fgcolor : Config.fgcolordark
+                        readonly property bool ready: !!root.idle
+                        readonly property bool autoLock: !!root.idle && root.idle.autoLock
+                        readonly property bool autoDim: !!root.idle && root.idle.autoDim
+                        readonly property bool autoSuspend: !!root.idle && root.idle.autoSuspend
+
+                        // ---------------- Lockscreen ----------------
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(8, root.uiScale)
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            Text {
+                                text: "Lockscreen"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(16, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                                color: Config.fgcolor
+                            }
+                        }
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Auto-lock"
+                            checked: powerCategoryContent.autoLock
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setAutoLock(!root.idle.autoLock)
+                        }
+
+                        RowLayout {
+                            id: lockDelayRow
+
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            readonly property color shownColor: powerCategoryContent.autoLock ? Config.fgcolor : Config.fgcolordark
+
+                            Text {
+                                text: "after"
+                                color: lockDelayRow.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            NumberBox {
+                                uiScale: root.uiScale
+                                value: root.idle ? root.idle.lockMinutes : 10
+                                usable: powerCategoryContent.autoLock
+                                onCommitted: (value) => root.idle.setLockMinutes(value)
+                            }
+
+                            Text {
+                                text: "minutes of inactivity"
+                                color: lockDelayRow.shownColor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        // A notification a minute before it locks - so only with a
+                        // delay of 2 minutes or more.
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            spacing: Config.scaled(8, root.uiScale)
+
+                            CheckRow {
+                                uiScale: root.uiScale
+                                text: "Warn before auto-lock"
+                                checked: !!root.idle && root.idle.lockWarning
+                                usable: powerCategoryContent.autoLock
+                                onToggled: root.idle.setLockWarning(!root.idle.lockWarning)
+                            }
+
+                            Text {
+                                visible: !!root.idle && root.idle.lockMinutes < 2
+                                text: "(needs 2 minutes or more)"
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Item { Layout.fillWidth: true }
+                        }
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Show time"
+                            checked: !!root.idle && root.idle.showTime
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setShowTime(!root.idle.showTime)
+                        }
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Show media player (if active)"
+                            checked: !!root.idle && root.idle.showMedia
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setShowMedia(!root.idle.showMedia)
+                        }
+
+                        // ---------------- Dim ----------------
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(14, root.uiScale)
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            Text {
+                                text: "Dim"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(16, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                                color: Config.fgcolor
+                            }
+                        }
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Auto-dim"
+                            checked: !!root.idle && root.idle.autoDim
+                            usable: powerCategoryContent.ready
+                            onToggled: root.idle.setAutoDim(!root.idle.autoDim)
+                        }
+
+                        // Everything under Auto-dim: dark and locked while it's off.
+                        ColumnLayout {
+                            id: dimOptions
+
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            spacing: Config.scaled(10, root.uiScale)
+
+                            readonly property bool usable: powerCategoryContent.autoDim
+                            readonly property color shownColor: dimOptions.usable ? Config.fgcolor : Config.fgcolordark
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: Config.scaled(4, root.uiScale)
+
+                                CheckRow {
+                                    Layout.fillWidth: true
+                                    uiScale: root.uiScale
+                                    text: "Per monitor"
+                                    checked: !!root.idle && root.idle.dimPerMonitor
+                                    usable: dimOptions.usable
+                                    onToggled: root.idle.setDimPerMonitor(!root.idle.dimPerMonitor)
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                    wrapMode: Text.WordWrap
+                                    text: "Every monitor dims after its own inactivity, without waiting for the lock - input while it has focus, or a window on it keeping the computer awake, counts."
+                                    color: Config.fgcolorhint
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(12, root.uiScale)
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "after"
+                                    color: dimOptions.shownColor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                NumberBox {
+                                    uiScale: root.uiScale
+                                    value: root.idle ? root.idle.dimMinutes : 5
+                                    usable: dimOptions.usable
+                                    onCommitted: (value) => root.idle.setDimMinutes(value)
+                                }
+
+                                // Counted from the stage before it, when that one's on.
+                                Text {
+                                    text: root.idle ? root.idle.dimDelayLabel : ""
+                                    color: dimOptions.shownColor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+                            }
+                        }
+
+                        // The two below are how any dim looks - Manual dim's too -
+                        // so they stay usable with auto-dim off.
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            CheckRow {
+                                Layout.fillWidth: true
+                                uiScale: root.uiScale
+                                text: "Show active monitors"
+                                checked: !!root.idle && root.idle.dimShowActive
+                                usable: powerCategoryContent.ready
+                                onToggled: root.idle.setDimShowActive(!root.idle.dimShowActive)
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                wrapMode: Text.WordWrap
+                                text: "Names the monitors still in use on the dimmed ones - with Per monitor, or after a Manual dim."
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(12, root.uiScale)
+                            }
+                        }
+
+                        // How dark the dimmed screens go: 50-100%.
+                        ColumnLayout {
+                            Layout.topMargin: Config.scaled(4, root.uiScale)
+                            spacing: Config.scaled(6, root.uiScale)
+                            enabled: powerCategoryContent.ready
+                            opacity: enabled ? 1 : 0.35
+
+                            RowLayout {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                Layout.fillWidth: false
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "Dim opacity:"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: (root.idle ? root.idle.dimOpacity : 100) + "%"
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+                            }
+
+                            DeviceSlider {
+                                Layout.preferredWidth: Config.scaled(420, root.uiScale)
+                                uiScale: root.uiScale
+                                value: root.idle ? (root.idle.dimOpacity - 50) / 50 : 1
+                                onMoved: (newValue) => root.idle.setDimOpacity(50 + newValue * 50)
+                            }
+                        }
+
+                        // ---------------- Suspend ----------------
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.topMargin: Config.scaled(14, root.uiScale)
+                            spacing: Config.scaled(4, root.uiScale)
+
+                            Text {
+                                text: "Suspend"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(16, root.uiScale)
+                                font.bold: true
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Config.scaled(2, root.uiScale)
+                                color: Config.fgcolor
+                            }
+                        }
 
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -2386,234 +2694,92 @@ Item {
                             CheckRow {
                                 Layout.fillWidth: true
                                 uiScale: root.uiScale
-                                text: "Per monitor"
-                                checked: !!root.idle && root.idle.dimPerMonitor
-                                usable: dimOptions.usable
-                                onToggled: root.idle.setDimPerMonitor(!root.idle.dimPerMonitor)
+                                text: "Auto-suspend"
+                                checked: powerCategoryContent.autoSuspend
+                                usable: powerCategoryContent.ready
+                                onToggled: root.idle.setAutoSuspend(!root.idle.autoSuspend)
                             }
 
                             Text {
                                 Layout.fillWidth: true
                                 Layout.leftMargin: Config.scaled(28, root.uiScale)
                                 wrapMode: Text.WordWrap
-                                text: "Every monitor dims after its own inactivity, without waiting for the lock - input while it has focus, or a window on it keeping the computer awake, counts."
-                                color: Config.fgcolordark
+                                text: "Counts down on the main monitor before suspending - once every monitor is dimmed, or for the last 30 seconds without auto-dim, with the other monitors black. Any input calls it off."
+                                color: Config.fgcolorhint
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(12, root.uiScale)
                             }
                         }
 
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "after"
-                                color: dimOptions.shownColor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            NumberBox {
-                                uiScale: root.uiScale
-                                value: root.idle ? root.idle.dimMinutes : 5
-                                usable: dimOptions.usable
-                                onCommitted: (value) => root.idle.setDimMinutes(value)
-                            }
-
-                            // Counted from the stage before it, when that one's on.
-                            Text {
-                                text: root.idle ? root.idle.dimDelayLabel : ""
-                                color: dimOptions.shownColor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-                    }
-
-                    // The two below are how any dim looks - Manual dim's too -
-                    // so they stay usable with auto-dim off.
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        CheckRow {
-                            Layout.fillWidth: true
-                            uiScale: root.uiScale
-                            text: "Show active monitors"
-                            checked: !!root.idle && root.idle.dimShowActive
-                            usable: powerCategoryContent.ready
-                            onToggled: root.idle.setDimShowActive(!root.idle.dimShowActive)
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Config.scaled(28, root.uiScale)
-                            wrapMode: Text.WordWrap
-                            text: "Names the monitors still in use on the dimmed ones - with Per monitor, or after a Manual dim."
-                            color: Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(12, root.uiScale)
-                        }
-                    }
-
-                    // How dark the dimmed screens go: 50-100%.
-                    ColumnLayout {
-                        Layout.topMargin: Config.scaled(4, root.uiScale)
-                        spacing: Config.scaled(6, root.uiScale)
-                        enabled: powerCategoryContent.ready
-                        opacity: enabled ? 1 : 0.35
-
-                        RowLayout {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            Layout.fillWidth: false
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "Dim opacity:"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            Text {
-                                text: (root.idle ? root.idle.dimOpacity : 100) + "%"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-                        }
-
-                        DeviceSlider {
-                            Layout.preferredWidth: Config.scaled(420, root.uiScale)
-                            uiScale: root.uiScale
-                            value: root.idle ? (root.idle.dimOpacity - 50) / 50 : 1
-                            onMoved: (newValue) => root.idle.setDimOpacity(50 + newValue * 50)
-                        }
-                    }
-
-                    // ---------------- Suspend ----------------
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        Layout.topMargin: Config.scaled(14, root.uiScale)
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        Text {
-                            text: "Suspend"
-                            color: Config.fgcolor
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(16, root.uiScale)
-                            font.bold: true
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                            color: Config.fgcolor
-                        }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: Config.scaled(4, root.uiScale)
-
-                        CheckRow {
-                            Layout.fillWidth: true
-                            uiScale: root.uiScale
-                            text: "Auto-suspend"
-                            checked: powerCategoryContent.autoSuspend
-                            usable: powerCategoryContent.ready
-                            onToggled: root.idle.setAutoSuspend(!root.idle.autoSuspend)
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
-                            Layout.leftMargin: Config.scaled(28, root.uiScale)
-                            wrapMode: Text.WordWrap
-                            text: "Counts down on the main monitor before suspending - once every monitor is dimmed, or for the last 30 seconds without auto-dim, with the other monitors black. Any input calls it off."
-                            color: Config.fgcolordark
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(12, root.uiScale)
-                        }
-                    }
-
-                    // Everything under Auto-suspend: dark and locked while it's off.
-                    ColumnLayout {
-                        id: suspendOptions
-
-                        Layout.fillWidth: true
-                        Layout.leftMargin: Config.scaled(28, root.uiScale)
-                        spacing: Config.scaled(10, root.uiScale)
-
-                        readonly property bool usable: powerCategoryContent.autoSuspend
-                        readonly property color shownColor: suspendOptions.usable ? Config.fgcolor : Config.fgcolordark
-
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(8, root.uiScale)
-
-                            Text {
-                                text: "after"
-                                color: suspendOptions.shownColor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            NumberBox {
-                                uiScale: root.uiScale
-                                value: root.idle ? root.idle.suspendMinutes : 30
-                                usable: suspendOptions.usable
-                                onCommitted: (value) => root.idle.setSuspendMinutes(value)
-                            }
-
-                            // Counted from the stage before it, when that one's on.
-                            Text {
-                                text: root.idle ? root.idle.suspendDelayLabel : ""
-                                color: suspendOptions.shownColor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(13, root.uiScale)
-                                font.bold: true
-                            }
-
-                            Item { Layout.fillWidth: true }
-                        }
-
+                        // Everything under Auto-suspend: dark and locked while it's off.
                         ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: Config.scaled(4, root.uiScale)
+                            id: suspendOptions
 
-                            CheckRow {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: Config.scaled(28, root.uiScale)
+                            spacing: Config.scaled(10, root.uiScale)
+
+                            readonly property bool usable: powerCategoryContent.autoSuspend
+                            readonly property color shownColor: suspendOptions.usable ? Config.fgcolor : Config.fgcolordark
+
+                            RowLayout {
                                 Layout.fillWidth: true
-                                uiScale: root.uiScale
-                                text: "Wake up lock"
-                                checked: !!root.idle && root.idle.wakeUpLock
-                                usable: suspendOptions.usable && !(root.idle && root.idle.wakeUpLockForced)
-                                onToggled: root.idle.setWakeUpLock(!root.idle.wakeUpLock)
+                                spacing: Config.scaled(8, root.uiScale)
+
+                                Text {
+                                    text: "after"
+                                    color: suspendOptions.shownColor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                NumberBox {
+                                    uiScale: root.uiScale
+                                    value: root.idle ? root.idle.suspendMinutes : 30
+                                    usable: suspendOptions.usable
+                                    onCommitted: (value) => root.idle.setSuspendMinutes(value)
+                                }
+
+                                // Counted from the stage before it, when that one's on.
+                                Text {
+                                    text: root.idle ? root.idle.suspendDelayLabel : ""
+                                    color: suspendOptions.shownColor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(13, root.uiScale)
+                                    font.bold: true
+                                }
+
+                                Item { Layout.fillWidth: true }
                             }
 
-                            Text {
+                            ColumnLayout {
                                 Layout.fillWidth: true
-                                Layout.leftMargin: Config.scaled(28, root.uiScale)
-                                wrapMode: Text.WordWrap
-                                text: "Locks the screen before suspending, so the computer wakes up locked. Always on while auto-lock is."
-                                color: Config.fgcolordark
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(12, root.uiScale)
+                                spacing: Config.scaled(4, root.uiScale)
+
+                                CheckRow {
+                                    Layout.fillWidth: true
+                                    uiScale: root.uiScale
+                                    text: "Wake up lock"
+                                    checked: !!root.idle && root.idle.wakeUpLock
+                                    usable: suspendOptions.usable && !(root.idle && root.idle.wakeUpLockForced)
+                                    onToggled: root.idle.setWakeUpLock(!root.idle.wakeUpLock)
+                                }
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: Config.scaled(28, root.uiScale)
+                                    wrapMode: Text.WordWrap
+                                    text: "Locks the screen before suspending, so the computer wakes up locked. Always on while auto-lock is."
+                                    color: Config.fgcolorhint
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(12, root.uiScale)
+                                }
                             }
                         }
                     }
-                }
 
-                Item { Layout.fillHeight: true }
+                }
             }
         }
     }

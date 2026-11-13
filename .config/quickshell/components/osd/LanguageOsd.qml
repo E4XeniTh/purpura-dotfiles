@@ -6,13 +6,10 @@ import Qt5Compat.GraphicalEffects
 import "../../Config.js" as Config
 
 // Which input language is on, for a moment after the input language
-// shortcut (META + -) - the same box, in the same place, as the volume and
-// brightness OSDs. InputDevices.qml calls show().
+// shortcut (META + -) - the same box as the volume and brightness OSDs,
+// stacked with them by OsdHost.qml. InputDevices.qml calls show().
 Scope {
     id: root
-
-    // Settings > General's global UI Scale (UiScale.qml), from shell.qml.
-    property real shellScale: 1.0
 
     property string language: ""
     property bool shouldShowOsd: false
@@ -30,64 +27,52 @@ Scope {
         onTriggered: root.shouldShowOsd = false
     }
 
-    LazyLoader {
-        active: root.shouldShowOsd
+    // Its box - OsdHost.qml shows it, with the other OSDs, where Settings >
+    // General > Shell > OSD says, and sets uiScale.
+    property Component box: Rectangle {
+        id: languageBox
 
-        PanelWindow {
-            id: osdWindow
+        property real uiScale: 1.0
 
-            readonly property real uiScale: Config.uiScale(osdWindow.screen, root.shellScale)
+        width: Config.scaled(500, languageBox.uiScale)
+        height: Config.scaled(84, languageBox.uiScale)
+        color: Config.fillcolor
+        radius: 0
+        border.width: Config.scaled(2, languageBox.uiScale)
+        border.color: Config.fgcolor
 
-            anchors.bottom: true
-            margins.bottom: screen.height / 8
-            // Purely informational: clicks go straight through.
-            mask: Region {}
-            exclusiveZone: 0
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: Config.scaled(20, languageBox.uiScale)
+            spacing: Config.scaled(16, languageBox.uiScale)
 
-            implicitWidth: Config.scaled(500, osdWindow.uiScale)
-            implicitHeight: Config.scaled(84, osdWindow.uiScale)
-            color: "transparent"
+            Item {
+                Layout.preferredWidth: Config.scaled(48, languageBox.uiScale)
+                Layout.preferredHeight: Config.scaled(48, languageBox.uiScale)
 
-            Rectangle {
-                anchors.fill: parent
-
-                color: Config.fillcolor
-                radius: 0
-                border.width: Config.scaled(2, osdWindow.uiScale)
-                border.color: Config.fgcolor
-
-                RowLayout {
+                IconImage {
+                    id: keyboardIcon
                     anchors.fill: parent
-                    anchors.margins: Config.scaled(20, osdWindow.uiScale)
-                    spacing: Config.scaled(16, osdWindow.uiScale)
-
-                    Item {
-                        Layout.preferredWidth: Config.scaled(48, osdWindow.uiScale)
-                        Layout.preferredHeight: Config.scaled(48, osdWindow.uiScale)
-
-                        IconImage {
-                            id: keyboardIcon
-                            anchors.fill: parent
-                            source: Quickshell.iconPath("input-keyboard-symbolic", "preferences-desktop-keyboard")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: keyboardIcon
-                            source: keyboardIcon
-                            color: Config.fgcolor
-                        }
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: root.language
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(24, osdWindow.uiScale)
-                        font.bold: true
-                        elide: Text.ElideRight
-                    }
+                    source: Quickshell.iconPath("input-keyboard-symbolic", "preferences-desktop-keyboard")
                 }
+
+                ColorOverlay {
+                    anchors.fill: keyboardIcon
+                    source: keyboardIcon
+                    color: Config.fgcolor
+                }
+            }
+
+            // Before the shortcut's first use (a settings preview), just
+            // what it's for.
+            Text {
+                Layout.fillWidth: true
+                text: root.language.length > 0 ? root.language : "Input language"
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(24, languageBox.uiScale)
+                font.bold: true
+                elide: Text.ElideRight
             }
         }
     }

@@ -17,22 +17,8 @@ import "../common"
 Scope {
     id: root
 
-    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
-    // multiplied into every window's Config.uiScale below.
-    property real shellScale: 1.0
-
     // Fed in from shell.qml, same as Bar.qml's own dashboard reference.
     property var dashboard: null
-
-    // Fed in from shell.qml too - a cross-reference to the other OSD's
-    // own Scope instance, so each can tell whether the other is
-    // currently shown (see otherOsdShown below) and shift itself out of
-    // dead center instead of the two overlapping directly. A plain id
-    // reference doesn't work here - VolumeOsd.qml/BrightnessOsd.qml are
-    // separate top-level Scopes (siblings in shell.qml), and QML ids
-    // aren't visible outside the component they're declared in.
-    property var volumeOsd: null
-    readonly property bool otherOsdShown: !!(root.volumeOsd && root.volumeOsd.shouldShowOsd)
 
     readonly property string targetMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
     readonly property real currentBrightness: (root.dashboard && root.dashboard.liveBrightness[root.targetMonitor] !== undefined)
@@ -65,96 +51,64 @@ Scope {
         }
     }
 
-    // The OSD window will be created and destroyed based on shouldShowOsd.
-    // PanelWindow.visible could be set instead of using a loader, but using
-    // a loader will reduce the memory overhead when the window isn't open.
-    LazyLoader {
-        active: root.shouldShowOsd
+    // Its box - OsdHost.qml shows it, with the other OSDs, where Settings >
+    // General > Shell > OSD says, and sets uiScale.
+    property Component box: Rectangle {
+        id: brightnessBox
 
-        PanelWindow {
-            id: osdWindow
+        property real uiScale: 1.0
 
-            // The shell-wide per-screen scale (see Config.uiScale) of
-            // whichever screen the compositor put this window on.
-            readonly property real uiScale: Config.uiScale(osdWindow.screen, root.shellScale)
+        width: Config.scaled(500, brightnessBox.uiScale)
+        height: Config.scaled(84, brightnessBox.uiScale)
+        color: Config.fillcolor
+        radius: 0
+        border.width: Config.scaled(2, brightnessBox.uiScale)
+        border.color: Config.fgcolor
 
-            // Since the panel's screen is unset, it will be picked by the compositor
-            // when the window is created. Most compositors pick the current active monitor.
+        RowLayout {
+            anchors.fill: parent
+            anchors.margins: Config.scaled(20, brightnessBox.uiScale)
+            spacing: Config.scaled(16, brightnessBox.uiScale)
 
-            anchors.bottom: true
-            margins.bottom: screen.height / 8
-            mask: Region {}
-            // Centered by default (no left/right anchor at all) - only
-            // shifted right-of-center when VolumeOsd is ALSO up right
-            // now, so the pair sits side by side (volume left,
-            // brightness right - same left-to-right order Bar.qml's own
-            // widgets use) instead of directly on top of each other.
-            // Symmetric with VolumeOsd.qml's own mirror-image version of
-            // this same margin.
-            anchors.right: root.otherOsdShown
-            margins.right: root.otherOsdShown ? Math.max(0, screen.width / 2 - implicitWidth - Config.scaled(10, osdWindow.uiScale)) : 0
-            exclusiveZone: 0
+            Item {
+                Layout.preferredWidth: Config.scaled(48, brightnessBox.uiScale)
+                Layout.preferredHeight: Config.scaled(48, brightnessBox.uiScale)
 
-            implicitWidth: Config.scaled(500, osdWindow.uiScale)
-            implicitHeight: Config.scaled(84, osdWindow.uiScale)
-            color: "transparent"
-
-            // Purely a display - no click mask needed since nothing
-            // inside accepts mouse input.
-
-            Rectangle {
-                anchors.fill: parent
-                color: Config.fillcolor
-                radius: 0
-                border.width: Config.scaled(2, osdWindow.uiScale)
-                border.color: Config.fgcolor
-
-                RowLayout {
+                IconImage {
+                    id: brightIcon
                     anchors.fill: parent
-                    anchors.margins: Config.scaled(20, osdWindow.uiScale)
-                    spacing: Config.scaled(16, osdWindow.uiScale)
-
-                    Item {
-                        Layout.preferredWidth: Config.scaled(48, osdWindow.uiScale)
-                        Layout.preferredHeight: Config.scaled(48, osdWindow.uiScale)
-
-                        IconImage {
-                            id: brightIcon
-                            anchors.fill: parent
-                            source: Quickshell.iconPath("display-brightness-symbolic", "video-display-symbolic")
-                        }
-
-                        ColorOverlay {
-                            anchors.fill: brightIcon
-                            source: brightIcon
-                            color: Config.fgcolor
-                        }
-                    }
-
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: bar.implicitHeight
-
-                        DigitalBar {
-                            id: bar
-                            uiScale: 1.5 * osdWindow.uiScale
-                            targetWidth: parent.width
-                            segmentCount: 30
-                            value: root.currentBrightness / 100
-                            litColor: Config.fgcolor
-                        }
-                    }
-
-                    Text {
-                        Layout.preferredWidth: Config.scaled(60, osdWindow.uiScale)
-                        horizontalAlignment: Text.AlignHCenter
-                        text: Math.round(root.currentBrightness) + "%"
-                        color: Config.fgcolor
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(24, osdWindow.uiScale)
-                        font.bold: true
-                    }
+                    source: Quickshell.iconPath("display-brightness-symbolic", "video-display-symbolic")
                 }
+
+                ColorOverlay {
+                    anchors.fill: brightIcon
+                    source: brightIcon
+                    color: Config.fgcolor
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: bar.implicitHeight
+
+                DigitalBar {
+                    id: bar
+                    uiScale: 1.5 * brightnessBox.uiScale
+                    targetWidth: parent.width
+                    segmentCount: 30
+                    value: root.currentBrightness / 100
+                    litColor: Config.fgcolor
+                }
+            }
+
+            Text {
+                Layout.preferredWidth: Config.scaled(60, brightnessBox.uiScale)
+                horizontalAlignment: Text.AlignHCenter
+                text: Math.round(root.currentBrightness) + "%"
+                color: Config.fgcolor
+                font.family: Config.fontfamily
+                font.pixelSize: Config.scaled(24, brightnessBox.uiScale)
+                font.bold: true
             }
         }
     }

@@ -2013,7 +2013,7 @@ Item {
                             ? "Click to pick, drag to move - snaps to the other displays"
                             : (root.defaultMonitorNames.length === 0 ? ""
                                 : (root.defaultsOutOfSync ? "Saved default - not what's set now" : "Saved default - same as what's set now"))
-                        color: Config.fgcolordark
+                        color: Config.fgcolorhint
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(12, root.uiScale)
                     }
@@ -2086,7 +2086,7 @@ Item {
                         Layout.fillWidth: true
                         elide: Text.ElideRight
                         text: root.selectedDescription
-                        color: Config.fgcolordark
+                        color: Config.fgcolorhint
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(13, root.uiScale)
                     }
@@ -2238,7 +2238,7 @@ Item {
                         Text {
                             visible: (root.selectedTransform & 4) !== 0
                             text: "flipped"
-                            color: Config.fgcolordark
+                            color: Config.fgcolorhint
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(12, root.uiScale)
                         }
@@ -2367,7 +2367,7 @@ Item {
 
                         Text {
                             text: "X"
-                            color: Config.fgcolordark
+                            color: Config.fgcolorhint
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
                             font.bold: true
@@ -2384,7 +2384,7 @@ Item {
                         Text {
                             Layout.leftMargin: Config.scaled(6, root.uiScale)
                             text: "Y"
-                            color: Config.fgcolordark
+                            color: Config.fgcolorhint
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
                             font.bold: true

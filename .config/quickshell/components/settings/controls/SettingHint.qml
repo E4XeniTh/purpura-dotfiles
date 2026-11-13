@@ -13,7 +13,7 @@ Text {
     Layout.fillWidth: true
     Layout.leftMargin: root.indented ? Config.scaled(28, root.uiScale) : 0
     wrapMode: Text.WordWrap
-    color: Config.fgcolordark
+    color: Config.fgcolorhint
     font.family: Config.fontfamily
     font.pixelSize: Config.scaled(12, root.uiScale)
 }

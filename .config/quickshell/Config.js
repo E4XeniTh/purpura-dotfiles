@@ -19,6 +19,10 @@ var fgcolorlight = Qt.lighter(fgcolor, 1.55)
 // currently active/selected.
 var fgcolordarklight = Qt.darker(fgcolorlight, 1.3)
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
+// Small secondary text - setting hints, notes, placeholders: a soft,
+// lighter shade that stays readable at 11-13px, where fgcolordark (kept for
+// disabled things) all but disappears.
+var fgcolorhint = Qt.darker(fgcolorlight, 1.5)
 var fgcolorred = "#ff0000"
 
 // The shell's font: the qt6ct preset's general font (Hack, 10pt - see

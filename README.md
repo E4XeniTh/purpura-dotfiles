@@ -38,7 +38,7 @@ scripts) and `components/`, by area:
 | `dashboard/` | The dashboard and its cards (calendar, weather, now playing, visualizer, system monitor) |
 | `settings/` | The settings screen and its tabs; `cards/` and `controls/` hold the pieces the tabs are built from |
 | `panels/` | Notifications, clipboard, screenshot picker, updater, dropdown console |
-| `osd/` | Volume, brightness, workspace and fullscreen-hint popups |
+| `osd/` | Volume, brightness and input language popups (placed, sized and stacked by `OsdHost.qml` - Settings > General > Shell > OSD), plus the workspace and fullscreen-hint ones |
 | `lock/` | The lock screen |
 | `power/` | Power menu, auto-lock, auto-dim and auto-suspend |
 | `system/` | Shell-wide state with no UI of its own: UI scale, edge gaps, night light, input settings |

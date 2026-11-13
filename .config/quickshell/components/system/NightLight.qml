@@ -31,16 +31,31 @@ Scope {
     // Minutes since midnight.
     readonly property int scheduleStart: root.minutesOr(root.store.scheduleStart, 21 * 60)
     readonly property int scheduleEnd: root.minutesOr(root.store.scheduleEnd, 7 * 60)
-    // Fade length is a number plus a unit. A file from before the unit
-    // existed only has fadeMinutes, which reads as that many minutes.
-    readonly property string fadeUnit: root.store.fadeUnit === "seconds" ? "seconds" : "minutes"
-    readonly property int maxFadeAmount: root.fadeUnit === "seconds" ? 240 * 60 : 240
-    readonly property int fadeAmount: {
-        const raw = root.store.fadeAmount !== undefined ? root.store.fadeAmount : root.store.fadeMinutes
-        const n = Number(raw)
-        return (raw !== undefined && Number.isInteger(n) && n >= 0) ? Math.min(n, root.maxFadeAmount) : 5
+    // The schedule's fade, one of these lengths (seconds) - the stops of
+    // the settings' slider. Saved as fadeSeconds; a file from before has a
+    // number and a unit (fadeAmount, fadeUnit - or just fadeMinutes), read
+    // as the nearest stop.
+    readonly property var fadeStops: [30, 60, 180, 300, 600, 900, 1200, 1800, 2700, 3600]
+    readonly property int fadeIndex: {
+        let seconds = Number(root.store.fadeSeconds)
+        if (!isFinite(seconds)) {
+            const raw = Number(root.store.fadeAmount !== undefined ? root.store.fadeAmount : root.store.fadeMinutes)
+            seconds = isFinite(raw) ? raw * (root.store.fadeUnit === "seconds" ? 1 : 60) : 300
+        }
+        let best = 0
+        for (let i = 1; i < root.fadeStops.length; i++) {
+            if (Math.abs(root.fadeStops[i] - seconds) < Math.abs(root.fadeStops[best] - seconds)) best = i
+        }
+        return best
     }
-    readonly property real fadeMs: root.fadeAmount * (root.fadeUnit === "seconds" ? 1000 : 60000)
+    readonly property real fadeMs: root.fadeStops[root.fadeIndex] * 1000
+
+    function fadeLabel(index) {
+        const seconds = root.fadeStops[index]
+        if (seconds < 60) return seconds + " seconds"
+        if (seconds < 3600) return (seconds / 60) + (seconds === 60 ? " minute" : " minutes")
+        return "1 hour"
+    }
 
     function minutesOr(raw, fallback) {
         const n = Number(raw)
@@ -66,13 +81,9 @@ Scope {
     function setStrength(value) { root.update({ strength: Math.round(Math.max(0, Math.min(1, value)) * 100) / 100 }) }
     function setScheduled(on) { root.update({ scheduled: !!on }) }
     function setSchedule(start, end) { root.update({ scheduleStart: start, scheduleEnd: end }) }
-    function setFadeAmount(amount) { root.update({ fadeAmount: Math.max(0, Math.min(root.maxFadeAmount, amount)) }) }
-
-    // Keeps the number and changes what it counts (5 minutes -> 5
-    // seconds), the way a unit picker beside a number field reads.
-    function setFadeUnit(unit) {
-        const max = unit === "seconds" ? 240 * 60 : 240
-        root.update({ fadeUnit: unit, fadeAmount: Math.min(root.fadeAmount, max) })
+    function setFadeIndex(index) {
+        const i = Math.max(0, Math.min(root.fadeStops.length - 1, Math.round(index)))
+        root.update({ fadeSeconds: root.fadeStops[i] })
     }
 
     // Not watched: this is the only writer, and reloading after our own

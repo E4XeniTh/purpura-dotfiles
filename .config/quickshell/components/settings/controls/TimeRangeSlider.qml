@@ -127,7 +127,7 @@ Item {
             y: root.headSize + root.labelGap
             x: Math.max(0, Math.min(root.width - width, root.px(modelData) - width / 2))
             text: root.format(root.fromAxis(modelData))
-            color: Config.fgcolordark
+            color: Config.fgcolorhint
             font: tickLabelMetrics.font
         }
     }

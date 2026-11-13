@@ -730,7 +730,7 @@ Scope {
                             visible: text.length > 0
                             text: root.purpuraNote
                             wrapMode: Text.WordWrap
-                            color: Config.fgcolordark
+                            color: Config.fgcolorhint
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
                         }
