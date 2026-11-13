@@ -92,10 +92,8 @@ function scaled(px, uiScale) {
 // systemicons row already uses "battery-100-symbolic" as a known-good
 // icon; omitting it here silently failed every lookup and fell back to
 // the same generic icon regardless of percentage/charging). Used by
-// BatteryControl.qml (bar widget) and BatterySettings.qml instead of
-// trusting UPower's own iconName, since that's also the only source of
-// an icon for Solaar/Bluetooth/UPower-tracked devices (which have no
-// icon of their own) - one shared scheme for all of them.
+// BatteryControl.qml (bar widget) instead of trusting UPower's own
+// iconName.
 function batteryIconName(percentage, charging) {
     const clamped = Math.max(0, Math.min(100, Math.round(percentage)))
     const bucket = Math.floor(clamped / 10) * 10
