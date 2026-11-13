@@ -683,6 +683,32 @@ Item {
                 }
             }
 
+            // ---------------- Solaar: how often ----------------
+            SectionHeader {
+                visible: root.kind === "solaarHub" || root.kind === "solaar"
+                uiScale: root.uiScale
+                text: "Update every"
+            }
+
+            Flow {
+                Layout.fillWidth: true
+                visible: root.kind === "solaarHub" || root.kind === "solaar"
+                spacing: Config.scaled(8, root.uiScale)
+
+                Repeater {
+                    model: root.page ? root.page.solaarIntervals : []
+
+                    delegate: ActionButton {
+                        required property int modelData
+
+                        uiScale: root.uiScale
+                        text: modelData + " s"
+                        lit: root.page && root.page.solaarInterval === modelData
+                        onClicked: root.page.setSolaarInterval(modelData)
+                    }
+                }
+            }
+
             // ---------------- traffic ----------------
             SectionHeader {
                 visible: root.iface.length > 0
@@ -1035,7 +1061,7 @@ Item {
                 text: root.kind === "ztService" || root.kind === "ztNetwork"
                     ? "Joining and leaving ZeroTier networks needs root: sudo zerotier-cli join <network id>. Stopping or starting the service asks for your password."
                     : root.kind === "solaar" || root.kind === "solaarHub"
-                    ? "Read from Solaar every 15 seconds while this page is open. Solaar's own window has the devices' settings."
+                    ? "Read from Solaar every " + (root.page ? root.page.solaarInterval : 15) + " seconds while this page is open. Solaar's own window has the devices' settings."
                     : ""
                 color: Config.fgcolorhint
                 font.family: Config.fontfamily

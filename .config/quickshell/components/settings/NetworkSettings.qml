@@ -135,10 +135,18 @@ Item {
     }
 
     // Solaar is only asked while this page is open - on opening it, then
-    // every 15 seconds (Dashboard.qml skips a poll while one's still running:
-    // `solaar show` can take seconds).
+    // every solaarInterval seconds, picked in the Solaar entry's details
+    // (Dashboard.qml skips a poll while one's still running: `solaar show`
+    // can take seconds).
+    readonly property int solaarInterval: root.dashboardRoot ? root.dashboardRoot.solaarInterval : 15
+    readonly property var solaarIntervals: root.dashboardRoot ? root.dashboardRoot.solaarIntervals : []
+
+    function setSolaarInterval(seconds) {
+        if (root.dashboardRoot) root.dashboardRoot.setSolaarInterval(seconds)
+    }
+
     Timer {
-        interval: 15000
+        interval: root.solaarInterval * 1000
         repeat: true
         running: root.active
         onTriggered: root.refreshSolaar()

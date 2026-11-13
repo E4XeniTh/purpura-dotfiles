@@ -487,6 +487,33 @@ Scope {
     // once while integration is turned off, not just "run but ignored".
     property var solaarDevices: []
 
+    // How often Connections asks Solaar while it's open, in seconds - picked
+    // in the Solaar entry's details, kept in solaarsettings.json.
+    readonly property var solaarIntervals: [5, 10, 15, 30, 60]
+    property int solaarIntervalWritten: 0
+    readonly property int solaarInterval: {
+        if (root.solaarIntervalWritten > 0) return root.solaarIntervalWritten
+        try {
+            const stored = JSON.parse(solaarSettingsFile.text()).interval
+            if (root.solaarIntervals.indexOf(stored) !== -1) return stored
+        } catch (e) {}
+        return 15
+    }
+
+    function setSolaarInterval(seconds) {
+        if (root.solaarIntervals.indexOf(seconds) === -1) return
+        root.solaarIntervalWritten = seconds
+        solaarSettingsFile.setText(JSON.stringify({ interval: seconds }, null, 2) + "\n")
+    }
+
+    FileView {
+        id: solaarSettingsFile
+        path: Quickshell.env("HOME") + "/.config/quickshell/solaarsettings.json"
+        blockLoading: true
+        // A fresh install has no file yet - that's just the default.
+        printErrors: false
+    }
+
     function refreshSolaar() {
         if (!Config.solaarEnabled) return
         // Skip instead of killing-and-restarting if a poll is already
