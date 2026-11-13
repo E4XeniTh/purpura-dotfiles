@@ -1,9 +1,12 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Widgets
 import Qt5Compat.GraphicalEffects
 import "../../Config.js" as Config
 import "../common"
+import "../settings"
 
 // Bar widget: brightness icon + a horizontal "digital"/segmented level bar
 // (DigitalBar.qml, same style VolumeControl.qml/BatteryControl.qml use) +
@@ -24,11 +27,21 @@ import "../common"
 // - sharing one meant dragging Screen Settings' own per-monitor slider
 // made this widget immediately show the not-yet-applied value as if it
 // had already taken effect.
+//
+// Right-click opens a menu like the volume control's: every monitor but the
+// primary, each with a checkbox saying whether it's on - clicking one
+// switches it on or off at once - then Night Light's settings. A switch is
+// the Display tab's own right click + Apply: that file is loaded out of
+// sight for as long as it takes (see monitorSwitch below), so workspace
+// pins, windows rescued off a monitor going dark and its remembered mode
+// all come out exactly as they would there.
 Rectangle {
     id: root
 
     property real uiScale: 1.0
     property var dashboard: null
+    // Set from Bar.qml, so the right-click menu opens on this bar's monitor.
+    property var screen: null
 
     // General > Shell settings' "Brightness Control" checkbox (see
     // ShellSettings.qml/Bar.qml) - a user-level show/hide independent of
@@ -188,5 +201,422 @@ Rectangle {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton
         onWheel: (wheel) => root.nudgeBrightness(wheel.angleDelta.y > 0 ? 5 : -5)
+    }
+
+    // ---------------- right-click menu ----------------
+    property bool menuOpen: false
+    // Snapshot taken as it opens - see VolumeControl.qml's menuMarginLeft.
+    property real menuMarginLeft: 0
+
+    function closeMenu() {
+        root.menuOpen = false
+    }
+
+    // Every monitor Hyprland knows, switched off ones included - read while
+    // the menu's open, and once more after a switch.
+    property var monitors: []
+    property bool monitorsKnown: false
+    readonly property var otherMonitors: root.monitors.filter(m => m.name !== root.targetMonitor)
+    // What a click asked a monitor to be - what its checkbox shows until the
+    // switch is over and Hyprland's been asked again.
+    property var requested: ({})
+
+    function monitorOn(m) {
+        return root.requested[m.name] !== undefined ? root.requested[m.name] : !m.disabled
+    }
+
+    // Make and model, as the Display tab shows the monitor selected there.
+    function monitorModel(m) {
+        const makeModel = [m.make, m.model].filter(s => s && String(s).length > 0).join(" ")
+        return makeModel.length > 0 ? makeModel : (m.description || "")
+    }
+
+    function refreshMonitors() {
+        monitorsProcess.running = false
+        monitorsProcess.running = true
+    }
+
+    Process {
+        id: monitorsProcess
+        command: ["hyprctl", "-j", "monitors", "all"]
+
+        // Whether this read began with no switch under way - only such a
+        // read says where the switches left things.
+        property bool switchFree: false
+        onStarted: monitorsProcess.switchFree = !monitorSwitch.active
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let parsed
+                try {
+                    parsed = JSON.parse(text)
+                } catch (e) {
+                    return
+                }
+                root.monitors = parsed
+                root.monitorsKnown = true
+                if (monitorsProcess.switchFree && !monitorSwitch.active) root.requested = ({})
+            }
+        }
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        triggeredOnStart: true
+        running: root.menuOpen
+        onTriggered: root.refreshMonitors()
+    }
+
+    // Switches waiting for monitorSwitch to load.
+    property var pendingSwitches: ({})
+
+    function toggleMonitor(m) {
+        const on = !root.monitorOn(m)
+        root.requested = Object.assign({}, root.requested, { [m.name]: on })
+        root.pendingSwitches = Object.assign({}, root.pendingSwitches, { [m.name]: on })
+        switchLifetime.restart()
+        if (monitorSwitch.item) root.sendSwitches()
+        else monitorSwitch.active = true
+    }
+
+    function sendSwitches() {
+        for (const name in root.pendingSwitches) monitorSwitch.item.setEnabledNow(name, root.pendingSwitches[name])
+        root.pendingSwitches = ({})
+        switchIdle.restart()
+    }
+
+    // The Display tab (ScreenSettings.qml), out of sight - it only exists
+    // while Settings is open otherwise. Sized only so its layout has
+    // something to work with; nothing of it is ever shown.
+    Item {
+        visible: false
+        width: Config.scaled(800, root.uiScale)
+        height: Config.scaled(600, root.uiScale)
+
+        Loader {
+            id: monitorSwitch
+
+            anchors.fill: parent
+            active: false
+
+            sourceComponent: ScreenSettings {
+                uiScale: root.uiScale
+                primaryMonitor: root.dashboard ? root.dashboard.primaryMonitor : ""
+                dashboardRoot: root.dashboard
+            }
+
+            // Left inactive - opening it as a tab would restart the read
+            // of monitors.json it has just begun (see setEnabledNow()).
+            onLoaded: root.sendSwitches()
+            onStatusChanged: {
+                if (monitorSwitch.status === Loader.Error) root.unloadSwitch()
+            }
+        }
+    }
+
+    // Unloaded again once its Apply has nothing left to do.
+    Timer {
+        id: switchIdle
+        interval: 1500
+        repeat: true
+        onTriggered: {
+            if (Object.keys(root.pendingSwitches).length > 0) return
+            if (monitorSwitch.item && monitorSwitch.item.applying) return
+            root.unloadSwitch()
+        }
+    }
+
+    // Or after half a minute regardless, should a switch never finish (a
+    // monitor unplugged midway, hyprctl not answering).
+    Timer {
+        id: switchLifetime
+        interval: 30000
+        onTriggered: root.unloadSwitch()
+    }
+
+    // The checkboxes go back to what Hyprland says once it's been asked.
+    function unloadSwitch() {
+        switchIdle.stop()
+        switchLifetime.stop()
+        monitorSwitch.active = false
+        root.pendingSwitches = ({})
+        root.refreshMonitors()
+    }
+
+    // Right-click anywhere on the widget - only the right button, so it
+    // never competes with the bar's own dragging or the wheel above.
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: {
+            root.menuMarginLeft = Config.scaled(10, root.uiScale) + root.x
+            root.menuOpen = !root.menuOpen
+        }
+    }
+
+    // Same box-grow-open PanelWindow popup as VolumeControl.qml's and
+    // Tray.qml's menus, anchored below this widget.
+    PanelWindow {
+        id: menuWindow
+
+        screen: root.screen
+        visible: root.menuOpen
+
+        WlrLayershell.namespace: "brightnessMenu"
+        WlrLayershell.layer: WlrLayer.Overlay
+
+        exclusiveZone: 0
+
+        anchors {
+            top: true
+            left: true
+        }
+
+        margins {
+            top: Config.scaled(4, root.uiScale)
+            left: root.menuMarginLeft
+        }
+
+        implicitWidth: Math.max(root.width, Config.scaled(240, root.uiScale))
+        implicitHeight: Math.max(menuColumn.height + Config.scaled(10, root.uiScale), 1)
+
+        color: "transparent"
+
+        Rectangle {
+            id: menuBox
+
+            width: 0
+            height: Config.scaled(2, root.uiScale)
+            color: Config.fillcolor
+
+            states: [
+                State {
+                    name: "horizontal"
+
+                    PropertyChanges {
+                        target: menuBox
+                        width: menuWindow.implicitWidth
+                        height: Config.scaled(3, root.uiScale)
+                    }
+                },
+
+                State {
+                    name: "open"
+
+                    PropertyChanges {
+                        target: menuBox
+                        width: menuWindow.implicitWidth
+                        height: menuWindow.implicitHeight
+                    }
+                }
+            ]
+
+            transitions: [
+                Transition {
+                    NumberAnimation {
+                        properties: "width,height"
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
+            ]
+
+            Item {
+                anchors.fill: parent
+                anchors.topMargin: Config.scaled(5, root.uiScale)
+                anchors.bottomMargin: Config.scaled(5, root.uiScale)
+                clip: true
+
+                Column {
+                    id: menuColumn
+                    width: menuWindow.implicitWidth
+
+                    // ---------------- the other monitors ----------------
+                    Repeater {
+                        model: ScriptModel {
+                            values: root.otherMonitors
+                            objectProp: "name"
+                        }
+
+                        delegate: Item {
+                            id: monitorEntry
+
+                            required property var modelData
+
+                            readonly property bool isOn: root.monitorOn(monitorEntry.modelData)
+
+                            width: menuColumn.width
+                            height: Config.scaled(32, root.uiScale)
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: monitorMouse.containsMouse ? Config.fgcolordark : "transparent"
+                            }
+
+                            Text {
+                                id: monitorName
+                                anchors {
+                                    left: parent.left
+                                    verticalCenter: parent.verticalCenter
+                                    leftMargin: Config.scaled(10, root.uiScale)
+                                }
+                                text: monitorEntry.modelData.name
+                                textFormat: Text.PlainText
+                                color: monitorEntry.isOn ? Config.fgcolor : Config.fgcolordarklight
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                            }
+
+                            Text {
+                                anchors {
+                                    left: monitorName.right
+                                    right: monitorBox.left
+                                    verticalCenter: parent.verticalCenter
+                                    leftMargin: Config.scaled(8, root.uiScale)
+                                    rightMargin: Config.scaled(10, root.uiScale)
+                                }
+                                text: root.monitorModel(monitorEntry.modelData)
+                                textFormat: Text.PlainText
+                                color: Config.fgcolorhint
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(11, root.uiScale)
+                                elide: Text.ElideRight
+                            }
+
+                            // On or off - CheckRow.qml's box.
+                            Rectangle {
+                                id: monitorBox
+                                anchors {
+                                    right: parent.right
+                                    verticalCenter: parent.verticalCenter
+                                    rightMargin: Config.scaled(10, root.uiScale)
+                                }
+                                width: Config.scaled(20, root.uiScale)
+                                height: width
+                                color: monitorEntry.isOn ? Config.fgcolor : Config.fillcolor
+                                border.width: Config.scaled(2, root.uiScale)
+                                border.color: Config.fgcolor
+                            }
+
+                            MouseArea {
+                                id: monitorMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleMonitor(monitorEntry.modelData)
+                            }
+                        }
+                    }
+
+                    Item {
+                        visible: root.monitorsKnown && root.otherMonitors.length === 0
+                        width: menuColumn.width
+                        height: Config.scaled(32, root.uiScale)
+
+                        Text {
+                            anchors {
+                                fill: parent
+                                leftMargin: Config.scaled(10, root.uiScale)
+                                rightMargin: Config.scaled(10, root.uiScale)
+                            }
+                            verticalAlignment: Text.AlignVCenter
+                            text: "No other monitors"
+                            color: Config.fgcolordarklight
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.italic: true
+                        }
+                    }
+
+                    // ---------------- separator ----------------
+                    // Tray.qml's thin, inset menu separator.
+                    Item {
+                        width: menuColumn.width
+                        height: Config.scaled(9, root.uiScale)
+
+                        Rectangle {
+                            anchors {
+                                left: parent.left
+                                right: parent.right
+                                verticalCenter: parent.verticalCenter
+                                leftMargin: Config.scaled(8, root.uiScale)
+                                rightMargin: Config.scaled(8, root.uiScale)
+                            }
+                            height: Config.scaled(1, root.uiScale)
+                            color: Config.fgcolordark
+                        }
+                    }
+
+                    // ---------------- Night Light settings ----------------
+                    Item {
+                        width: menuColumn.width
+                        height: Config.scaled(32, root.uiScale)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: nightLightMouse.containsMouse ? Config.fgcolordark : "transparent"
+
+                            Text {
+                                anchors {
+                                    fill: parent
+                                    leftMargin: Config.scaled(10, root.uiScale)
+                                    rightMargin: Config.scaled(10, root.uiScale)
+                                }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "Night Light Settings"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                id: nightLightMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+
+                                // General tab (0), Night Light section (3) -
+                                // see SettingsScreen.qml's requestedInitialTab
+                                // and requestedShellCategory.
+                                onClicked: {
+                                    root.closeMenu()
+                                    if (root.dashboard && root.dashboard.settingsScreen) {
+                                        root.dashboard.settingsScreen.requestedInitialTab = 0
+                                        root.dashboard.settingsScreen.requestedShellCategory = 3
+                                        root.dashboard.settingsScreen.open = true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                color: "transparent"
+                border.width: Config.scaled(2, root.uiScale)
+                border.color: Config.fgcolor
+                z: 10
+            }
+        }
+
+        onVisibleChanged: {
+            if (visible) {
+                menuBox.width = 0
+                menuBox.height = Config.scaled(4, root.uiScale)
+                menuBox.state = "horizontal"
+                menuOpenTimer.start()
+            }
+        }
+
+        Timer {
+            id: menuOpenTimer
+            // The transition's length, so the width finishes before the
+            // height starts.
+            interval: 200
+            repeat: false
+            onTriggered: menuBox.state = "open"
+        }
     }
 }

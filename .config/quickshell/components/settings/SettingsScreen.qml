@@ -83,6 +83,11 @@ Scope {
     // open (e.g. the ordinary Settings button on Dashboard.qml's power
     // row) to the same tab.
     property int requestedInitialTab: 0
+    // The same for a section of the General tab (ShellSettings.qml's
+    // currentCategory, e.g. 3 for Night Light, from BrightnessControl.qml's
+    // right-click menu) - -1 for wherever it opens normally. Consumed with
+    // requestedInitialTab.
+    property int requestedShellCategory: -1
 
     IpcHandler {
         target: "settingsscreen"
@@ -589,6 +594,8 @@ Scope {
             Component.onCompleted: {
                 root.currentTab = root.requestedInitialTab
                 root.requestedInitialTab = 0
+                if (root.requestedShellCategory >= 0) shellTab.currentCategory = root.requestedShellCategory
+                root.requestedShellCategory = -1
 
                 box.width = 0
                 box.height = Config.scaled(2, panelScope.uiScale)

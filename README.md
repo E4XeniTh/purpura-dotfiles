@@ -12,7 +12,7 @@ out to be copied straight into place.
 
 | Component | What it does |
 |---|---|
-| **Bar** | Top bar: tray, clock (opens the dashboard), volume/brightness/battery widgets, notification icon (opens the notification center) |
+| **Bar** | Top bar: tray, clock (opens the dashboard), volume/brightness/battery widgets, notification icon (opens the notification center). Right-clicking the volume widget picks the playback device; right-clicking the brightness widget lists every monitor but the primary with a checkbox - click one to switch it on or off at once (the same as switching it in Settings > Display and pressing Apply) - and opens Night Light's settings |
 | **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen/battery), power/lock |
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |

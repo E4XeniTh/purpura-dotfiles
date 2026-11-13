@@ -1476,15 +1476,93 @@ Item {
         }
     }
 
+    // ---------------- switching a monitor from elsewhere ----------------
+    // The bar's brightness menu switches monitors on and off by loading this
+    // file out of sight (BrightnessControl.qml) and calling setEnabledNow():
+    // the same as opening this tab, right-clicking the monitor and pressing
+    // Apply, so its workspace pins, rescued windows and remembered mode come
+    // out the same. Nothing else goes out with it - brightness staged here
+    // and never applied is dropped first, as opening the tab would.
+    //
+    // A request waits for a read of the monitors started after it, a read
+    // of monitors.json, and for an Apply still under way to finish and be
+    // read back, so two switches in a row never trample each other. A read
+    // already running is never restarted for monitors.json, and one that was
+    // restarted for the monitors doesn't count: Quickshell hands a stopped
+    // read's partial output to its handlers all the same.
+    property bool monitorsRead: false
+    property bool storeRead: false
+    property var queuedEnable: ({})
+    property int monitorsWanted: 0
+    property int monitorsStartedFor: 0
+
+    function setEnabledNow(name, enabled) {
+        const queued = Object.assign({}, root.queuedEnable)
+        queued[name] = enabled
+        root.queuedEnable = queued
+        root.readMonitorsAfresh()
+        if (!screensStoreProcess.running) {
+            root.storeRead = false
+            root.loadScreensStore()
+        }
+    }
+
+    function readMonitorsAfresh() {
+        root.monitorsWanted++
+        root.monitorsRead = false
+        root.refreshMonitors()
+    }
+
+    function flushQueuedEnable() {
+        if (!root.monitorsRead || !root.storeRead || root.applyBusy) return
+        const queued = root.queuedEnable
+        const names = Object.keys(queued)
+        if (names.length === 0) return
+        root.queuedEnable = ({})
+
+        let any = false
+        for (const name of names) {
+            const base = root.baseFor(name)
+            // Gone, or already that way - switched off and straight back on
+            // before the first got anywhere.
+            if (!base || !base.disabled === queued[name]) continue
+            root.setPendingEnabled(name, queued[name])
+            any = true
+        }
+        if (!any) return
+
+        if (root.dashboardRoot) root.dashboardRoot.pendingBrightness = ({})
+        root.applyChanges()
+    }
+
+    // An Apply still sending its lines, waiting for a monitor to come up,
+    // rescuing windows or reading the result back.
+    readonly property bool applyBusy: applyProcess.running || applySettleTimer.running
+        || clientsQueryProcess.running
+        || monitorSettleTimer.running || monitorSettleQueryProcess.running
+        || root.pendingSettleMonitors.length > 0 || root.pendingRescues.length > 0
+
+    onApplyBusyChanged: {
+        if (!root.applyBusy && Object.keys(root.queuedEnable).length > 0) root.readMonitorsAfresh()
+    }
+
+    // Whether a request or an Apply still has steps to run. The bar keeps
+    // its copy of this file loaded until it's false.
+    readonly property bool applying: Object.keys(root.queuedEnable).length > 0 || root.applyBusy
+
     Process {
         id: monitorsProcess
         command: ["hyprctl", "-j", "monitors", "all"]
+
+        onStarted: root.monitorsStartedFor = root.monitorsWanted
 
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
                     const parsed = JSON.parse(text)
                     root.monitors = parsed
+                    root.monitorsRead = root.monitorsStartedFor === root.monitorsWanted
+                    root.flushQueuedEnable()
                     if (root.selectedName === "" || !root.baseFor(root.selectedName)) {
                         root.selectedName = parsed.length > 0 ? parsed[0].name : ""
                     }
@@ -1810,6 +1888,8 @@ Item {
                     root.screensStore = {}
                     root.seedDefaultWorkspacesIfFresh()
                 }
+                root.storeRead = true
+                root.flushQueuedEnable()
             }
         }
     }

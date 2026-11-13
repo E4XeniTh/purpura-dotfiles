@@ -319,6 +319,7 @@ Scope {
                     id: brightnessControl
                     uiScale: bar.uiScale
                     dashboard: root.dashboard
+                    screen: modelData
                     showBrightnessControl: root.showBrightnessControl
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: volumeControl.right
