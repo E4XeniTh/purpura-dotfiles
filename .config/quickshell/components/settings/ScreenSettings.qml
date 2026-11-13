@@ -19,7 +19,8 @@ import "controls"
 // Hyprland's layout (MonitorLayout.qml - click to pick, drag to move);
 // under it, the
 // selected display's resolution and refresh rate (dropdowns of the modes
-// it reports, Preferred first), scale (a slider that only stops on
+// it reports, Preferred first - the monitor's preferred resolution at the
+// fastest refresh rate it offers there), scale (a slider that only stops on
 // scales Hyprland accepts at that resolution), rotation, workspaces and
 // exact position. Resizing a display moves the ones beside and below it
 // along (keepNeighbours()), so displays that touched keep touching.
@@ -560,6 +561,20 @@ Item {
         return modes.length > 0 ? modes[0] : null
     }
 
+    // What Preferred runs: the monitor's preferred resolution at the
+    // fastest refresh rate it offers there - Hyprland's own "preferred"
+    // often settles for 60 Hz on a faster monitor. Null while hyprctl
+    // lists no modes for it.
+    function preferredRunModeFor(name) {
+        const preferred = root.preferredModeFor(name)
+        if (!preferred) return null
+        let refresh = preferred.refresh
+        for (const m of root.modesFor(name)) {
+            if (m.w === preferred.w && m.h === preferred.h && m.refresh > refresh) refresh = m.refresh
+        }
+        return { w: preferred.w, h: preferred.h, refresh }
+    }
+
     // Whether this monitor runs (or, while off, would run once enabled)
     // Hyprland's own "preferred" mode - the exact opposite of what
     // effectiveStateFor() calls usesExplicitMode for an enabled monitor:
@@ -660,8 +675,10 @@ Item {
         const lines = []
         if (state.disabled) lines.push("OFF")
         lines.push(size.w + " x " + size.h)
-        let detail = root.runsPreferredMode(name) ? "Preferred"
-            : (state.refresh > 0 ? root.formatRefresh(state.refresh) + " Hz" : "")
+        // The refresh rate it runs at, Preferred or not.
+        const run = root.runsPreferredMode(name) ? root.preferredRunModeFor(name) : null
+        const refresh = run ? run.refresh : state.refresh
+        let detail = refresh > 0 ? root.formatRefresh(refresh) + " Hz" : ""
         detail += (detail.length > 0 ? " · " : "") + root.formatScale(state.scale) + "x"
         if (state.transform & 3) detail += " · " + ((state.transform & 3) * 90) + "°"
         lines.push(detail)
@@ -741,7 +758,9 @@ Item {
             const e = root.screensStore[name]
             if (!e) continue
             const preferred = root.preferredModeFor(name)
-            const size = (e.width > 0 && e.height > 0) ? { w: e.width, h: e.height }
+            const run = e.mode === "preferred" ? root.preferredRunModeFor(name) : null
+            const size = run ? { w: run.w, h: run.h }
+                : (e.width > 0 && e.height > 0) ? { w: e.width, h: e.height }
                 : (preferred ? { w: preferred.w, h: preferred.h } : { w: 1920, h: 1080 })
             const transform = Number.isInteger(e.transform) ? e.transform : 0
             const scale = e.scale > 0 ? e.scale : 1
@@ -749,7 +768,8 @@ Item {
             const lines = []
             if (e.disabled) lines.push("OFF")
             lines.push(size.w + " x " + size.h)
-            let detail = e.mode === "preferred" ? "Preferred" : (e.refresh > 0 ? root.formatRefresh(e.refresh) + " Hz" : "")
+            const refresh = run ? run.refresh : e.refresh
+            let detail = refresh > 0 ? root.formatRefresh(refresh) + " Hz" : ""
             detail += (detail.length > 0 ? " · " : "") + root.formatScale(scale) + "x"
             if (transform & 3) detail += " · " + ((transform & 3) * 90) + "°"
             lines.push(detail)
@@ -809,20 +829,21 @@ Item {
     // The selected monitor's resolution dropdown: 0 is Preferred, the rest
     // index root.selectedResolutions. Picking a resolution keeps the current
     // refresh rate if the new one offers it, and otherwise takes its
-    // fastest. Preferred also stages the preferred mode's own numbers, so
-    // the arrangement view and Set Default see the size it'll really be.
+    // fastest. Preferred also stages the numbers it runs at (the preferred
+    // resolution, fastest refresh rate), so the arrangement view and Set
+    // Default see what it'll really be.
     function chooseResolution(index) {
         const name = root.selectedName
         if (!name) return
         const before = root.rectFor(name)
         if (index === 0) {
-            const preferred = root.preferredModeFor(name)
+            const run = root.preferredRunModeFor(name)
             root.setPreferredMode(name, true)
             root.selectedDirty = true
-            if (preferred) {
-                root.setEdited("width", preferred.w)
-                root.setEdited("height", preferred.h)
-                root.setEdited("refresh", preferred.refresh)
+            if (run) {
+                root.setEdited("width", run.w)
+                root.setEdited("height", run.h)
+                root.setEdited("refresh", run.refresh)
             }
         } else {
             const res = root.selectedResolutions[index - 1]
@@ -901,9 +922,14 @@ Item {
         return i >= 0 ? i + 1 : 0
     }
     readonly property var selectedRates: root.refreshRatesFor(root.selectedName, root.selectedSize.w, root.selectedSize.h)
-    readonly property var refreshOptions: root.selectedPreferred
-        ? ["Auto"]
-        : (root.selectedRates.length > 0 ? root.selectedRates.map(r => root.formatRefresh(r) + " Hz") : ["-"])
+    // On Preferred, just the rate it runs at.
+    readonly property var refreshOptions: {
+        if (root.selectedPreferred) {
+            const run = root.preferredRunModeFor(root.selectedName)
+            return [run ? root.formatRefresh(run.refresh) + " Hz" : "Auto"]
+        }
+        return root.selectedRates.length > 0 ? root.selectedRates.map(r => root.formatRefresh(r) + " Hz") : ["-"]
+    }
     readonly property int refreshIndex: (root.selectedPreferred || !root.selectedState || root.selectedRates.length === 0
                                          || !(root.selectedState.refresh > 0))
         ? 0
@@ -1037,7 +1063,13 @@ Item {
             return `hl.monitor({ output = "${name}", disabled = true })`
         }
 
-        const mode = state.usesExplicitMode ? `${state.width}x${state.height}@${state.refresh}` : "preferred"
+        // Preferred goes out as its own numbers (preferredRunModeFor()),
+        // for the fastest refresh rate - and so does what Set Default
+        // saves, which apply-monitors.sh replays at login. Hyprland's own
+        // "preferred" only when hyprctl lists no modes to go by.
+        const run = state.usesExplicitMode ? null : root.preferredRunModeFor(name)
+        const mode = state.usesExplicitMode ? `${state.width}x${state.height}@${state.refresh}`
+            : (run ? `${run.w}x${run.h}@${run.refresh}` : "preferred")
         const position = state.usesExplicitPosition ? `${state.x}x${state.y}` : "auto"
 
         // disabled = false has to be explicit - hl.monitor() only
