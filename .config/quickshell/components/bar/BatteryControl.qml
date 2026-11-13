@@ -56,7 +56,8 @@ Rectangle {
                 id: battIcon
                 anchors.fill: parent
                 // Config.batteryIconName buckets in 10% increments
-                // (battery-000 .. battery-100, "-charging" suffixed).
+                // (battery-000 .. battery-100) - and while charging it's
+                // always the empty charging one, see there for why.
                 source: Quickshell.iconPath(
                     Config.batteryIconName(root.percentage * 100, root.charging),
                     "battery-missing-symbolic")

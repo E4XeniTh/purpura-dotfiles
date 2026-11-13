@@ -369,7 +369,7 @@ Item {
     // their percentage last - kept free whether anything has a battery or
     // not, so nothing shifts when one connects. The boxes stop at a width
     // that still reads well, but never narrower than the deepest row needs,
-    // and always leave the bars at least minBatteryBar.
+    // and always leave the battery box at least minBatteryBox.
     readonly property real batteryGap: Config.scaled(16, root.uiScale)
     // The battery box (TreeNode.qml): its bar at least 230, plus 90 of icon,
     // percentage and padding.
