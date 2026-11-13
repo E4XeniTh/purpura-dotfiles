@@ -30,7 +30,7 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
@@ -41,7 +41,7 @@ Scope {
     // fire.
     property var dashboard: null
 
-    // Settings > Shell > Bar's "Show fullscreen hint" (ShellSettings.qml),
+    // Settings > General > Shell's "Show fullscreen hint" (ShellSettings.qml),
     // watched the same way WorkspaceOsd.qml watches its own Bar setting.
     FileView {
         id: barSettingsFile

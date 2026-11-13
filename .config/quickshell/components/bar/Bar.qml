@@ -11,7 +11,7 @@ import "../common"
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
@@ -47,7 +47,7 @@ Scope {
     // its ends line up with windows.
     property var edgeGaps: null
 
-    // Shell > Bar settings (ShellSettings.qml) - watched directly rather
+    // General > Shell settings (ShellSettings.qml) - watched directly rather
     // than routed through Dashboard.qml's object tree, same convention
     // WorkspaceRow.qml/WorkspaceOsd.qml already use for their own Bar
     // settings (strictWorkspaceWidget/showEmptyWidget/showEmptyOsd).
@@ -337,7 +337,7 @@ Scope {
                     anchors.leftMargin: Config.scaled(10, bar.uiScale)
                 }
 
-                // Hides itself entirely when "Show Updater" (Shell > Bar
+                // Hides itself entirely when "Show Updater" (General > Shell
                 // settings) is off - same visible/width/height-to-0
                 // convention BrightnessControl.qml/BatteryControl.qml use
                 // for their own conditional hiding, just inlined here

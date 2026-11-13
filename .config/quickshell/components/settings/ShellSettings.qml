@@ -6,22 +6,22 @@ import "../../Config.js" as Config
 import "../common"
 import "controls"
 
-// Shell-level settings (as opposed to Sound/Network/Bluetooth/Display,
-// which all configure a piece of hardware) - one tab of
+// The General tab's settings (as opposed to Sound/Network/Bluetooth/
+// Display, which all configure a piece of hardware) - one tab of
 // SettingsScreen.qml's fullscreen tabbed panel (see there for the tab
-// bar/coordinator). Categories down the left ("Bar", "Peripherals",
-// "Updater", "Night Light") mirror the Connections tab's own left
+// bar/coordinator). Categories down the left ("Shell", "Input",
+// "Updater", "Night Light", ...) mirror the Connections tab's own left
 // icon-tab strip, picking which group of settings shows on the right.
 //
 // Everything here is a plain, immediately-saved toggle - no Apply
 // button, unlike ScreenSettings.qml's staged monitor edits - persisted
 // to its own barsettings.json/peripheralsettings.json/updatersettings.json
 // rather than monitors.json, so a Display tab Apply can never clobber a
-// Bar/Peripherals/Updater setting (or vice versa) by overwriting the
+// Shell/Input/Updater setting (or vice versa) by overwriting the
 // wrong file wholesale. WorkspaceRow.qml/WorkspaceOsd.qml/Bar.qml each
 // watch barsettings.json directly for the same reason they already
 // watched monitors.json - no property-passing chain needed.
-// Peripherals' mouse sensitivity/solaar startup settings are instead
+// Input's mouse sensitivity/solaar startup settings are instead
 // replayed by ~/.config/hypr/scripts/apply-peripherals.sh from
 // hyprland.lua's own autostart block (see that script), the same
 // "small JSON file + startup replay" pattern apply-monitors.sh already
@@ -66,7 +66,7 @@ Item {
 
     anchors.fill: parent
 
-    // 0 = Bar, 1 = Peripherals, 2 = Updater, 3 = Night Light, 4 = Dropdown Console,
+    // 0 = Shell, 1 = Input, 2 = Updater, 3 = Night Light, 4 = Dropdown Console,
     // 5 = Power.
     property int currentCategory: 0
 
@@ -118,7 +118,7 @@ Item {
     function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
     function toggleShowFullscreenHint() { root.setBarSetting("showFullscreenHint", !root.showFullscreenHint) }
 
-    // ---------------- Peripherals ----------------
+    // ---------------- Input (peripheralsettings.json) ----------------
     property var peripheralsStore: ({})
 
     function loadPeripheralsStore() {
@@ -374,7 +374,7 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "Bar"
+                        text: "Shell"
                         color: barCategoryCard.border.color
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(14, root.uiScale)
@@ -400,7 +400,7 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "Peripherals"
+                        text: "Input"
                         color: peripheralsCategoryCard.border.color
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(14, root.uiScale)
@@ -598,7 +598,7 @@ Item {
                 Layout.fillHeight: true
                 spacing: Config.scaled(10, root.uiScale)
 
-                // ---------------- Bar category ----------------
+                // ---------------- Shell category ----------------
                 ColumnLayout {
                     id: barCategoryContent
 
@@ -831,7 +831,7 @@ Item {
 
                 } // barCategoryContent
 
-                // ---------------- Peripherals category ----------------
+                // ---------------- Input category ----------------
                 ColumnLayout {
                     id: peripheralsCategoryContent
 

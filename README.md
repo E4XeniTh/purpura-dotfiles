@@ -18,7 +18,7 @@ out to be copied straight into place.
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
 | **Screenshot picker** | Custom region/window/monitor/all-monitors picker (META + X) - freezes the screen, dims it, and captures straight to the clipboard via grim |
 | **Lock screen** | A real session lock - no keybind gets through but volume, brightness and media keys - over the blurred desktop, with the time above the password box and the dashboard's now-playing card beside it while something plays. Authenticates via PAM |
-| **Auto-lock, dim and suspend** | Settings > Shell > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active if you like) and suspends, counting down on the main monitor first. The dim covers everything, the settings screen and the lock screen included |
+| **Auto-lock, dim and suspend** | Settings > General > Power: locks after a set time without input, then optionally dims the monitors (all together, or each after its own inactivity, naming the ones still active if you like) and suspends, counting down on the main monitor first. The dim covers everything, the settings screen and the lock screen included |
 | **Manual dim** | META + BackSpace dims every monitor but the one the mouse is on, each time it's pressed. A dimmed one wakes when the mouse moves onto it. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
 | **Shortcuts** | Settings tab with a clickable keyboard: bound keys are lit, and clicking a key adds or removes its binds. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads (an existing `hyprland.lua` needs the `pcall(require, "shortcuts")` line from the `.example` added by hand) |
 | **Power menu** | Shutdown / reboot / suspend / logout |
@@ -102,7 +102,7 @@ shows the help, which lists the options (`--color HEX`, `--yes`,
 
 ### Staying up to date
 
-Turn on **Follow Purpura versioning** in Settings > Shell > Updater, and the
+Turn on **Follow Purpura versioning** in Settings > General > Updater, and the
 updater keeps purpura itself current alongside your packages. A version is a
 commit of the checkout you installed from: the installer records which
 checkout and commit it installed (in `~/.local/state/purpura/`), and anything
@@ -238,7 +238,7 @@ package lists are the exact set):
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/panels/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
 - `grim` - the custom screenshot picker (`components/panels/Screenshot.qml`, META + X) freezes every screen with it before the picker appears; every capture is then taken from those frozen frames, never the live screen, so the picker's own dim/selection border can't end up in the image. `wl-clipboard` above also covers the `wl-copy` the result goes into
 - `imagemagick` - crops those frozen frames for region and window captures (`helpers/screenshot-crop.sh`); monitor and all-monitor captures copy a frozen frame as-is and don't need it
-- `hyprsunset` - night light (Settings > Shell > Night Light); the shell starts and drives it itself, so don't autostart it separately
+- `hyprsunset` - night light (Settings > General > Night Light); the shell starts and drives it itself, so don't autostart it separately
 - `libnotify` - provides `notify-send`, which the screenshot picker calls after every successful capture ("Screenshot copied to clipboard"); routes through this shell's own `NotificationServer` (`components/panels/Notification.qml`) like any other app notification, no separate daemon needed
 - `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
@@ -274,7 +274,7 @@ package lists are the exact set):
   their height). This goes by the size after Hyprland's own monitor
   scale, so a 4K screen at scale 2 isn't scaled twice. To make the shell
   bigger or smaller on top of that, use the **UI Scale** slider at the
-  bottom of Settings > Shell (50-150%, applied when you let go; saved to
+  bottom of Settings > General (50-150%, applied when you let go; saved to
   `~/.config/quickshell/uiscalesettings.json`).
 - `Config.solaarEnabled` (default `true`) turns Solaar integration off
   entirely - `solaar show` is never invoked at all while it's `false`,

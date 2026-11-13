@@ -62,7 +62,7 @@ var barheight = 48
 // screen.width/height are logical pixels - after Hyprland's own monitor
 // scale - so a 4K screen at scale 2 already reads as 1920x1080 here and
 // isn't scaled twice. Floored at 0.6 so text stays readable on small
-// screens. userScale is the global UI Scale from Settings > Shell
+// screens. userScale is the global UI Scale from Settings > General
 // (components/system/UiScale.qml), multiplied on top; 1.0 when left out.
 function uiScale(screen, userScale) {
     const user = userScale > 0 ? userScale : 1

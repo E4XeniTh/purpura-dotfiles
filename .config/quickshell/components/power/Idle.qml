@@ -6,7 +6,7 @@ import Quickshell.Hyprland
 import "../../Config.js" as Config
 import "IdleLogic.js" as Logic
 
-// Settings > Shell > Power at work: locking the screen, dimming the
+// Settings > General > Power at work: locking the screen, dimming the
 // monitors and suspending the computer after a while without activity,
 // each stage counted from the one before it. The decisions themselves
 // are in IdleLogic.js (see there for the stages); this measures the

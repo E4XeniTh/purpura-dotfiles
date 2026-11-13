@@ -24,7 +24,7 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 

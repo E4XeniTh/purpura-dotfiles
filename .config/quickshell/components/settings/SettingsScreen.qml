@@ -20,7 +20,7 @@ import "../common"
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
@@ -34,19 +34,19 @@ Scope {
     // they're hosted here instead.
     property var dashboard: null
 
-    // NightLight.qml - handed on to the Shell tab's Night Light category.
+    // NightLight.qml - handed on to the General tab's Night Light category.
     property var nightLight: null
 
-    // DropdownConsole.qml - handed on to the Shell tab's Dropdown Console category.
+    // DropdownConsole.qml - handed on to the General tab's Dropdown Console category.
     property var dropdownConsole: null
 
-    // Idle.qml - handed on to the Shell tab's Power category.
+    // Idle.qml - handed on to the General tab's Power category.
     property var idle: null
 
     // EdgeGaps.qml - the bar's top margin, for topOffset below.
     property var edgeGaps: null
 
-    // UiScale.qml - handed on to the Shell tab's UI Scale slider.
+    // UiScale.qml - handed on to the General tab's UI Scale slider.
     property var uiScaleSetting: null
 
     // Symmetric with Dashboard.qml's own onOpenChanged - both are
@@ -368,7 +368,7 @@ Scope {
 
                                 Repeater {
                                     model: [
-                                        { label: "Shell", icon: "preferences-system-symbolic" },
+                                        { label: "General", icon: "preferences-system-symbolic" },
                                         { label: "Sound", icon: "audio-volume-high-symbolic" },
                                         { label: "Display", icon: "video-display-symbolic" },
                                         { label: "Connections", icon: "network-wired-symbolic" },

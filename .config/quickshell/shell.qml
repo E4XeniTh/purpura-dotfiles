@@ -11,7 +11,7 @@ import "components/settings"
 import "components/system"
 
 Scope {
-  // Settings > Shell's global UI Scale - every component below that sizes
+  // Settings > General's global UI Scale - every component below that sizes
   // itself gets its value as shellScale.
   UiScale { id: uiScaleSetting }
   EdgeGaps { id: edgeGaps }
@@ -25,7 +25,7 @@ Scope {
     showMedia: idle.showMedia
     idle: idle
   }
-  // Settings > Shell > Power: auto-lock, auto-dim and auto-suspend.
+  // Settings > General > Power: auto-lock, auto-dim and auto-suspend.
   Idle { id: idle; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
   SettingsScreen {
     id: settingsScreen

@@ -21,13 +21,13 @@ import "../power"
 //
 // Only the primary monitor shows the avatar/password prompt, with the
 // clock above it and what's playing beside it (each can be turned off in
-// Settings > Shell > Power). The keyboard follows the mouse from monitor
+// Settings > General > Power). The keyboard follows the mouse from monitor
 // to monitor while locked, though, so every monitor takes typing into
 // the one shared password and checks it on Enter.
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every surface's Config.uiScale below.
     property real shellScale: 1.0
 
@@ -38,7 +38,7 @@ Scope {
     // this before suspending the computer locked.
     readonly property bool secure: sessionLock.secure
 
-    // Settings > Shell > Power, through Idle.qml: the clock above the
+    // Settings > General > Power, through Idle.qml: the clock above the
     // login box, and what's playing beside it.
     property bool showTime: true
     property bool showMedia: true

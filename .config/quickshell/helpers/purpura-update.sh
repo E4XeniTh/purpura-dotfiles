@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Purpura's own updates, for the updater (Updater.qml) once "Follow Purpura
-# versioning" is on in Settings > Shell > Updater.
+# versioning" is on in Settings > General > Updater.
 #
 # A version of purpura is a commit of the checkout it was installed from.
 # purpura.sh records which checkout and which commit it installed (in

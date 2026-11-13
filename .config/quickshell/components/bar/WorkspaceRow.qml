@@ -31,7 +31,7 @@ Row {
         return Math.abs(a.y) - Math.abs(b.y)
     })
 
-    // showEmptyWidget (Shell settings' Bar category, "Show empty
+    // showEmptyWidget (General settings' Shell category, "Show empty
     // workspaces: In widget" toggle - see barSettingsStore below) - any
     // workspace 1-5 pinned to a monitor (liveworkspaces.json) but not
     // existing in Hyprland yet (nobody's switched to it this session, so
@@ -260,7 +260,7 @@ Row {
         return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
     }
 
-    // Shell > Bar settings (ShellSettings.qml) - a separate file from
+    // General > Shell settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since these are simple
     // immediately-saved toggles rather than staged/Apply-dependent
     // monitor state.

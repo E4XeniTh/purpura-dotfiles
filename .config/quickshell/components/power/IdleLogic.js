@@ -1,6 +1,6 @@
 .pragma library
 
-// The decisions behind Idle.qml (Settings > Shell > Power), kept apart from
+// The decisions behind Idle.qml (Settings > General > Power), kept apart from
 // the QML so they're plain functions of their inputs.
 //
 // Three stages, each counted from the one before it when that one's on:

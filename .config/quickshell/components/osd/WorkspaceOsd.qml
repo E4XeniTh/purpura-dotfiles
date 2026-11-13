@@ -22,7 +22,7 @@ import "../../Config.js" as Config
 Scope {
     id: root
 
-    // Settings > Shell's global UI Scale (UiScale.qml), from shell.qml -
+    // Settings > General's global UI Scale (UiScale.qml), from shell.qml -
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
@@ -54,7 +54,7 @@ Scope {
 
     onLiveWorkspacesStoreChanged: renderSettleTimer.restart()
 
-    // Shell > Bar settings (ShellSettings.qml) - a separate file from
+    // General > Shell settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since the "Show empty
     // workspaces: In OSD" toggle is a simple immediately-saved setting
     // rather than staged/Apply-dependent monitor state.

@@ -30,7 +30,7 @@ Rectangle {
     property real uiScale: 1.0
     property var dashboard: null
 
-    // Shell > Bar settings' "Brightness Control" checkbox (see
+    // General > Shell settings' "Brightness Control" checkbox (see
     // ShellSettings.qml/Bar.qml) - a user-level show/hide independent of
     // whether the primary monitor actually supports brightness control at
     // all (see controllable/detecting below).

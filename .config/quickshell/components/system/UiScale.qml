@@ -2,7 +2,7 @@ import Quickshell
 import Quickshell.Io
 import QtQuick
 
-// The global UI Scale - the slider at the bottom of Settings > Shell's
+// The global UI Scale - the slider at the bottom of Settings > General's
 // category list. One multiplier on top of every screen's own
 // resolution-based scale (Config.uiScale): shell.qml hands `value` to
 // every component that sizes itself, as its `shellScale`.
