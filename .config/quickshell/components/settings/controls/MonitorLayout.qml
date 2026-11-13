@@ -4,7 +4,8 @@ import "../../../Config.js" as Config
 // Display settings' arrangement view: every monitor drawn to scale at its
 // position in Hyprland's layout (logical pixels - a monitor's mode divided
 // by its scale, turned on its side when rotated). Click one to pick it;
-// drag it to move it. A dragged monitor snaps to the other monitors' edges
+// drag it to move it; right-click to enable or disable it and double-click
+// to make it primary, as on the monitor list's cards. A dragged monitor snaps to the other monitors' edges
 // when it gets close, and the new position goes out through moved() once
 // it's let go.
 //
@@ -27,6 +28,8 @@ Item {
 
     signal picked(string name)
     signal moved(string name, real x, real y)
+    signal toggleEnabled(string name)
+    signal makePrimary(string name)
 
     clip: true
 
@@ -234,13 +237,16 @@ Item {
         anchors.fill: parent
         enabled: root.interactive
         hoverEnabled: true
-        acceptedButtons: Qt.LeftButton
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         cursorShape: root.dragging ? Qt.ClosedHandCursor : (root.hoverName.length > 0 ? Qt.OpenHandCursor : Qt.ArrowCursor)
 
         property real pressX: 0
         property real pressY: 0
 
+        // The right button only enables and disables (onClicked below) - it
+        // neither picks nor drags.
         onPressed: (mouse) => {
+            if (mouse.button !== Qt.LeftButton) return
             const m = root.monitorAt(mouse.x, mouse.y)
             pressX = mouse.x
             pressY = mouse.y
@@ -259,6 +265,7 @@ Item {
                 root.hoverName = m ? m.name : ""
                 return
             }
+            if (!(pressedButtons & Qt.LeftButton)) return
             const m = root.byName[root.dragName]
             if (!m) return
             // A plain click shouldn't nudge anything.
@@ -277,7 +284,8 @@ Item {
         // Hand the new position over before dropping the preview, so the
         // monitor is already there when it stops following the drag instead
         // of flicking back to the old spot for a frame.
-        onReleased: {
+        onReleased: (mouse) => {
+            if (mouse.button !== Qt.LeftButton) return
             if (root.dragging && root.dragName.length > 0) {
                 root.moved(root.dragName, Math.round(root.dragX), Math.round(root.dragY))
             }
@@ -288,6 +296,21 @@ Item {
         onCanceled: {
             root.dragging = false
             root.dragName = ""
+        }
+
+        onClicked: (mouse) => {
+            if (mouse.button !== Qt.RightButton) return
+            const m = root.monitorAt(mouse.x, mouse.y)
+            if (m) root.toggleEnabled(m.name)
+        }
+
+        // Left: primary. A quick second right-click is just another
+        // enable/disable, as if they'd been slower.
+        onDoubleClicked: (mouse) => {
+            const m = root.monitorAt(mouse.x, mouse.y)
+            if (!m) return
+            if (mouse.button === Qt.LeftButton) root.makePrimary(m.name)
+            else root.toggleEnabled(m.name)
         }
 
         onExited: if (!pressed) root.hoverName = ""

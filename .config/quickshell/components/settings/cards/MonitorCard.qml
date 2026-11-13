@@ -68,8 +68,13 @@ DashCard {
         // Qt still fires a plain clicked() for the first
         // press/release of a double-click before this -
         // harmless here, it just also selects the card, which
-        // makes sense alongside marking it primary anyway.
-        onDoubleClicked: root.makePrimary()
+        // makes sense alongside marking it primary anyway. Only a left
+        // double-click makes it primary: a quick second right-click is
+        // just another enable/disable, as if they'd been slower.
+        onDoubleClicked: (mouse) => {
+            if (mouse.button === Qt.LeftButton) root.makePrimary()
+            else root.toggleEnabled()
+        }
     }
 
     ColumnLayout {

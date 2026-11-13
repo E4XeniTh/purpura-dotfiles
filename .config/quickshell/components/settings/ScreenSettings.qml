@@ -2044,6 +2044,10 @@ Item {
                             if (name !== root.selectedName) root.selectMonitor(name)
                         }
                         onMoved: (name, x, y) => root.moveMonitor(name, x, y)
+                        // The same as on the cards - see toggleEnabled()/
+                        // makePrimary() for the fail-safes.
+                        onToggleEnabled: (name) => root.toggleEnabled(name)
+                        onMakePrimary: (name) => root.makePrimary(name)
                     }
                 }
 
@@ -2059,8 +2063,9 @@ Item {
                 }
 
                 // ---------------- selected display ----------------
-                // Enabling and making primary are the cards' (right-click,
-                // double-click) - see the hint row.
+                // Enabling and making primary are the cards' and the
+                // arrangement view's (right-click, double-click) - see the
+                // hint row.
                 RowLayout {
                     Layout.fillWidth: true
                     Layout.topMargin: Config.scaled(4, root.uiScale)
