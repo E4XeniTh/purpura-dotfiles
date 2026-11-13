@@ -48,7 +48,7 @@ DashCard {
         return root.stream.name
     }
 
-    border.color: Config.fgcolordark
+    border.color: Config.fgcolor
 
     ColumnLayout {
         anchors {
