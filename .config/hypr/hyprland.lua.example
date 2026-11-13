@@ -215,10 +215,17 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
         return cursor.x >= x and cursor.x < x + w and cursor.y >= y and cursor.y < y + h
     end
 
-    -- Hyprland can't say which window is on top, so this goes by what's drawn
-    -- over what: a shown special workspace over the rest, pinned and floating
-    -- windows over tiled ones, a fullscreen window over everything that isn't
-    -- allowed over it, and the most recently focused one among equals.
+    -- Hyprland can't say which window is on top, so this goes by the order it
+    -- draws them in: a shown special workspace over the rest, pinned windows
+    -- over the rest of theirs, then - with a fullscreen or maximized window
+    -- there - the floating windows it lets over that window (any opened or
+    -- focused since), then the window itself, then the rest, floating over
+    -- tiled; the most recently focused one among equals.
+    --
+    -- The fullscreen window has the "allowed over fullscreen" flag on too -
+    -- Hyprland only turns it off for the others on its workspace - so it
+    -- doesn't count for that one. If it did, a maximized window would win over
+    -- a floating one drawn right on top of it, and close instead.
     local function windowUnderCursor(cursor)
         local best, bestRank, bestHistory
         for _, window in ipairs(hl.get_windows({ mapped = true })) do
@@ -227,11 +234,12 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
                 local x, y = pair(window.at, "x", "y")
                 local w, h = pair(window.size, "x", "y")
                 if contains(x, y, w, h, cursor) then
+                    local fullscreen = (window.fullscreen or 0) > 0
                     local rank = 0
                     if workspace.special then rank = rank + 16 end
                     if window.pinned then rank = rank + 8 end
-                    if window.allowed_over_fullscreen then rank = rank + 4 end
-                    if (window.fullscreen or 0) > 0 then rank = rank + 2 end
+                    if window.floating and window.allowed_over_fullscreen and not fullscreen then rank = rank + 4 end
+                    if fullscreen then rank = rank + 2 end
                     if window.floating then rank = rank + 1 end
                     local history = window.focus_history_id or math.huge
                     if history < 0 then history = math.huge end
