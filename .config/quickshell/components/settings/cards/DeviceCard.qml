@@ -10,7 +10,7 @@ import "../controls"
 // One playback/recording device: name + mute button + volume slider inside
 // a DashCard. Right-clicking anywhere on the card - including over the
 // name, the mute icon, or the slider - makes it the default device, which
-// gets an fgcolorlight border and a [Default] tag by its name. Middle-
+// gets an fgcolorlight border (the rest fgcolordark) and a [Default] tag by its name. Middle-
 // clicking renames it in place, for the shell only (`names`, an
 // AliasStore.qml over audioaliases.json - nothing changes for PipeWire or
 // other apps): Enter keeps the name, Escape drops it, and a blank one goes
@@ -61,7 +61,7 @@ DashCard {
 
     readonly property bool muted: root.device.audio ? root.device.audio.muted : false
 
-    border.color: root.isPrimary ? Config.fgcolorlight : Config.fgcolor
+    border.color: root.isPrimary ? Config.fgcolorlight : Config.fgcolordark
 
     Column {
         anchors {
