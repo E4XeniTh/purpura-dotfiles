@@ -48,7 +48,7 @@ DashCard {
     // state alone - primary, enabled, disabled - as in the arrangement view.
     color: root.selected ? Config.fgcolorhover : Config.fillcolor
     readonly property color textColor: root.isPrimary ? Config.fgcolorlight
-        : (root.pendingEnabled ? Config.fgcolor : Config.fgcolordark)
+        : (root.pendingEnabled ? Config.fgcolor : Config.fgcolorred)
     border.color: root.isPrimary ? Config.fgcolorlight : (root.pendingEnabled ? Config.fgcolor : Config.fgcolorred)
 
     MouseArea {

@@ -160,7 +160,7 @@ Item {
             // monitor list's cards: primary, enabled, disabled. Picking one
             // only lights up its background.
             readonly property color textColor: box.info.primary ? Config.fgcolorlight
-                : (box.info.enabled ? Config.fgcolor : Config.fgcolordark)
+                : (box.info.enabled ? Config.fgcolor : Config.fgcolorred)
 
             x: root.viewX + (box.held ? root.dragX : box.info.x) * root.viewScale
             y: root.viewY + (box.held ? root.dragY : box.info.y) * root.viewScale
