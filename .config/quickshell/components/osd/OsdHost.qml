@@ -30,8 +30,7 @@ Scope {
         id: settingsFile
 
         path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"
-        // Read up front, so the first OSD already has its place - and a
-        // change seen later is a real one (see the preview below).
+        // Read up front, so the first OSD already has its place.
         blockLoading: true
         watchChanges: true
         printErrors: false
@@ -60,12 +59,21 @@ Scope {
     readonly property bool vertical: root.atLeft || root.atRight || root.store.osdStacking === "vertical"
 
     // A moment's look at all of them after any of these changes, so the
-    // settings show what they do.
+    // settings show what they do - not while the shell's starting, when
+    // they change from the defaults to what's saved as the file is read.
     property bool previewing: false
+    property bool settled: false
 
     function preview() {
+        if (!root.settled) return
         root.previewing = true
         previewTimer.restart()
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        onTriggered: root.settled = true
     }
 
     onSizeChanged: root.preview()
