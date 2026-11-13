@@ -1,93 +1,98 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Widgets
-import Quickshell.Networking
 import Quickshell.Io
-import Qt5Compat.GraphicalEffects
+import Quickshell.Networking
+import Quickshell.Bluetooth
+import Quickshell.Services.UPower
 import "../../Config.js" as Config
 import "../common"
 import "cards"
 import "controls"
+import "ConnectionsLogic.js" as Logic
 
-// The Connections tab of SettingsScreen.qml's fullscreen tabbed panel
-// (see there for the tab bar/coordinator): network devices, wired
-// connections and wifi, plus Bluetooth. A vertical icon-tab strip on the
-// left picks the category; the three network ones share one ListView
-// whose model swaps, while Bluetooth embeds BluetoothSettings.qml whole
-// (its own controllers + devices layout). Embeddable Item instead of a
-// standalone SettingsPanel popup: panelWidth/uiScale/active are plain
-// properties fed in from the tab host instead of coming from a
-// PanelWindow.
+// Settings > Connections: everything this computer is connected through, as a
+// tree read left to right, and the details of whatever's picked in it.
 //
-// Backed by Quickshell.Networking (NetworkManager only) - confirmed
-// against Quickshell's own source that only Wifi and Ethernet device
-// types are ever surfaced by this module; other NetworkManager device
-// types (tun/VPN/bridge/etc, e.g. a ZeroTier interface) are silently
-// ignored at the backend level and will never appear here, regardless of
-// anything done in this file.
+// The tree (left): this computer (user@host) branches into its devices -
+// Solaar's Logitech peripherals, Wi-Fi, Bluetooth, ZeroTier, Ethernet - and
+// each device into the connections that exist through it: Wi-Fi networks that
+// are connected or remembered, paired Bluetooth devices, joined ZeroTier
+// networks, the wired connection. Networks only in range, and Bluetooth
+// devices nearby but not paired, are in the details panel's lists instead.
+//
+// A box's border says its state (ConnectionsLogic.js): fgcolor for a device
+// that's on or a plain connection, fgcolorlight for a connection that's
+// remembered too (disconnecting it leaves it forgettable), fgcolordark for one
+// that's only remembered, red for anything disabled. Something with a battery
+// - a laptop, a Solaar peripheral, a controller - draws its border as a ring
+// of segments lit up to its charge instead, red when it's low.
+//
+// Left click picks a box for the details panel (right). Middle click renames
+// it - for this shell only (AliasStore.qml, connectionaliases.json): nothing
+// changes for the system, not even BlueZ's own alias. Right click disables or
+// enables a device, disconnects a connection, and forgets one that's only
+// remembered; a wired connection, which can't be forgotten, connects again.
+//
+// Backed by Quickshell.Networking (Wi-Fi and Ethernet through
+// NetworkManager), Quickshell.Bluetooth (BlueZ), UPower (the laptop battery)
+// and Dashboard.qml's Solaar poll. ZeroTier's interfaces come from plain
+// `nmcli`, which lists them although NetworkManager doesn't manage them, and
+// its service from systemctl: zerotier-cli itself needs root.
 Item {
     id: root
 
     property real panelWidth: 800
     property real uiScale: 1.0
     property bool active: false
+    // Dashboard.qml's shared root, which polls Solaar (solaarDevices).
+    property var dashboardRoot: null
 
-    // Sized by whatever container SettingsScreen.qml gives this tab -
-    // not self-measured from content anymore, so listColumn's existing
-    // Layout.fillHeight machinery below actually has real leftover
-    // height to expand into (see contentWrapper for what changed).
     anchors.fill: parent
 
-    // 0 = Devices, 1 = Wired, 2 = WiFi, 3 = Bluetooth.
-    property int currentTab: 0
-
-    readonly property var wifiDevices: Networking.devices.values.filter(d => d.type === DeviceType.Wifi)
-    // Whether the WiFi tab has anything usable to show - matches the
-    // same nmManaged concept the Devices tab's enable/disable toggles.
-    readonly property bool wifiUsable: root.wifiDevices.some(d => d.nmManaged)
-
-    readonly property var allNetworks: {
-        const list = []
-        for (const dev of Networking.devices.values) {
-            for (const net of dev.networks.values) {
-                list.push(net)
-            }
-        }
-        return list
+    AliasStore {
+        id: aliasStore
+        file: "connectionaliases.json"
     }
 
-    readonly property var wifiNetworks: {
-        const list = []
-        for (const dev of root.wifiDevices) {
-            for (const net of dev.networks.values) {
-                list.push(net)
+    // For the details panel's lists.
+    property alias names: aliasStore
+
+    // ---------------- this computer ----------------
+    readonly property string userName: Quickshell.env("USER") || ""
+    property string hostName: ""
+    property string kernel: ""
+
+    readonly property var laptopBattery: {
+        const d = UPower.displayDevice
+        return d && d.ready && d.isLaptopBattery ? d : null
+    }
+    readonly property bool laptopCharging: !!root.laptopBattery
+        && (root.laptopBattery.state === UPowerDeviceState.Charging || root.laptopBattery.state === UPowerDeviceState.PendingCharge)
+
+    Process {
+        id: hostProcess
+        command: ["uname", "-nr"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const parts = text.trim().split(/\s+/)
+                root.hostName = parts[0] || ""
+                root.kernel = parts[1] || ""
             }
         }
-        return list
     }
 
-    // ---------------- Devices tab ----------------
-    readonly property var deviceEntries: Networking.devices.values.map(d => ({ kind: "device", device: d }))
+    // ---------------- Solaar ----------------
+    readonly property var solaarDevices: root.dashboardRoot ? root.dashboardRoot.solaarDevices : []
 
-    // ---------------- Wired tab: connected/disconnected (no separator) ----------------
-    // Wireless networks have their own dedicated WiFi tab, so they're
-    // excluded here rather than duplicated in both places.
-    readonly property var wiredNetworks: root.allNetworks.filter(n => !(n.device && n.device.type === DeviceType.Wifi))
+    function refreshSolaar() {
+        if (root.dashboardRoot) root.dashboardRoot.refreshSolaar()
+    }
 
-    // ---------------- ZeroTier (simple presence check via nmcli) ----------------
-    // zerotier-cli needs root (its local API socket is root-only by
-    // default on most installs) - confirmed live, so it's not something
-    // this shell can just shell out to as the logged-in user. nmcli
-    // works instead: NetworkManager is aware of every device on the
-    // system whether or not it actually manages it, and a live nmcli
-    // dump showed the zt* interface listed there (as "unmanaged") even
-    // though nothing here ever asked NetworkManager to manage it. Kept
-    // deliberately minimal: just "is a zt* interface present, and what
-    // does nmcli say its state is" - no generic device parsing beyond
-    // that (see the file-level note above for why nmcli is needed at
-    // all instead of Quickshell.Networking).
-    property var zerotierNetworks: []
+    // ---------------- ZeroTier ----------------
+    property var zerotierInterfaces: []
+    property var zerotierService: ({ installed: false, active: false })
 
     function refreshZerotier() {
         zerotierProcess.running = false
@@ -96,108 +101,341 @@ Item {
 
     Process {
         id: zerotierProcess
-        command: ["nmcli"]
+        command: ["sh", "-c", "nmcli 2>/dev/null; echo @@service; systemctl show -p LoadState -p ActiveState zerotier-one.service 2>/dev/null"]
 
-        // Plain `nmcli` (no args) prints one block per device it knows
-        // about, e.g.:
-        //
-        //   zthnhadv3s: unmanaged
-        //
-        //           "zthnhadv3s"
-        //
-        //           tun, 46:F0:70:70:22:48, sw, mtu 2800
-        //
-        // Only the un-indented header line (id + state) is needed here
-        // - ZeroTier's own interface naming convention ("zt" + a
-        // generated lowercase-alphanumeric id, NOT necessarily hex -
-        // "zthnhadv3s" itself has 'h'/'n' in it, which the previous
-        // hex-only pattern here missed entirely, hiding it regardless
-        // of managed state) is what identifies it, not nmcli's "tun"
-        // type token, since any other VPN client could just as easily
-        // show up as a tun device too. Deliberately not filtered by
-        // state - unmanaged is the expected/common case here, not a
-        // reason to hide it.
         stdout: StdioCollector {
             onStreamFinished: {
-                const nets = []
-                for (const rawLine of text.split("\n")) {
-                    if (/^\s/.test(rawLine)) continue
-                    const sepIdx = rawLine.lastIndexOf(": ")
-                    if (sepIdx === -1) continue
-                    const id = rawLine.slice(0, sepIdx).trim()
-                    const state = rawLine.slice(sepIdx + 2).trim()
-                    if (!/^zt[0-9a-z]+$/i.test(id)) continue
-                    nets.push({ name: id, connected: state === "connected" })
-                }
-                root.zerotierNetworks = nets
+                const at = text.indexOf("@@service")
+                root.zerotierInterfaces = Logic.parseZerotierInterfaces(at === -1 ? text : text.slice(0, at))
+                root.zerotierService = Logic.parseServiceState(at === -1 ? "" : text.slice(at))
             }
         }
     }
 
+    // Starting and stopping the service needs root, which systemctl asks the
+    // polkit agent for - a password prompt.
+    Process {
+        id: zerotierToggle
+        onExited: root.refreshZerotier()
+    }
+
+    function setZerotierRunning(running) {
+        if (zerotierToggle.running) return
+        zerotierToggle.command = ["systemctl", running ? "start" : "stop", "zerotier-one.service"]
+        zerotierToggle.running = true
+    }
+
     Timer {
-        id: zerotierRefreshTimer
         interval: 4000
         repeat: true
+        running: root.active
         onTriggered: root.refreshZerotier()
     }
 
-    readonly property var connectionEntries: {
-        const connected = root.wiredNetworks.filter(n => n.connected)
-        const disconnected = root.wiredNetworks.filter(n => !n.connected)
-        const list = connected.map(n => ({ kind: "network", network: n }))
-        for (const n of disconnected) list.push({ kind: "network", network: n })
-        for (const zt of root.zerotierNetworks) {
-            list.push({ kind: "zerotier", name: zt.name, connected: zt.connected })
-        }
-        return list
-    }
-
-    // ---------------- WiFi tab: connected + remembered on top, separator, then found networks ----------------
-    readonly property var wifiEntries: {
-        const connected = root.wifiNetworks.filter(n => n.connected)
-        const remembered = root.wifiNetworks.filter(n => !n.connected && n.known)
-            .slice()
-            .sort((a, b) => b.signalStrength - a.signalStrength)
-        const found = root.wifiNetworks.filter(n => !n.connected && !n.known)
-            .slice()
-            .sort((a, b) => b.signalStrength - a.signalStrength)
-        const list = connected.map(n => ({ kind: "network", network: n }))
-        for (const n of remembered) list.push({ kind: "network", network: n })
-        if ((connected.length > 0 || remembered.length > 0) && found.length > 0) list.push({ kind: "separator" })
-        for (const n of found) list.push({ kind: "network", network: n })
-        return list
-    }
-
-    readonly property var currentEntries: root.currentTab === 0 ? root.deviceEntries
-        : root.currentTab === 1 ? root.connectionEntries
-        : root.wifiEntries
-
-    // Only scan (which costs power/radio time) while the WiFi tab is
-    // actually the one showing, same reasoning as Bluetooth's
-    // `discovering` being tied to this panel's own active state.
-    function updateWifiScanning() {
-        const shouldScan = root.active && root.currentTab === 2
-        for (const dev of root.wifiDevices) {
-            dev.scannerEnabled = shouldScan
-        }
-    }
-
     onActiveChanged: {
-        root.updateWifiScanning()
         if (root.active) {
+            hostProcess.running = true
             root.refreshZerotier()
-            zerotierRefreshTimer.restart()
-        } else {
-            zerotierRefreshTimer.stop()
+            root.refreshSolaar()
+        }
+        root.updateRadios()
+    }
+
+    // ---------------- the tree ----------------
+    // A node: `key` is its place in the tree, `aliasKey` what its name is
+    // kept under - the same Wi-Fi network seen by two adapters is two nodes
+    // with one name.
+    function makeNode(key, aliasKey, kind, systemName, ref, fields) {
+        return Object.assign({
+            key: key,
+            aliasKey: aliasKey,
+            kind: kind,
+            systemName: systemName,
+            name: aliasStore.name(aliasKey, systemName),
+            ref: ref,
+            state: "on",
+            subtitle: "",
+            battery: -1,
+            charging: false,
+            children: []
+        }, fields)
+    }
+
+    function percent(fraction) {
+        return Math.round(fraction * 100) + "%"
+    }
+
+    function solaarNode(d, key) {
+        const parts = []
+        if (d.kind) parts.push(d.kind)
+        parts.push(root.percent(d.percentage) + (d.charging ? " charging" : ""))
+        return root.makeNode(key, "solaar:" + d.name, "solaar", d.name, d, {
+            subtitle: parts.join(" · "),
+            battery: d.percentage,
+            charging: d.charging
+        })
+    }
+
+    function wifiNetworkNode(dev, n) {
+        const state = Logic.wifiNetworkState({ changing: n.stateChanging, connected: n.connected, known: n.known })
+        const signal = n.signalStrength > 0 ? " · " + root.percent(n.signalStrength) : ""
+        const subtitle = state === "busy" ? (n.connected ? "disconnecting…" : "connecting…")
+            : n.connected ? "connected" + signal
+            : n.signalStrength > 0 ? "remembered" + signal
+            : "remembered · out of range"
+        return root.makeNode("wifi:" + dev.name + ":" + n.name, "wifi:" + n.name, "wifiNetwork", n.name, n, {
+            state: state,
+            subtitle: subtitle,
+            device: dev
+        })
+    }
+
+    function wifiDeviceNode(dev) {
+        const radioOff = Networking.wifiEnabled === false
+        const switchedOff = Networking.wifiHardwareEnabled === false
+        const enabled = !radioOff && !switchedOff && dev.nmManaged !== false
+        const networks = Logic.sortNetworks(dev.networks.values
+            .filter(n => n.connected || n.known)
+            .map(n => ({ net: n, name: n.name, connected: n.connected, signal: n.signalStrength || 0 })))
+            .map(e => root.wifiNetworkNode(dev, e.net))
+        const current = dev.networks.values.find(n => n.connected)
+        return root.makeNode("netdev:" + dev.name, "netdev:" + dev.name, "wifiDevice", dev.name, dev, {
+            state: Logic.deviceState(enabled),
+            subtitle: switchedOff ? "Wi-Fi · switched off"
+                : radioOff ? "Wi-Fi · radio off"
+                : !enabled ? "Wi-Fi · disabled"
+                : current ? "Wi-Fi · " + aliasStore.name("wifi:" + current.name, current.name)
+                : "Wi-Fi · not connected",
+            children: networks
+        })
+    }
+
+    function bluetoothDeviceNode(adapter, d) {
+        const changing = d.state === BluetoothDeviceState.Connecting || d.state === BluetoothDeviceState.Disconnecting
+        const state = Logic.bluetoothDeviceState({ changing: changing, connected: d.connected, paired: d.paired })
+        const battery = d.batteryAvailable ? d.battery : -1
+        const systemName = d.name.length > 0 ? d.name : d.deviceName.length > 0 ? d.deviceName : d.address
+        const subtitle = state === "busy" ? (d.connected ? "disconnecting…" : "connecting…")
+            : d.connected ? "connected" + (battery >= 0 ? " · " + root.percent(battery) : "")
+            : "remembered"
+        return root.makeNode("bt:" + adapter.adapterId + ":" + d.address, "bt:" + d.address, "btDevice", systemName, d, {
+            state: state,
+            subtitle: subtitle,
+            battery: battery
+        })
+    }
+
+    function adapterNode(a) {
+        const blocked = a.state === BluetoothAdapterState.Blocked
+        const enabled = a.enabled && !blocked
+        const devices = Logic.sortDevices(a.devices.values
+            .filter(d => d.paired || d.connected)
+            .map(d => ({ dev: d, name: d.name || d.deviceName || d.address, connected: d.connected })))
+            .map(e => root.bluetoothDeviceNode(a, e.dev))
+        const connected = a.devices.values.filter(d => d.connected).length
+        return root.makeNode("btadapter:" + a.adapterId, "btadapter:" + a.adapterId, "btAdapter", a.name, a, {
+            state: Logic.deviceState(enabled),
+            subtitle: blocked ? "Bluetooth · blocked" : !a.enabled ? "Bluetooth · off" : "Bluetooth · " + connected + " connected",
+            children: devices
+        })
+    }
+
+    function zerotierNode() {
+        // Not installed as a service but its interfaces are up: running
+        // some other way.
+        const running = root.zerotierService.active || (!root.zerotierService.installed && root.zerotierInterfaces.length > 0)
+        return root.makeNode("zerotier", "zerotier", "ztService", "ZeroTier One", null, {
+            state: Logic.deviceState(running),
+            subtitle: running ? "ZeroTier · running" : "ZeroTier · stopped",
+            children: root.zerotierInterfaces.map(i => root.makeNode("zt:" + i.name, "zt:" + i.name, "ztNetwork", i.name, i, {
+                state: "connected",
+                subtitle: "ZeroTier network"
+            }))
+        })
+    }
+
+    function wiredNetworkNode(dev, n) {
+        const state = Logic.wiredNetworkState({ changing: n.stateChanging, connected: n.connected })
+        return root.makeNode("wired:" + dev.name + ":" + n.name, "wired:" + n.name, "wiredNetwork", n.name, n, {
+            state: state,
+            subtitle: state === "busy" ? (n.connected ? "disconnecting…" : "connecting…") : n.connected ? "connected" : "disconnected",
+            device: dev
+        })
+    }
+
+    function wiredDeviceNode(dev) {
+        const enabled = dev.nmManaged !== false
+        const link = dev.hasLink === undefined ? true : dev.hasLink
+        return root.makeNode("netdev:" + dev.name, "netdev:" + dev.name, "wiredDevice", dev.name, dev, {
+            state: Logic.deviceState(enabled),
+            subtitle: !enabled ? "Ethernet · disabled"
+                : !link ? "Ethernet · cable unplugged"
+                : dev.linkSpeed > 0 ? "Ethernet · " + dev.linkSpeed + " Mbit/s"
+                : "Ethernet",
+            children: dev.networks.values.map(n => root.wiredNetworkNode(dev, n))
+        })
+    }
+
+    readonly property var treeRoot: {
+        const children = []
+        // Two peripherals of the same name still get a box each.
+        const seen = {}
+        for (const d of root.solaarDevices) {
+            seen[d.name] = (seen[d.name] || 0) + 1
+            children.push(root.solaarNode(d, "solaar:" + d.name + (seen[d.name] > 1 ? "#" + seen[d.name] : "")))
+        }
+        const devices = Networking.devices.values
+        for (const dev of devices) {
+            if (dev.type === DeviceType.Wifi) children.push(root.wifiDeviceNode(dev))
+        }
+        for (const a of Bluetooth.adapters.values) children.push(root.adapterNode(a))
+        if (root.zerotierService.installed || root.zerotierInterfaces.length > 0) children.push(root.zerotierNode())
+        for (const dev of devices) {
+            if (dev.type === DeviceType.Wired) children.push(root.wiredDeviceNode(dev))
+        }
+
+        const battery = root.laptopBattery ? root.laptopBattery.percentage : -1
+        return root.makeNode("host", "host", "host", root.userName + "@" + (root.hostName || "localhost"), null, {
+            subtitle: battery >= 0 ? "battery " + root.percent(battery) + (root.laptopCharging ? " · charging" : "") : "this computer",
+            battery: battery,
+            charging: root.laptopCharging,
+            children: children
+        })
+    }
+
+    // Three columns sharing the tree's width, a box no narrower than a name
+    // needs and no wider than reads well.
+    readonly property var treeMetrics: {
+        const columnGap = Config.scaled(40, root.uiScale)
+        const fitted = (treeView.width - 2 * columnGap) / 3
+        return {
+            nodeWidth: Math.max(Config.scaled(130, root.uiScale), Math.min(Config.scaled(250, root.uiScale), fitted)),
+            nodeHeight: Config.scaled(46, root.uiScale),
+            columnGap: columnGap,
+            rowGap: Config.scaled(10, root.uiScale)
         }
     }
-    onCurrentTabChanged: root.updateWifiScanning()
 
-    // Fills the whole tab (root is anchors.fill'd by its container) -
-    // no longer self-measured from content, so listColumn's own
-    // Layout.fillHeight children (the spacer Item, and entryList once
-    // it's given fillHeight too) actually have real leftover height to
-    // expand into, keeping the hint row pinned to the true bottom.
+    readonly property var treeLayout: Logic.layoutTree(root.treeRoot, root.treeMetrics)
+
+    readonly property var nodeByKey: {
+        const map = {}
+        for (const n of root.treeLayout.nodes) map[n.key] = n
+        return map
+    }
+
+    // Just the keys go to the Repeater, which keeps a box for as long as its
+    // key's there - the tree is rebuilt whenever anything in it changes, and
+    // a rename in progress has to outlive that.
+    readonly property var nodeKeys: root.treeLayout.nodes.map(n => n.key)
+
+    function stateColor(state) {
+        const role = Logic.colorRole(state)
+        return role === "light" ? Config.fgcolorlight
+            : role === "dark" ? Config.fgcolordark
+            : role === "red" ? Config.fgcolorred
+            : Config.fgcolor
+    }
+
+    // ---------------- selection, renaming, actions ----------------
+    property string selectedKey: "host"
+    property string selectedParentKey: ""
+    readonly property var selectedNode: root.nodeByKey[root.selectedKey] || null
+
+    // When what's picked goes (forgotten, unplugged), its parent is picked
+    // instead - or this computer.
+    onSelectedNodeChanged: {
+        if (root.selectedNode) {
+            root.selectedParentKey = root.selectedNode.parentKey
+            return
+        }
+        root.selectedKey = root.nodeByKey[root.selectedParentKey] ? root.selectedParentKey : "host"
+    }
+
+    onSelectedKeyChanged: root.updateRadios()
+
+    function select(key) {
+        root.selectedKey = key
+    }
+
+    property string renamingKey: ""
+
+    function startRename(key) {
+        root.selectedKey = key
+        root.renamingKey = key
+    }
+
+    function finishRename(node, newName) {
+        if (root.renamingKey !== node.key) return
+        root.renamingKey = ""
+        aliasStore.rename(node.aliasKey, newName, node.systemName)
+    }
+
+    function cancelRename() {
+        root.renamingKey = ""
+    }
+
+    // `action` is one of ConnectionsLogic.js's: enable, disable, connect,
+    // disconnect, forget.
+    function perform(node, action) {
+        if (!node || !action) return
+        const ref = node.ref
+        switch (node.kind) {
+        case "wifiDevice":
+            if (action === "disable") {
+                // The radio, as Wi-Fi's own switch does - or, where
+                // Quickshell can't reach it, just this device.
+                if (Networking.wifiEnabled !== undefined) Networking.wifiEnabled = false
+                else ref.nmManaged = false
+            } else if (action === "enable") {
+                ref.nmManaged = true
+                if (Networking.wifiEnabled !== undefined) Networking.wifiEnabled = true
+            }
+            break
+        case "wiredDevice":
+            ref.nmManaged = action === "enable"
+            break
+        case "btAdapter":
+            ref.enabled = action === "enable"
+            break
+        case "ztService":
+            root.setZerotierRunning(action === "enable")
+            break
+        case "wifiNetwork":
+        case "wiredNetwork":
+        case "btDevice":
+            if (action === "disconnect") ref.disconnect()
+            else if (action === "forget") ref.forget()
+            else if (action === "connect") ref.connect()
+            break
+        }
+    }
+
+    function rightClick(node) {
+        root.selectedKey = node.key
+        root.perform(node, Logic.rightClickAction(node.kind, node.state))
+    }
+
+    // Wi-Fi scans only while a Wi-Fi device or one of its networks is picked,
+    // and Bluetooth looks for devices only while its adapter is - both cost
+    // radio time and power.
+    function updateRadios() {
+        const picked = root.active ? root.selectedNode : null
+        const scanning = !picked ? null
+            : picked.kind === "wifiDevice" ? picked.ref
+            : picked.kind === "wifiNetwork" ? picked.device
+            : null
+        for (const dev of Networking.devices.values) {
+            if (dev.type === DeviceType.Wifi) dev.scannerEnabled = dev === scanning
+        }
+        const discovering = picked && picked.kind === "btAdapter" ? picked.ref : null
+        for (const a of Bluetooth.adapters.values) {
+            const want = a === discovering && a.enabled
+            if (a.discovering !== want) a.discovering = want
+        }
+    }
+
+    // ---------------- layout ----------------
     Item {
         id: contentWrapper
 
@@ -205,369 +443,184 @@ Item {
 
         RowLayout {
             id: contentRow
+
             readonly property real margins: Config.scaled(18, root.uiScale)
+            readonly property real dividerWidth: Config.scaled(2, root.uiScale)
 
             anchors {
                 left: parent.left
                 right: parent.right
                 top: parent.top
-                bottom: parent.bottom
+                bottom: hintSeparator.top
                 margins: contentRow.margins
+                bottomMargin: Config.scaled(14, root.uiScale)
             }
             spacing: Config.scaled(12, root.uiScale)
 
-            readonly property real cardHeight: Config.scaled(56, root.uiScale)
-            readonly property real dividerWidth: Config.scaled(2, root.uiScale)
+            // ---------------- LEFT: the tree ----------------
+            Flickable {
+                id: treeView
 
-            // ---------------- LEFT: icon tabs ----------------
-            ColumnLayout {
-                id: tabColumn
-
-                // Snug to the tab buttons themselves, locked to
-                // min == preferred == max so it can never be squeezed (or
-                // stretched) by the list column's own content.
-                readonly property real contentWidth: Config.scaled(40, root.uiScale)
-
-                Layout.preferredWidth: tabColumn.contentWidth
-                Layout.minimumWidth: tabColumn.contentWidth
-                Layout.maximumWidth: tabColumn.contentWidth
+                Layout.preferredWidth: (contentRow.width - contentRow.spacing * 2 - contentRow.dividerWidth) * 0.55
                 Layout.fillHeight: true
-                spacing: Config.scaled(8, root.uiScale)
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                contentWidth: Math.max(treeView.width, root.treeLayout.width)
+                contentHeight: Math.max(treeView.height, root.treeLayout.height + treeArea.pad * 2)
 
-                DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
-                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
-                    Layout.alignment: Qt.AlignHCenter
-                    uiScale: root.uiScale
-                    color: devicesTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.color: root.currentTab === 0 ? Config.fgcolorlight : Config.fgcolor
+                // Centred in the room it has, scrolling once it outgrows it.
+                Item {
+                    id: treeArea
 
-                    IconImage {
-                        id: devicesTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-workgroup-symbolic")
-                    }
+                    readonly property real pad: Config.scaled(8, root.uiScale)
 
-                    ColorOverlay {
-                        anchors.fill: devicesTabIcon
-                        source: devicesTabIcon
-                        color: parent.border.color
-                    }
+                    x: Math.max(0, Math.round((treeView.width - width) / 2))
+                    y: Math.max(treeArea.pad, Math.round((treeView.height - height) / 2))
+                    width: root.treeLayout.width
+                    height: root.treeLayout.height
 
-                    MouseArea {
-                        id: devicesTabMouse
+                    // Straight lines from each box's right edge to its
+                    // children's left, lit to a connection that's up.
+                    Canvas {
+                        id: edgeCanvas
+
+                        readonly property var edges: root.treeLayout.edges
+                        readonly property color lit: Config.fgcolor
+                        readonly property color dim: Config.fgcolordark
+
                         anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.currentTab = 0
+                        onEdgesChanged: requestPaint()
+                        onLitChanged: requestPaint()
+                        onDimChanged: requestPaint()
+                        onWidthChanged: requestPaint()
+                        onHeightChanged: requestPaint()
+
+                        onPaint: {
+                            const ctx = getContext("2d")
+                            ctx.reset()
+                            ctx.lineWidth = Config.scaled(2, root.uiScale)
+                            for (const e of edgeCanvas.edges) {
+                                const child = root.nodeByKey[e.to]
+                                const role = child ? Logic.colorRole(child.state) : "dark"
+                                ctx.strokeStyle = role === "dark" || role === "red" ? edgeCanvas.dim : edgeCanvas.lit
+                                ctx.beginPath()
+                                ctx.moveTo(e.x1, e.y1)
+                                ctx.lineTo(e.x2, e.y2)
+                                ctx.stroke()
+                            }
+                        }
+                    }
+
+                    Repeater {
+                        model: ScriptModel {
+                            values: root.nodeKeys
+                        }
+
+                        delegate: TreeNode {
+                            id: treeNode
+
+                            required property string modelData
+                            readonly property var info: root.nodeByKey[treeNode.modelData] || null
+
+                            visible: !!treeNode.info
+                            x: treeNode.info ? Math.round(treeNode.info.x) : 0
+                            y: treeNode.info ? Math.round(treeNode.info.y) : 0
+                            width: root.treeMetrics.nodeWidth
+                            height: root.treeMetrics.nodeHeight
+                            uiScale: root.uiScale
+
+                            title: treeNode.info ? treeNode.info.name : ""
+                            subtitle: treeNode.info ? treeNode.info.subtitle : ""
+                            stateColor: root.stateColor(treeNode.info ? treeNode.info.state : "on")
+                            battery: treeNode.info ? treeNode.info.battery : -1
+                            charging: treeNode.info ? treeNode.info.charging : false
+                            selected: root.selectedKey === treeNode.modelData
+                            renaming: root.renamingKey === treeNode.modelData
+
+                            onClicked: root.select(treeNode.modelData)
+                            onRenameRequested: root.startRename(treeNode.modelData)
+                            onActionRequested: {
+                                if (treeNode.info) root.rightClick(treeNode.info)
+                            }
+                            onRenamed: (newName) => {
+                                if (treeNode.info) root.finishRename(treeNode.info, newName)
+                            }
+                            onRenameCancelled: root.cancelRename()
+                        }
                     }
                 }
-
-                DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
-                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
-                    Layout.alignment: Qt.AlignHCenter
-                    uiScale: root.uiScale
-                    color: connectionsTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.color: root.currentTab === 1 ? Config.fgcolorlight : Config.fgcolor
-
-                    IconImage {
-                        id: connectionsTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        // Same icon NetworkCard uses for every row this
-                        // tab ever lists (root.wiredNetworks excludes
-                        // Wifi devices entirely) - "network-transmit-
-                        // receive-symbolic" isn't in every icon theme
-                        // and was rendering as a missing-texture image
-                        // instead of a blank/wrong one.
-                        source: Quickshell.iconPath("network-wired-symbolic")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: connectionsTabIcon
-                        source: connectionsTabIcon
-                        color: parent.border.color
-                    }
-
-                    MouseArea {
-                        id: connectionsTabMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.currentTab = 1
-                    }
-                }
-
-                DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
-                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
-                    Layout.alignment: Qt.AlignHCenter
-                    uiScale: root.uiScale
-                    // Grayed out and unclickable when there's no enabled
-                    // wifi device to show anything for - matches the
-                    // Devices tab's own enable/disable (nmManaged)
-                    // concept rather than introducing a separate one.
-                    color: (root.wifiUsable && wifiTabMouse.containsMouse) ? Config.fgcolorhover : Config.fillcolor
-                    border.color: !root.wifiUsable ? Config.fgcolordark
-                        : (root.currentTab === 2 ? Config.fgcolorlight : Config.fgcolor)
-
-                    IconImage {
-                        id: wifiTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-wireless-symbolic")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: wifiTabIcon
-                        source: wifiTabIcon
-                        color: parent.border.color
-                    }
-
-                    MouseArea {
-                        id: wifiTabMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        enabled: root.wifiUsable
-                        onClicked: root.currentTab = 2
-                    }
-                }
-
-                // Always clickable, unlike WiFi - with no adapter,
-                // BluetoothSettings shows its own "no receiver" message.
-                DashCard {
-                    Layout.preferredWidth: Config.scaled(40, root.uiScale)
-                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
-                    Layout.alignment: Qt.AlignHCenter
-                    uiScale: root.uiScale
-                    color: bluetoothTabMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.color: root.currentTab === 3 ? Config.fgcolorlight : Config.fgcolor
-
-                    IconImage {
-                        id: bluetoothTabIcon
-                        anchors.centerIn: parent
-                        implicitSize: Config.scaled(20, root.uiScale)
-                        source: Quickshell.iconPath("network-bluetooth")
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: bluetoothTabIcon
-                        source: bluetoothTabIcon
-                        color: parent.border.color
-                    }
-
-                    MouseArea {
-                        id: bluetoothTabMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.currentTab = 3
-                    }
-                }
-
-                Item { Layout.fillHeight: true }
             }
 
-            // ---------------- divider between tabs and list ----------------
             Rectangle {
                 Layout.preferredWidth: contentRow.dividerWidth
                 Layout.fillHeight: true
                 color: Config.fgcolor
             }
 
-            // ---------------- RIGHT: current tab's list ----------------
-            ColumnLayout {
-                id: listColumn
-
+            // ---------------- RIGHT: details ----------------
+            ConnectionDetails {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                visible: root.currentTab !== 3
-                spacing: Config.scaled(8, root.uiScale)
+                uiScale: root.uiScale
+                active: root.active
+                page: root
+                node: root.selectedNode
+            }
+        }
 
-                Text {
-                    text: root.currentTab === 0 ? "Devices" : root.currentTab === 1 ? "Wired" : "WiFi"
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
-                    font.bold: true
-                }
+        // ---------------- hint row ----------------
+        Rectangle {
+            id: hintSeparator
 
-                ListView {
-                    id: entryList
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: hintRow.top
+                bottomMargin: Config.scaled(10, root.uiScale)
+                leftMargin: contentRow.margins
+                rightMargin: contentRow.margins
+            }
+            height: Config.scaled(2, root.uiScale)
+            color: Config.fgcolor
+        }
 
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    clip: true
-                    spacing: Config.scaled(8, root.uiScale)
-                    boundsBehavior: Flickable.StopAtBounds
-                    model: root.currentEntries
+        RowLayout {
+            id: hintRow
 
-                    delegate: Loader {
-                        id: entryLoader
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+                margins: contentRow.margins
+            }
+            spacing: Config.scaled(16, root.uiScale)
 
-                        required property var modelData
-
-                        width: entryList.width
-                        height: modelData.kind === "separator" ? Config.scaled(2, root.uiScale) : contentRow.cardHeight
-
-                        sourceComponent: modelData.kind === "device" ? deviceRowComponent
-                            : modelData.kind === "network" ? networkRowComponent
-                            : modelData.kind === "zerotier" ? zerotierRowComponent
-                            : separatorRowComponent
-                    }
-                }
-
-                // These reference `parent` (the Loader that instantiated them,
-                // per Loader's own reparenting behavior) rather than
-                // `entryLoader` by id - see BluetoothSettings.qml for the
-                // same pattern and why.
-                Component {
-                    id: deviceRowComponent
-
-                    NetworkDeviceCard {
-                        anchors.fill: parent
-                        uiScale: root.uiScale
-                        device: parent.modelData.device
-                    }
-                }
-
-                Component {
-                    id: networkRowComponent
-
-                    NetworkCard {
-                        anchors.fill: parent
-                        uiScale: root.uiScale
-                        network: parent.modelData.network
-                        allowForget: root.currentTab === 2
-                    }
-                }
-
-                // Wired tab only - see zerotierNetworks above.
-                // rowData is captured once here (rather than each
-                // nested child reaching back through parent.parent...)
-                // since only this root item's own `parent` is actually
-                // the Loader that instantiated it.
-                Component {
-                    id: zerotierRowComponent
-
-                    DashCard {
-                        id: ztCard
-                        anchors.fill: parent
-                        uiScale: root.uiScale
-                        readonly property var rowData: ztCard.parent.modelData
-                        border.color: ztCard.rowData.connected ? Config.fgcolorlight : Config.fgcolor
-
-                        RowLayout {
-                            anchors {
-                                fill: parent
-                                margins: Config.scaled(10, root.uiScale)
-                            }
-                            spacing: Config.scaled(10, root.uiScale)
-
-                            Item {
-                                Layout.preferredWidth: Config.scaled(24, root.uiScale)
-                                Layout.preferredHeight: Config.scaled(24, root.uiScale)
-
-                                IconImage {
-                                    id: zerotierIcon
-                                    anchors.fill: parent
-                                    source: Quickshell.iconPath("network-vpn-symbolic", "network-wired-symbolic")
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: zerotierIcon
-                                    source: zerotierIcon
-                                    color: ztCard.border.color
-                                }
-                            }
-
-                            Text {
-                                Layout.fillWidth: true
-                                // No "ZeroTier: " prefix - just the
-                                // interface/network name itself, same
-                                // as every other row in this list.
-                                // Renaming these (they currently show
-                                // nmcli's raw interface id) is a later
-                                // task.
-                                text: ztCard.rowData.name
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(15, root.uiScale)
-                                font.bold: true
-                                elide: Text.ElideRight
-                            }
-                        }
-                    }
-                }
-
-                Component {
-                    id: separatorRowComponent
-
-                    Rectangle {
-                        anchors.fill: parent
-                        color: Config.fgcolor
-                    }
-                }
-
-                // ---------------- separator ----------------
-                Rectangle {
-                    id: hintSeparator
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(14, root.uiScale)
-                    Layout.preferredHeight: Config.scaled(2, root.uiScale)
-                    color: Config.fgcolor
-                }
-
-                // ---------------- hint row ----------------
-                RowLayout {
-                    id: hintRow
-
-                    Layout.fillWidth: true
-                    Layout.topMargin: Config.scaled(10, root.uiScale)
-                    spacing: Config.scaled(16, root.uiScale)
-
-                    HintItem {
-                        uiScale: root.uiScale
-                        visible: root.currentTab === 0
-                        iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                        label: "Enable/Disable"
-                    }
-
-                    HintItem {
-                        uiScale: root.uiScale
-                        visible: root.currentTab !== 0
-                        iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
-                        label: "Connect/Disconnect"
-                    }
-
-                    HintItem {
-                        uiScale: root.uiScale
-                        visible: root.currentTab === 2
-                        iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
-                        label: "Forget"
-                        tint: "red"
-                    }
-
-                    Item { Layout.fillWidth: true }
-                }
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
+                label: "Select"
             }
 
-            // ---------------- RIGHT (Bluetooth category): its own layout ----------------
-            // Wrapped in a plain Item because BluetoothSettings anchors
-            // itself to fill its parent, which a RowLayout child can't do.
-            // contentRow already supplies the outer margins.
-            Item {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                visible: root.currentTab === 3
-
-                BluetoothSettings {
-                    panelWidth: root.panelWidth
-                    uiScale: root.uiScale
-                    contentMargins: 0
-                    // Scans for nearby devices only while it's showing.
-                    active: root.active && root.currentTab === 3
-                }
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic", "input-mouse-symbolic")
+                label: "Rename (here only)"
             }
+
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                label: "Disable / Disconnect"
+            }
+
+            HintItem {
+                uiScale: root.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                label: "Forget (remembered)"
+                tint: Config.fgcolorred
+            }
+
+            Item { Layout.fillWidth: true }
         }
     }
 }

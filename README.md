@@ -22,6 +22,8 @@ out to be copied straight into place.
 | **Manual dim** | META + BackSpace dims every monitor but the one the mouse is on, each time it's pressed. A dimmed one wakes when the mouse moves onto it. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
 | **Mouse & input languages** | Settings > General > Input: mouse sensitivity and acceleration, and the keyboard languages you type in. With more than one, META + - switches to the next and shows which is on. Kept after Hyprland config reloads. An existing `hyprland.lua` needs the bind from the `.example` added by hand, or bind it in Settings > Shortcuts |
 | **Shortcuts** | Settings tab with a clickable keyboard and mouse: bound keys and buttons are lit, and clicking one adds or removes its binds. The mouse has left, right and middle click, the wheel's up and down, and Forward and Back on its side; the + below the wheel opens the rest (a tilting wheel, extra buttons 6 - 16 and the F13 - F24 keys many-button mice send), where pressing a button finds it too. Mouse buttons can also drag or resize windows; left click needs a modifier. Saved to `hypr/shortcuts.lua`, which `hyprland.lua` loads with `dofile`. An existing `hyprland.lua` needs the `pcall(dofile, ...)` line from the `.example` added by hand, in place of an older `pcall(require, "shortcuts")`: Hyprland reloads its whole config whenever a file it `require`d changes, resetting the monitor layout on every save |
+| **Sound** | Settings tab with the playback and recording devices - right click makes one the default, scrolling changes its volume, middle click renames it for the shell only (the bar's volume menu uses the name too) - and a volume mixer for the apps playing |
+| **Connections** | Settings tab with everything this computer connects through as a tree: user@host branches into its devices (Logitech peripherals via Solaar, Wi-Fi, Bluetooth, ZeroTier, Ethernet), each into its connections (remembered and connected Wi-Fi networks, paired Bluetooth devices, ZeroTier networks, the wired connection). Borders show the state - lit for connected, brighter for connected and remembered, dark for remembered, red for disabled - and anything with a battery (a laptop, a mouse, a controller) gets a ring of segments round it showing its charge, red when low. Left click shows its details on the right (addresses, signal, live traffic, a Wi-Fi network search to join, nearby Bluetooth devices to pair...), middle click renames it for the shell only, right click disables/disconnects it - or forgets one that's only remembered |
 | **Power menu** | Shutdown / reboot / suspend / logout |
 | **Tray** | System tray with a themed right-click menu per item |
 
@@ -227,7 +229,7 @@ package lists are the exact set):
 - `pipewire`
 - `pipewire-pulse` - the visualizer's `cava_bridge` reads audio through the PulseAudio API
 - `wireplumber`
-- `bluez` + `bluez-utils` - the Connections tab's Bluetooth category
+- `bluez` + `bluez-utils` - the Connections tab's Bluetooth adapters and devices
 - `ddcutil` - Screen Settings' brightness sliders and Bar.qml's brightness widget use this for external DDC/CI monitors
 - `brightnessctl` (optional) - used instead of `ddcutil` for a laptop's own built-in panel (`eDP-*`), which ddcutil can't reach at all; only needed if you actually have one
 - `playerctl`
@@ -236,15 +238,15 @@ package lists are the exact set):
 - `pam`
 - `xembedsniproxy` (AUR) - (useful if you emulate windows applications through Wayland)
 - `kservice` - `kbuildsycoca6`, run at login so KDE apps like Dolphin see installed apps
-- `networkmanager` - provides `nmcli`, which the Connections tab's Wired category also uses to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly)
-- `zerotier-one` (AUR, optional, not installed by `purpura.sh`) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used)
+- `networkmanager` - provides `nmcli`, which the Connections tab also uses for addresses, DNS and the Wi-Fi access point's details, and to detect a ZeroTier interface (`Quickshell.Networking` never sees it directly); `iproute2`'s `ip` gives the addresses and routes
+- `zerotier-one` (AUR, optional, not installed by `purpura.sh`) - only if you actually use ZeroTier; its `zt*` interface shows up via `nmcli` on its own, nothing here calls `zerotier-cli` (it needs root and isn't used). The Connections tab starts and stops `zerotier-one.service` through systemctl, which asks for your password
 - `upower` - Battery Settings' system-battery row and Bar.qml's battery widget both read through `Quickshell.Services.UPower`, which needs the `upower` daemon running
 - `cliphist` (AUR) + `wl-clipboard` - back the clipboard history panel (`components/panels/Clipboard.qml`, META + V); `wl-paste --watch cliphist store` (both `--type text` and `--type image`, see `hyprland.lua`'s autostart block) is what actually feeds cliphist's history, the panel itself only ever calls `cliphist list` / `decode` / `delete` / `wipe`
 - `grim` - the custom screenshot picker (`components/panels/Screenshot.qml`, META + X) freezes every screen with it before the picker appears; every capture is then taken from those frozen frames, never the live screen, so the picker's own dim/selection border can't end up in the image. `wl-clipboard` above also covers the `wl-copy` the result goes into
 - `imagemagick` - crops those frozen frames for region and window captures (`helpers/screenshot-crop.sh`); monitor and all-monitor captures copy a frozen frame as-is and don't need it
 - `hyprsunset` - night light (Settings > General > Night Light); the shell starts and drives it itself, so don't autostart it separately
 - `libnotify` - provides `notify-send`, which the screenshot picker calls after every successful capture ("Screenshot copied to clipboard"); routes through this shell's own `NotificationServer` (`components/panels/Notification.qml`) like any other app notification, no separate daemon needed
-- `solaar` (optional) - Battery Settings' Logitech-peripheral list parses `solaar show`'s default text output (no stable JSON output as of writing); skipped entirely if it's not installed
+- `solaar` (optional) - the Connections tab's Logitech peripherals (battery, kind, receiver, firmware...) come from `solaar show`'s default text output (no stable JSON output as of writing, see `dashboard/SolaarParse.js`); skipped entirely if it's not installed
 - An MPRIS-compatible media player (mpv with the mpris plugin, Spotify, etc.)
 - `breeze-gtk`, `breeze-icons`, `kde-gtk-config`, `noto-fonts`, `quintom-cursor-theme-git` (AUR) - the GTK theme, icons, font, cursor and GTK modules `gtk-3.0/settings.ini` names
 - `python` - `purpura.sh` uses it to apply the highlight color

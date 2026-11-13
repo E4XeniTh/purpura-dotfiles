@@ -22,6 +22,8 @@
 .config/quickshell/uiscalesettings.json
 .config/quickshell/powersettings.json
 .config/quickshell/shortcuts.json
+.config/quickshell/connectionaliases.json
+.config/quickshell/audioaliases.json
 .config/hypr/shortcuts.lua
 
 .config/ZapZap/ZapZap.conf

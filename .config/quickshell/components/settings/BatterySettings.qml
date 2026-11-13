@@ -72,8 +72,7 @@ SettingsPanel {
     }
 
     // Single combined list - kind distinguishes what each row renders,
-    // same "kind"-tagged-model approach BluetoothSettings.qml/
-    // NetworkSettings.qml already use for their own mixed lists. The
+    // the same "kind"-tagged-model approach as other mixed lists. The
     // separator between the Solaar and Bluetooth/UPower sections is
     // unconditional (mirrors the system section's own separator above),
     // regardless of whether either section actually has any rows.
@@ -131,8 +130,7 @@ SettingsPanel {
         // lot of peripherals connected.
         readonly property real listMaxHeight: Config.scaled(400, root.uiScale)
 
-        // Same fixed-height empty-state swap BluetoothSettings.qml uses
-        // for "No Bluetooth receiver detected." - a plain centered
+        // A fixed-height empty state - a plain centered
         // message in a reserved-height box instead of the title +
         // (now-empty) list.
         Item {
@@ -177,8 +175,8 @@ SettingsPanel {
                     spacing: Config.scaled(10, root.uiScale)
 
                     // Fixed-size icon instead of a width fraction of the
-                    // row - same reasoning ControllerCard.qml/
-                    // AudioSettings' own hint icons use.
+                    // row - same reasoning AudioSettings' own hint
+                    // icons use.
 
 
                     // Fills whatever space the fixed-width bar next to

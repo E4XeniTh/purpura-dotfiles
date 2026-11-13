@@ -7,6 +7,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../../Config.js" as Config
 import "../common"
+import "SolaarParse.js" as SolaarParse
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
 // same two-phase stretch-then-drop animation as Tray.qml's context menu.
@@ -499,90 +500,16 @@ Scope {
         solaarProcess.running = true
     }
 
-    // Best-effort text parsing of `solaar show`'s default (human-
-    // readable, no stable JSON output as of writing) dump. Two header
-    // shapes exist and both need handling: a receiver-paired peripheral
-    // is indented exactly 2 spaces as "N: Name" (e.g. "  1: G703
-    // LIGHTSPEED..."), while a standalone peripheral (no receiver - a
-    // Bluetooth/USB-wired device like a headset) or a receiver itself
-    // is a bare, unindented name line at column 0 (e.g. "PRO X TKL",
-    // "Lightspeed Receiver"). A receiver's own block never contains a
-    // "Battery:" line (only "Has N paired device(s)..."), so treating
-    // its name the same as a real device's is harmless - it just gets
-    // silently overwritten by the next real header before any battery
-    // match ever fires for it, without needing to special-case
-    // receivers vs. devices at all.
-    //
-    // Deeper "N: ..." lines also exist further down in a real device's
-    // own block (HID++ feature listings, per-effect tables) - those are
-    // indented well past 2 spaces, so anchoring the receiver-paired
-    // pattern to *exactly* 2 leading spaces is what keeps this from
-    // misreading one of those as a new device header mid-block.
-    //
-    // Some HID++ features (e.g. ADC MEASUREMENT) also print their own
-    // nested "Battery: ..." reading before the block's real summary
-    // line at the end - pendingName is cleared the moment a match is
-    // found so a second one for the same device doesn't push a
-    // duplicate entry. Confirmed live against a real `solaar show` dump
-    // that BatteryStatus is exactly one of FULL/DISCHARGING/RECHARGING
-    // (never a bare "CHARGING") - RECHARGING is the only one that means
-    // actually charging right now.
-    //
-    // If solaar isn't installed, this command fails and solaarDevices
-    // simply stays empty, which already hides the section entirely
-    // (there's no separate header to hide alongside it). Flag if a
-    // solaar version ever changes this format.
+    // `solaar show`'s human-readable dump, read by SolaarParse.js (see there
+    // for its format): each peripheral with a battery, plus its kind, serial,
+    // firmware and the like for Settings > Connections. If solaar isn't
+    // installed, this command fails and solaarDevices simply stays empty.
     Process {
         id: solaarProcess
         command: ["solaar", "show"]
 
         stdout: StdioCollector {
-            onStreamFinished: {
-                const devices = []
-                let pendingName = null
-                for (const rawLine of text.split("\n")) {
-                    const pairedMatch = rawLine.match(/^ {2}(\d+):\s+(.+?)\s*$/)
-                    if (pairedMatch) {
-                        pendingName = pairedMatch[2]
-                        continue
-                    }
-
-                    if (/^\S/.test(rawLine) && !/^(solaar version|solaar show|rules cannot access)/i.test(rawLine)) {
-                        pendingName = rawLine.trim()
-                        continue
-                    }
-
-                    if (!pendingName) continue
-
-                    const battMatch = rawLine.match(/Battery:\s*(\d+)%(?:.*?BatteryStatus\.(\w+))?/)
-                    if (battMatch) {
-                        devices.push({
-                            name: pendingName,
-                            percentage: parseInt(battMatch[1], 10) / 100,
-                            charging: battMatch[2] === "RECHARGING"
-                        })
-                        pendingName = null
-                    }
-                }
-                // Only replace the cached list when this poll actually
-                // found something - a receiver/multi-device setup going
-                // from N devices to zero all at once in a single poll is
-                // almost always a transient CLI hiccup (a race with
-                // solaar's own GUI instance also querying the receiver,
-                // a brief HID++ timeout, etc.), not every peripheral
-                // really vanishing at the same instant. Keeping the last
-                // known-good list instead of blanking it avoids the
-                // whole Battery Settings Solaar section flickering empty
-                // once a refresh cycle. A genuinely unplugged receiver
-                // just means this list goes stale until it's reconnected
-                // and a poll actually sees it again.
-                //
-                //if (devices.length > 0) root.solaarDevices = devices
-                //
-                // TEMPORARILY OMMITED AND USED PREVIOUS MODE. - toknica
-
-                root.solaarDevices = devices
-            }
+            onStreamFinished: root.solaarDevices = SolaarParse.parse(text)
         }
 
         stderr: StdioCollector {

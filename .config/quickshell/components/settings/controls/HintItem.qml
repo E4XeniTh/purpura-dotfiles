@@ -11,7 +11,7 @@ import "../../../Config.js" as Config
 // itself to its content and can sit as one unit inside an outer
 // Row/RowLayout, in either icon-first ("[icon] label", used for
 // left-anchored hints) or label-first ("label [icon]", used for
-// right-anchored hints in BluetoothSettings) order.
+// right-anchored hints) order.
 RowLayout {
     id: root
 

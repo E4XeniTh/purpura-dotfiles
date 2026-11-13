@@ -31,6 +31,12 @@ Rectangle {
 
     readonly property var playbackNodes: Pipewire.nodes.values.filter(n => n.audio && !n.isStream && n.isSink)
 
+    // The names given to devices in Settings > Sound.
+    AliasStore {
+        id: audioNames
+        file: "audioaliases.json"
+    }
+
     // Right-click quick menu: pick the primary playback device without
     // opening the full Sound settings tab. Same box-grow-open PanelWindow
     // popup Tray.qml's own right-click menu uses, anchored below this
@@ -307,9 +313,11 @@ Rectangle {
 
                                     verticalAlignment: Text.AlignVCenter
 
-                                    text: entryDelegate.modelData.nickname.length > 0 ? entryDelegate.modelData.nickname
+                                    text: audioNames.name(entryDelegate.modelData.name,
+                                        entryDelegate.modelData.nickname.length > 0 ? entryDelegate.modelData.nickname
                                         : entryDelegate.modelData.description.length > 0 ? entryDelegate.modelData.description
-                                        : entryDelegate.modelData.name
+                                        : entryDelegate.modelData.name)
+                                    textFormat: Text.PlainText
                                     color: entryDelegate.isActive ? Config.fgcolorlight : Config.fgcolor
                                     font.family: Config.fontfamily
                                     font.pixelSize: Config.scaled(13, root.uiScale)

@@ -5,6 +5,7 @@ import Quickshell.Widgets
 import Quickshell.Services.Pipewire
 import Qt5Compat.GraphicalEffects
 import "../../Config.js" as Config
+import "../common"
 import "cards"
 import "controls"
 
@@ -67,6 +68,13 @@ Item {
     // it has to be a single value shared outside any one screen's
     // instance - see Dashboard.qml for the same reasoning already
     // applied to identifying/primaryMonitor.
+    // Names given to devices here (middle click on a card) - the bar's
+    // volume menu reads the same file.
+    AliasStore {
+        id: audioNames
+        file: "audioaliases.json"
+    }
+
     property var selectedSinkId: null
     property var selectedSourceId: null
     signal sinkSelected(var id)
@@ -141,6 +149,7 @@ Item {
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
+                        names: audioNames
                         isPrimary: root.selectedSinkId !== null
                             ? modelData.id === root.selectedSinkId
                             : Boolean(Pipewire.defaultAudioSink) && modelData.id === Pipewire.defaultAudioSink.id
@@ -190,6 +199,7 @@ Item {
                         height: soundContent.cardHeight
                         uiScale: root.uiScale
                         device: modelData
+                        names: audioNames
                         isPrimary: root.selectedSourceId !== null
                             ? modelData.id === root.selectedSourceId
                             : Boolean(Pipewire.defaultAudioSource) && modelData.id === Pipewire.defaultAudioSource.id
@@ -321,8 +331,16 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                prefix: "Scroll"
                 iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic")
                 label: "Quick change volume"
+            }
+
+            HintItem {
+                uiScale: root.uiScale
+                prefix: "Click"
+                iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic")
+                label: "Rename (here only)"
             }
         }
     }

@@ -484,7 +484,7 @@ Row {
                         // quietly - the two-arg fallback form loads a
                         // generic icon instead whenever the specific
                         // app/class name isn't a real theme icon, same
-                        // fallback pattern BluetoothDeviceCard.qml uses.
+                        // fallback pattern the shell uses elsewhere.
                         source: winBox.iconName.length > 0
                             ? Quickshell.iconPath(winBox.iconName, "application-x-executable")
                             : Quickshell.iconPath("application-x-executable")

@@ -68,8 +68,8 @@ Scope {
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
     }
 
-    // 0 = Shell, 1 = Sound, 2 = Display, 3 = Connections (Bluetooth is a
-    // category inside it), 4 = Shortcuts - matches the tab bar's own left-to-right
+    // 0 = Shell, 1 = Sound, 2 = Display, 3 = Connections (Bluetooth is part
+    // of its tree), 4 = Shortcuts - matches the tab bar's own left-to-right
     // Repeater model order below, not the order these tabs were
     // originally added in.
     property int currentTab: 0
@@ -518,6 +518,7 @@ Scope {
                                 panelWidth: panelScope.panelWidth
                                 uiScale: panelScope.uiScale
                                 active: root.open && root.currentTab === 3
+                                dashboardRoot: root.dashboard
                             }
                         }
                     }
