@@ -119,6 +119,9 @@ newer on that checkout's upstream branch is an update.
   `./purpura.sh --update`, which installs the new configs and helpers, keeps
   your color and keyboard layout, and only adds core packages that are
   missing (never the optional apps).
+- The dropdown's **Update:** buttons run one step on its own - packages,
+  flatpak, firmware or purpura - or **everything**, the same as
+  right-clicking the updater button.
 
 An install from before this needs one `./purpura.sh --install` (or `--link`)
 so the checkout gets recorded; linked configs are found without it.

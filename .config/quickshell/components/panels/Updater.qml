@@ -15,7 +15,9 @@ import "../../Config.js" as Config
 // for an AUR one, "flatpak" for a flatpak), old -> new version. With
 // "Follow Purpura versioning" on, purpura itself is checked too: a
 // notification once per new version, its state in a fixed section under
-// the list, and its update run just before the firmware. Mutually
+// the list, and its update run just before the firmware. Under it all,
+// buttons to run each update step on its own, or every step (as
+// right-clicking the bar button does). Mutually
 // exclusive with Notification.qml's own history panel (each holds a
 // reference to the other and closes it
 // when it itself opens, same convention Dashboard.qml/SettingsScreen.qml
@@ -421,9 +423,28 @@ Scope {
     // the updates are done (`qs ipc call updater check`, see the
     // IpcHandler above), before its "press any key" prompt.
     function runUpdate() {
-        const steps = ["yay", "flatpak update"]
-        if (root.followPurpura) steps.push('{ bash "$1/helpers/purpura-update.sh" apply || true; }')
-        steps.push("fwupdmgr update")
+        const steps = [root.updateSteps.packages, root.updateSteps.flatpak]
+        if (root.followPurpura) steps.push("{ " + root.updateSteps.purpura + " || true; }")
+        steps.push(root.updateSteps.firmware)
+        root.runInTerminal(steps)
+    }
+
+    // Each step on its own - the dropdown's buttons. Purpura's runs
+    // whether "Follow Purpura versioning" is on or not: it's asked for.
+    readonly property var updateSteps: ({
+        packages: "yay",
+        flatpak: "flatpak update",
+        firmware: "fwupdmgr update",
+        purpura: 'bash "$1/helpers/purpura-update.sh" apply'
+    })
+
+    function runStep(name) {
+        if (root.updateSteps[name]) root.runInTerminal([root.updateSteps[name]])
+    }
+
+    // `steps` one after the other, stopping at the first that fails, in a
+    // kitty window that asks for a recheck once they're done.
+    function runInTerminal(steps) {
         const script = steps.join(" && ")
             + "; echo; qs ipc call updater check >/dev/null 2>&1"
             + "; echo 'Press any key to close this window'; read -n 1 -s"
@@ -710,6 +731,86 @@ Scope {
                             color: Config.fgcolordark
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
+                        }
+                    }
+
+                    // ---------------- run the updates ----------------
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Config.scaled(2, dropdownWindow.uiScale)
+                        Layout.topMargin: Config.scaled(4, dropdownWindow.uiScale)
+                        color: Config.fgcolor
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Update:"
+                        color: Config.fgcolor
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
+                        font.bold: true
+                    }
+
+                    // One step each, in its own terminal (see runStep()).
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(6, dropdownWindow.uiScale)
+
+                        Repeater {
+                            model: ["packages", "flatpak", "firmware", "purpura"]
+
+                            Rectangle {
+                                id: stepButton
+
+                                required property string modelData
+
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: Config.scaled(30, dropdownWindow.uiScale)
+                                color: stepMouse.containsMouse ? Config.fgcolorhover : "transparent"
+                                border.width: Config.scaled(2, dropdownWindow.uiScale)
+                                border.color: Config.fgcolor
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: stepButton.modelData
+                                    color: Config.fgcolor
+                                    font.family: Config.fontfamily
+                                    font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                                    font.bold: true
+                                }
+
+                                MouseArea {
+                                    id: stepMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: root.runStep(stepButton.modelData)
+                                }
+                            }
+                        }
+                    }
+
+                    // Every step, the same as right-clicking the updater.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Config.scaled(30, dropdownWindow.uiScale)
+                        color: everythingMouse.containsMouse ? Config.fgcolorhover : "transparent"
+                        border.width: Config.scaled(2, dropdownWindow.uiScale)
+                        border.color: Config.fgcolor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "everything"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                            font.bold: true
+                        }
+
+                        MouseArea {
+                            id: everythingMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: root.runUpdate()
                         }
                     }
 
