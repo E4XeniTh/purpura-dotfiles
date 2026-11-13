@@ -127,7 +127,7 @@ Rectangle {
             IconImage {
                 id: brightnessIcon
                 anchors.fill: parent
-                source: Quickshell.iconPath("video-display-brightness-symbolic", "monitor-symbolic")
+                source: Quickshell.iconPath("display-brightness-symbolic", "video-display-symbolic")
             }
 
             ColorOverlay {
