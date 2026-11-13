@@ -2655,6 +2655,7 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 prefix: "Dbl"
                 iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
                 label: "Set as Primary"
@@ -2662,6 +2663,7 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 prefix: "Drag"
                 iconSource: Quickshell.iconPath("input-mouse-click-left-symbolic")
                 label: "Arrange Displays"
@@ -2669,6 +2671,7 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic", "input-mouse-symbolic")
                 label: "Rename (here only)"
             }

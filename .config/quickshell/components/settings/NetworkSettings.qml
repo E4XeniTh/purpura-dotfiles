@@ -649,18 +649,21 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic", "input-mouse-symbolic")
                 label: "Rename (here only)"
             }
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
                 label: "Disable / Disconnect"
             }
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
                 label: "Forget (remembered)"
                 tint: Config.fgcolorred

@@ -24,6 +24,8 @@ RowLayout {
     property string iconSource: ""
     property color tint: Config.fgcolor
     property bool iconFirst: true
+    // A "|" before it, setting it off from the hint before.
+    property bool separated: false
 
     spacing: Config.scaled(4, root.uiScale)
     // Pinned explicitly rather than relying on RowLayout's own default
@@ -32,6 +34,18 @@ RowLayout {
     // whatever height an outer row gave this whole fragment instead of
     // centered within it.
     Layout.alignment: Qt.AlignVCenter
+
+    // Halfway between the hint before (the row's spacing) and this one.
+    Text {
+        visible: root.separated
+        Layout.alignment: Qt.AlignVCenter
+        Layout.rightMargin: Config.scaled(12, root.uiScale)
+        text: "|"
+        color: Config.fgcolordarklight
+        font.family: Config.fontfamily
+        font.pixelSize: Config.scaled(14, root.uiScale)
+        verticalAlignment: Text.AlignVCenter
+    }
 
     Text {
         visible: root.prefix.length > 0

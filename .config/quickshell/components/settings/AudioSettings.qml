@@ -331,6 +331,7 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 prefix: "Scroll"
                 iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic")
                 label: "Quick change volume"
@@ -338,6 +339,7 @@ Item {
 
             HintItem {
                 uiScale: root.uiScale
+                separated: true
                 prefix: "Click"
                 iconSource: Quickshell.iconPath("input-mouse-click-middle-symbolic")
                 label: "Rename (here only)"
