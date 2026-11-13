@@ -25,7 +25,7 @@ DashCard {
 
     readonly property bool muted: root.device.audio ? root.device.audio.muted : false
 
-    border.color: root.isPrimary ? Config.fgcolorlight : Config.fgcolordark
+    border.color: root.isPrimary ? Config.fgcolorlight : Config.fgcolor
 
     Column {
         anchors {
