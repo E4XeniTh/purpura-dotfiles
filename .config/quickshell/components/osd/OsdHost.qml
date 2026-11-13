@@ -89,8 +89,32 @@ Scope {
 
     readonly property bool anyShown: root.previewing || root.osds.some(osd => osd && osd.shouldShowOsd)
 
+    // Each box fades in and out on its own (all in one window, Hyprland's
+    // own fade only covers the window), so the window stays up until the
+    // last one has faded away.
+    readonly property int fadeInMs: 180
+    readonly property int fadeOutMs: 260
+    property bool lingering: false
+
+    onAnyShownChanged: {
+        if (root.anyShown) {
+            lingerTimer.stop()
+            root.lingering = false
+        } else {
+            root.lingering = true
+            lingerTimer.restart()
+        }
+    }
+
+    Timer {
+        id: lingerTimer
+
+        interval: root.fadeOutMs + 60
+        onTriggered: root.lingering = false
+    }
+
     LazyLoader {
-        active: root.anyShown
+        active: root.anyShown || root.lingering
 
         PanelWindow {
             id: win
@@ -135,10 +159,19 @@ Scope {
             implicitWidth: root.vertical ? win.boxWidth : win.count * win.boxWidth + (win.count - 1) * win.gap
             implicitHeight: root.vertical ? win.count * win.boxHeight + (win.count - 1) * win.gap : win.boxHeight
 
-            // The ones showing, packed against the window's anchored side.
+            // The ones showing, packed against the window's anchored side -
+            // the rest sliding along as one comes or goes.
             Grid {
                 columns: root.vertical ? 1 : win.count
                 spacing: win.gap
+
+                move: Transition {
+                    NumberAnimation {
+                        properties: "x,y"
+                        duration: 200
+                        easing.type: Easing.OutCubic
+                    }
+                }
 
                 anchors.top: root.atTop ? parent.top : undefined
                 anchors.bottom: root.atTop ? undefined : parent.bottom
@@ -154,7 +187,24 @@ Scope {
 
                         required property var modelData
 
-                        visible: root.previewing || !!(osdLoader.modelData && osdLoader.modelData.shouldShowOsd)
+                        readonly property bool shown: root.previewing || !!(osdLoader.modelData && osdLoader.modelData.shouldShowOsd)
+
+                        // Faded in from nothing, even when it comes up with
+                        // the window: the fade starts once it's made.
+                        property bool appeared: false
+                        Component.onCompleted: Qt.callLater(() => osdLoader.appeared = true)
+
+                        opacity: osdLoader.shown && osdLoader.appeared ? 1 : 0
+                        // Holds its place until it's faded out.
+                        visible: osdLoader.opacity > 0
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: osdLoader.shown ? root.fadeInMs : root.fadeOutMs
+                                easing.type: Easing.OutQuad
+                            }
+                        }
+
                         sourceComponent: osdLoader.modelData ? osdLoader.modelData.box : null
 
                         Binding {
