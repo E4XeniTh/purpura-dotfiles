@@ -92,30 +92,32 @@ Scope {
 
     // Each box fades in and out on its own (all in one window, Hyprland's
     // own fade only covers the window), so the window stays up until the
-    // last one has faded away.
+    // last one has faded away. Whether it's up is this one flag, switched
+    // on the moment anything shows and off only by the timer once it's all
+    // faded - never by `anyShown` directly, which could take the window
+    // down before the last fade even started.
     readonly property int fadeInMs: 180
     readonly property int fadeOutMs: 260
-    property bool lingering: false
+    property bool windowUp: false
 
     onAnyShownChanged: {
         if (root.anyShown) {
-            lingerTimer.stop()
-            root.lingering = false
+            closeTimer.stop()
+            root.windowUp = true
         } else {
-            root.lingering = true
-            lingerTimer.restart()
+            closeTimer.restart()
         }
     }
 
     Timer {
-        id: lingerTimer
+        id: closeTimer
 
-        interval: root.fadeOutMs + 60
-        onTriggered: root.lingering = false
+        interval: root.fadeOutMs + 80
+        onTriggered: root.windowUp = false
     }
 
     LazyLoader {
-        active: root.anyShown || root.lingering
+        active: root.windowUp
 
         PanelWindow {
             id: win
