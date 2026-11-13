@@ -84,7 +84,9 @@ Item {
             margins: Config.scaled(16, root.uiScale)
         }
 
-        readonly property real columnWidth: (width - columnsRow.spacing) / 2
+        // Two lists, with the divider and a gap either side of it between.
+        readonly property real dividerWidth: Config.scaled(2, root.uiScale)
+        readonly property real columnWidth: (width - 2 * columnsRow.spacing - soundContent.dividerWidth) / 2
         readonly property real cardHeight: Config.scaled(76, root.uiScale)
         // Fixed, not fillHeight - a horizontal row of cards only ever
         // needs enough height for one row regardless of how many apps are
@@ -148,6 +150,14 @@ Item {
                         }
                     }
                 }
+            }
+
+            // ---------------- divider between playback and recording ----------------
+            // The same line as the one above the mixer, standing up.
+            Rectangle {
+                Layout.preferredWidth: soundContent.dividerWidth
+                Layout.fillHeight: true
+                color: Config.fgcolor
             }
 
             ColumnLayout {
