@@ -1035,7 +1035,7 @@ Item {
                 text: root.kind === "ztService" || root.kind === "ztNetwork"
                     ? "Joining and leaving ZeroTier networks needs root: sudo zerotier-cli join <network id>. Stopping or starting the service asks for your password."
                     : root.kind === "solaar" || root.kind === "solaarHub"
-                    ? "Read from Solaar once a minute. Solaar's own window has the devices' settings."
+                    ? "Read from Solaar every 5 seconds while this page is open. Solaar's own window has the devices' settings."
                     : ""
                 color: Config.fgcolorhint
                 font.family: Config.fontfamily

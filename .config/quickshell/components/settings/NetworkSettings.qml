@@ -134,6 +134,16 @@ Item {
         onTriggered: root.refreshZerotier()
     }
 
+    // Solaar is only asked while this page is open - on opening it, then
+    // every 5 seconds (Dashboard.qml skips a poll while one's still running:
+    // `solaar show` can take seconds).
+    Timer {
+        interval: 5000
+        repeat: true
+        running: root.active
+        onTriggered: root.refreshSolaar()
+    }
+
     onActiveChanged: {
         if (root.active) {
             hostProcess.running = true

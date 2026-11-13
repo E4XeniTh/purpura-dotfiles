@@ -478,14 +478,12 @@ Scope {
     // Lives up here rather than on Settings > Connections (NetworkSettings.qml)
     // - a full `solaar show` walks every HID++ feature on every paired
     // peripheral (seconds, not milliseconds), so one shared poll beats
-    // one per page that shows the devices. Also started at Quickshell
-    // startup instead of waiting for the panel to ever be opened, so
-    // devices don't still be showing empty the first time someone
-    // actually looks.
+    // one per page that shows the devices. Only Settings > Connections
+    // polls it, and only while it's open (NetworkSettings.qml) - nothing
+    // runs in the background.
     //
     // refreshSolaar() is the single choke point Config.solaarEnabled
-    // gates - Component.onCompleted below and solaarRefreshTimer both
-    // route through it, so the `solaar` binary is never even invoked
+    // gates, so the `solaar` binary is never even invoked
     // once while integration is turned off, not just "run but ignored".
     property var solaarDevices: []
 
@@ -494,8 +492,7 @@ Scope {
         // Skip instead of killing-and-restarting if a poll is already
         // in flight - `solaar show` genuinely takes real seconds (it
         // reads every HID++ feature table live off each device), and
-        // this is called both from the 1-minute timer AND every time
-        // Battery Settings is opened. Restarting unconditionally meant
+        // this is called every few seconds while Connections is open. Restarting unconditionally meant
         // reopening the panel a couple of times in a row could kill the
         // in-progress poll before it ever finished and produced a
         // result, over and over - which looked like Solaar devices
@@ -525,17 +522,6 @@ Scope {
         }
     }
 
-    // Polled continuously from startup, not just while a Battery
-    // Settings panel is open - solaar has no live change notification
-    // this shell can subscribe to, only a point-in-time CLI dump.
-    Timer {
-        id: solaarRefreshTimer
-        interval: 60000
-        repeat: true
-        running: Config.solaarEnabled
-        onTriggered: root.refreshSolaar()
-    }
-
     function close() {
         open = false
         screen = null
@@ -553,11 +539,9 @@ Scope {
     // Probes ddcutil/brightnessctl once, eagerly, rather than waiting
     // for a Screen Settings panel to open - Bar.qml's BrightnessControl
     // widget needs a live brightness reading from the moment the bar
-    // itself appears. Same reasoning for the first solaar show - a
-    // no-op if Config.solaarEnabled is false (see refreshSolaar()).
+    // itself appears.
     Component.onCompleted: {
         root.detectBrightnessControllers()
-        root.refreshSolaar()
         savedPrimaryProcess.running = true
     }
 
