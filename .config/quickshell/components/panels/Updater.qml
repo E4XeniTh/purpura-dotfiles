@@ -571,7 +571,7 @@ Scope {
 
                         Text {
                             Layout.fillWidth: true
-                            text: "Updates"
+                            text: "yay/flatpak"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
@@ -678,7 +678,7 @@ Scope {
                         Text {
                             Layout.fillWidth: true
                             Layout.bottomMargin: Config.scaled(2, dropdownWindow.uiScale)
-                            text: "Purpura"
+                            text: "purpura"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
