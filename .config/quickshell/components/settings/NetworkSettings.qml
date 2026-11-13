@@ -339,15 +339,22 @@ Item {
     readonly property var treeLayout: Logic.layoutList(root.treeRoot, root.treeMetrics)
 
     // Every box ends at the same right edge, so the battery bars beside them
-    // line up in a column - kept free whether anything has a battery or not,
-    // so nothing shifts when one connects. The boxes stop at a width that
-    // still reads well, but never narrower than the deepest row needs.
+    // line up in a column, and the bars run on to the end of the pane with
+    // their percentage last - kept free whether anything has a battery or
+    // not, so nothing shifts when one connects. The boxes stop at a width
+    // that still reads well, but never narrower than the deepest row needs,
+    // and always leave the bars at least minBatteryBar.
     readonly property real batteryGap: Config.scaled(12, root.uiScale)
-    readonly property real batteryBarWidth: Config.scaled(230, root.uiScale)
-    readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + Config.scaled(52, root.uiScale)
+    // TreeNode.qml's gap after the bar and its percentage's width.
+    readonly property real batteryPercentRoom: Config.scaled(48, root.uiScale)
+    readonly property real minBatteryBar: Config.scaled(230, root.uiScale)
+    readonly property real treeRoom: treeView.width - treeArea.pad * 2
     readonly property real boxesRight: Math.max(
         root.treeLayout.depth * root.treeMetrics.indent + Config.scaled(240, root.uiScale),
-        Math.min(treeView.width - treeArea.pad * 2 - root.batteryColumn, Config.scaled(540, root.uiScale)))
+        Math.min(root.treeRoom - root.batteryGap - root.minBatteryBar - root.batteryPercentRoom, Config.scaled(540, root.uiScale)))
+    readonly property real batteryBarWidth: Math.max(root.minBatteryBar,
+        root.treeRoom - root.boxesRight - root.batteryGap - root.batteryPercentRoom)
+    readonly property real batteryColumn: root.batteryGap + root.batteryBarWidth + root.batteryPercentRoom
 
     readonly property var nodeByKey: {
         const map = {}

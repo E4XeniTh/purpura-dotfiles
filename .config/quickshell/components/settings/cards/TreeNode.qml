@@ -157,14 +157,18 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             uiScale: root.uiScale
             targetWidth: root.batteryBarWidth
-            segmentCount: 10
+            // 5% each.
+            segmentCount: 20
             barHeight: Config.scaled(14, root.uiScale)
             value: Math.max(0, root.battery)
             litColor: root.batteryColor
         }
 
+        // A fixed width that fits "100%", so the page can leave exactly that
+        // much room after the bar (NetworkSettings.qml's batteryPercentRoom).
         Text {
             anchors.verticalCenter: parent.verticalCenter
+            width: Config.scaled(40, root.uiScale)
             text: Math.round(Math.max(0, root.battery) * 100) + "%"
             color: root.batteryColor
             font.family: Config.fontfamily
