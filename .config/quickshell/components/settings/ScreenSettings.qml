@@ -163,9 +163,19 @@ Item {
     property var pendingEnabled: ({})
 
     function setPendingEnabled(name, value) {
+        const soleBefore = root.soleEnabledName
         const updated = Object.assign({}, root.pendingEnabled)
         updated[name] = value
         root.pendingEnabled = updated
+
+        // Down to one monitor, or back up from one: that monitor has every
+        // workspace, and keeps them - the others have none until picked,
+        // switched back on or not.
+        const keeper = root.soleEnabledName || soleBefore
+        if (!keeper) return
+        const pins = {}
+        for (const m of root.monitors) pins[m.name] = m.name === keeper ? [1, 2, 3, 4, 5] : []
+        root.pendingWorkspaces = pins
     }
 
     function enabledFor(name) {
@@ -230,8 +240,8 @@ Item {
     // save), else the saved default.
     function workspacesFor(name) {
         // The only monitor that's on (or will be, with what's staged) has
-        // every workspace - the others keep their own pins for when they're
-        // back on.
+        // every workspace - see setPendingEnabled() for what the others
+        // get.
         if (root.soleEnabledName === name) return [1, 2, 3, 4, 5]
         if (root.pendingWorkspaces[name] !== undefined) return root.pendingWorkspaces[name]
         const live = root.liveWorkspaces[name]
