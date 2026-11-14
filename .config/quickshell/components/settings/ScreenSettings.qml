@@ -229,11 +229,20 @@ Item {
     // default right after applying, and Set Default saw nothing new to
     // save), else the saved default.
     function workspacesFor(name) {
+        // The only monitor that's on (or will be, with what's staged) has
+        // every workspace - the others keep their own pins for when they're
+        // back on.
+        if (root.soleEnabledName === name) return [1, 2, 3, 4, 5]
         if (root.pendingWorkspaces[name] !== undefined) return root.pendingWorkspaces[name]
         const live = root.liveWorkspaces[name]
         if (live && Array.isArray(live.pins)) return live.pins
         const stored = root.screensStore[name]
         return (stored && stored.workspaces) ? stored.workspaces : []
+    }
+
+    readonly property string soleEnabledName: {
+        const on = root.monitors.filter(m => root.enabledFor(m.name))
+        return on.length === 1 ? on[0].name : ""
     }
 
     // liveworkspaces.json: per monitor, "workspaces" - what's live, read by
