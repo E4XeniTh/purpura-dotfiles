@@ -283,7 +283,8 @@ Item {
     // isn't something the buttons allow anymore, since every workspace
     // 1-5 is meant to always be reachable from some monitor.
     function toggleWorkspace(name, num) {
-        if (!name) return
+        // A monitor that's off (or will be, with what's staged) takes none.
+        if (!name || !root.enabledFor(name)) return
         if (root.workspacesFor(name).includes(num)) return
 
         const updated = Object.assign({}, root.pendingWorkspaces)
@@ -2460,8 +2461,15 @@ Item {
                         font.bold: true
                     }
 
+                    // Dimmed and unclickable for a monitor that's off, or
+                    // staged to be - see toggleWorkspace().
                     RowLayout {
+                        id: wsRow
+
+                        readonly property bool usable: root.enabledFor(root.selectedName)
+
                         spacing: Config.scaled(8, root.uiScale)
+                        opacity: wsRow.usable ? 1 : 0.5
 
                         Repeater {
                             model: [1, 2, 3, 4, 5]
@@ -2486,7 +2494,7 @@ Item {
                                 Layout.preferredWidth: Config.scaled(28, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(28, root.uiScale)
                                 uiScale: root.uiScale
-                                color: wsMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                color: wsMouseArea.containsMouse && wsRow.usable ? Config.fgcolorhover : Config.fillcolor
                                 border.color: wsButton.bound ? Config.fgcolor : Config.fgcolordark
 
                                 Text {
@@ -2501,6 +2509,7 @@ Item {
                                 MouseArea {
                                     id: wsMouseArea
                                     anchors.fill: parent
+                                    enabled: wsRow.usable
                                     hoverEnabled: true
                                     onClicked: {
                                         contentWrapper.forceActiveFocus()
