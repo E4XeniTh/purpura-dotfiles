@@ -1885,8 +1885,15 @@ Item {
         root.pendingWorkspaces = updated
     }
 
+    // Never restarts a read that's still running - one started moments ago
+    // is fresh enough. Quickshell hands a stopped read's partial output to
+    // its handler all the same, which reads as no monitors.json at all: on
+    // a setup that has one, that staged the fresh-setup seed (all five
+    // workspaces on the primary) and lit Apply up untouched. Opening
+    // Settings straight onto this tab (the bar's brightness menu) asks
+    // twice in a row - Component.onCompleted, then onActiveChanged.
     function loadScreensStore() {
-        screensStoreProcess.running = false
+        if (screensStoreProcess.running) return
         screensStoreProcess.running = true
     }
 

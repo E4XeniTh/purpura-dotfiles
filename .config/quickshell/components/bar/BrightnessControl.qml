@@ -30,14 +30,14 @@ import "../settings"
 //
 // Right-click opens a menu like the volume control's: every monitor but the
 // primary - by its port, or the name Settings > Display gave it - each with
-// a checkbox saying whether it's on, then Night Light's settings. Clicking a
-// monitor switches it on or off at once and closes the menu, as picking a
-// device closes the volume control's; the switch carries on without it, and
-// reopening shows the checkbox it asked for until it's done. A switch is
-// the Display tab's own right click + Apply: that file is loaded out of
-// sight for as long as it takes (see monitorSwitch below), so workspace
-// pins, windows rescued off a monitor going dark and its remembered mode
-// all come out exactly as they would there.
+// a checkbox saying whether it's on, then Display Settings and Night Light
+// Settings. Clicking a monitor switches it on or off at once and closes the
+// menu, as picking a device closes the volume control's; the switch carries
+// on without it, and reopening shows the checkbox it asked for until it's
+// done. A switch is the Display tab's own right click + Apply: that file is
+// loaded out of sight for as long as it takes (see monitorSwitch below), so
+// workspace pins, windows rescued off a monitor going dark and its
+// remembered mode all come out exactly as they would there.
 Rectangle {
     id: root
 
@@ -536,6 +536,47 @@ Rectangle {
                             }
                             height: Config.scaled(1, root.uiScale)
                             color: Config.fgcolordark
+                        }
+                    }
+
+                    // ---------------- Display settings ----------------
+                    Item {
+                        width: menuColumn.width
+                        height: Config.scaled(32, root.uiScale)
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: displaySettingsMouse.containsMouse ? Config.fgcolordark : "transparent"
+
+                            Text {
+                                anchors {
+                                    fill: parent
+                                    leftMargin: Config.scaled(10, root.uiScale)
+                                    rightMargin: Config.scaled(10, root.uiScale)
+                                }
+                                verticalAlignment: Text.AlignVCenter
+                                text: "Display Settings"
+                                color: Config.fgcolor
+                                font.family: Config.fontfamily
+                                font.pixelSize: Config.scaled(13, root.uiScale)
+                                elide: Text.ElideRight
+                            }
+
+                            MouseArea {
+                                id: displaySettingsMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+
+                                // The Display tab (2) - see SettingsScreen.qml's
+                                // requestedInitialTab.
+                                onClicked: {
+                                    root.closeMenu()
+                                    if (root.dashboard && root.dashboard.settingsScreen) {
+                                        root.dashboard.settingsScreen.requestedInitialTab = 2
+                                        root.dashboard.settingsScreen.open = true
+                                    }
+                                }
+                            }
                         }
                     }
 
