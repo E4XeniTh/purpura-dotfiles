@@ -23,32 +23,34 @@ Row {
     property string screenName: ""
 
     // ---------------- dropping a dragged window on a workspace ----------------
-    // purpura.lua's binds on the window-drag buttons (mainMod + LMB, see
-    // ~/.config/hypr/purpura.lua) tell the shell about a drag through custom
-    // events: "purpura-drag,start" and
-    // "purpura-drag,end" around it, and instead of the end, when the window
-    // was let go on a bar,
-    //   purpura-drag,drop,<monitor>,<x>,<y>,<address>,<floating>,<relX>,<relY>,<w>,<h>
-    // - the bar's monitor, where on the bar (its own coordinates), the
-    // window, whether the drag left it floating, where it was on its own
-    // monitor before the drag, and its size. Whatever workspace box is there
-    // gets the window, silently; a floating one goes back to that spot, on
-    // the workspace's own monitor (kept on it whole), rather than staying up
-    // by the bar where it was let go. While a drag's on, the box under the
-    // cursor lights up - Hyprland keeps giving the bar the pointer during a
-    // window drag.
-    //
-    // Anything on Hyprland's socket can post a custom event, so every field
-    // is checked before any of it goes into the hyprctl eval below, and the
-    // workspace comes from this row's own boxes.
+    // purpura.lua (~/.config/hypr/purpura.lua) follows a window dragged with
+    // mainMod + LMB and tells the shell about it through custom events on
+    // Hyprland's socket - the bar itself never sees the cursor during a drag,
+    // as Hyprland keeps the pointer on the dragged window:
+    //   purpura-drag,start                      a drag began
+    //   purpura-drag,over,<monitor>,<workspace> the cursor is on that
+    //                                           workspace's box, on that
+    //                                           monitor's bar
+    //   purpura-drag,off                        it's on no box
+    //   purpura-drag,end                        it's over
+    // To a start, this row answers with where its boxes are (sendDropTargets
+    // below), which purpura.lua then finds the cursor in - and sends the
+    // window to the workspace of the box it's let go on, by itself. Here, the
+    // box under the cursor just lights up.
     property bool windowDragging: false
+    // The box under the cursor on this bar, by workspaceSelector() - only
+    // ever compared, never run.
+    property string dragOver: ""
 
-    // Should an end never arrive (a config reload mid-drag), the highlight
-    // doesn't stay on for good.
+    // Should an end never arrive (the shell restarted mid-drag), the
+    // highlight doesn't stay on for good.
     Timer {
         id: dragSafetyTimer
         interval: 120000
-        onTriggered: root.windowDragging = false
+        onTriggered: {
+            root.windowDragging = false
+            root.dragOver = ""
+        }
     }
 
     function handleDragEvent(data) {
@@ -56,35 +58,18 @@ Row {
         if (parts[0] !== "purpura-drag") return
         if (parts[1] === "start") {
             root.windowDragging = true
+            root.dragOver = ""
             dragSafetyTimer.restart()
-            return
+            root.sendDropTargets()
+        } else if (parts[1] === "over") {
+            root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
+        } else if (parts[1] === "off") {
+            root.dragOver = ""
+        } else if (parts[1] === "end") {
+            root.windowDragging = false
+            root.dragOver = ""
+            dragSafetyTimer.stop()
         }
-        root.windowDragging = false
-        dragSafetyTimer.stop()
-        if (parts[1] !== "drop" || parts.length !== 11 || parts[2] !== root.screenName) return
-
-        const integer = /^-?\d{1,6}$/
-        const [x, y, relX, relY, w, h] = [parts[3], parts[4], parts[7], parts[8], parts[9], parts[10]]
-        if (![x, y, relX, relY, w, h].every(v => integer.test(v))) return
-        if (!/^0x[0-9a-fA-F]{1,16}$/.test(parts[5]) || (parts[6] !== "0" && parts[6] !== "1")) return
-
-        const local = root.mapFromItem(null, parseInt(x, 10), parseInt(y, 10))
-        const workspace = root.workspaceAt(local.x)
-        if (!workspace) return
-        root.sendWindow(parts[5], workspace, parts[6] === "1",
-            parseInt(relX, 10), parseInt(relY, 10), parseInt(w, 10), parseInt(h, 10))
-    }
-
-    // The workspace whose box spans `x` (this row's coordinates) - the gap
-    // after a box counts as half its own, half the next's.
-    function workspaceAt(x) {
-        const half = root.spacing / 2
-        for (const child of root.children) {
-            const entry = child.modelData
-            if (!entry || entry.kind !== "workspace" || !child.item) continue
-            if (x >= child.x - half && x < child.x + child.width + half) return entry.ws
-        }
-        return null
     }
 
     // A real workspace by number, or by name when it has one (no quotes or
@@ -95,20 +80,33 @@ Row {
         return /^[A-Za-z0-9 _.-]{1,64}$/.test(name) ? "name:" + name : ""
     }
 
-    function sendWindow(address, workspace, floating, relX, relY, w, h) {
-        const target = root.workspaceSelector(workspace)
-        if (!target) return
-        const selector = "address:" + address
-        let lua = `hl.dispatch(hl.dsp.window.move({ workspace = "${target}", window = "${selector}", follow = false }))`
-        const mon = workspace.monitor
-        if (floating && mon && mon.scale > 0) {
-            const monWidth = mon.width / mon.scale
-            const monHeight = mon.height / mon.scale
-            const x = Math.round(mon.x + Math.max(0, Math.min(relX, monWidth - w)))
-            const y = Math.round(mon.y + Math.max(0, Math.min(relY, monHeight - h)))
-            lua += ` hl.dispatch(hl.dsp.window.move({ x = ${x}, y = ${y}, window = "${selector}" }))`
+    // Each box's span across the bar, in the bar's own coordinates (the gap
+    // after a box counts as half its own, half the next's), its workspace,
+    // and the area of the monitor that's on - for purpura.lua to land a
+    // floating window inside. Handed over as Lua, through hyprctl eval: the
+    // only strings in it are the checked monitor name and workspaceSelector()s,
+    // the rest are whole numbers.
+    function sendDropTargets() {
+        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return
+        const half = root.spacing / 2
+        const boxes = []
+        for (const child of root.children) {
+            const entry = child.modelData
+            if (!entry || entry.kind !== "workspace" || !child.item) continue
+            const workspace = root.workspaceSelector(entry.ws)
+            const mon = entry.ws.monitor
+            if (!workspace || !mon || !(mon.scale > 0)) continue
+            const numbers = [
+                child.mapToItem(null, -half, 0).x,
+                child.mapToItem(null, child.width + half, 0).x,
+                mon.x, mon.y, mon.width / mon.scale, mon.height / mon.scale
+            ]
+            if (!numbers.every(n => Number.isFinite(n))) continue
+            const [from, to, x, y, w, h] = numbers.map(n => Math.floor(n))
+            boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h} }`)
         }
-        Quickshell.execDetached(["hyprctl", "eval", lua])
+        Quickshell.execDetached(["hyprctl", "eval",
+            `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} })`])
     }
 
     spacing: Config.scaled(4, root.uiScale)
@@ -452,7 +450,8 @@ Row {
                 : (16 / 9)
 
             // Where a window being dragged would go, if let go now.
-            readonly property bool dropTarget: root.windowDragging && wsMouse.containsMouse
+            readonly property bool dropTarget: root.windowDragging && root.dragOver !== ""
+                && root.workspaceSelector(wsBox.modelData) === root.dragOver
 
             height: root.height
             width: wsBox.height * wsBox.aspect
@@ -633,11 +632,8 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with).
-            // Hover too, for dropTarget above.
             MouseArea {
-                id: wsMouse
                 anchors.fill: parent
-                hoverEnabled: true
                 onClicked: wsBox.modelData.activate()
             }
         }
