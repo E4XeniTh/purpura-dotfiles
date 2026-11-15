@@ -266,20 +266,30 @@ Item {
         const seen = {}
         for (const b of own) seen[root.comboKey(b.combo)] = true
 
+        // Several binds can share a combo - purpura.lua's drop binds share the
+        // window drag's, and come first - so the first of them with a
+        // description stands for the lot.
         const others = []
+        const otherAt = {}
         for (const b of root.liveBinds) {
             if (!b.key || b.mouse || b.catch_all || b.submap) continue
             const combo = root.comboFromLive(b)
             const id = root.comboKey(combo)
-            if (seen[id]) continue
-            seen[id] = true
-            others.push({
+            const entry = {
                 combo: combo,
                 key: b.key,
                 label: root.labelFromLive(b),
                 description: notes[id] !== undefined ? notes[id] : root.descriptionFromLive(b),
                 own: false
-            })
+            }
+            if (otherAt[id] !== undefined) {
+                if (!others[otherAt[id]].description && entry.description) others[otherAt[id]] = entry
+                continue
+            }
+            if (seen[id]) continue
+            seen[id] = true
+            otherAt[id] = others.length
+            others.push(entry)
         }
         return own.concat(others)
     }

@@ -13,7 +13,7 @@ out to be copied straight into place.
 | Component | What it does |
 |---|---|
 | **Bar** | Top bar: tray, clock (opens the dashboard), volume/brightness/battery widgets, notification icon (opens the notification center). Right-clicking the volume widget picks the playback device; right-clicking the brightness widget lists every monitor but the primary with a checkbox - click one to switch it on or off at once and close the menu (the same as switching it in Settings > Display and pressing Apply) - and opens the Display or Night Light settings |
-| **Drag to a workspace** | Drag a window with META + left click and let go on a workspace in the bar's workspace widget to send it there - the workspace under the cursor lights up while you drag, a floating window lands where it was on its own monitor before the drag, and letting go anywhere else is an ordinary drag. An existing `hyprland.lua` needs the three `mouse:272` binds after "Drag window" in the `.example` added by hand, in the same place, since they use its window helpers |
+| **Drag to a workspace** | Drag a window with META + left click and let go on a workspace in the bar's workspace widget to send it there - the workspace under the cursor lights up while you drag, a floating window lands where it was on its own monitor before the drag, and letting go anywhere else is an ordinary drag. Comes with `hypr/purpura.lua` (see below) |
 | **Dashboard** | Clock, weather, calendar, now-playing + media controls, quick settings (audio/network/bluetooth/screen/battery), power/lock |
 | **Notification center** | Toast popups, plus a persistent (capped, newest-first) history panel |
 | **Clipboard history** | cliphist-backed text/image history panel (META + V), with a full-content preview pane, click-to-copy, and right-click delete |
@@ -293,6 +293,19 @@ package lists are the exact set):
   against each item's own id/title, since apps aren't consistent about
   which of the two they actually set.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
+- The shell's own side of Hyprland lives in `hypr/purpura.lua`, not in
+  your `hyprland.lua`: Close Window closing what's under the mouse (the
+  dropdown console included), dropping a dragged window on a workspace in
+  the bar, and the layer rules for the shell's panels. It's installed and
+  updated with everything else, and `hyprland.lua` runs it with one line at
+  the start of its binds:
+  `pcall(loadfile(os.getenv("HOME") .. "/.config/hypr/purpura.lua") or function() end, mainMod)`.
+  An existing `hyprland.lua` needs that line added by hand, in place of the
+  Close Window block (`pair`, `contains`, `windowUnderCursor` and the
+  `hl.dsp.window.close` wrapper), the three drop binds on `mouse:272` and
+  the `powermenu`, `settingsscreen` and `dropdownconsole` layer rules, if
+  it has them. If one of its parts ever fails to load, a notification says
+  which, and the rest still loads.
 - Monitor layout (resolution, position, scale, on/off, pinned
   workspaces) is set in Settings > Display, not hardcoded in
   `hyprland.lua` - that file only defines the primary display. Set

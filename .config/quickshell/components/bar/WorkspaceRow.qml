@@ -23,8 +23,9 @@ Row {
     property string screenName: ""
 
     // ---------------- dropping a dragged window on a workspace ----------------
-    // hyprland.lua's binds on the window-drag buttons (mainMod + LMB) tell
-    // the shell about a drag through custom events: "purpura-drag,start" and
+    // purpura.lua's binds on the window-drag buttons (mainMod + LMB, see
+    // ~/.config/hypr/purpura.lua) tell the shell about a drag through custom
+    // events: "purpura-drag,start" and
     // "purpura-drag,end" around it, and instead of the end, when the window
     // was let go on a bar,
     //   purpura-drag,drop,<monitor>,<x>,<y>,<address>,<floating>,<relX>,<relY>,<w>,<h>

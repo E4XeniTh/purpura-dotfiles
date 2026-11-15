@@ -20,8 +20,8 @@ import "../../Config.js" as Config
 // the panel covers all the text on it: it appears as soon as the growing panel
 // reaches the last line of text, and goes just before the shrinking panel does.
 // A full screen of text therefore can't show until the panel is fully open. The
-// layer rule for "dropdownconsole" in hyprland.lua turns off Hyprland's fades on
-// it, which would otherwise leave its text fading outside the shrinking panel.
+// layer rule for "dropdownconsole" in hypr/purpura.lua turns off Hyprland's fades
+// on it, which would otherwise leave its text fading outside the shrinking panel.
 //
 // Wayland can't embed another program's surface, so the terminal is really a
 // `kitten panel`, kitty's own layer-shell surface, placed exactly over the
@@ -29,15 +29,15 @@ import "../../Config.js" as Config
 // It's on the overlay layer because the panel is on top: a surface above the
 // panel keeps its text at full brightness.
 //
-// hyprland.lua's Close Window stops kitty when the mouse is over its surface.
+// Close Window (hypr/purpura.lua) stops kitty when the mouse is over its surface.
 // While the panel slides, or waits for a new kitty, that surface isn't always
 // up, so an empty "dropdownconsolesliding" surface covers the console's area
 // for that time, and Close Window leaves the window underneath alone.
 //
 // kitty starts the first time the console opens. After that, closing only
 // hides it, through kitty's remote control socket, so whatever's in it stays.
-// Should it end some other way (`exit`, a crash, the close window bind in
-// hyprland.lua), the panel disappears with it rather than sliding away, and the
+// Should it end some other way (`exit`, a crash, Close Window from
+// hypr/purpura.lua), the panel disappears with it rather than sliding away, and the
 // next open starts a new one.
 //
 // kitty outlives the shell, so a reload or a restart leaves the console as it
