@@ -271,7 +271,9 @@ Scope {
                     width: clock.implicitWidth + Config.scaled(16, bar.uiScale)
                     height: bar.buttonHeight
                     border.width: Config.scaled(2, bar.uiScale)
-                    border.color: Config.fgcolor
+                    // Red while a power action waits to run (the power menu's
+                    // timer, see components/power/PowerTimer.qml).
+                    border.color: root.dashboard && root.dashboard.powerTimerActive ? Config.fgcolorred : Config.fgcolor
                     color: clockmouseArea.containsMouse ? Config.fgcolorhover : "transparent"
                     Clock {
                         id: clock

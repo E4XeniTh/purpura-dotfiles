@@ -9,7 +9,7 @@ import "../../Config.js" as Config
 //
 //   [ action ]  [ number ]  [ Hours/Minutes ]
 //   [        ]
-//   [        ]    [Confirm]
+//   [        ]                    [Confirm]
 //
 // The number box has the keyboard from the start; Enter or Confirm sends
 // `confirmed`, Escape `dismissed` (as does a click outside, which
@@ -23,10 +23,10 @@ Rectangle {
     signal confirmed(int amount, bool hours)
     signal dismissed()
 
-    readonly property real pad: Config.scaled(18, root.uiScale)
-    readonly property real gap: Config.scaled(12, root.uiScale)
-    // The action's box, as tall as the three rows beside it.
-    readonly property real actionSize: Config.scaled(150, root.uiScale)
+    readonly property real pad: Config.scaled(14, root.uiScale)
+    readonly property real gap: Config.scaled(10, root.uiScale)
+    // The action's icon, as tall as the three rows beside it.
+    readonly property real actionSize: Config.scaled(110, root.uiScale)
     readonly property real rowHeight: (root.actionSize - 2 * root.gap) / 3
     readonly property real fieldWidth: Config.scaled(120, root.uiScale)
 
@@ -60,42 +60,21 @@ Rectangle {
         spacing: root.gap
 
         // Column 1, all three rows: the action.
-        Rectangle {
+        Item {
             width: root.actionSize
             height: root.actionSize
-            color: "transparent"
-            border.width: Config.scaled(2, root.uiScale)
-            border.color: Config.fgcolor
 
-            Column {
+            IconImage {
+                id: actionIcon
                 anchors.centerIn: parent
-                spacing: Config.scaled(6, root.uiScale)
+                implicitSize: root.actionSize
+                source: root.action ? Quickshell.iconPath(root.action.icon) : ""
+            }
 
-                Item {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    width: actionIcon.width
-                    height: actionIcon.height
-
-                    IconImage {
-                        id: actionIcon
-                        implicitSize: Config.scaled(80, root.uiScale)
-                        source: root.action ? Quickshell.iconPath(root.action.icon) : ""
-                    }
-
-                    ColorOverlay {
-                        anchors.fill: actionIcon
-                        source: actionIcon
-                        color: Config.fgcolor
-                    }
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: root.action ? root.action.label : ""
-                    color: Config.fgcolor
-                    font.family: Config.fontfamily
-                    font.pixelSize: Config.scaled(14, root.uiScale)
-                }
+            ColorOverlay {
+                anchors.fill: actionIcon
+                source: actionIcon
+                color: Config.fgcolor
             }
         }
 
@@ -170,9 +149,9 @@ Rectangle {
                 height: root.rowHeight
             }
 
-            // Row 3: Confirm, at the right of column 2.
+            // Row 3: Confirm, at the right of column 3.
             Item {
-                width: root.fieldWidth
+                width: 2 * root.fieldWidth + root.gap
                 height: root.rowHeight
 
                 Rectangle {
