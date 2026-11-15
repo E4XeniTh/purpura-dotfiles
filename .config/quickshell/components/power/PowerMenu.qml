@@ -67,8 +67,25 @@ Scope {
 
     // Set by picking a button with the arrow keys: the mouse cursor hides
     // and the selected button gets the hover look, until the menu closes or
-    // the mouse moves (see the HoverHandler in each window below).
+    // the mouse moves (see pointerMoved()).
     property bool keyboardSelecting: false
+
+    // Where the mouse last rested (window coordinates), and the cursor the
+    // menu's mouse areas show: none while the arrow keys are picking. Every
+    // one of those areas reports its moves here - only one more than 2px from
+    // the rest ends the picking, so Qt's own hover updates for a still mouse
+    // don't.
+    property point pointerRest: Qt.point(-1, -1)
+    readonly property int cursor: root.keyboardSelecting && root.pendingIndex < 0 ? Qt.BlankCursor : Qt.ArrowCursor
+
+    function pointerMoved(p) {
+        if (root.keyboardSelecting && root.pointerRest.x >= 0) {
+            if (Math.abs(p.x - root.pointerRest.x) > 2 || Math.abs(p.y - root.pointerRest.y) > 2)
+                root.keyboardSelecting = false
+        } else {
+            root.pointerRest = p
+        }
+    }
 
     // One entry per button - a plain data model driving a Repeater below
     // instead of four near-identical hand-duplicated Items (the
@@ -134,6 +151,7 @@ Scope {
     onOpenChanged: {
         root.pendingIndex = -1
         root.keyboardSelecting = false
+        root.pointerRest = Qt.point(-1, -1)
     }
 
     function activateSelected() {
@@ -202,7 +220,11 @@ Scope {
             // on a non-primary screen too (nothing else ever sits above
             // it there), just closes the menu the same way.
             MouseArea {
+                id: backdropMouse
                 anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: root.cursor
+                onPositionChanged: mouse => root.pointerMoved(backdropMouse.mapToItem(null, mouse.x, mouse.y))
                 onClicked: root.open = false
             }
 
@@ -218,31 +240,6 @@ Scope {
                 sourceComponent: menuBoxComponent
 
                 property real uiScale: win.uiScale
-            }
-
-            // Watches the mouse, over everything and without taking hover or
-            // clicks from anything below: hides the cursor while the arrow
-            // keys are picking (keyboardSelecting), and ends that once the
-            // mouse really moves - more than 2px from where it rested, so
-            // Qt's own hover updates for a still mouse don't count.
-            Item {
-                anchors.fill: parent
-                z: 1000
-
-                HoverHandler {
-                    id: pointerWatch
-                    property point rest: Qt.point(-1, -1)
-                    cursorShape: root.keyboardSelecting && root.pendingIndex < 0 ? Qt.BlankCursor : undefined
-                    onPointChanged: {
-                        const p = pointerWatch.point.position
-                        if (root.keyboardSelecting && pointerWatch.rest.x >= 0) {
-                            if (Math.abs(p.x - pointerWatch.rest.x) > 2 || Math.abs(p.y - pointerWatch.rest.y) > 2)
-                                root.keyboardSelecting = false
-                        } else {
-                            pointerWatch.rest = p
-                        }
-                    }
-                }
             }
 
             onVisibleChanged: {
@@ -426,6 +423,8 @@ Scope {
 
                                     anchors.fill: parent
                                     hoverEnabled: buttonItem.inReach
+                                    cursorShape: root.cursor
+                                    onPositionChanged: mouse => root.pointerMoved(buttonMouseArea.mapToItem(null, mouse.x, mouse.y))
                                     enabled: buttonItem.inReach
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
 
