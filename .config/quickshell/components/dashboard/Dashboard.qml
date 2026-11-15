@@ -572,7 +572,7 @@ Scope {
     // ---------------- a power action waiting ----------------
     // The power menu's delayed action (components/power/PowerTimer.qml, set
     // by right-clicking a power menu button): shown in a small window under
-    // the dashboard while it waits, once the dashboard has finished opening,
+    // the dashboard while it waits, as the dashboard finishes opening,
     // with an X that cancels it.
     readonly property var powerTimer: root.powerMenu ? root.powerMenu.timer : null
     readonly property bool powerTimerActive: !!root.powerTimer && root.powerTimer.active
