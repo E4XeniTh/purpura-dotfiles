@@ -247,6 +247,9 @@ Scope {
             Rectangle {
                 id: menuBox
 
+                // Strongly dimmed behind the delay box (PowerTimerInput).
+                opacity: root.pendingIndex >= 0 ? 0.15 : 1
+
                 anchors.centerIn: parent
 
                 width: 0
@@ -324,8 +327,6 @@ Scope {
 
                         spacing: Config.scaled(24, menuScope.uiScale)
 
-                        opacity: root.pendingIndex >= 0 ? 0.3 : 1
-
                         Repeater {
                             model: root.actions
 
@@ -337,14 +338,17 @@ Scope {
                                 width: Config.scaled(150, menuScope.uiScale)
                                 height: Config.scaled(150, menuScope.uiScale)
 
-                                readonly property bool isSelected: buttonItem.index === root.selectedIndex
+                                // Neither the keyboard's selection nor the mouse
+                                // shows while the delay box is up.
+                                readonly property bool inReach: root.pendingIndex < 0
+                                readonly property bool isSelected: buttonItem.inReach && buttonItem.index === root.selectedIndex
                                 readonly property bool isWaiting: root.timer.isFor(buttonItem.modelData.key)
 
                                 Rectangle {
                                     anchors.fill: parent
 
                                     radius: 0
-                                    color: buttonMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                                    color: buttonItem.inReach && buttonMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
 
                                     // Selected (keyboard-highlighted)
                                     // button gets a thicker, lighter
@@ -373,7 +377,8 @@ Scope {
                                     id: buttonMouseArea
 
                                     anchors.fill: parent
-                                    hoverEnabled: true
+                                    hoverEnabled: buttonItem.inReach
+                                    enabled: buttonItem.inReach
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
 
                                     // Hovering a button also moves the
