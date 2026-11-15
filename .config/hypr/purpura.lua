@@ -150,11 +150,21 @@ end)
 --   the tag comes off and "purpura-drag,end" posts. A plain click just ends it.
 --
 -- Taking the tag off gives the window back whatever opacity its own rules give it.
+-- The window fades out and back in with Hyprland's fade, and without its blur:
+-- Hyprland draws the blur behind a window at full strength whatever the window's own
+-- opacity, so it would hang there, behind a window that's already faded out, until
+-- the fade ends - and show up again before the window, coming back. So the tag turns
+-- the blur off with the opacity, and a second one (purpura-reappearing) keeps it off
+-- until the fade back in is over.
 -- non_consuming: mainMod + click on no window still reaches the app below. These have
 -- no description, so Settings > Shortcuts keeps showing the drag bind's.
 
 part("dropping a window on a workspace", function()
     local TAG = "purpura-dragged"
+    local REAPPEARING = "purpura-reappearing"
+    -- Longer than the fade back in: hyprland.lua.example's takes 0.3s, Hyprland's
+    -- default 1s. An opaque window shows nothing of its blur once it's back anyway.
+    local REAPPEAR_MS = 1200
     local FOLLOW_MS = 25
     -- Should the release never come (a submap switched to mid-drag), the drag ends
     -- here after this long.
@@ -164,19 +174,43 @@ part("dropping a window on a workspace", function()
         name = TAG,
         match = { tag = TAG },
         opacity = "0",
+        no_blur = true,
     })
 
-    local targets = {} -- each monitor's workspace boxes, from its bar
-    local dragged      -- { address, relX, relY } while the button's down
-    local over         -- the box under the cursor, while there is one
+    hl.window_rule({
+        name = REAPPEARING,
+        match = { tag = REAPPEARING },
+        no_blur = true,
+    })
+
+    local targets = {}     -- each monitor's workspace boxes, from its bar
+    local dragged          -- { address, relX, relY } while the button's down
+    local over             -- the box under the cursor, while there is one (the window's hidden)
+    local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
 
     local function dragEvent(data)
         hl.dispatch(hl.dsp.event("purpura-drag," .. data))
     end
 
-    local function invisible(address, on)
-        hl.dispatch(hl.dsp.window.tag({ tag = (on and "+" or "-") .. TAG, window = "address:" .. address }))
+    local function tag(address, change)
+        hl.dispatch(hl.dsp.window.tag({ tag = change, window = "address:" .. address }))
+    end
+
+    local function hide(address)
+        tag(address, "+" .. TAG)
+    end
+
+    local function reappear(address)
+        local mark = {}
+        reappearing[address] = mark
+        tag(address, "+" .. REAPPEARING) -- first, so the blur's never on between the two
+        tag(address, "-" .. TAG)
+        hl.timer(function()
+            if reappearing[address] ~= mark then return end -- a later one's still fading in
+            reappearing[address] = nil
+            tag(address, "-" .. REAPPEARING)
+        end, { timeout = REAPPEAR_MS, type = "oneshot" })
     end
 
     -- A bar's boxes, from the shell through hyprctl eval:
@@ -215,13 +249,13 @@ part("dropping a window on a workspace", function()
         return nil
     end
 
-    -- Stops following, and gives the window back its own opacity.
+    -- Stops following, and brings the window back if it's hidden.
     local function endDrag()
-        local window = dragged
+        local window, hidden = dragged, over ~= nil
         dragged, over = nil, nil
         if follower then follower:set_enabled(false) end
         if not window then return end
-        invisible(window.address, false)
+        if hidden then reappear(window.address) end
         dragEvent("end")
     end
 
@@ -233,7 +267,11 @@ part("dropping a window on a workspace", function()
         if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
         local box, monitor = boxUnderCursor()
         if box == over then return end
-        if (box == nil) ~= (over == nil) then invisible(dragged.address, box ~= nil) end
+        if box and not over then
+            hide(dragged.address)
+        elseif over and not box then
+            reappear(dragged.address)
+        end
         over = box
         dragEvent(box and ("over," .. monitor .. "," .. box.workspace) or "off")
     end
@@ -290,12 +328,13 @@ part("dropping a window on a workspace", function()
 
     hl.bind(mainMod .. " + mouse:272", function() endDrag() end, { click = true })
 
-    -- A config reload mid-drag drops all of this, the timer included, with the old Lua
-    -- state - so a window it left invisible is brought back here.
+    -- A config reload mid-drag drops all of this, the timers included, with the old
+    -- Lua state - so a window it left invisible, or without its blur, is brought back
+    -- here.
     hl.on("config.reloaded", function()
         for _, window in ipairs(hl.get_windows()) do
-            for _, tag in ipairs(window.tags or {}) do
-                if tag == TAG then invisible(window.address, false) end
+            for _, name in ipairs(window.tags or {}) do
+                if name == TAG or name == REAPPEARING then tag(window.address, "-" .. name) end
             end
         end
     end)
