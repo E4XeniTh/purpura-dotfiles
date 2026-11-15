@@ -6,6 +6,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import Qt5Compat.GraphicalEffects
 import "../../Config.js" as Config
+import "../settings/controls"
 
 // Power menu overlay - one dimmed (and, via hyprland.lua's own
 // "powermenu" layer_rule, compositor-blurred) window per connected
@@ -384,8 +385,13 @@ Scope {
 
                                     onClicked: mouse => {
                                         root.selectedIndex = buttonItem.index
-                                        if (mouse.button === Qt.RightButton) root.pendingIndex = buttonItem.index
-                                        else root.activateSelected()
+                                        // Right: run it later - not while
+                                        // something's already waiting.
+                                        if (mouse.button === Qt.RightButton) {
+                                            if (!root.timer.active) root.pendingIndex = buttonItem.index
+                                        } else {
+                                            root.activateSelected()
+                                        }
                                     }
                                 }
                             }
@@ -423,6 +429,18 @@ Scope {
                 fontSize: 56
                 framed: true
                 closable: true
+            }
+
+            // How to run an action later - only while nothing's waiting,
+            // as that's when a right click does it.
+            HintItem {
+                visible: !root.timer.active
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: Config.scaled(24, menuScope.uiScale)
+                uiScale: menuScope.uiScale
+                iconSource: Quickshell.iconPath("input-mouse-click-right-symbolic")
+                label: "to delay"
             }
 
             // While the input's up: a click anywhere else closes it (and
