@@ -14,10 +14,13 @@ var fgfillcolor = "#aa9600fa"
 var fgcolordark = Qt.darker(fgcolor, 2.5)
 var fgcolorlight = Qt.lighter(fgcolor, 1.55)
 // Mildly dimmed fgcolorlight (not the harsh 2.5x of fgcolordark) - for
-// states that are still fgcolorlight-worthy (e.g. a workspace holding a
-// fullscreen app) but shouldn't compete with something that's also
-// currently active/selected.
+// states that are still fgcolorlight-worthy but shouldn't compete with
+// something that's also currently active/selected.
 var fgcolordarklight = Qt.darker(fgcolorlight, 1.3)
+// The border Hyprland gives a fullscreen window: hyprland.lua's
+// "fullscreenrule" border_color, copied here by purpura.sh --install - for the
+// workspace widget's boxes holding one.
+var fgcolorfullscreen = "#f600ff"
 var fgcolorhover = Qt.darker(fgfillcolor, 2.5)
 // Small secondary text - setting hints, notes, placeholders: a soft,
 // lighter shade that stays readable at 11-13px, where fgcolordark (kept for

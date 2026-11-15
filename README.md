@@ -93,6 +93,11 @@ The installer:
 - creates `hyprland.lua`, `hyprpaper.conf` and `ZapZap.conf` from their
   `.example` once and never overwrites them after that (picking a new
   color only updates `hyprland.lua`'s border colors)
+- copies `hyprland.lua`'s fullscreen border color (the `border_color` of
+  its `fullscreenrule`) into the shell's `Config.js` as `fgcolorfullscreen`,
+  which the bar's workspace widget draws a workspace holding a fullscreen
+  window in - so after changing that color by hand, run
+  `./purpura.sh --install --no-packages` again to match
 - builds the helper binaries and installs the lock screen's PAM file
 - if you changed the color from inside Hyprland, **closes everything that's
   open** when it finishes, so nothing stays in the old color. It warns and

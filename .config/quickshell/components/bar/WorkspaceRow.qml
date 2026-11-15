@@ -457,14 +457,14 @@ Row {
             width: wsBox.height * wsBox.aspect
             color: wsBox.dropTarget ? Config.fgcolorhover : Config.fillcolor
             border.width: Config.scaled(2, root.uiScale)
-            // hasFullscreen bumps the border up a tier from whatever
-            // it'd otherwise be - fgcolor becomes fgcolorlight when
-            // active, fgcolordark becomes fgcolordarklight when not -
-            // so a workspace holding a fullscreen app always reads as
-            // more prominent than one that doesn't, active or not.
+            // A workspace holding a fullscreen app takes the border
+            // Hyprland gives that app (fgcolorfullscreen) - dimmed the way
+            // fgcolordarklight is to fgcolorlight when it isn't the one
+            // shown on its monitor - so it always reads as more prominent
+            // than one that doesn't, active or not.
             border.color: wsBox.dropTarget ? Config.fgcolorlight
                 : wsBox.modelData.hasFullscreen
-                ? (wsBox.isActive ? Config.fgcolorlight : Config.fgcolordarklight)
+                ? (wsBox.isActive ? Config.fgcolorfullscreen : Qt.darker(Config.fgcolorfullscreen, 1.3))
                 : (wsBox.isActive ? Config.fgcolor : Config.fgcolordark)
             radius: 0
             // A window that's fullscreened, off-monitor mid-drag, or

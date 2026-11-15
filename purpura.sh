@@ -437,6 +437,33 @@ recolor_live_hyprland() {
     fi
 }
 
+# The workspace widget draws a workspace holding a fullscreen window in the
+# border Hyprland gives that window, so Config.js's fgcolorfullscreen is set
+# to hyprland.lua's "fullscreenrule" border_color - from the hyprland.lua
+# that's about to be live: the staged one when there is one, else yours.
+match_fullscreen_color() {
+    local config=$STAGE/.config/quickshell/Config.js hypr=$STAGE/.config/hypr/hyprland.lua line
+    local rgba='rgba\(([0-9a-fA-F]{6})([0-9a-fA-F]{2})\)' rgb='rgb\(([0-9a-fA-F]{6})\)' color
+    [[ -f $config ]] || return 0
+    [[ -f $hypr ]] || hypr=$HOME/.config/hypr/hyprland.lua
+    [[ -f $hypr ]] || return 0
+    line=$(awk '
+        /^[[:space:]]*--/ { next }
+        /name[[:space:]]*=[[:space:]]*"fullscreenrule"/ { found = 1 }
+        found && /border_color[[:space:]]*=/ { print; exit }
+        found && /hl\.window_rule/ && !/fullscreenrule/ { exit }
+    ' "$hypr")
+    if [[ $line =~ $rgba ]]; then
+        color=${BASH_REMATCH[2]}${BASH_REMATCH[1]} # Qt puts the alpha first
+    elif [[ $line =~ $rgb ]]; then
+        color=${BASH_REMATCH[1]}
+    else
+        warn "Couldn't find the fullscreen border_color in ${hypr/#$HOME/\~} (rgb()/rgba() in its \"fullscreenrule\"), so the workspace widget keeps its own."
+        return 0
+    fi
+    sed -i -E "s/^(var fgcolorfullscreen = \")#[0-9a-fA-F]{6,8}\"/\1#${color,,}\"/" "$config"
+}
+
 in_a_checkout() {
     local dir=$1
     while [[ $dir == /?* ]]; do
@@ -536,6 +563,7 @@ install_dotfiles() {
     stage_dotfiles
     recolor_stage
     recolor_live_hyprland
+    match_fullscreen_color
     sync_stage
     mkdir -p -- "$(dirname -- "$STATE_FILE")"
     printf '#%s\n' "$COLOR" >"$STATE_FILE"
