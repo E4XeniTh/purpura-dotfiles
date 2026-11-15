@@ -443,8 +443,10 @@ Scope {
     }
 
     // `steps` one after the other, stopping at the first that fails, in a
-    // kitty window that asks for a recheck once they're done.
+    // kitty window that asks for a recheck once they're done. The dropdown
+    // closes, out of the terminal's way.
     function runInTerminal(steps) {
+        root.dropdownOpen = false
         const script = steps.join(" && ")
             + "; echo; qs ipc call updater check >/dev/null 2>&1"
             + "; echo 'Press any key to close this window'; read -n 1 -s"
