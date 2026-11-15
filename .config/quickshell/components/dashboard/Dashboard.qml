@@ -573,9 +573,10 @@ Scope {
     // Right-clicking the dashboard's power button opens a small window
     // under the dashboard: "Shutdown in [number] [Hours|Minutes]". Enter
     // starts the countdown; from then on the window opens with the
-    // dashboard every time, showing a red shutdown icon and the time left,
-    // and a left click on it cancels. At zero it shuts down the way the
-    // power menu's Shutdown does. Lives only as long as the shell does.
+    // dashboard every time (once the dashboard has finished opening),
+    // showing a red shutdown icon and the time left; another right click on
+    // the power button cancels. At zero it shuts down the way the power
+    // menu's Shutdown does. Lives only as long as the shell does.
     property bool shutdownEntryOpen: false
     property real shutdownAt: 0
     readonly property bool shutdownActive: shutdownAt > 0
@@ -1097,10 +1098,11 @@ Scope {
                                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onClicked: mouse => {
                                                 // Right: the auto-shutdown window (see
-                                                // shutdownEntryOpen) - already counting
-                                                // down, it's open anyway.
+                                                // shutdownEntryOpen) - or, while it's
+                                                // counting down, cancelling it.
                                                 if (mouse.button === Qt.RightButton) {
-                                                    if (!root.shutdownActive) root.shutdownEntryOpen = !root.shutdownEntryOpen
+                                                    if (root.shutdownActive) root.cancelShutdown()
+                                                    else root.shutdownEntryOpen = !root.shutdownEntryOpen
                                                     return
                                                 }
                                                 root.close()
@@ -1231,7 +1233,13 @@ Scope {
                 }
             }
 
+            // Set once the opening below has played out in full (width, then
+            // height) - the auto-shutdown window waits for it.
+            property bool fullyOpen: false
+
             onVisibleChanged: {
+                dashWindow.fullyOpen = false
+                dashSettledTimer.stop()
                 if (visible) {
                     dashBox.width = 0
                     dashBox.height = Config.scaled(4, dashWindow.uiScale)
@@ -1251,7 +1259,16 @@ Scope {
 
                 onTriggered: {
                     dashBox.state = "open"
+                    dashSettledTimer.start()
                 }
+            }
+
+            // The height phase's length, as above.
+            Timer {
+                id: dashSettledTimer
+                interval: 300
+                repeat: false
+                onTriggered: dashWindow.fullyOpen = true
             }
 
             // Invisible, full-screen click catcher that closes the
@@ -1298,7 +1315,8 @@ Scope {
                 readonly property real uiScale: dashWindow.uiScale
                 readonly property real boxWidth: Config.scaled(260, shutdownWindow.uiScale)
 
-                visible: root.open && root.screen === modelData && (root.shutdownEntryOpen || root.shutdownActive)
+                visible: root.open && root.screen === modelData && dashWindow.fullyOpen
+                    && (root.shutdownEntryOpen || root.shutdownActive)
 
                 WlrLayershell.namespace: "dashboard-shutdown"
                 WlrLayershell.layer: WlrLayer.Overlay
@@ -1453,12 +1471,6 @@ Scope {
                             }
                         }
 
-                        MouseArea {
-                            anchors.fill: parent
-                            enabled: root.shutdownActive
-                            acceptedButtons: Qt.LeftButton
-                            onClicked: root.cancelShutdown()
-                        }
                     }
                 }
 
