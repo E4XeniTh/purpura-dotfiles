@@ -65,6 +65,11 @@ Scope {
     // below), rather than remembering wherever it was left last time.
     property int selectedIndex: 0
 
+    // Set by picking a button with the arrow keys: the mouse cursor hides
+    // and the selected button gets the hover look, until the menu closes or
+    // the mouse moves (see the HoverHandler in each window below).
+    property bool keyboardSelecting: false
+
     // One entry per button - a plain data model driving a Repeater below
     // instead of four near-identical hand-duplicated Items (the
     // previous version's own comment noted why: this Quickshell's QML
@@ -126,7 +131,10 @@ Scope {
         }
     }
 
-    onOpenChanged: root.pendingIndex = -1
+    onOpenChanged: {
+        root.pendingIndex = -1
+        root.keyboardSelecting = false
+    }
 
     function activateSelected() {
         if (root.pendingIndex >= 0) return
@@ -212,6 +220,31 @@ Scope {
                 property real uiScale: win.uiScale
             }
 
+            // Watches the mouse, over everything and without taking hover or
+            // clicks from anything below: hides the cursor while the arrow
+            // keys are picking (keyboardSelecting), and ends that once the
+            // mouse really moves - more than 2px from where it rested, so
+            // Qt's own hover updates for a still mouse don't count.
+            Item {
+                anchors.fill: parent
+                z: 1000
+
+                HoverHandler {
+                    id: pointerWatch
+                    property point rest: Qt.point(-1, -1)
+                    cursorShape: root.keyboardSelecting && root.pendingIndex < 0 ? Qt.BlankCursor : undefined
+                    onPointChanged: {
+                        const p = pointerWatch.point.position
+                        if (root.keyboardSelecting && pointerWatch.rest.x >= 0) {
+                            if (Math.abs(p.x - pointerWatch.rest.x) > 2 || Math.abs(p.y - pointerWatch.rest.y) > 2)
+                                root.keyboardSelecting = false
+                        } else {
+                            pointerWatch.rest = p
+                        }
+                    }
+                }
+            }
+
             onVisibleChanged: {
                 if (visible) {
                     background.opacity = 0
@@ -231,8 +264,16 @@ Scope {
             // From the Loader above (its window's screen).
             readonly property real uiScale: parent.uiScale
 
-            Keys.onLeftPressed: if (root.pendingIndex < 0) root.selectedIndex = (root.selectedIndex + root.actions.length - 1) % root.actions.length
-            Keys.onRightPressed: if (root.pendingIndex < 0) root.selectedIndex = (root.selectedIndex + 1) % root.actions.length
+            Keys.onLeftPressed: {
+                if (root.pendingIndex >= 0) return
+                root.keyboardSelecting = true
+                root.selectedIndex = (root.selectedIndex + root.actions.length - 1) % root.actions.length
+            }
+            Keys.onRightPressed: {
+                if (root.pendingIndex >= 0) return
+                root.keyboardSelecting = true
+                root.selectedIndex = (root.selectedIndex + 1) % root.actions.length
+            }
             Keys.onReturnPressed: root.activateSelected()
             Keys.onEnterPressed: root.activateSelected()
             Keys.onEscapePressed: {
@@ -246,9 +287,6 @@ Scope {
 
             Rectangle {
                 id: menuBox
-
-                // Strongly dimmed behind the delay box (PowerTimerInput).
-                opacity: root.pendingIndex >= 0 ? 0.15 : 1
 
                 anchors.centerIn: parent
 
@@ -348,7 +386,9 @@ Scope {
                                     anchors.fill: parent
 
                                     radius: 0
-                                    color: buttonItem.inReach && buttonMouseArea.containsMouse ? Config.fgcolorhover : "transparent"
+                                    color: buttonItem.inReach
+                                        && (root.keyboardSelecting ? buttonItem.isSelected : buttonMouseArea.containsMouse)
+                                        ? Config.fgcolorhover : "transparent"
 
                                     // Selected (keyboard-highlighted)
                                     // button gets a thicker, lighter
@@ -370,6 +410,14 @@ Scope {
                                         anchors.fill: buttonIcon
                                         source: buttonIcon
                                         color: buttonItem.isWaiting ? Config.fgcolorred : Config.fgcolor
+                                    }
+                                }
+
+                                Connections {
+                                    target: root
+                                    function onKeyboardSelectingChanged() {
+                                        if (!root.keyboardSelecting && buttonMouseArea.containsMouse)
+                                            root.selectedIndex = buttonItem.index
                                     }
                                 }
 
@@ -417,6 +465,16 @@ Scope {
 
                     z: 10
 
+                }
+
+                // Behind the delay box (PowerTimerInput), the buttons and the
+                // border strongly dimmed: a near-black veil over them, as the
+                // box's own opacity would only let the backdrop through.
+                Rectangle {
+                    anchors.fill: parent
+                    visible: root.pendingIndex >= 0
+                    color: Qt.rgba(0, 0, 0, 0.85)
+                    z: 11
                 }
 
             }
