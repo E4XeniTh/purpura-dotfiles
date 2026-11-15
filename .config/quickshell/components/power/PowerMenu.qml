@@ -73,22 +73,32 @@ Scope {
     // limitation.
     readonly property var actions: [
         {
+            key: "shutdown",
+            label: "Shutdown",
             icon: "system-shutdown-symbolic",
             trigger: () => Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl poweroff"])
         },
         {
+            key: "reboot",
+            label: "Restart",
             icon: "system-reboot-symbolic",
             trigger: () => Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl reboot"])
         },
         {
+            key: "suspend",
+            label: "Suspend",
             icon: "system-suspend-symbolic",
             trigger: () => Quickshell.execDetached(["systemctl", "suspend"])
         },
         {
+            key: "logout",
+            label: "Log out",
             icon: "system-log-out-symbolic",
             trigger: () => Quickshell.execDetached(["hyprshutdown", "--post-cmd", "hyprctl dispatch 'hl.dsp.exit()'"])
         },
         {
+            key: "lock",
+            label: "Lock",
             icon: "system-lock-screen-symbolic",
             // Moved here from Dashboard.qml's own power/lock row - that
             // row is back to just Power/Settings now.
@@ -96,7 +106,29 @@ Scope {
         }
     ]
 
+    // ---------------- running an action later ----------------
+    // Right-clicking a button opens PowerTimerInput.qml for its action
+    // (pendingIndex), centred on the screen, over the buttons - dimmed and
+    // out of reach until it's closed again. Confirming leaves the menu with
+    // the action waiting in `timer` (PowerTimer.qml); while one waits, the
+    // menu shows how long it has left above the buttons (PowerTimerCountdown,
+    // whose X cancels it) and its button in red. The dashboard reads `timer`
+    // too, to show it.
+    readonly property var timer: powerTimer
+    property int pendingIndex: -1
+
+    PowerTimer {
+        id: powerTimer
+        onFired: action => {
+            root.open = false
+            action.trigger()
+        }
+    }
+
+    onOpenChanged: root.pendingIndex = -1
+
     function activateSelected() {
+        if (root.pendingIndex >= 0) return
         const entry = root.actions[root.selectedIndex]
         if (!entry) return
         root.open = false
@@ -198,11 +230,18 @@ Scope {
             // From the Loader above (its window's screen).
             readonly property real uiScale: parent.uiScale
 
-            Keys.onLeftPressed: root.selectedIndex = (root.selectedIndex + root.actions.length - 1) % root.actions.length
-            Keys.onRightPressed: root.selectedIndex = (root.selectedIndex + 1) % root.actions.length
+            Keys.onLeftPressed: if (root.pendingIndex < 0) root.selectedIndex = (root.selectedIndex + root.actions.length - 1) % root.actions.length
+            Keys.onRightPressed: if (root.pendingIndex < 0) root.selectedIndex = (root.selectedIndex + 1) % root.actions.length
             Keys.onReturnPressed: root.activateSelected()
             Keys.onEnterPressed: root.activateSelected()
-            Keys.onEscapePressed: root.open = false
+            Keys.onEscapePressed: {
+                if (root.pendingIndex >= 0) {
+                    root.pendingIndex = -1
+                    menuScope.forceActiveFocus()
+                } else {
+                    root.open = false
+                }
+            }
 
             Rectangle {
                 id: menuBox
@@ -284,6 +323,8 @@ Scope {
 
                         spacing: Config.scaled(24, menuScope.uiScale)
 
+                        opacity: root.pendingIndex >= 0 ? 0.3 : 1
+
                         Repeater {
                             model: root.actions
 
@@ -296,6 +337,7 @@ Scope {
                                 height: Config.scaled(150, menuScope.uiScale)
 
                                 readonly property bool isSelected: buttonItem.index === root.selectedIndex
+                                readonly property bool isWaiting: root.timer.isFor(buttonItem.modelData.key)
 
                                 Rectangle {
                                     anchors.fill: parent
@@ -309,7 +351,8 @@ Scope {
                                     // navigation is visible without a
                                     // mouse anywhere near the menu.
                                     border.width: Config.scaled(buttonItem.isSelected ? 3 : 2, menuScope.uiScale)
-                                    border.color: buttonItem.isSelected ? Config.fgcolorlight : Config.fgcolor
+                                    border.color: buttonItem.isWaiting ? Config.fgcolorred
+                                        : buttonItem.isSelected ? Config.fgcolorlight : Config.fgcolor
 
                                     IconImage {
                                         id: buttonIcon
@@ -321,7 +364,7 @@ Scope {
                                     ColorOverlay {
                                         anchors.fill: buttonIcon
                                         source: buttonIcon
-                                        color: Config.fgcolor
+                                        color: buttonItem.isWaiting ? Config.fgcolorred : Config.fgcolor
                                     }
                                 }
 
@@ -330,6 +373,7 @@ Scope {
 
                                     anchors.fill: parent
                                     hoverEnabled: true
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton
 
                                     // Hovering a button also moves the
                                     // keyboard selection onto it, so the
@@ -338,9 +382,10 @@ Scope {
                                     // button is "current".
                                     onEntered: root.selectedIndex = buttonItem.index
 
-                                    onClicked: {
+                                    onClicked: mouse => {
                                         root.selectedIndex = buttonItem.index
-                                        root.activateSelected()
+                                        if (mouse.button === Qt.RightButton) root.pendingIndex = buttonItem.index
+                                        else root.activateSelected()
                                     }
                                 }
                             }
@@ -363,6 +408,51 @@ Scope {
 
                 }
 
+            }
+
+            // A waiting action's time left, centred above the buttons once
+            // the box has opened.
+            PowerTimerCountdown {
+                visible: root.timer.active && menuBox.state === "open" && !openTimer.running
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.bottom: menuBox.top
+                anchors.bottomMargin: Config.scaled(24, menuScope.uiScale)
+                timer: root.timer
+                uiScale: menuScope.uiScale
+                iconSize: 72
+                fontSize: 56
+                framed: true
+                closable: true
+            }
+
+            // While the input's up: a click anywhere else closes it (and
+            // keeps the dimmed buttons out of reach).
+            MouseArea {
+                anchors.fill: parent
+                z: 20
+                visible: root.pendingIndex >= 0
+                onClicked: {
+                    root.pendingIndex = -1
+                    menuScope.forceActiveFocus()
+                }
+            }
+
+            Loader {
+                anchors.centerIn: parent
+                z: 30
+                active: root.pendingIndex >= 0
+                sourceComponent: PowerTimerInput {
+                    action: root.actions[root.pendingIndex] || null
+                    uiScale: menuScope.uiScale
+                    onConfirmed: (amount, hours) => {
+                        root.timer.start(root.actions[root.pendingIndex], amount, hours)
+                        root.open = false
+                    }
+                    onDismissed: {
+                        root.pendingIndex = -1
+                        menuScope.forceActiveFocus()
+                    }
+                }
             }
 
             // Runs fresh every time this component is loaded (see the

@@ -7,6 +7,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick
 import "../../Config.js" as Config
 import "../common"
+import "../power"
 import "SolaarParse.js" as SolaarParse
 
 // Dashboard dropdown, toggled from the avatar button in Bar.qml. Uses the
@@ -566,55 +567,15 @@ Scope {
     function close() {
         open = false
         screen = null
-        shutdownEntryOpen = false
     }
 
-    // ---------------- auto-shutdown ----------------
-    // Right-clicking the dashboard's power button opens a small window
-    // under the dashboard: "Shutdown in [number] [Hours|Minutes]". Enter
-    // starts the countdown; from then on the window opens with the
-    // dashboard every time (once the dashboard has finished opening),
-    // showing a red shutdown icon and the time left; another right click on
-    // the power button cancels. At zero it shuts down the way the power
-    // menu's Shutdown does. Lives only as long as the shell does.
-    property bool shutdownEntryOpen: false
-    property real shutdownAt: 0
-    readonly property bool shutdownActive: shutdownAt > 0
-    property real shutdownNow: Date.now()
-
-    function startShutdown(amount, hours) {
-        if (!(amount > 0)) return
-        root.shutdownNow = Date.now()
-        root.shutdownAt = root.shutdownNow + amount * (hours ? 3600000 : 60000)
-        root.shutdownEntryOpen = false
-    }
-
-    function cancelShutdown() {
-        root.shutdownAt = 0
-        root.shutdownEntryOpen = false
-    }
-
-    // "1:05:09" / "4:09" left.
-    function shutdownRemaining() {
-        const total = Math.max(0, Math.ceil((root.shutdownAt - root.shutdownNow) / 1000))
-        const h = Math.floor(total / 3600), m = Math.floor(total % 3600 / 60), sec = total % 60
-        const two = n => (n < 10 ? "0" : "") + n
-        return h > 0 ? h + ":" + two(m) + ":" + two(sec) : m + ":" + two(sec)
-    }
-
-    Timer {
-        interval: 1000
-        repeat: true
-        running: root.shutdownActive
-        triggeredOnStart: true
-        onTriggered: {
-            root.shutdownNow = Date.now()
-            if (root.shutdownNow >= root.shutdownAt) {
-                root.shutdownAt = 0
-                Quickshell.execDetached(["hyprshutdown", "--post-cmd", "systemctl poweroff"])
-            }
-        }
-    }
+    // ---------------- a power action waiting ----------------
+    // The power menu's delayed action (components/power/PowerTimer.qml, set
+    // by right-clicking a power menu button): shown in a small window under
+    // the dashboard while it waits, once the dashboard has finished opening.
+    // A right click on the dashboard's power button cancels it.
+    readonly property var powerTimer: root.powerMenu ? root.powerMenu.timer : null
+    readonly property bool powerTimerActive: !!root.powerTimer && root.powerTimer.active
 
     function toggle(screen_) {
         if (open && screen === screen_) {
@@ -1097,12 +1058,10 @@ Scope {
                                             hoverEnabled: true
                                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                                             onClicked: mouse => {
-                                                // Right: the auto-shutdown window (see
-                                                // shutdownEntryOpen) - or, while it's
-                                                // counting down, cancelling it.
+                                                // Right: cancels a waiting power action
+                                                // (see powerTimer).
                                                 if (mouse.button === Qt.RightButton) {
-                                                    if (root.shutdownActive) root.cancelShutdown()
-                                                    else root.shutdownEntryOpen = !root.shutdownEntryOpen
+                                                    if (root.powerTimerActive) root.powerTimer.cancel()
                                                     return
                                                 }
                                                 root.close()
@@ -1234,7 +1193,7 @@ Scope {
             }
 
             // Set once the opening below has played out in full (width, then
-            // height) - the auto-shutdown window waits for it.
+            // height) - the waiting power action's window waits for it.
             property bool fullyOpen: false
 
             onVisibleChanged: {
@@ -1304,196 +1263,77 @@ Scope {
                 }
             }
 
-            // The auto-shutdown window (see shutdownEntryOpen), centred under
-            // the dashboard and opening like it, twice as fast. Takes the
-            // keyboard while the time's being typed in.
+            // A waiting power action (see powerTimer), centred under the
+            // dashboard and opening like it, twice as fast.
             PanelWindow {
-                id: shutdownWindow
+                id: powerTimerWindow
                 screen: modelData
 
-                readonly property bool entering: root.shutdownEntryOpen && !root.shutdownActive
                 readonly property real uiScale: dashWindow.uiScale
-                readonly property real boxWidth: Config.scaled(260, shutdownWindow.uiScale)
+                readonly property real boxWidth: Config.scaled(260, powerTimerWindow.uiScale)
 
-                visible: root.open && root.screen === modelData && dashWindow.fullyOpen
-                    && (root.shutdownEntryOpen || root.shutdownActive)
+                visible: root.open && root.screen === modelData && dashWindow.fullyOpen && root.powerTimerActive
 
-                WlrLayershell.namespace: "dashboard-shutdown"
+                WlrLayershell.namespace: "dashboard-powertimer"
                 WlrLayershell.layer: WlrLayer.Overlay
-                WlrLayershell.keyboardFocus: shutdownWindow.entering ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
                 exclusiveZone: dashWindow.ignoresBarPadding ? -1 : 0
 
                 anchors { top: true }
                 margins {
-                    top: Config.scaled(dashWindow.ignoresBarPadding ? 10 : 4, shutdownWindow.uiScale)
-                        + dashWindow.implicitHeight + Config.scaled(8, shutdownWindow.uiScale)
+                    top: Config.scaled(dashWindow.ignoresBarPadding ? 10 : 4, powerTimerWindow.uiScale)
+                        + dashWindow.implicitHeight + Config.scaled(8, powerTimerWindow.uiScale)
                 }
 
-                implicitWidth: shutdownWindow.boxWidth
-                implicitHeight: Math.max(shutdownContent.implicitHeight, 1)
+                implicitWidth: powerTimerWindow.boxWidth
+                implicitHeight: Math.max(powerTimerCountdown.implicitHeight, 1)
                 color: "transparent"
 
                 Rectangle {
-                    id: shutdownBox
+                    id: powerTimerBox
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 0
-                    height: Config.scaled(2, shutdownWindow.uiScale)
+                    height: Config.scaled(2, powerTimerWindow.uiScale)
                     color: Config.fillcolor
-                    border.width: Config.scaled(2, shutdownWindow.uiScale)
-                    border.color: root.shutdownActive ? Config.fgcolorred : Config.fgcolor
+                    border.width: Config.scaled(2, powerTimerWindow.uiScale)
+                    border.color: Config.fgcolorred
                     clip: true
 
                     states: [
                         State {
                             name: "horizontal"
-                            PropertyChanges { target: shutdownBox; width: shutdownWindow.boxWidth; height: Config.scaled(2, shutdownWindow.uiScale) }
+                            PropertyChanges { target: powerTimerBox; width: powerTimerWindow.boxWidth; height: Config.scaled(2, powerTimerWindow.uiScale) }
                         },
                         State {
                             name: "open"
-                            PropertyChanges { target: shutdownBox; width: shutdownWindow.boxWidth; height: Math.max(shutdownContent.implicitHeight, 1) }
+                            PropertyChanges { target: powerTimerBox; width: powerTimerWindow.boxWidth; height: Math.max(powerTimerCountdown.implicitHeight, 1) }
                         }
                     ]
                     transitions: Transition {
                         NumberAnimation { properties: "width,height"; duration: 150; easing.type: Easing.OutCubic }
                     }
 
-                    Item {
-                        id: shutdownContent
-                        width: shutdownWindow.boxWidth
-                        implicitHeight: (shutdownWindow.entering ? entryColumn.implicitHeight : countdownRow.implicitHeight)
-                            + Config.scaled(28, shutdownWindow.uiScale)
-
-                        // ---- typing the time in ----
-                        Column {
-                            id: entryColumn
-                            visible: shutdownWindow.entering
-                            anchors.centerIn: parent
-                            spacing: Config.scaled(10, shutdownWindow.uiScale)
-
-                            Text {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                text: "Shutdown in"
-                                color: Config.fgcolor
-                                font.family: Config.fontfamily
-                                font.pixelSize: Config.scaled(15, shutdownWindow.uiScale)
-                            }
-
-                            Row {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                spacing: Config.scaled(8, shutdownWindow.uiScale)
-
-                                Rectangle {
-                                    width: Config.scaled(90, shutdownWindow.uiScale)
-                                    height: Config.scaled(34, shutdownWindow.uiScale)
-                                    color: Config.fillcolor
-                                    border.width: Config.scaled(2, shutdownWindow.uiScale)
-                                    border.color: amountInput.activeFocus ? Config.fgcolorlight : Config.fgcolor
-
-                                    TextInput {
-                                        id: amountInput
-                                        anchors.fill: parent
-                                        anchors.margins: Config.scaled(6, shutdownWindow.uiScale)
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        horizontalAlignment: TextInput.AlignHCenter
-                                        color: Config.fgcolorlight
-                                        selectionColor: Config.fgcolordark
-                                        font.family: Config.fontfamily
-                                        font.pixelSize: Config.scaled(16, shutdownWindow.uiScale)
-                                        validator: IntValidator { bottom: 1; top: 999 }
-                                        maximumLength: 3
-                                        onAccepted: root.startShutdown(parseInt(amountInput.text, 10), unitButton.hours)
-                                        Keys.onEscapePressed: root.shutdownEntryOpen = false
-                                    }
-                                }
-
-                                Rectangle {
-                                    id: unitButton
-                                    property bool hours: true
-                                    width: Config.scaled(90, shutdownWindow.uiScale)
-                                    height: Config.scaled(34, shutdownWindow.uiScale)
-                                    color: unitMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                                    border.width: Config.scaled(2, shutdownWindow.uiScale)
-                                    border.color: Config.fgcolor
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: unitButton.hours ? "Hours" : "Minutes"
-                                        color: Config.fgcolor
-                                        font.family: Config.fontfamily
-                                        font.pixelSize: Config.scaled(14, shutdownWindow.uiScale)
-                                    }
-
-                                    MouseArea {
-                                        id: unitMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            unitButton.hours = !unitButton.hours
-                                            amountInput.forceActiveFocus()
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // ---- counting down ----
-                        Row {
-                            id: countdownRow
-                            visible: root.shutdownActive
-                            anchors.centerIn: parent
-                            spacing: Config.scaled(12, shutdownWindow.uiScale)
-
-                            Item {
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: countdownIcon.width
-                                height: countdownIcon.height
-
-                                IconImage {
-                                    id: countdownIcon
-                                    implicitSize: Config.scaled(44, shutdownWindow.uiScale)
-                                    source: Quickshell.iconPath("system-shutdown-symbolic")
-                                }
-
-                                ColorOverlay {
-                                    anchors.fill: countdownIcon
-                                    source: countdownIcon
-                                    color: Config.fgcolorred
-                                }
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: root.shutdownRemaining()
-                                color: Config.fgcolorred
-                                font.family: Config.fontfamily
-                                font.bold: true
-                                font.pixelSize: Config.scaled(34, shutdownWindow.uiScale)
-                            }
-                        }
-
+                    PowerTimerCountdown {
+                        id: powerTimerCountdown
+                        width: powerTimerWindow.boxWidth
+                        timer: root.powerTimer
+                        uiScale: powerTimerWindow.uiScale
                     }
                 }
 
-                function openUp() {
-                    shutdownBox.state = ""
-                    shutdownBox.width = 0
-                    shutdownBox.height = Config.scaled(2, shutdownWindow.uiScale)
-                    shutdownBox.state = "horizontal"
-                    shutdownOpenTimer.restart()
-                    if (shutdownWindow.entering) {
-                        amountInput.text = ""
-                        unitButton.hours = true
-                        amountInput.forceActiveFocus()
-                    }
+                onVisibleChanged: {
+                    if (!visible) return
+                    powerTimerBox.state = ""
+                    powerTimerBox.width = 0
+                    powerTimerBox.height = Config.scaled(2, powerTimerWindow.uiScale)
+                    powerTimerBox.state = "horizontal"
+                    powerTimerOpenTimer.restart()
                 }
-
-                onVisibleChanged: if (visible) shutdownWindow.openUp()
-                onEnteringChanged: if (visible && entering) amountInput.forceActiveFocus()
 
                 Timer {
-                    id: shutdownOpenTimer
+                    id: powerTimerOpenTimer
                     interval: 150
-                    onTriggered: shutdownBox.state = "open"
+                    onTriggered: powerTimerBox.state = "open"
                 }
             }
         }
