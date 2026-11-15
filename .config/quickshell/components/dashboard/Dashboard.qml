@@ -86,6 +86,13 @@ Scope {
     // otherwise it silently targets a monitor that can never report
     // brightness support and just stays hidden forever on such a
     // machine.
+    // The screen object for effectivePrimaryMonitor() - where META+D and the
+    // dashboard IPC calls open the dashboard, as they carry no click position.
+    function primaryScreen() {
+        const name = root.effectivePrimaryMonitor()
+        return Quickshell.screens.find(s => s.name === name) || Quickshell.screens[0]
+    }
+
     function effectivePrimaryMonitor() {
         if (root.primaryMonitor && Quickshell.screens.some(s => s.name === root.primaryMonitor)) return root.primaryMonitor
         return Quickshell.screens.length > 0 ? Quickshell.screens[0].name : ""
@@ -605,10 +612,10 @@ Scope {
         // A keybind/IPC call carries no click position, so there's no
         // "which screen was clicked" the way there is from Bar.qml's
         // clock button - this just always targets the primary screen.
-        function toggle(): void { root.toggle(Quickshell.screens[0]) }
+        function toggle(): void { root.toggle(root.primaryScreen()) }
         function show(): void {
             root.open = true
-            root.screen = Quickshell.screens[0]
+            root.screen = root.primaryScreen()
         }
         function hide(): void { root.close() }
     }
@@ -618,7 +625,7 @@ Scope {
         onPressed: {
             // Same "no click position, always the primary screen" logic
             // as IpcHandler's own toggle() above.
-            root.toggle(Quickshell.screens[0])
+            root.toggle(root.primaryScreen())
         }
     }
 
