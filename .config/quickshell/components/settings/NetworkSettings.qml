@@ -212,7 +212,8 @@ Item {
     function solaarNode(d, key) {
         const parts = []
         if (d.kind) parts.push(d.kind)
-        parts.push(root.percent(d.percentage) + (d.charging ? " charging" : ""))
+        // The charge itself is in the battery box beside the row.
+        if (d.charging) parts.push("charging")
         return root.makeNode(key, "solaar:" + d.name, "solaar", d.name, d, {
             subtitle: parts.join(" · "),
             battery: d.percentage,
@@ -296,7 +297,7 @@ Item {
         const charging = !!upower && (upower.state === UPowerDeviceState.Charging || upower.state === UPowerDeviceState.PendingCharge)
         const systemName = d.name.length > 0 ? d.name : d.deviceName.length > 0 ? d.deviceName : d.address
         const subtitle = state === "busy" ? (d.connected ? "disconnecting…" : "connecting…")
-            : d.connected ? "connected" + (battery >= 0 ? " · " + root.percent(battery) : "")
+            : d.connected ? "connected"
             : "remembered"
         return root.makeNode("bt:" + adapter.adapterId + ":" + d.address, "bt:" + d.address, "btDevice", systemName, d, {
             state: state,
@@ -376,7 +377,7 @@ Item {
 
         const battery = root.laptopBattery ? root.laptopBattery.percentage : -1
         return root.makeNode("host", "host", "host", root.userName + "@" + (root.hostName || "localhost"), null, {
-            subtitle: battery >= 0 ? "battery " + root.percent(battery) + (root.laptopCharging ? " · charging" : "") : "this computer",
+            subtitle: "this computer" + (battery >= 0 && root.laptopCharging ? " · charging" : ""),
             battery: battery,
             charging: root.laptopCharging,
             icons: Logic.nodeIcons("host", { laptop: !!root.laptopBattery }),
