@@ -1185,12 +1185,13 @@ Scope {
                 }
             }
 
-            // Set once the opening below has played out in full (width, then
-            // height) - the waiting power action's window waits for it.
-            property bool fullyOpen: false
+            // Set once the opening below is nearly done (its width, then half
+            // its height - see dashSettledTimer) - the waiting power action's
+            // window waits for it.
+            property bool nearlyOpen: false
 
             onVisibleChanged: {
-                dashWindow.fullyOpen = false
+                dashWindow.nearlyOpen = false
                 dashSettledTimer.stop()
                 if (visible) {
                     dashBox.width = 0
@@ -1215,12 +1216,15 @@ Scope {
                 }
             }
 
-            // The height phase's length, as above.
+            // Half the height phase: its OutCubic easing has the box 7/8 open
+            // by then, so the countdown's own opening (150ms + 150ms) has its
+            // line drawn just as the dashboard finishes, rather than starting
+            // after a still-looking last stretch.
             Timer {
                 id: dashSettledTimer
-                interval: 300
+                interval: 150
                 repeat: false
-                onTriggered: dashWindow.fullyOpen = true
+                onTriggered: dashWindow.nearlyOpen = true
             }
 
             // Invisible, full-screen click catcher that closes the
@@ -1265,7 +1269,7 @@ Scope {
                 readonly property real uiScale: dashWindow.uiScale
                 readonly property real boxWidth: Config.scaled(260, powerTimerWindow.uiScale)
 
-                visible: root.open && root.screen === modelData && dashWindow.fullyOpen && root.powerTimerActive
+                visible: root.open && root.screen === modelData && dashWindow.nearlyOpen && root.powerTimerActive
 
                 WlrLayershell.namespace: "dashboard-powertimer"
                 WlrLayershell.layer: WlrLayer.Overlay
