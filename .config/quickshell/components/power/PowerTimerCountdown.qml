@@ -5,8 +5,9 @@ import Qt5Compat.GraphicalEffects
 import "../../Config.js" as Config
 
 // A waiting power action (PowerTimer.qml): its icon and the time left, in
-// red. Small and bare under the dashboard (Dashboard.qml draws the box
-// around it); large, framed and with an X that cancels it in the power menu.
+// red, and an X that cancels it. Small and bare under the dashboard
+// (Dashboard.qml draws the box around it); large and framed in the power
+// menu.
 Rectangle {
     id: root
 
@@ -32,7 +33,8 @@ Rectangle {
         id: countdown
         anchors.verticalCenter: parent.verticalCenter
         anchors.horizontalCenter: root.closable ? undefined : parent.horizontalCenter
-        x: root.pad
+        // Centred in what the X leaves, given more room than it needs.
+        x: Math.max(root.pad, (root.width - root.closeSize - root.pad / 2 - countdown.width) / 2)
         spacing: Config.scaled(12, root.uiScale)
 
         Item {

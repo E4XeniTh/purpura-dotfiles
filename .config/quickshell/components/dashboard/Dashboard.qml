@@ -572,8 +572,8 @@ Scope {
     // ---------------- a power action waiting ----------------
     // The power menu's delayed action (components/power/PowerTimer.qml, set
     // by right-clicking a power menu button): shown in a small window under
-    // the dashboard while it waits, once the dashboard has finished opening.
-    // A right click on the dashboard's power button cancels it.
+    // the dashboard while it waits, once the dashboard has finished opening,
+    // with an X that cancels it.
     readonly property var powerTimer: root.powerMenu ? root.powerMenu.timer : null
     readonly property bool powerTimerActive: !!root.powerTimer && root.powerTimer.active
 
@@ -1056,14 +1056,7 @@ Scope {
                                             id: mouseAreaPower
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                            onClicked: mouse => {
-                                                // Right: cancels a waiting power action
-                                                // (see powerTimer).
-                                                if (mouse.button === Qt.RightButton) {
-                                                    if (root.powerTimerActive) root.powerTimer.cancel()
-                                                    return
-                                                }
+                                            onClicked: {
                                                 root.close()
                                                 if (root.powerMenu) {
                                                     root.powerMenu.open = true
@@ -1318,6 +1311,7 @@ Scope {
                         width: powerTimerWindow.boxWidth
                         timer: root.powerTimer
                         uiScale: powerTimerWindow.uiScale
+                        closable: true
                     }
                 }
 
