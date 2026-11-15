@@ -478,19 +478,67 @@ Scope {
 
             }
 
-            // A waiting action's time left, centred above the buttons once
-            // the box has opened.
-            PowerTimerCountdown {
-                visible: root.timer.active && menuBox.state === "open" && !openTimer.running
+            // A waiting action's time left, centred above the buttons. Once
+            // the menu's box has opened, and a beat after, it opens upwards
+            // from its bottom edge: a line first, then its height - the
+            // dashboard's countdown's opening, the other way up.
+            Rectangle {
+                id: countdownBox
+                property bool started: false
+                visible: root.timer.active && countdownBox.started
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: menuBox.top
                 anchors.bottomMargin: Config.scaled(24, menuScope.uiScale)
-                timer: root.timer
-                uiScale: menuScope.uiScale
-                iconSize: 72
-                fontSize: 56
-                framed: true
-                closable: true
+                width: 0
+                height: Config.scaled(2, menuScope.uiScale)
+                color: Config.fillcolor
+                border.width: Config.scaled(2, menuScope.uiScale)
+                border.color: Config.fgcolorred
+                clip: true
+
+                states: [
+                    State {
+                        name: "line"
+                        PropertyChanges { target: countdownBox; width: bigCountdown.implicitWidth; height: Config.scaled(2, menuScope.uiScale) }
+                    },
+                    State {
+                        name: "open"
+                        PropertyChanges { target: countdownBox; width: bigCountdown.implicitWidth; height: bigCountdown.implicitHeight }
+                    }
+                ]
+                transitions: Transition {
+                    NumberAnimation { properties: "width,height"; duration: 150; easing.type: Easing.OutCubic }
+                }
+
+                PowerTimerCountdown {
+                    id: bigCountdown
+                    anchors.bottom: parent.bottom
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: bigCountdown.implicitWidth
+                    height: bigCountdown.implicitHeight
+                    timer: root.timer
+                    uiScale: menuScope.uiScale
+                    iconSize: 72
+                    fontSize: 56
+                    closable: true
+                }
+            }
+
+            Timer {
+                id: countdownDelay
+                // The menu's box opening (openTimer's two phases), then a beat.
+                interval: 2 * 350 + 250
+                onTriggered: {
+                    countdownBox.started = true
+                    countdownBox.state = "line"
+                    countdownPhase.start()
+                }
+            }
+
+            Timer {
+                id: countdownPhase
+                interval: 150
+                onTriggered: countdownBox.state = "open"
             }
 
             // How to run an action later - only while nothing's waiting,
@@ -553,6 +601,7 @@ Scope {
                 menuScope.forceActiveFocus()
 
                 openTimer.start()
+                countdownDelay.start()
             }
 
             Timer {
