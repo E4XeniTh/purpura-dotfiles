@@ -242,6 +242,7 @@ Scope {
                 WorkspaceRow {
                     id: workspaceRow
                     uiScale: bar.uiScale
+                    screenName: modelData ? modelData.name : ""
                     height: bar.buttonHeight
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left

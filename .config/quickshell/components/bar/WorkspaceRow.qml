@@ -18,6 +18,97 @@ Row {
 
     // Fed in by Bar.qml (the per-screen Config.uiScale).
     property real uiScale: 1.0
+    // The output this row's bar is on, also from Bar.qml - a dropped window
+    // is only taken by the bar it was dropped on.
+    property string screenName: ""
+
+    // ---------------- dropping a dragged window on a workspace ----------------
+    // hyprland.lua's binds on the window-drag buttons (mainMod + LMB) tell
+    // the shell about a drag through custom events: "purpura-drag,start" and
+    // "purpura-drag,end" around it, and instead of the end, when the window
+    // was let go on a bar,
+    //   purpura-drag,drop,<monitor>,<x>,<y>,<address>,<floating>,<relX>,<relY>,<w>,<h>
+    // - the bar's monitor, where on the bar (its own coordinates), the
+    // window, whether the drag left it floating, where it was on its own
+    // monitor before the drag, and its size. Whatever workspace box is there
+    // gets the window, silently; a floating one goes back to that spot, on
+    // the workspace's own monitor (kept on it whole), rather than staying up
+    // by the bar where it was let go. While a drag's on, the box under the
+    // cursor lights up - Hyprland keeps giving the bar the pointer during a
+    // window drag.
+    //
+    // Anything on Hyprland's socket can post a custom event, so every field
+    // is checked before any of it goes into the hyprctl eval below, and the
+    // workspace comes from this row's own boxes.
+    property bool windowDragging: false
+
+    // Should an end never arrive (a config reload mid-drag), the highlight
+    // doesn't stay on for good.
+    Timer {
+        id: dragSafetyTimer
+        interval: 120000
+        onTriggered: root.windowDragging = false
+    }
+
+    function handleDragEvent(data) {
+        const parts = String(data).split(",")
+        if (parts[0] !== "purpura-drag") return
+        if (parts[1] === "start") {
+            root.windowDragging = true
+            dragSafetyTimer.restart()
+            return
+        }
+        root.windowDragging = false
+        dragSafetyTimer.stop()
+        if (parts[1] !== "drop" || parts.length !== 11 || parts[2] !== root.screenName) return
+
+        const integer = /^-?\d{1,6}$/
+        const [x, y, relX, relY, w, h] = [parts[3], parts[4], parts[7], parts[8], parts[9], parts[10]]
+        if (![x, y, relX, relY, w, h].every(v => integer.test(v))) return
+        if (!/^0x[0-9a-fA-F]{1,16}$/.test(parts[5]) || (parts[6] !== "0" && parts[6] !== "1")) return
+
+        const local = root.mapFromItem(null, parseInt(x, 10), parseInt(y, 10))
+        const workspace = root.workspaceAt(local.x)
+        if (!workspace) return
+        root.sendWindow(parts[5], workspace, parts[6] === "1",
+            parseInt(relX, 10), parseInt(relY, 10), parseInt(w, 10), parseInt(h, 10))
+    }
+
+    // The workspace whose box spans `x` (this row's coordinates) - the gap
+    // after a box counts as half its own, half the next's.
+    function workspaceAt(x) {
+        const half = root.spacing / 2
+        for (const child of root.children) {
+            const entry = child.modelData
+            if (!entry || entry.kind !== "workspace" || !child.item) continue
+            if (x >= child.x - half && x < child.x + child.width + half) return entry.ws
+        }
+        return null
+    }
+
+    // A real workspace by number, or by name when it has one (no quotes or
+    // anything else that could end the Lua string); a placeholder by number.
+    function workspaceSelector(workspace) {
+        if (workspace.id > 0) return String(workspace.id)
+        const name = workspace.name || ""
+        return /^[A-Za-z0-9 _.-]{1,64}$/.test(name) ? "name:" + name : ""
+    }
+
+    function sendWindow(address, workspace, floating, relX, relY, w, h) {
+        const target = root.workspaceSelector(workspace)
+        if (!target) return
+        const selector = "address:" + address
+        let lua = `hl.dispatch(hl.dsp.window.move({ workspace = "${target}", window = "${selector}", follow = false }))`
+        const mon = workspace.monitor
+        if (floating && mon && mon.scale > 0) {
+            const monWidth = mon.width / mon.scale
+            const monHeight = mon.height / mon.scale
+            const x = Math.round(mon.x + Math.max(0, Math.min(relX, monWidth - w)))
+            const y = Math.round(mon.y + Math.max(0, Math.min(relY, monHeight - h)))
+            lua += ` hl.dispatch(hl.dsp.window.move({ x = ${x}, y = ${y}, window = "${selector}" }))`
+        }
+        Quickshell.execDetached(["hyprctl", "eval", lua])
+    }
 
     spacing: Config.scaled(4, root.uiScale)
 
@@ -210,6 +301,10 @@ Row {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
+            if (event.name === "custom") {
+                root.handleDragEvent(event.data)
+                return
+            }
             Hyprland.refreshToplevels()
             renderSettleTimer.restart()
         }
@@ -355,16 +450,20 @@ Row {
                 ? (wsBox.mon.width / wsBox.mon.height)
                 : (16 / 9)
 
+            // Where a window being dragged would go, if let go now.
+            readonly property bool dropTarget: root.windowDragging && wsMouse.containsMouse
+
             height: root.height
             width: wsBox.height * wsBox.aspect
-            color: Config.fillcolor
+            color: wsBox.dropTarget ? Config.fgcolorhover : Config.fillcolor
             border.width: Config.scaled(2, root.uiScale)
             // hasFullscreen bumps the border up a tier from whatever
             // it'd otherwise be - fgcolor becomes fgcolorlight when
             // active, fgcolordark becomes fgcolordarklight when not -
             // so a workspace holding a fullscreen app always reads as
             // more prominent than one that doesn't, active or not.
-            border.color: wsBox.modelData.hasFullscreen
+            border.color: wsBox.dropTarget ? Config.fgcolorlight
+                : wsBox.modelData.hasFullscreen
                 ? (wsBox.isActive ? Config.fgcolorlight : Config.fgcolordarklight)
                 : (wsBox.isActive ? Config.fgcolor : Config.fgcolordark)
             radius: 0
@@ -533,8 +632,11 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with).
+            // Hover too, for dropTarget above.
             MouseArea {
+                id: wsMouse
                 anchors.fill: parent
+                hoverEnabled: true
                 onClicked: wsBox.modelData.activate()
             }
         }

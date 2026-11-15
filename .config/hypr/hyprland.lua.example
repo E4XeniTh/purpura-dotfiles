@@ -277,6 +277,66 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { description = "Drag window" })
     hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { description = "Resize window" })
 
+    -- Dropping a window dragged that way on a workspace in the bar's workspace
+    -- widget sends it there. The three binds below share the drag's buttons:
+    -- pressing notes the window the drag picks up (the one under the cursor)
+    -- and tells the shell a drag began, so it can light up the workspace under
+    -- the cursor; letting go after a drag - Hyprland has ended the drag by
+    -- then - reports where on the bar the window went, if it went on the bar,
+    -- and a plain click just ends it. The shell (components/bar/WorkspaceRow.qml)
+    -- knows which workspace is there and moves the window itself, a floating
+    -- one back to where it was on its own monitor before the drag. All of it
+    -- goes as custom events on Hyprland's event socket ("purpura-drag,...").
+    -- non_consuming: META + click on no window still reaches the app below.
+    local draggedWindow
+
+    local function dragEvent(data)
+        hl.dispatch(hl.dsp.event("purpura-drag," .. data))
+    end
+
+    hl.bind(mainMod .. " + mouse:272", function()
+        local cursor = hl.get_cursor_pos()
+        local window = cursor and windowUnderCursor(cursor)
+        draggedWindow = nil
+        if not window then return end
+        local x, y = pair(window.at, "x", "y")
+        local monitor = window.monitor
+        draggedWindow = {
+            address = window.address,
+            relX = math.floor(x - (monitor and monitor.x or 0)),
+            relY = math.floor(y - (monitor and monitor.y or 0)),
+        }
+        dragEvent("start")
+    end, { non_consuming = true })
+
+    hl.bind(mainMod .. " + mouse:272", function()
+        local dragged = draggedWindow
+        draggedWindow = nil
+        if not dragged then return end
+        local cursor = hl.get_cursor_pos()
+        -- Still there - and floating or tiled as the drag left it.
+        local window = hl.get_window("address:" .. dragged.address)
+        if cursor and window then
+            for _, bar in ipairs(hl.get_layers({ namespace = "bar" })) do
+                local monitor = bar.monitor
+                if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor) then
+                    local w, h = pair(window.size, "x", "y")
+                    dragEvent(string.format("drop,%s,%d,%d,%s,%d,%d,%d,%d,%d", monitor.name,
+                        math.floor(cursor.x - bar.x), math.floor(cursor.y - bar.y), dragged.address,
+                        window.floating and 1 or 0, dragged.relX, dragged.relY, math.floor(w), math.floor(h)))
+                    return
+                end
+            end
+        end
+        dragEvent("end")
+    end, { drag = true })
+
+    hl.bind(mainMod .. " + mouse:272", function()
+        if not draggedWindow then return end
+        draggedWindow = nil
+        dragEvent("end")
+    end, { click = true })
+
     hl.bind(mainMod .. " + return", hl.dsp.exec_cmd("kitty"), { description = "Open terminal" })
     hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "Close window" })
     hl.bind(mainMod .. " + S", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating" })
