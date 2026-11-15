@@ -479,7 +479,7 @@ Scope {
             }
 
             // A waiting action's time left, centred above the buttons. Once
-            // the menu's box has opened, and a beat after, it opens upwards
+            // the menu's box has opened, it opens upwards
             // from its bottom edge: a line first, then its height - the
             // dashboard's countdown's opening, the other way up.
             Rectangle {
@@ -526,8 +526,8 @@ Scope {
 
             Timer {
                 id: countdownDelay
-                // The menu's box opening (openTimer's two phases), then a beat.
-                interval: 2 * 350 + 250
+                // The menu's box opening (openTimer's two phases).
+                interval: 2 * 350
                 onTriggered: {
                     countdownBox.started = true
                     countdownBox.state = "line"
