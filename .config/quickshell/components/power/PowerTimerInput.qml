@@ -9,11 +9,11 @@ import "../../Config.js" as Config
 //
 //   [ action ]  [ number ]  [ Hours/Minutes ]
 //   [        ]
-//   [        ]                    [Confirm]
+//   [        ]                [Enter] confirm
 //
-// The number box has the keyboard from the start; Enter or Confirm sends
-// `confirmed`, Escape `dismissed` (as does a click outside, which
-// PowerMenu.qml catches).
+// The number box has the keyboard from the start; Enter sends `confirmed`
+// (the hint at the bottom says so), Escape `dismissed` (as does a click
+// outside, which PowerMenu.qml catches).
 Rectangle {
     id: root
 
@@ -149,33 +149,41 @@ Rectangle {
                 height: root.rowHeight
             }
 
-            // Row 3: Confirm, at the right of column 3.
+            // Row 3: "[Enter] confirm", at the right of column 3 - the Enter
+            // key drawn as a key cap with the return symbol in it, sized like
+            // the settings panels' hint icons (HintItem).
             Item {
                 width: 2 * root.fieldWidth + root.gap
                 height: root.rowHeight
 
-                Rectangle {
+                Row {
                     anchors.right: parent.right
-                    width: confirmText.implicitWidth + Config.scaled(24, root.uiScale)
-                    height: parent.height
-                    color: confirmMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
-                    border.width: Config.scaled(2, root.uiScale)
-                    border.color: Config.fgcolor
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Config.scaled(6, root.uiScale)
+
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Config.scaled(22, root.uiScale)
+                        height: Config.scaled(18, root.uiScale)
+                        color: "transparent"
+                        border.width: Config.scaled(1, root.uiScale)
+                        border.color: Config.fgcolor
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "\u21b5"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                        }
+                    }
 
                     Text {
-                        id: confirmText
-                        anchors.centerIn: parent
-                        text: "Confirm"
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "confirm"
                         color: Config.fgcolor
                         font.family: Config.fontfamily
                         font.pixelSize: Config.scaled(14, root.uiScale)
-                    }
-
-                    MouseArea {
-                        id: confirmMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: root.confirm()
                     }
                 }
             }
