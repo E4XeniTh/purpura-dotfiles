@@ -211,6 +211,10 @@ part("dropping a window on a workspace", function()
     -- Should the release never come (a submap switched to mid-drag), the drag ends
     -- here after this long.
     local FOLLOW_FOR_S = 120
+    -- How long a window sent off to a workspace that isn't on screen stays invisible
+    -- (see endDrag()): past Hyprland's hold on its move (misc:transaction_timeout,
+    -- 250ms at most) and its fade out of sight (hyprland.lua.example's: 0.15s).
+    local AWAY_MS = 500
 
     hl.window_rule({
         name = TAG,
@@ -384,15 +388,43 @@ part("dropping a window on a workspace", function()
     end
 
     -- Stops following, and brings the window back if it's hidden.
-    local function endDrag()
+    -- A window sent off to a workspace that isn't on screen stays invisible, with its
+    -- animations off (purpura-grabbed), for AWAY_MS. Hyprland 0.57 holds a window's
+    -- move back until it's got its new size, or 50ms (misc:transaction_timeout) - and
+    -- meanwhile keeps drawing it where it was. Its opacity given back at once, it would
+    -- fade in there, faintly, for that moment before it went. By the time it's given
+    -- back here it's gone; its move out of sight, with no animations, was instant.
+    local away = {} -- by address, the window's hold while it goes
+
+    local function settleAway(address)
+        local hold = away[address]
+        if not hold then return end
+        away[address] = nil
+        if hold.hidden then reappear(address) end
+        tag(address, "-" .. GRABBED)
+    end
+
+    local function holdWhileGoing(address, hidden)
+        local hold = { hidden = hidden }
+        away[address] = hold
+        hl.timer(function()
+            if away[address] == hold then settleAway(address) end
+        end, { timeout = AWAY_MS, type = "oneshot" })
+    end
+
+    -- Stops following, and brings the window back if it's hidden - once it's gone, if
+    -- it's being sent off out of sight (see above).
+    local function endDrag(sentAway)
         local window, hidden, wasGrabbed = dragged, over ~= nil, grabbed ~= nil
         dragged, over, grabbed = nil, nil, nil
         if follower then follower:set_enabled(false) end
         if not window then return end
-        if hidden then reappear(window.address) end
-        if wasGrabbed then
-            tag(window.address, "-" .. GRABBING)
-            tag(window.address, "-" .. GRABBED)
+        if wasGrabbed then tag(window.address, "-" .. GRABBING) end
+        if sentAway then
+            holdWhileGoing(window.address, hidden)
+        else
+            if hidden then reappear(window.address) end
+            if wasGrabbed then tag(window.address, "-" .. GRABBED) end
         end
         dragEvent("end")
     end
@@ -459,6 +491,7 @@ part("dropping a window on a workspace", function()
         local here = monitor.active_workspace and workspaceSelector(monitor.active_workspace)
         if not here then return false end
         local address, selector = window.address, "address:" .. window.address
+        settleAway(address) -- still going from a drop a moment ago
         dragged = { address = address }
         grabbed = { tiled = not window.floating, fullscreen = window.fullscreen or 0 }
         startedAt = os.time()
@@ -510,7 +543,13 @@ part("dropping a window on a workspace", function()
         -- Still there - and floating or tiled as the drag left it.
         local window = hl.get_window(selector)
         local box = window and boxUnderCursor()
+        local sentAway = false
         if box then
+            -- Out of sight with it, if that workspace isn't on screen (see endDrag()):
+            -- animations off before it moves.
+            local ok, target = pcall(hl.get_workspace, box.workspace)
+            sentAway = not (ok and type(target) == "table" and target.visible)
+            if sentAway then tag(dragged.address, "+" .. GRABBED) end
             hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
         end
         if window and grabbed and grabbed.tiled then
@@ -528,7 +567,7 @@ part("dropping a window on a workspace", function()
                 mode = fullscreenMode(grabbed.fullscreen), action = "set", window = selector,
             }))
         end
-        endDrag()
+        endDrag(sentAway)
     end
 
     local function press()
@@ -537,6 +576,7 @@ part("dropping a window on a workspace", function()
         if not cursor or grab(cursor) then return end
         local window = windowUnderCursor(cursor)
         if not window then return end
+        settleAway(window.address) -- still going from a drop a moment ago
         local x, y = pair(window.at, "x", "y")
         local monitor = window.monitor
         dragged = {
