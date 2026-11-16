@@ -547,8 +547,21 @@ part("dropping a window on a workspace", function()
         if box then
             -- Out of sight with it, if that workspace isn't on screen (see endDrag()):
             -- animations off before it moves.
-            local ok, target = pcall(hl.get_workspace, box.workspace)
-            sentAway = not (ok and type(target) == "table" and target.visible)
+            -- On screen: the one it's on already (a grabbed window is on the one
+            -- shown), any monitor's shown one, or one Hyprland says is visible.
+            local shown = window.workspace ~= nil and workspaceSelector(window.workspace) == box.workspace
+            if not shown then
+                local okMonitors, monitors = pcall(hl.get_monitors)
+                for _, monitor in ipairs(okMonitors and type(monitors) == "table" and monitors or {}) do
+                    local active = monitor.active_workspace
+                    if active and workspaceSelector(active) == box.workspace then shown = true end
+                end
+            end
+            if not shown then
+                local ok, target = pcall(hl.get_workspace, box.workspace)
+                shown = ok and type(target) == "table" and target.visible == true
+            end
+            sentAway = not shown
             if sentAway then tag(dragged.address, "+" .. GRABBED) end
             hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
         end
