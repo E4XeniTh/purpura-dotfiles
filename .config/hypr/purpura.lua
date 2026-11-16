@@ -404,8 +404,8 @@ part("dropping a window on a workspace", function()
         tag(address, "-" .. GRABBED)
     end
 
-    local function holdWhileGoing(address, hidden)
-        local hold = { hidden = hidden }
+    local function holdWhileGoing(address, hidden, workspace)
+        local hold = { hidden = hidden, workspace = workspace }
         away[address] = hold
         hl.timer(function()
             if away[address] == hold then settleAway(address) end
@@ -421,7 +421,7 @@ part("dropping a window on a workspace", function()
         if not window then return end
         if wasGrabbed then tag(window.address, "-" .. GRABBING) end
         if sentAway then
-            holdWhileGoing(window.address, hidden)
+            holdWhileGoing(window.address, hidden, sentAway)
         else
             if hidden then reappear(window.address) end
             if wasGrabbed then tag(window.address, "-" .. GRABBED) end
@@ -561,7 +561,7 @@ part("dropping a window on a workspace", function()
                 local ok, target = pcall(hl.get_workspace, box.workspace)
                 shown = ok and type(target) == "table" and target.visible == true
             end
-            sentAway = not shown
+            sentAway = not shown and box.workspace
             if sentAway then tag(dragged.address, "+" .. GRABBED) end
             hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
         end
@@ -655,6 +655,16 @@ part("dropping a window on a workspace", function()
             return unbind(keys, ...)
         end
     end
+
+    -- Switched to the workspace a held window was sent to: it's needed there now, so
+    -- the hold ends at once rather than when its time's up.
+    hl.on("workspace.active", function(workspace)
+        local selector = type(workspace) == "table" and workspaceSelector(workspace)
+        if not selector then return end
+        for address, hold in pairs(away) do
+            if hold.workspace == selector then settleAway(address) end
+        end
+    end)
 
     -- A config reload mid-drag drops all of this, the timers included, with the old
     -- Lua state - so a window it left invisible, without its blur or its animations,
