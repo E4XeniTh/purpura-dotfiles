@@ -37,6 +37,9 @@ Row {
     //   purpura-drag,at,<monitor>,<x>,<y>       where on that monitor it is,
     //                                           while it's on either
     //   purpura-drag,off                        it's on neither
+    //   purpura-drag,monitor,<monitor>          the cursor's on that monitor
+    //                                           (from the start, then on
+    //                                           every change)
     //   purpura-drag,end                        it's over
     // purpura.lua knows where this row's boxes are (sendDropTargets below),
     // finds the cursor in them, and sends the window to the workspace of the
@@ -52,6 +55,9 @@ Row {
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
+    // The monitor the cursor's on during a drag - Bar.qml shows its floating
+    // copy of the widget only there.
+    property string dragMonitor: ""
     // The cursor's on this bar's widget - a box or a separator - where the
     // window itself is hidden, so Bar.qml shows its icon instead.
     property bool dragHere: false
@@ -80,6 +86,7 @@ Row {
             root.windowDragging = false
             root.dragOver = ""
             root.dragHere = false
+            root.dragMonitor = ""
         }
     }
 
@@ -90,6 +97,7 @@ Row {
             root.windowDragging = true
             root.dragOver = ""
             root.dragHere = false
+            root.dragMonitor = ""
             root.dragAddress = /^0x[0-9a-fA-F]{1,16}$/.test(parts[2] || "") ? parts[2] : ""
             root.dragOverAnywhere = false
             dragSafetyTimer.restart()
@@ -98,6 +106,8 @@ Row {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
             root.dragHere = parts[2] === root.screenName
             root.dragOverAnywhere = true
+        } else if (parts[1] === "monitor") {
+            root.dragMonitor = /^[A-Za-z0-9_.-]{1,64}$/.test(parts[2] || "") ? parts[2] : ""
         } else if (parts[1] === "between") {
             root.dragOver = ""
             root.dragHere = parts[2] === root.screenName
@@ -114,6 +124,7 @@ Row {
             root.windowDragging = false
             root.dragOver = ""
             root.dragHere = false
+            root.dragMonitor = ""
             root.dragOverAnywhere = false
             root.dragAddress = ""
             dragSafetyTimer.stop()

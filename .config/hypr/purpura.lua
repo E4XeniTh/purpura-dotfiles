@@ -158,7 +158,9 @@ end)
 --   leaving both, the tag comes off and "purpura-drag,off" follows. While it's on
 --   either, "purpura-drag,at,<monitor>,<x>,<y>" says where on that monitor the cursor
 --   is, whenever it moves (once a tick at most), for the window's icon the shell shows
---   under it.
+--   under it. And "purpura-drag,monitor,<monitor>" whenever the cursor's on another
+--   monitor, the first time included: the floating copy of the widget on a monitor
+--   without the bar shows only there.
 -- - Letting go over a box - Hyprland has ended the drag by then - sends the window to
 --   that workspace without following it, a floating one back to where it was on its own
 --   monitor before the drag, only on the workspace's monitor (kept on it whole). Then
@@ -256,6 +258,7 @@ part("dropping a window on a workspace", function()
     -- A grabbed window is hidden before the box under the cursor's been posted.
     local HIDDEN_AT_START = {}
     local lastAt           -- the last "at" posted, so a still cursor isn't posted again
+    local cursorMonitor    -- the monitor last posted as the cursor's
     local ticksSinceAt = 0
     local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
@@ -442,6 +445,14 @@ part("dropping a window on a workspace", function()
             return
         end
         if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
+        -- The monitor the cursor's on, whenever that changes: the bar shows its
+        -- floating copy of the widget only there (Bar.qml).
+        local onMonitor = hl.get_monitor_at_cursor()
+        local onName = onMonitor and onMonitor.name
+        if onName and onName ~= cursorMonitor then
+            cursorMonitor = onName
+            dragEvent("monitor," .. onName)
+        end
         local box, span, monitor, x, y = spotUnderCursor()
         local spot = box or span
         -- First, so the icon's in place by the time "over" shows it - on reaching a
@@ -502,7 +513,7 @@ part("dropping a window on a workspace", function()
         dragged = { address = address }
         grabbed = { tiled = not window.floating, fullscreen = window.fullscreen or 0 }
         startedAt = os.time()
-        lastAt, ticksSinceAt = nil, 0
+        lastAt, ticksSinceAt, cursorMonitor = nil, 0, nil
         dragEvent("start," .. address)
         -- Out of sight before it moves at all, with no animations first, so its
         -- opacity doesn't fade where it lands.
@@ -605,7 +616,7 @@ part("dropping a window on a workspace", function()
             relY = math.floor(y - (monitor and monitor.y or 0)),
         }
         startedAt = os.time()
-        lastAt, ticksSinceAt = nil, 0
+        lastAt, ticksSinceAt, cursorMonitor = nil, 0, nil
         dragEvent("start," .. window.address)
         startFollowing()
     end
