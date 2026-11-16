@@ -139,7 +139,8 @@ end)
 -- - Pressing notes the window the drag picks up (the one under the cursor) and posts
 --   "purpura-drag,start,<address>" on Hyprland's event socket. Each bar
 --   (components/bar/WorkspaceRow.qml) answers with its workspace boxes, through
---   purpura.dropTargets() below, and the timer starts looking for one under the cursor.
+--   purpura.dropTargets() below - it hands them over whenever they change as well -
+--   and the timer starts looking for one under the cursor.
 -- - On the cursor reaching a box, the window gets the purpura-dragged tag - the rule
 --   below turns a window with it invisible - and "purpura-drag,over,<monitor>,
 --   <workspace>" lights the box up; on the cursor leaving the boxes, the tag comes off
@@ -159,16 +160,30 @@ end)
 -- the blur off with the opacity, and a second one (purpura-reappearing) keeps it off
 -- until the fade back in is over.
 --
--- Carrying: dragging a window's icon out of its box in the workspace widget (a plain
--- left-button drag in the bar, see WorkspaceRow.qml) picks the window up from whichever
--- workspace it's on. The shell calls purpura.carry() below, and the window comes onto
--- the workspace shown under the cursor, floating, and follows the cursor from then on:
--- moved here every tick, as Hyprland only starts a drag of its own from a bind's press,
--- not on the shell's word. Otherwise it's a dragged window like any other - hidden over
--- a box, that box lit up - and letting go of the button drops it: on a box, sent there;
--- anywhere else, it stays where it is, on the workspace shown there, focused. A window
--- that was tiled goes back into the tiling either way. The release comes to a bind on
--- the plain left button, which (like the press bind) takes the click from nothing.
+-- Grabbing from the widget: mainMod + LMB on a window drawn in the widget picks that
+-- window up from whichever workspace it's on, at the press - nothing waits for the
+-- mouse to move. The window there is found from the box under the cursor (the bars
+-- hand over where their boxes are): the cursor's spot in it, scaled up to that
+-- workspace's monitor - a fullscreen window wherever it's pressed, as the widget
+-- draws only that one then, otherwise floating over tiled, the most recently focused
+-- among equals. The press bind below runs before hyprland.lua's own "Drag window"
+-- bind for the same press (binds go in the order they're made, and this file loads
+-- before hyprland.lua's), so by the time that one looks for a window to drag, the
+-- grabbed one is already under the cursor, on the workspace shown there: out of sight
+-- first, then out of fullscreen, floating if it was tiled, raised, and held by its
+-- top edge, centred on the cursor. That bind starts Hyprland's own drag of it, the
+-- very drag as any other from there on - hidden over a box, that box lit up.
+--
+-- Hyprland's drag looks for its window where it's drawn right now, which mid-
+-- animation is still where it was - so for that one moment the window also has
+-- dim_around (purpura-grabbing), for which Hyprland counts a window as covering its
+-- whole monitor. Being invisible, it dims nothing; the tag comes off a millisecond
+-- later, the drag under way by then. Until it's let go, purpura-grabbed keeps its
+-- animations off, so it never fades out or glides where it lands - and it vanishes
+-- and comes back at once over the boxes. Let go, it's put down as any drag: on a
+-- box, sent there; anywhere else, left there. One that was tiled goes back into the
+-- tiling either way, and one that was fullscreen is fullscreen again on a box. Let
+-- go without moving, it's over its own box - so it's back where it was.
 --
 -- non_consuming: mainMod + click on no window still reaches the app below. These have
 -- no description, so Settings > Shortcuts keeps showing the drag bind's.
@@ -176,17 +191,18 @@ end)
 part("dropping a window on a workspace", function()
     local TAG = "purpura-dragged"
     local REAPPEARING = "purpura-reappearing"
-    local CARRIED = "purpura-carried"
+    local GRABBED = "purpura-grabbed"
+    local GRABBING = "purpura-grabbing"
     -- Longer than the fade back in: hyprland.lua.example's takes 0.3s, Hyprland's
     -- default 1s. An opaque window shows nothing of its blur once it's back anyway.
     local REAPPEAR_MS = 1200
-    -- Often enough for a carried window to keep up with the cursor; "at" goes out at
-    -- most every AT_EVERY ticks (16ms).
+    -- How often the cursor's looked for on the boxes; "at" goes out at most every
+    -- AT_EVERY ticks (16ms).
     local FOLLOW_MS = 8
     local AT_EVERY = 2
-    -- How far below a carried window's top edge the cursor holds it - by its top, as
+    -- How far below a grabbed window's top edge the cursor holds it - by its top, as
     -- by a title bar.
-    local CARRY_GRIP = 16
+    local GRIP = 16
     -- Should the release never come (a submap switched to mid-drag), the drag ends
     -- here after this long.
     local FOLLOW_FOR_S = 120
@@ -204,20 +220,24 @@ part("dropping a window on a workspace", function()
         no_blur = true,
     })
 
-    -- While carried it's moved every tick, so without animations - they'd have it
-    -- trailing the cursor. Its hiding and showing are instant then too.
     hl.window_rule({
-        name = CARRIED,
-        match = { tag = CARRIED },
+        name = GRABBED,
+        match = { tag = GRABBED },
         no_anim = true,
+    })
+
+    hl.window_rule({
+        name = GRABBING,
+        match = { tag = GRABBING },
+        dim_around = true,
     })
 
     local targets = {}     -- each monitor's workspace boxes, from its bar
     local dragged          -- { address, relX, relY } while the button's down
-    local carried          -- { tiled, at } while it's being carried (see purpura.carry)
+    local grabbed          -- { tiled, fullscreen } while it's one grabbed from the widget
     local over             -- the box under the cursor, while there is one (the window's hidden)
-    -- A carried window starts out hidden, before any box is known under the cursor.
-    local CARRY_START = {}
+    -- A grabbed window is hidden before the box under the cursor's been posted.
+    local HIDDEN_AT_START = {}
     local lastAt           -- the last "at" posted, so a still cursor isn't posted again
     local ticksSinceAt = 0
     local reappearing = {} -- each window's latest reappearance, till its blur's back
@@ -247,11 +267,17 @@ part("dropping a window on a workspace", function()
         end, { timeout = REAPPEAR_MS, type = "oneshot" })
     end
 
+    local function workspaceSelector(workspace)
+        if workspace.id and workspace.id > 0 then return tostring(workspace.id) end
+        return workspace.name and ("name:" .. workspace.name) or nil
+    end
+
     -- A bar's boxes, from the shell through hyprctl eval:
     --   purpura.dropTargets("DP-1", { { from = 412, to = 498, workspace = "3",
-    --       x = 0, y = 0, w = 2560, h = 1440 }, ... })
+    --       x = 0, y = 0, w = 2560, h = 1440, bx = 414, by = 6, bw = 82, bh = 46 }, ... })
     -- from/to: where it spans across the bar, in the bar's own coordinates; then the
-    -- workspace to send a window to, and the area of the monitor it's on.
+    -- workspace to send a window to, the area of the monitor it's on, and the box itself
+    -- (bx/by/bw/bh, in the bar's coordinates too), which draws that area scaled down.
     purpura = purpura or {}
     function purpura.dropTargets(monitor, boxes)
         if type(monitor) ~= "string" or type(boxes) ~= "table" then return end
@@ -260,10 +286,26 @@ part("dropping a window on a workspace", function()
             if type(box) == "table" and type(box.workspace) == "string" and type(box.from) == "number"
                 and type(box.to) == "number" and type(box.x) == "number" and type(box.y) == "number"
                 and type(box.w) == "number" and type(box.h) == "number" then
+                -- Without a box to find its windows in, it's still somewhere to drop on.
+                if not (type(box.bx) == "number" and type(box.by) == "number" and type(box.bw) == "number"
+                    and type(box.bh) == "number" and box.bw > 0 and box.bh > 0 and box.w > 0 and box.h > 0) then
+                    box.bx, box.by, box.bw, box.bh = nil, nil, nil, nil
+                end
                 valid[#valid + 1] = box
             end
         end
         targets[monitor] = valid
+    end
+
+    -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
+    local function barUnderCursor(cursor)
+        for _, bar in ipairs(hl.get_layers({ namespace = "bar" })) do
+            local monitor = bar.monitor
+            if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor) then
+                return monitor, cursor.x - bar.x, cursor.y - bar.y
+            end
+        end
+        return nil
     end
 
     -- The box under the cursor, the monitor of the bar it's on, and where on that
@@ -271,17 +313,45 @@ part("dropping a window on a workspace", function()
     local function boxUnderCursor()
         local cursor = hl.get_cursor_pos()
         if not cursor then return nil end
-        for _, bar in ipairs(hl.get_layers({ namespace = "bar" })) do
-            local monitor = bar.monitor
-            if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor) then
-                local x = cursor.x - bar.x
-                for _, box in ipairs(targets[monitor.name] or {}) do
-                    if x >= box.from and x < box.to then
-                        return box, monitor.name,
-                            math.floor(cursor.x - (monitor.x or 0)), math.floor(cursor.y - (monitor.y or 0))
+        local monitor, x = barUnderCursor(cursor)
+        if not monitor then return nil end
+        for _, box in ipairs(targets[monitor.name] or {}) do
+            if x >= box.from and x < box.to then
+                return box, monitor.name,
+                    math.floor(cursor.x - (monitor.x or 0)), math.floor(cursor.y - (monitor.y or 0))
+            end
+        end
+        return nil
+    end
+
+    -- The window the widget draws under the cursor, if any (see above).
+    local function windowInWidget(cursor)
+        local monitor, x, y = barUnderCursor(cursor)
+        if not monitor then return nil end
+        for _, box in ipairs(targets[monitor.name] or {}) do
+            if box.bw and x >= box.bx and x < box.bx + box.bw and y >= box.by and y < box.by + box.bh then
+                local point = {
+                    x = box.x + (x - box.bx) / box.bw * box.w,
+                    y = box.y + (y - box.by) / box.bh * box.h,
+                }
+                local best, bestRank, bestHistory
+                for _, window in ipairs(hl.get_windows({ mapped = true })) do
+                    local workspace = window.workspace
+                    if not window.hidden and workspace and workspaceSelector(workspace) == box.workspace then
+                        local fullscreen = (window.fullscreen or 0) > 0
+                        local wx, wy = pair(window.at, "x", "y")
+                        local ww, wh = pair(window.size, "x", "y")
+                        if fullscreen or contains(wx, wy, ww, wh, point) then
+                            local rank = (fullscreen and 2 or 0) + (window.floating and 1 or 0)
+                            local history = window.focus_history_id or math.huge
+                            if history < 0 then history = math.huge end
+                            if not best or rank > bestRank or (rank == bestRank and history < bestHistory) then
+                                best, bestRank, bestHistory = window, rank, history
+                            end
+                        end
                     end
                 end
-                return nil
+                return best
             end
         end
         return nil
@@ -289,29 +359,16 @@ part("dropping a window on a workspace", function()
 
     -- Stops following, and brings the window back if it's hidden.
     local function endDrag()
-        local window, hidden, wasCarried = dragged, over ~= nil, carried ~= nil
-        dragged, over, carried = nil, nil, nil
+        local window, hidden, wasGrabbed = dragged, over ~= nil, grabbed ~= nil
+        dragged, over, grabbed = nil, nil, nil
         if follower then follower:set_enabled(false) end
         if not window then return end
         if hidden then reappear(window.address) end
-        if wasCarried then tag(window.address, "-" .. CARRIED) end
+        if wasGrabbed then
+            tag(window.address, "-" .. GRABBING)
+            tag(window.address, "-" .. GRABBED)
+        end
         dragEvent("end")
-    end
-
-    local function workspaceSelector(workspace)
-        if workspace.id and workspace.id > 0 then return tostring(workspace.id) end
-        return workspace.name and ("name:" .. workspace.name) or nil
-    end
-
-    -- A carried window's spot: centred on the cursor across, held CARRY_GRIP below
-    -- its top edge.
-    local function carryTo(window, cursor)
-        local w = pair(window.size, "x", "y")
-        hl.dispatch(hl.dsp.window.move({
-            x = math.floor(cursor.x - w / 2),
-            y = math.floor(cursor.y - CARRY_GRIP),
-            window = "address:" .. window.address,
-        }))
     end
 
     local function follow()
@@ -320,15 +377,6 @@ part("dropping a window on a workspace", function()
             return
         end
         if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
-        if carried then
-            local cursor = hl.get_cursor_pos()
-            if cursor and not (carried.at and carried.at.x == cursor.x and carried.at.y == cursor.y) then
-                local window = hl.get_window("address:" .. dragged.address)
-                if not window then return endDrag() end
-                carried.at = { x = cursor.x, y = cursor.y }
-                carryTo(window, cursor)
-            end
-        end
         local box, monitor, x, y = boxUnderCursor()
         -- First, so the icon's in place by the time "over" shows it - on reaching a
         -- box whenever, otherwise once every AT_EVERY ticks at most.
@@ -369,49 +417,97 @@ part("dropping a window on a workspace", function()
         end, { timeout = FOLLOW_MS, type = "repeat" })
     end
 
-    -- Picks a window up to carry it (see above), from the shell through hyprctl eval:
-    --   purpura.carry("0x55d1e0a4b2c0")
-    -- Only while nothing's being dragged already.
-    function purpura.carry(address)
-        if dragged or type(address) ~= "string" or not address:match("^0x%x+$") then return end
-        local selector = "address:" .. address
-        local window = hl.get_window(selector)
-        local cursor = hl.get_cursor_pos()
-        local monitor = hl.get_monitor_at_cursor()
-        local workspace = monitor and monitor.active_workspace
-        local here = workspace and workspaceSelector(workspace)
-        if not window or not cursor or not here then return end
-        local x, y = pair(window.at, "x", "y")
-        local own = window.monitor
-        dragged = {
-            address = address,
-            relX = math.floor(x - (own and own.x or 0)),
-            relY = math.floor(y - (own and own.y or 0)),
-        }
-        carried = { tiled = not window.floating, at = { x = cursor.x, y = cursor.y } }
-        over = CARRY_START
+    local function fullscreenMode(mode)
+        return mode == 1 and "maximized" or "fullscreen"
+    end
+
+    -- Picks up the window drawn under the cursor in the widget (see above) - false
+    -- when there's none, or a special workspace is shown there, which Hyprland's drag
+    -- would look in instead.
+    local function grab(cursor)
+        local window = windowInWidget(cursor)
+        local monitor = window and hl.get_monitor_at_cursor()
+        if not monitor or monitor.active_special_workspace then return false end
+        local here = monitor.active_workspace and workspaceSelector(monitor.active_workspace)
+        if not here then return false end
+        local address, selector = window.address, "address:" .. window.address
+        dragged = { address = address }
+        grabbed = { tiled = not window.floating, fullscreen = window.fullscreen or 0 }
         startedAt = os.time()
         lastAt, ticksSinceAt = nil, 0
         dragEvent("start," .. address)
-        -- Out of sight at once, before it lands under the bar - no animations first, so
-        -- its opacity doesn't fade there.
-        tag(address, "+" .. CARRIED)
+        -- Out of sight before it moves at all, with no animations first, so its
+        -- opacity doesn't fade where it lands.
+        tag(address, "+" .. GRABBED)
         hide(address)
-        if not (window.workspace and window.workspace.id == workspace.id) then
-            hl.dispatch(hl.dsp.window.move({ workspace = here, window = selector, follow = false }))
+        over = HIDDEN_AT_START
+        if grabbed.fullscreen > 0 then
+            hl.dispatch(hl.dsp.window.fullscreen({
+                mode = fullscreenMode(grabbed.fullscreen), action = "unset", window = selector,
+            }))
+            window = hl.get_window(selector) or window -- its own spot again
         end
-        if not window.floating then
+        -- Where it was on its monitor, for a floating one to go back to on a box.
+        local x, y = pair(window.at, "x", "y")
+        local own = window.monitor
+        dragged.relX = math.floor(x - (own and own.x or 0))
+        dragged.relY = math.floor(y - (own and own.y or 0))
+        -- Floating first, while it's out of sight, so it never joins the tiling here.
+        if grabbed.tiled then
             hl.dispatch(hl.dsp.window.float({ action = "enable", window = selector }))
         end
+        if workspaceSelector(window.workspace) ~= here then
+            hl.dispatch(hl.dsp.window.move({ workspace = here, window = selector, follow = false }))
+        end
         hl.dispatch(hl.dsp.window.alter_zorder({ mode = "top", window = selector }))
-        carryTo(hl.get_window(selector) or window, cursor)
+        -- Its size as a floating window, which Hyprland reports at once.
+        local w = pair((hl.get_window(selector) or window).size, "x", "y")
+        hl.dispatch(hl.dsp.window.move({
+            x = math.floor(cursor.x - w / 2),
+            y = math.floor(cursor.y - GRIP),
+            window = selector,
+        }))
+        -- For "Drag window"'s search, next - see above.
+        tag(address, "+" .. GRABBING)
+        hl.timer(function() tag(address, "-" .. GRABBING) end, { timeout = 1, type = "oneshot" })
         startFollowing()
+        follow() -- the box lit up and the icon shown now, not a tick later
+        return true
+    end
+
+    -- Letting go (see above).
+    local function drop()
+        if not dragged then return end
+        local selector = "address:" .. dragged.address
+        -- Still there - and floating or tiled as the drag left it.
+        local window = hl.get_window(selector)
+        local box = window and boxUnderCursor()
+        if box then
+            hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
+        end
+        if window and grabbed and grabbed.tiled then
+            hl.dispatch(hl.dsp.window.float({ action = "disable", window = selector }))
+        elseif box and window.floating then
+            local w, h = pair(window.size, "x", "y")
+            hl.dispatch(hl.dsp.window.move({
+                x = math.floor(box.x + math.max(0, math.min(dragged.relX, box.w - w))),
+                y = math.floor(box.y + math.max(0, math.min(dragged.relY, box.h - h))),
+                window = selector,
+            }))
+        end
+        if box and grabbed and grabbed.fullscreen > 0 then
+            hl.dispatch(hl.dsp.window.fullscreen({
+                mode = fullscreenMode(grabbed.fullscreen), action = "set", window = selector,
+            }))
+        end
+        endDrag()
     end
 
     hl.bind(mainMod .. " + mouse:272", function()
         endDrag() -- one whose release never came
         local cursor = hl.get_cursor_pos()
-        local window = cursor and windowUnderCursor(cursor)
+        if not cursor or grab(cursor) then return end
+        local window = windowUnderCursor(cursor)
         if not window then return end
         local x, y = pair(window.at, "x", "y")
         local monitor = window.monitor
@@ -426,70 +522,23 @@ part("dropping a window on a workspace", function()
         startFollowing()
     end, { non_consuming = true })
 
+    hl.bind(mainMod .. " + mouse:272", function() drop() end, { drag = true })
+
+    -- A grabbed window let go is put down even without a move (back on its own box);
+    -- any other drag just ends.
     hl.bind(mainMod .. " + mouse:272", function()
-        if not dragged then return end
-        local box = boxUnderCursor()
-        local selector = "address:" .. dragged.address
-        -- Still there - and floating or tiled as the drag left it.
-        local window = box and hl.get_window(selector)
-        if window then
-            hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
-            if window.floating then
-                local w, h = pair(window.size, "x", "y")
-                hl.dispatch(hl.dsp.window.move({
-                    x = math.floor(box.x + math.max(0, math.min(dragged.relX, box.w - w))),
-                    y = math.floor(box.y + math.max(0, math.min(dragged.relY, box.h - h))),
-                    window = selector,
-                }))
-            end
-        end
-        endDrag()
-    end, { drag = true })
-
-    hl.bind(mainMod .. " + mouse:272", function() endDrag() end, { click = true })
-
-    -- Any left-button release - a carried window's drop, otherwise nothing.
-    hl.bind("mouse:272", function()
-        if not (dragged and carried) then return end
-        local selector = "address:" .. dragged.address
-        local window = hl.get_window(selector)
-        if window then
-            local box = boxUnderCursor()
-            if box then
-                hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
-                if carried.tiled then
-                    hl.dispatch(hl.dsp.window.float({ action = "disable", window = selector }))
-                else
-                    local w, h = pair(window.size, "x", "y")
-                    hl.dispatch(hl.dsp.window.move({
-                        x = math.floor(box.x + math.max(0, math.min(dragged.relX, box.w - w))),
-                        y = math.floor(box.y + math.max(0, math.min(dragged.relY, box.h - h))),
-                        window = selector,
-                    }))
-                end
-            else
-                local monitor = hl.get_monitor_at_cursor()
-                local workspace = monitor and monitor.active_workspace
-                local there = workspace and workspaceSelector(workspace)
-                if there and not (window.workspace and window.workspace.id == workspace.id) then
-                    hl.dispatch(hl.dsp.window.move({ workspace = there, window = selector, follow = false }))
-                end
-                if carried.tiled then
-                    hl.dispatch(hl.dsp.window.float({ action = "disable", window = selector }))
-                end
-                hl.dispatch(hl.dsp.focus({ window = selector }))
-            end
-        end
-        endDrag()
-    end, { release = true, non_consuming = true })
+        if grabbed then drop() else endDrag() end
+    end, { click = true })
 
     -- A config reload mid-drag drops all of this, the timers included, with the old
-    -- Lua state - so a window it left invisible, or without its blur, is brought back
-    -- here.
+    -- Lua state - so a window it left invisible, without its blur or its animations,
+    -- is brought back here.
     hl.on("config.reloaded", function()
         for _, window in ipairs(hl.get_windows()) do
             for _, name in ipairs(window.tags or {}) do
-                if name == TAG or name == REAPPEARING or name == CARRIED then tag(window.address, "-" .. name) end
+                if name == TAG or name == REAPPEARING or name == GRABBED or name == GRABBING then
+                    tag(window.address, "-" .. name)
+                end
             end
         end
     end)

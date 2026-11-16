@@ -35,15 +35,16 @@ Row {
     //                                           while it's on a box
     //   purpura-drag,off                        it's on no box
     //   purpura-drag,end                        it's over
-    // To a start, this row answers with where its boxes are (sendDropTargets
-    // below), which purpura.lua then finds the cursor in - and sends the
-    // window to the workspace of the box it's let go on, by itself. Here, the
+    // purpura.lua knows where this row's boxes are (sendDropTargets below),
+    // finds the cursor in them, and sends the window to the workspace of the
+    // box it's let go on, by itself - and picks up a window drawn in a box
+    // pressed with mainMod + LMB, for Hyprland to drag from there. Here, the
     // box under the cursor just lights up.
     property bool windowDragging: false
-    // Whether this row hands purpura.lua its boxes at a drag's start: only
-    // while it's on screen - the bar on the primary monitor, or Bar.qml's
-    // floating copy on another during a drag. A hidden bar's row would
-    // otherwise send its own, wrong, spans for the same monitor.
+    // Whether this row hands purpura.lua its boxes: only while it's on
+    // screen - the bar on the primary monitor, or Bar.qml's floating copy on
+    // another during a drag. A hidden bar's row would otherwise send its
+    // own, wrong, spans for the same monitor.
     property bool sendsDropTargets: true
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
@@ -84,7 +85,7 @@ Row {
             root.dragAddress = /^0x[0-9a-fA-F]{1,16}$/.test(parts[2] || "") ? parts[2] : ""
             root.dragOverAnywhere = false
             dragSafetyTimer.restart()
-            root.sendDropTargets()
+            root.sendDropTargets(true)
         } else if (parts[1] === "over") {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
             root.dragOverAnywhere = true
@@ -159,55 +160,85 @@ Row {
 
     // Each box's span across the bar, in the bar's own coordinates (the gap
     // after a box counts as half its own, half the next's), its workspace,
-    // and the area of the monitor that's on - for purpura.lua to land a
-    // floating window inside. Handed over as Lua, through hyprctl eval: the
-    // only strings in it are the checked monitor name and workspaceSelector()s,
-    // the rest are whole numbers.
-    function sendDropTargets() {
+    // the area of the monitor that's on - for purpura.lua to land a
+    // floating window inside - and the box itself (bx/by/bw/bh), which
+    // draws that area scaled down: from it, purpura.lua finds the window
+    // drawn under a mainMod + LMB press in a box and picks that window up,
+    // then and there, for Hyprland to drag like any other. Handed over as
+    // Lua, through hyprctl eval: the only strings in it are the checked
+    // monitor name and workspaceSelector()s, the rest are whole numbers.
+    //
+    // The press needs them there already, so they're handed over whenever
+    // they'd come out different - looked at on any change the row knows of
+    // and once a second besides (dropTargetsCheck) - and again at a drag's
+    // start, for Bar.qml's floating copy, only on screen from then, and
+    // after a config reload, which starts purpura.lua over without them.
+    property string sentDropTargets: ""
+
+    function sendDropTargets(force) {
         if (!root.sendsDropTargets) return
         const lua = root.dropTargetsLua()
-        if (lua) Quickshell.execDetached(["hyprctl", "eval", lua])
+        if (!lua || (!force && lua === root.sentDropTargets)) return
+        root.sentDropTargets = lua
+        Quickshell.execDetached(["hyprctl", "eval", lua])
+    }
+
+    function refreshDropTargets() {
+        root.sendDropTargets(false)
     }
 
     function dropTargetsLua() {
         if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return ""
         // A row that's only just been put on screen (Bar.qml's floating
-        // copy) may not have placed its boxes yet.
+        // copy), or just changed, may not have placed its boxes yet.
         root.forceLayout()
         const half = root.spacing / 2
         const boxes = []
         for (const child of root.children) {
             const entry = child.modelData
-            if (!entry || entry.kind !== "workspace" || !child.item) continue
+            const box = child.item
+            if (!entry || entry.kind !== "workspace" || !box) continue
             const workspace = root.workspaceSelector(entry.ws)
             const mon = entry.ws.monitor
             if (!workspace || !mon || !(mon.scale > 0)) continue
+            const corner = box.mapToItem(null, 0, 0)
             const numbers = [
                 child.mapToItem(null, -half, 0).x,
                 child.mapToItem(null, child.width + half, 0).x,
-                mon.x, mon.y, mon.width / mon.scale, mon.height / mon.scale
+                mon.x, mon.y, mon.width / mon.scale, mon.height / mon.scale,
+                corner.x, corner.y, box.width, box.height
             ]
             if (!numbers.every(n => Number.isFinite(n))) continue
-            const [from, to, x, y, w, h] = numbers.map(n => Math.floor(n))
-            boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h} }`)
+            const [from, to, x, y, w, h, bx, by, bw, bh] = numbers.map(n => Math.floor(n))
+            boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h}, `
+                + `bx = ${bx}, by = ${by}, bw = ${bw}, bh = ${bh} }`)
         }
         return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} })`
     }
 
-    // ---------------- carrying a window out of its box ----------------
-    // A window's miniature pressed and dragged a few pixels: purpura.lua
-    // picks the window up from wherever it is and carries it under the
-    // cursor (purpura.carry, see ~/.config/hypr/purpura.lua) - onto a box to
-    // send it there, or out of the bar to put it down on the workspace
-    // there. This row's boxes go along in the same call, so it knows where
-    // they are from the first moment. A plain click still switches to the
-    // workspace (wsBox's MouseArea).
-    function carryWindow(toplevel) {
-        const address = String(toplevel && toplevel.address || "")
-        if (!/^[0-9a-fA-F]{1,16}$/.test(address)) return
-        Quickshell.execDetached(["hyprctl", "eval",
-            root.dropTargetsLua() + ` purpura.carry("0x${address}")`])
+    // Catches the boxes moving without the row hearing of it - the row
+    // shifting along the bar as the clock beside it changes width, say.
+    // Nothing's sent unless they've changed.
+    Timer {
+        id: dropTargetsCheck
+        interval: 1000
+        repeat: true
+        running: root.sendsDropTargets
+        triggeredOnStart: true
+        onTriggered: root.refreshDropTargets()
     }
+
+    // Once laid out again, rather than at the next check. A row just put on
+    // screen sends them whatever it sent before: another row may have sent
+    // its own for the same monitor meanwhile.
+    onSendsDropTargetsChanged: {
+        root.sentDropTargets = ""
+        if (root.sendsDropTargets) Qt.callLater(root.refreshDropTargets)
+    }
+    onSettledEntriesChanged: Qt.callLater(root.refreshDropTargets)
+    onXChanged: Qt.callLater(root.refreshDropTargets)
+    onWidthChanged: Qt.callLater(root.refreshDropTargets)
+    onHeightChanged: Qt.callLater(root.refreshDropTargets)
 
     spacing: Config.scaled(4, root.uiScale)
 
@@ -404,6 +435,11 @@ Row {
                 root.handleDragEvent(event.data)
                 return
             }
+            // purpura.lua starts over without the boxes (see sendDropTargets()).
+            if (event.name === "configreloaded") {
+                root.sentDropTargets = ""
+                Qt.callLater(root.refreshDropTargets)
+            }
             Hyprland.refreshToplevels()
             renderSettleTimer.restart()
         }
@@ -585,8 +621,6 @@ Row {
                 Rectangle {
                     id: winBox
                     required property var modelData
-                    // For wsBox.windowAt().
-                    readonly property bool isWindowBox: true
 
                     readonly property var ipcData: winBox.modelData.lastIpcObject
                     readonly property var atArr: winBox.ipcData.at ?? [0, 0]
@@ -682,38 +716,12 @@ Row {
             // equivalent to HyprlandIpc.dispatch("workspace <name>").
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
-            // own to compete with).
-            // Press and drag a window's miniature to carry the window (see
-            // carryWindow()); a click without one switches to the workspace.
+            // own to compete with). mainMod + LMB on a window drawn here
+            // never reaches it: purpura.lua picks that window up and
+            // Hyprland drags it (see sendDropTargets()).
             MouseArea {
-                property var pressedWindow: null
-                property point pressedAt: Qt.point(0, 0)
-                property bool carrying: false
-
                 anchors.fill: parent
-                onPressed: mouse => {
-                    pressedAt = Qt.point(mouse.x, mouse.y)
-                    pressedWindow = wsBox.windowAt(mouse.x, mouse.y)
-                    carrying = false
-                }
-                onPositionChanged: mouse => {
-                    if (carrying || !pressedWindow) return
-                    if (Math.hypot(mouse.x - pressedAt.x, mouse.y - pressedAt.y) < Config.scaled(6, root.uiScale)) return
-                    carrying = true
-                    root.carryWindow(pressedWindow)
-                }
-                onClicked: if (!carrying) wsBox.modelData.activate()
-            }
-
-            // The topmost window shown at (x, y) in this box, if any.
-            function windowAt(x, y) {
-                for (let i = wsBox.children.length - 1; i >= 0; i--) {
-                    const child = wsBox.children[i]
-                    if (!child.isWindowBox || !child.visible) continue
-                    if (x >= child.x && x < child.x + child.width && y >= child.y && y < child.y + child.height)
-                        return child.modelData
-                }
-                return null
+                onClicked: wsBox.modelData.activate()
             }
         }
     }
