@@ -243,6 +243,7 @@ Scope {
                     id: workspaceRow
                     uiScale: bar.uiScale
                     screenName: modelData ? modelData.name : ""
+                    sendsDropTargets: bar.visible
                     height: bar.buttonHeight
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.right: clockCard.left
@@ -465,6 +466,52 @@ Scope {
                             ? Config.fgcolorred
                             : Config.fgcolor
                     }
+                }
+            }
+
+            // During a window drag, on a screen this bar isn't showing on (any
+            // but the primary, or the primary while something fullscreen hides
+            // it): the same workspace widget, floating at the top of the screen
+            // - over everything and reserving no room - so the window can be
+            // dropped on a workspace there too. Its layer is a "bar" as well,
+            // which is what purpura.lua looks for.
+            PanelWindow {
+                id: dragBar
+                screen: modelData
+
+                readonly property real pad: Config.scaled(8, bar.uiScale)
+
+                visible: !bar.visible && dragRow.windowDragging
+
+                WlrLayershell.namespace: "bar"
+                WlrLayershell.layer: WlrLayer.Overlay
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+                exclusiveZone: -1
+
+                anchors { top: true }
+                margins { top: Config.scaled(10, bar.uiScale) }
+
+                implicitWidth: dragRow.width + 2 * dragBar.pad
+                implicitHeight: Config.scaled(Config.barheight, bar.uiScale)
+                color: "transparent"
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: Config.fillcolor
+                    border.width: Config.scaled(2, bar.uiScale)
+                    border.color: Config.fgcolor
+                }
+
+                WorkspaceRow {
+                    id: dragRow
+                    // At a fixed spot rather than centred, so where its boxes
+                    // are doesn't wait on the window's size.
+                    x: dragBar.pad
+                    anchors.verticalCenter: parent.verticalCenter
+                    uiScale: bar.uiScale
+                    screenName: modelData ? modelData.name : ""
+                    sendsDropTargets: dragBar.visible
+                    height: bar.buttonHeight
                 }
             }
         }

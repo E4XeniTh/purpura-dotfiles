@@ -486,9 +486,11 @@ Scope {
     // Lives up here rather than on Settings > Connections (NetworkSettings.qml)
     // - a full `solaar show` walks every HID++ feature on every paired
     // peripheral (seconds, not milliseconds), so one shared poll beats
-    // one per page that shows the devices. Only Settings > Connections
-    // polls it, and only while it's open (NetworkSettings.qml) - nothing
-    // runs in the background.
+    // one per page that shows the devices. Settings > Connections polls it
+    // often while it's open (NetworkSettings.qml); otherwise it's asked once
+    // as the shell starts and every 5 minutes while nothing's open (see
+    // solaarBackgroundTimer), so Connections has the devices from the first
+    // time it opens.
     //
     // refreshSolaar() is the single choke point Config.solaarEnabled
     // gates, so the `solaar` binary is never even invoked
@@ -523,6 +525,25 @@ Scope {
         blockLoading: true
         // A fresh install has no file yet - that's just the default.
         printErrors: false
+    }
+
+    // Neither the dashboard nor Settings is open.
+    readonly property bool nothingOpen: !root.open && !(root.settingsScreen && root.settingsScreen.open)
+
+    Timer {
+        id: solaarBackgroundTimer
+        interval: 5 * 60 * 1000
+        repeat: true
+        running: root.nothingOpen
+        onTriggered: root.refreshSolaar()
+    }
+
+    // The first ask, a little after the shell starts rather than in the
+    // middle of everything else starting.
+    Timer {
+        interval: 10000
+        running: true
+        onTriggered: root.refreshSolaar()
     }
 
     function refreshSolaar() {

@@ -38,6 +38,11 @@ Row {
     // window to the workspace of the box it's let go on, by itself. Here, the
     // box under the cursor just lights up.
     property bool windowDragging: false
+    // Whether this row hands purpura.lua its boxes at a drag's start: only
+    // while it's on screen - the bar on the primary monitor, or Bar.qml's
+    // floating copy on another during a drag. A hidden bar's row would
+    // otherwise send its own, wrong, spans for the same monitor.
+    property bool sendsDropTargets: true
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
@@ -87,7 +92,11 @@ Row {
     // only strings in it are the checked monitor name and workspaceSelector()s,
     // the rest are whole numbers.
     function sendDropTargets() {
+        if (!root.sendsDropTargets) return
         if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return
+        // A row that's only just been put on screen (Bar.qml's floating
+        // copy) may not have placed its boxes yet.
+        root.forceLayout()
         const half = root.spacing / 2
         const boxes = []
         for (const child of root.children) {
