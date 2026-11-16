@@ -48,6 +48,8 @@ Row {
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
+    // The cursor's on a box on some bar - this one or another.
+    property bool dragOverAnywhere: false
     // The dragged window, by address, and where the cursor is on this row's
     // monitor while it's on a box - for Bar.qml's icon of the window under
     // the cursor, which shows dragIconSource (see iconSourceFor()).
@@ -80,19 +82,23 @@ Row {
             root.windowDragging = true
             root.dragOver = ""
             root.dragAddress = /^0x[0-9a-fA-F]{1,16}$/.test(parts[2] || "") ? parts[2] : ""
+            root.dragOverAnywhere = false
             dragSafetyTimer.restart()
             root.sendDropTargets()
         } else if (parts[1] === "over") {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
+            root.dragOverAnywhere = true
         } else if (parts[1] === "at") {
             const integer = /^-?\d{1,6}$/
             if (parts.length === 5 && parts[2] === root.screenName && integer.test(parts[3]) && integer.test(parts[4]))
                 root.dragPointer = Qt.point(parseInt(parts[3], 10), parseInt(parts[4], 10))
         } else if (parts[1] === "off") {
             root.dragOver = ""
+            root.dragOverAnywhere = false
         } else if (parts[1] === "end") {
             root.windowDragging = false
             root.dragOver = ""
+            root.dragOverAnywhere = false
             root.dragAddress = ""
             dragSafetyTimer.stop()
         }
@@ -159,7 +165,12 @@ Row {
     // the rest are whole numbers.
     function sendDropTargets() {
         if (!root.sendsDropTargets) return
-        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return
+        const lua = root.dropTargetsLua()
+        if (lua) Quickshell.execDetached(["hyprctl", "eval", lua])
+    }
+
+    function dropTargetsLua() {
+        if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return ""
         // A row that's only just been put on screen (Bar.qml's floating
         // copy) may not have placed its boxes yet.
         root.forceLayout()
@@ -180,8 +191,22 @@ Row {
             const [from, to, x, y, w, h] = numbers.map(n => Math.floor(n))
             boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h} }`)
         }
+        return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} })`
+    }
+
+    // ---------------- carrying a window out of its box ----------------
+    // A window's miniature pressed and dragged a few pixels: purpura.lua
+    // picks the window up from wherever it is and carries it under the
+    // cursor (purpura.carry, see ~/.config/hypr/purpura.lua) - onto a box to
+    // send it there, or out of the bar to put it down on the workspace
+    // there. This row's boxes go along in the same call, so it knows where
+    // they are from the first moment. A plain click still switches to the
+    // workspace (wsBox's MouseArea).
+    function carryWindow(toplevel) {
+        const address = String(toplevel && toplevel.address || "")
+        if (!/^[0-9a-fA-F]{1,16}$/.test(address)) return
         Quickshell.execDetached(["hyprctl", "eval",
-            `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} })`])
+            root.dropTargetsLua() + ` purpura.carry("0x${address}")`])
     }
 
     spacing: Config.scaled(4, root.uiScale)
@@ -560,6 +585,8 @@ Row {
                 Rectangle {
                     id: winBox
                     required property var modelData
+                    // For wsBox.windowAt().
+                    readonly property bool isWindowBox: true
 
                     readonly property var ipcData: winBox.modelData.lastIpcObject
                     readonly property var atArr: winBox.ipcData.at ?? [0, 0]
@@ -590,7 +617,10 @@ Row {
                             ? Math.max(1, winBox.sizeArr[1] / wsBox.monHeight * wsBox.height)
                             : 1)
 
-                    visible: !wsBox.modelData.hasFullscreen || winBox.isFullscreen
+                    // Gone while it's the window being dragged and the cursor's on
+                    // the widget, where the window itself is hidden too.
+                    visible: (!wsBox.modelData.hasFullscreen || winBox.isFullscreen)
+                        && !(root.windowDragging && root.dragOverAnywhere && winBox.modelData === root.draggedToplevel)
 
                     color: "transparent"
                     border.width: Config.scaled(1, root.uiScale)
@@ -653,9 +683,37 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with).
+            // Press and drag a window's miniature to carry the window (see
+            // carryWindow()); a click without one switches to the workspace.
             MouseArea {
+                property var pressedWindow: null
+                property point pressedAt: Qt.point(0, 0)
+                property bool carrying: false
+
                 anchors.fill: parent
-                onClicked: wsBox.modelData.activate()
+                onPressed: mouse => {
+                    pressedAt = Qt.point(mouse.x, mouse.y)
+                    pressedWindow = wsBox.windowAt(mouse.x, mouse.y)
+                    carrying = false
+                }
+                onPositionChanged: mouse => {
+                    if (carrying || !pressedWindow) return
+                    if (Math.hypot(mouse.x - pressedAt.x, mouse.y - pressedAt.y) < Config.scaled(6, root.uiScale)) return
+                    carrying = true
+                    root.carryWindow(pressedWindow)
+                }
+                onClicked: if (!carrying) wsBox.modelData.activate()
+            }
+
+            // The topmost window shown at (x, y) in this box, if any.
+            function windowAt(x, y) {
+                for (let i = wsBox.children.length - 1; i >= 0; i--) {
+                    const child = wsBox.children[i]
+                    if (!child.isWindowBox || !child.visible) continue
+                    if (x >= child.x && x < child.x + child.width && y >= child.y && y < child.y + child.height)
+                        return child.modelData
+                }
+                return null
             }
         }
     }

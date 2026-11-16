@@ -273,6 +273,10 @@ Item {
         const otherAt = {}
         for (const b of root.liveBinds) {
             if (!b.key || b.mouse || b.catch_all || b.submap) continue
+            // A mouse button with no modifiers and nothing said about it isn't a
+            // shortcut but something watching every click - purpura.lua's
+            // left-button release, which ends a carried window's drag.
+            if (!b.modmask && /^mouse:/.test(b.key) && !root.descriptionFromLive(b)) continue
             const combo = root.comboFromLive(b)
             const id = root.comboKey(combo)
             const entry = {

@@ -473,8 +473,8 @@ Scope {
                 }
             }
 
-            // The dragged window's icon, just below the cursor, while the
-            // cursor's on a workspace box on this screen - where the window
+            // The dragged window's icon, right under the cursor (centred on it),
+            // while the cursor's on a workspace box on this screen - where the window
             // itself turns invisible. The icon the workspace widget draws for
             // it (WorkspaceRow's iconSourceFor()), moving as purpura.lua
             // reports the cursor; this bar's row follows the drag even while
@@ -504,12 +504,12 @@ Scope {
                 // Down to the lowest the icon goes: the cursor on the bottom
                 // edge of the bar or of the floating widget.
                 implicitHeight: Math.max(bar.margins.top, Config.scaled(10, bar.uiScale)) + bar.implicitHeight
-                    + Config.scaled(32, bar.uiScale) + dragIcon.size
+                    + dragIcon.size / 2 + Config.scaled(4, bar.uiScale)
                 color: "transparent"
 
                 IconImage {
                     x: workspaceRow.dragPointer.x - width / 2
-                    y: workspaceRow.dragPointer.y + Config.scaled(24, bar.uiScale)
+                    y: workspaceRow.dragPointer.y - height / 2
                     implicitSize: dragIcon.size
                     source: workspaceRow.dragIconSource
                 }
