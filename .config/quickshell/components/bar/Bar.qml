@@ -121,6 +121,10 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
+            // Not purpura.lua's drag events ("custom"): they change nothing
+            // here, and come many a second while a dragged window's over the
+            // workspace widget.
+            if (event.name === "custom") return
             fullscreenCheckProcess.running = true
         }
     }
@@ -466,6 +470,48 @@ Scope {
                             ? Config.fgcolorred
                             : Config.fgcolor
                     }
+                }
+            }
+
+            // The dragged window's icon, just below the cursor, while the
+            // cursor's on a workspace box on this screen - where the window
+            // itself turns invisible. The icon the workspace widget draws for
+            // it (WorkspaceRow's iconSourceFor()), moving as purpura.lua
+            // reports the cursor; this bar's row follows the drag even while
+            // the bar's hidden. A strip across the top of the screen, over
+            // everything (the floating widget below included) and taking no
+            // clicks, rather than a window that moves - moving the icon in it
+            // is just a redraw.
+            PanelWindow {
+                id: dragIcon
+                screen: modelData
+
+                readonly property real size: Config.scaled(32, bar.uiScale)
+
+                visible: workspaceRow.windowDragging && workspaceRow.dragOver !== "" && workspaceRow.dragIconSource !== ""
+
+                WlrLayershell.namespace: "dragicon"
+                WlrLayershell.layer: WlrLayer.Overlay
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+                exclusiveZone: -1
+                mask: Region {}
+
+                anchors {
+                    top: true
+                    left: true
+                    right: true
+                }
+                // Down to the lowest the icon goes: the cursor on the bottom
+                // edge of the bar or of the floating widget.
+                implicitHeight: Math.max(bar.margins.top, Config.scaled(10, bar.uiScale)) + bar.implicitHeight
+                    + Config.scaled(32, bar.uiScale) + dragIcon.size
+                color: "transparent"
+
+                IconImage {
+                    x: workspaceRow.dragPointer.x - width / 2
+                    y: workspaceRow.dragPointer.y + Config.scaled(24, bar.uiScale)
+                    implicitSize: dragIcon.size
+                    source: workspaceRow.dragIconSource
                 }
             }
 

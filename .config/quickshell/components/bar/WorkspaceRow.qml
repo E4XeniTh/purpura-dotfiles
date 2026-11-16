@@ -27,10 +27,12 @@ Row {
     // mainMod + LMB and tells the shell about it through custom events on
     // Hyprland's socket - the bar itself never sees the cursor during a drag,
     // as Hyprland keeps the pointer on the dragged window:
-    //   purpura-drag,start                      a drag began
+    //   purpura-drag,start,<address>            a drag of that window began
     //   purpura-drag,over,<monitor>,<workspace> the cursor is on that
     //                                           workspace's box, on that
     //                                           monitor's bar
+    //   purpura-drag,at,<monitor>,<x>,<y>       where on that monitor it is,
+    //                                           while it's on a box
     //   purpura-drag,off                        it's on no box
     //   purpura-drag,end                        it's over
     // To a start, this row answers with where its boxes are (sendDropTargets
@@ -46,6 +48,19 @@ Row {
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
+    // The dragged window, by address, and where the cursor is on this row's
+    // monitor while it's on a box - for Bar.qml's icon of the window under
+    // the cursor, which shows dragIconSource (see iconSourceFor()).
+    property string dragAddress: ""
+    property point dragPointer: Qt.point(0, 0)
+    readonly property var draggedToplevel: {
+        const wanted = root.dragAddress.replace(/^0x0*/, "").toLowerCase()
+        if (!wanted) return null
+        return Hyprland.toplevels.values.find(t => String(t.address).replace(/^0*/, "").toLowerCase() === wanted) || null
+    }
+    readonly property string dragIconSource: root.draggedToplevel && root.draggedToplevel.lastIpcObject
+        ? root.iconSourceFor(String(root.draggedToplevel.lastIpcObject.class || ""))
+        : ""
 
     // Should an end never arrive (the shell restarted mid-drag), the
     // highlight doesn't stay on for good.
@@ -64,17 +79,68 @@ Row {
         if (parts[1] === "start") {
             root.windowDragging = true
             root.dragOver = ""
+            root.dragAddress = /^0x[0-9a-fA-F]{1,16}$/.test(parts[2] || "") ? parts[2] : ""
             dragSafetyTimer.restart()
             root.sendDropTargets()
         } else if (parts[1] === "over") {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
+        } else if (parts[1] === "at") {
+            const integer = /^-?\d{1,6}$/
+            if (parts.length === 5 && parts[2] === root.screenName && integer.test(parts[3]) && integer.test(parts[4]))
+                root.dragPointer = Qt.point(parseInt(parts[3], 10), parseInt(parts[4], 10))
         } else if (parts[1] === "off") {
             root.dragOver = ""
         } else if (parts[1] === "end") {
             root.windowDragging = false
             root.dragOver = ""
+            root.dragAddress = ""
             dragSafetyTimer.stop()
         }
+    }
+
+    // A window's icon, from its class - for each window drawn in the boxes
+    // below, and for Bar.qml's icon of the window being dragged.
+    //
+    // Real per-app icon, the same way Tray.qml gets one - its Image binds
+    // straight to SystemTray's own already-resolved .icon rather than
+    // guessing an icon-theme name. There's no such direct icon on a Hyprland
+    // toplevel, but DesktopEntries.heuristicLookup() matches a window's WM
+    // class to its installed .desktop file and returns that entry's real icon
+    // name, which resolves correctly far more often than assuming the icon
+    // theme has an entry literally named after the raw class string (the
+    // fallback below, for whatever heuristicLookup can't match).
+    //
+    // heuristicLookup() itself only ever tries an exact desktop-file-id match
+    // or an exact (case-insensitive) StartupWMClass match (confirmed against
+    // Quickshell's own source) - it has no substring/fuzzy matching at all.
+    // Flatpak apps commonly report a short runtime class ("waterfox") that
+    // matches neither their reverse-DNS desktop file id nor StartupWMClass
+    // ("net.waterfox.waterfox"), so heuristicLookup comes back empty and this
+    // fell all the way through to the generic fallback icon. Falls back here
+    // to a substring search over every installed .desktop entry's own id for
+    // one that contains the window's class, so Waterfox (and anything else
+    // shaped the same way) still resolves to its real icon.
+    //
+    // The plain single-arg iconPath() renders "a missing texture" image when
+    // the name doesn't resolve in the current icon theme (documented
+    // behavior, not a bug) rather than failing quietly - the two-arg fallback
+    // form loads a generic icon instead whenever the specific app/class name
+    // isn't a real theme icon, same fallback pattern the shell uses elsewhere.
+    function substringLookup(cls) {
+        const lower = cls.toLowerCase()
+        const apps = DesktopEntries.applications.values
+        for (const app of apps) {
+            if (app.id.toLowerCase().includes(lower)) return app
+        }
+        return null
+    }
+
+    function iconSourceFor(cls) {
+        const entry = cls.length > 0 ? (DesktopEntries.heuristicLookup(cls) ?? root.substringLookup(cls)) : null
+        const name = entry && entry.icon.length > 0 ? entry.icon : cls
+        return name.length > 0
+            ? Quickshell.iconPath(name, "application-x-executable")
+            : Quickshell.iconPath("application-x-executable")
     }
 
     // A real workspace by number, or by name when it has one (no quotes or
@@ -504,50 +570,6 @@ Row {
                     // it, straight from hyprctl clients' own field.
                     readonly property bool isFullscreen: !!winBox.ipcData.fullscreen
 
-                    // Real per-app icon, the same way Tray.qml gets one
-                    // - its Image binds straight to SystemTray's own
-                    // already-resolved .icon rather than guessing an
-                    // icon-theme name. There's no such direct icon on a
-                    // Hyprland toplevel, but DesktopEntries.
-                    // heuristicLookup() matches this window's WM class
-                    // to its installed .desktop file and returns that
-                    // entry's real icon name, which resolves correctly
-                    // far more often than assuming the icon theme has
-                    // an entry literally named after the raw class
-                    // string (the fallback below, for whatever
-                    // heuristicLookup can't match).
-                    //
-                    // heuristicLookup() itself only ever tries an exact
-                    // desktop-file-id match or an exact (case-
-                    // insensitive) StartupWMClass match (confirmed
-                    // against Quickshell's own source) - it has no
-                    // substring/fuzzy matching at all. Flatpak apps
-                    // commonly report a short runtime class ("waterfox")
-                    // that matches neither their reverse-DNS desktop
-                    // file id nor StartupWMClass ("net.waterfox.
-                    // waterfox"), so heuristicLookup comes back empty
-                    // and this fell all the way through to the generic
-                    // fallback icon. Falls back here to a substring
-                    // search over every installed .desktop entry's own
-                    // id for one that contains this window's class, so
-                    // Waterfox (and anything else shaped the same way)
-                    // still resolves to its real icon.
-                    function substringLookup(cls) {
-                        const lower = cls.toLowerCase()
-                        const apps = DesktopEntries.applications.values
-                        for (const app of apps) {
-                            if (app.id.toLowerCase().includes(lower)) return app
-                        }
-                        return null
-                    }
-
-                    readonly property var desktopEntry: winBox.winClass.length > 0
-                        ? (DesktopEntries.heuristicLookup(winBox.winClass) ?? winBox.substringLookup(winBox.winClass))
-                        : null
-                    readonly property string iconName: (winBox.desktopEntry && winBox.desktopEntry.icon.length > 0)
-                        ? winBox.desktopEntry.icon
-                        : winBox.winClass
-
                     // A fullscreen window's own reported at/size isn't
                     // trusted to already cover the full monitor exactly
                     // - forced to fill this box outright instead, and
@@ -585,17 +607,7 @@ Row {
                     IconImage {
                         anchors.centerIn: parent
                         implicitSize: Math.max(Config.scaled(4, root.uiScale), Math.min(winBox.width, winBox.height) * 0.6)
-                        // The plain single-arg iconPath() renders "a
-                        // missing texture" image when the name doesn't
-                        // resolve in the current icon theme (documented
-                        // behavior, not a bug) rather than failing
-                        // quietly - the two-arg fallback form loads a
-                        // generic icon instead whenever the specific
-                        // app/class name isn't a real theme icon, same
-                        // fallback pattern the shell uses elsewhere.
-                        source: winBox.iconName.length > 0
-                            ? Quickshell.iconPath(winBox.iconName, "application-x-executable")
-                            : Quickshell.iconPath("application-x-executable")
+                        source: root.iconSourceFor(winBox.winClass)
                     }
                 }
             }

@@ -137,13 +137,15 @@ end)
 -- timer, and the three binds below share the drag's buttons:
 --
 -- - Pressing notes the window the drag picks up (the one under the cursor) and posts
---   "purpura-drag,start" on Hyprland's event socket. Each bar
+--   "purpura-drag,start,<address>" on Hyprland's event socket. Each bar
 --   (components/bar/WorkspaceRow.qml) answers with its workspace boxes, through
 --   purpura.dropTargets() below, and the timer starts looking for one under the cursor.
 -- - On the cursor reaching a box, the window gets the purpura-dragged tag - the rule
 --   below turns a window with it invisible - and "purpura-drag,over,<monitor>,
 --   <workspace>" lights the box up; on the cursor leaving the boxes, the tag comes off
---   and "purpura-drag,off" follows.
+--   and "purpura-drag,off" follows. While it's on one, "purpura-drag,at,<monitor>,<x>,
+--   <y>" says where on that monitor the cursor is, whenever it moves (once a tick at
+--   most), for the window's icon the shell shows under it.
 -- - Letting go over a box - Hyprland has ended the drag by then - sends the window to
 --   that workspace without following it, a floating one back to where it was on its own
 --   monitor before the drag, only on the workspace's monitor (kept on it whole). Then
@@ -186,6 +188,7 @@ part("dropping a window on a workspace", function()
     local targets = {}     -- each monitor's workspace boxes, from its bar
     local dragged          -- { address, relX, relY } while the button's down
     local over             -- the box under the cursor, while there is one (the window's hidden)
+    local lastAt           -- the last "at" posted, so a still cursor isn't posted again
     local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
 
@@ -232,7 +235,8 @@ part("dropping a window on a workspace", function()
         targets[monitor] = valid
     end
 
-    -- The box under the cursor, and the monitor of the bar it's on.
+    -- The box under the cursor, the monitor of the bar it's on, and where on that
+    -- monitor the cursor is.
     local function boxUnderCursor()
         local cursor = hl.get_cursor_pos()
         if not cursor then return nil end
@@ -241,7 +245,10 @@ part("dropping a window on a workspace", function()
             if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor) then
                 local x = cursor.x - bar.x
                 for _, box in ipairs(targets[monitor.name] or {}) do
-                    if x >= box.from and x < box.to then return box, monitor.name end
+                    if x >= box.from and x < box.to then
+                        return box, monitor.name,
+                            math.floor(cursor.x - (monitor.x or 0)), math.floor(cursor.y - (monitor.y or 0))
+                    end
                 end
                 return nil
             end
@@ -265,7 +272,17 @@ part("dropping a window on a workspace", function()
             return
         end
         if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
-        local box, monitor = boxUnderCursor()
+        local box, monitor, x, y = boxUnderCursor()
+        -- First, so the icon's in place by the time "over" shows it.
+        if box then
+            local at = monitor .. "," .. x .. "," .. y
+            if at ~= lastAt then
+                lastAt = at
+                dragEvent("at," .. at)
+            end
+        else
+            lastAt = nil
+        end
         if box == over then return end
         if box and not over then
             hide(dragged.address)
@@ -289,7 +306,8 @@ part("dropping a window on a workspace", function()
             relY = math.floor(y - (monitor and monitor.y or 0)),
         }
         startedAt = os.time()
-        dragEvent("start")
+        lastAt = nil
+        dragEvent("start," .. window.address)
         if follower then
             follower:set_enabled(true)
         else
