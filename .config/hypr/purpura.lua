@@ -39,6 +39,13 @@ end
 --## WINDOWS UNDER THE MOUSE                                                            #
 --#######################################################################################
 
+-- Hyprland's objects (a workspace, a window, a monitor) are userdata, not tables -
+-- both count.
+local function isObject(v)
+    local t = type(v)
+    return t == "table" or t == "userdata"
+end
+
 local function pair(v, a, b)
     if type(v) ~= "table" then return 0, 0 end
     return v[a] or v[1] or 0, v[b] or v[2] or 0
@@ -559,7 +566,7 @@ part("dropping a window on a workspace", function()
             end
             if not shown then
                 local ok, target = pcall(hl.get_workspace, box.workspace)
-                shown = ok and type(target) == "table" and target.visible == true
+                shown = ok and isObject(target) and target.visible == true
             end
             sentAway = not shown and box.workspace
             if sentAway then tag(dragged.address, "+" .. GRABBED) end
@@ -659,7 +666,7 @@ part("dropping a window on a workspace", function()
     -- Switched to the workspace a held window was sent to: it's needed there now, so
     -- the hold ends at once rather than when its time's up.
     hl.on("workspace.active", function(workspace)
-        local selector = type(workspace) == "table" and workspaceSelector(workspace)
+        local selector = isObject(workspace) and workspaceSelector(workspace)
         if not selector then return end
         for address, hold in pairs(away) do
             if hold.workspace == selector then settleAway(address) end
