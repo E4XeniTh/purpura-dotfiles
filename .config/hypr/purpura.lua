@@ -6,20 +6,21 @@
 --#######################################################################################
 --
 -- Installed and updated with the dotfiles (~/.config/hypr/purpura.lua). hyprland.lua
--- runs it with one line, at the start of its binds, handing it its mainMod:
+-- runs it with one line, at the start of its binds:
 --
 --     pcall(loadfile(os.getenv("HOME") .. "/.config/hypr/purpura.lua") or function() end, mainMod)
 --
 -- Before the binds, since Close Window works by replacing the action every close
--- bind is made from. loadfile rather than require: Hyprland watches each file require
--- loads and reloads the whole config when one changes - an update of this file would
--- put the monitors back to hyprland.lua's MONITORS rule. And a missing or broken file
--- leaves hyprland.lua loading as if the line weren't there.
+-- bind is made from, and dropping a window on a workspace makes its binds along with
+-- every "Drag window" bind made after it. (The mainMod handed over isn't needed any
+-- more - those binds go wherever "Drag window" is.) loadfile rather than require:
+-- Hyprland watches each file require loads and reloads the whole config when one
+-- changes - an update of this file would put the monitors back to hyprland.lua's
+-- MONITORS rule. And a missing or broken file leaves hyprland.lua loading as if the
+-- line weren't there.
 --
 -- Each part below runs on its own: should one fail (a Hyprland update renaming
 -- something it uses), a notification says which, and the rest still load.
-
-local mainMod = ... or "SUPER"
 
 local function report(name, err)
     pcall(hl.notification.create, {
@@ -128,13 +129,15 @@ end)
 --#######################################################################################
 --## DROPPING A DRAGGED WINDOW ON A WORKSPACE                                           #
 --#######################################################################################
--- Dropping a window dragged with hyprland.lua's "Drag window" bind (mainMod + LMB) on a
--- workspace in the bar's workspace widget sends it there. While it's over one, that
--- workspace lights up and the window turns invisible, out of the way.
+-- Dropping a window dragged with the "Drag window" bind (hyprland.lua's mainMod + LMB,
+-- unless it's been moved) on a workspace in the bar's workspace widget sends it there.
+-- While it's over one, that workspace lights up and the window turns invisible, out
+-- of the way.
 --
 -- Hyprland keeps the pointer on the dragged window until the button's let go, so the
 -- bar never sees the cursor during a drag - it's followed from here instead, by a
--- timer, and the three binds below share the drag's buttons:
+-- timer, and three binds share the drag's combo - made along with "Drag window"
+-- wherever that's bound, so they follow it if it's moved (see the end of this part):
 --
 -- - Pressing notes the window the drag picks up (the one under the cursor) and posts
 --   "purpura-drag,start,<address>" on Hyprland's event socket. Each bar
@@ -160,19 +163,19 @@ end)
 -- the blur off with the opacity, and a second one (purpura-reappearing) keeps it off
 -- until the fade back in is over.
 --
--- Grabbing from the widget: mainMod + LMB on a window drawn in the widget picks that
--- window up from whichever workspace it's on, at the press - nothing waits for the
--- mouse to move. The window there is found from the box under the cursor (the bars
--- hand over where their boxes are): the cursor's spot in it, scaled up to that
+-- Grabbing from the widget: the drag's combo on a window drawn in the widget picks
+-- that window up from whichever workspace it's on, at the press - nothing waits for
+-- the mouse to move. The window there is found from the box under the cursor (the
+-- bars hand over where their boxes are): the cursor's spot in it, scaled up to that
 -- workspace's monitor - a fullscreen window wherever it's pressed, as the widget
 -- draws only that one then, otherwise floating over tiled, the most recently focused
--- among equals. The press bind below runs before hyprland.lua's own "Drag window"
--- bind for the same press (binds go in the order they're made, and this file loads
--- before hyprland.lua's), so by the time that one looks for a window to drag, the
--- grabbed one is already under the cursor, on the workspace shown there: out of sight
--- first, then out of fullscreen, floating if it was tiled, raised, and held by its
--- top edge, centred on the cursor. That bind starts Hyprland's own drag of it, the
--- very drag as any other from there on - hidden over a box, that box lit up.
+-- among equals. The press bind runs before the "Drag window" bind for the same press
+-- (binds go in the order they're made, and it's made just before), so by the time
+-- that one looks for a window to drag, the grabbed one is already under the cursor,
+-- on the workspace shown there: out of sight first, then out of fullscreen, floating
+-- if it was tiled, raised, and held by its top edge, centred on the cursor. That bind
+-- starts Hyprland's own drag of it, the very drag as any other from there on - hidden
+-- over a box, that box lit up.
 --
 -- Hyprland's drag looks for its window where it's drawn right now, which mid-
 -- animation is still where it was - so for that one moment the window also has
@@ -185,8 +188,8 @@ end)
 -- tiling either way, and one that was fullscreen is fullscreen again on a box. Let
 -- go without moving, it's over its own box - so it's back where it was.
 --
--- non_consuming: mainMod + click on no window still reaches the app below. These have
--- no description, so Settings > Shortcuts keeps showing the drag bind's.
+-- non_consuming: the drag's combo clicked on no window still reaches the app below.
+-- These have no description, so Settings > Shortcuts keeps showing the drag bind's.
 
 part("dropping a window on a workspace", function()
     local TAG = "purpura-dragged"
@@ -503,7 +506,7 @@ part("dropping a window on a workspace", function()
         endDrag()
     end
 
-    hl.bind(mainMod .. " + mouse:272", function()
+    local function press()
         endDrag() -- one whose release never came
         local cursor = hl.get_cursor_pos()
         if not cursor or grab(cursor) then return end
@@ -520,15 +523,60 @@ part("dropping a window on a workspace", function()
         lastAt, ticksSinceAt = nil, 0
         dragEvent("start," .. window.address)
         startFollowing()
-    end, { non_consuming = true })
+    end
 
-    hl.bind(mainMod .. " + mouse:272", function() drop() end, { drag = true })
+    -- The three binds on the drag's combo (see above): the press, the release after
+    -- a drag, and the release after a click - which puts a grabbed window down even
+    -- without a move (back on its own box), and just ends any other drag.
+    local function bindAlong(bind, keys)
+        bind(keys, press, { non_consuming = true })
+        bind(keys, function() drop() end, { drag = true })
+        bind(keys, function()
+            if grabbed then drop() else endDrag() end
+        end, { click = true })
+    end
 
-    -- A grabbed window let go is put down even without a move (back on its own box);
-    -- any other drag just ends.
-    hl.bind(mainMod .. " + mouse:272", function()
-        if grabbed then drop() else endDrag() end
-    end, { click = true })
+    -- Made along with every bind of hl.dsp.window.drag(), on whatever combo that's
+    -- given, so they follow "Drag window" wherever it's bound: hyprland.lua's own
+    -- bind, or one from Settings > Shortcuts (hypr/shortcuts.lua, and the hyprctl
+    -- eval that changes it there at once). Just before it, so that the press here
+    -- runs first (see Grabbing). Unbinding a combo takes them along with the drag's
+    -- bind, as Hyprland unbinds every bind on it; a combo already holding them
+    -- isn't given them twice.
+    local drags = setmetatable({}, { __mode = "k" }) -- every action drag() has made
+    local makeDrag = hl.dsp.window.drag
+    hl.dsp.window.drag = function(...)
+        local action = makeDrag(...)
+        if action ~= nil then drags[action] = true end
+        return action
+    end
+
+    -- A combo as Hyprland tells one from another: case and spaces don't count.
+    local function comboKey(keys)
+        return (keys:gsub("%s", "")):lower()
+    end
+    local along = {} -- by comboKey, the combos holding them now
+
+    local bind = hl.bind
+    hl.bind = function(keys, action, ...)
+        if type(keys) == "string" and action ~= nil and drags[action] and not along[comboKey(keys)] then
+            local ok, err = pcall(bindAlong, bind, keys)
+            if ok then along[comboKey(keys)] = true else report("dropping a window on a workspace", err) end
+        end
+        return bind(keys, action, ...)
+    end
+
+    local unbind = hl.unbind
+    if unbind then
+        hl.unbind = function(keys, ...)
+            if keys == "all" and select("#", ...) == 0 then
+                along = {}
+            elseif type(keys) == "string" then
+                along[comboKey(keys)] = nil
+            end
+            return unbind(keys, ...)
+        end
+    end
 
     -- A config reload mid-drag drops all of this, the timers included, with the old
     -- Lua state - so a window it left invisible, without its blur or its animations,
