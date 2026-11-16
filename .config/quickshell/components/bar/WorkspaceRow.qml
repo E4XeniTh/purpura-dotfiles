@@ -24,22 +24,25 @@ Row {
 
     // ---------------- dropping a dragged window on a workspace ----------------
     // purpura.lua (~/.config/hypr/purpura.lua) follows a window dragged with
-    // mainMod + LMB and tells the shell about it through custom events on
-    // Hyprland's socket - the bar itself never sees the cursor during a drag,
-    // as Hyprland keeps the pointer on the dragged window:
+    // the "Drag window" bind (mainMod + LMB unless it's been moved) and tells
+    // the shell about it through custom events on Hyprland's socket - the bar
+    // itself never sees the cursor during a drag, as Hyprland keeps the
+    // pointer on the dragged window:
     //   purpura-drag,start,<address>            a drag of that window began
     //   purpura-drag,over,<monitor>,<workspace> the cursor is on that
     //                                           workspace's box, on that
     //                                           monitor's bar
+    //   purpura-drag,between,<monitor>          on a separator between two
+    //                                           monitors' boxes there
     //   purpura-drag,at,<monitor>,<x>,<y>       where on that monitor it is,
-    //                                           while it's on a box
-    //   purpura-drag,off                        it's on no box
+    //                                           while it's on either
+    //   purpura-drag,off                        it's on neither
     //   purpura-drag,end                        it's over
     // purpura.lua knows where this row's boxes are (sendDropTargets below),
     // finds the cursor in them, and sends the window to the workspace of the
     // box it's let go on, by itself - and picks up a window drawn in a box
-    // pressed with mainMod + LMB, for Hyprland to drag from there. Here, the
-    // box under the cursor just lights up.
+    // pressed with the drag's combo, for Hyprland to drag from there. Here,
+    // the box under the cursor just lights up.
     property bool windowDragging: false
     // Whether this row hands purpura.lua its boxes: only while it's on
     // screen - the bar on the primary monitor, or Bar.qml's floating copy on
@@ -49,11 +52,14 @@ Row {
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
-    // The cursor's on a box on some bar - this one or another.
+    // The cursor's on this bar's widget - a box or a separator - where the
+    // window itself is hidden, so Bar.qml shows its icon instead.
+    property bool dragHere: false
+    // The cursor's on a box or a separator on some bar - this one or another.
     property bool dragOverAnywhere: false
     // The dragged window, by address, and where the cursor is on this row's
-    // monitor while it's on a box - for Bar.qml's icon of the window under
-    // the cursor, which shows dragIconSource (see iconSourceFor()).
+    // monitor while it's on the widget - for Bar.qml's icon of the window
+    // under the cursor, which shows dragIconSource (see iconSourceFor()).
     property string dragAddress: ""
     property point dragPointer: Qt.point(0, 0)
     readonly property var draggedToplevel: {
@@ -73,6 +79,7 @@ Row {
         onTriggered: {
             root.windowDragging = false
             root.dragOver = ""
+            root.dragHere = false
         }
     }
 
@@ -82,12 +89,18 @@ Row {
         if (parts[1] === "start") {
             root.windowDragging = true
             root.dragOver = ""
+            root.dragHere = false
             root.dragAddress = /^0x[0-9a-fA-F]{1,16}$/.test(parts[2] || "") ? parts[2] : ""
             root.dragOverAnywhere = false
             dragSafetyTimer.restart()
             root.sendDropTargets(true)
         } else if (parts[1] === "over") {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
+            root.dragHere = parts[2] === root.screenName
+            root.dragOverAnywhere = true
+        } else if (parts[1] === "between") {
+            root.dragOver = ""
+            root.dragHere = parts[2] === root.screenName
             root.dragOverAnywhere = true
         } else if (parts[1] === "at") {
             const integer = /^-?\d{1,6}$/
@@ -95,10 +108,12 @@ Row {
                 root.dragPointer = Qt.point(parseInt(parts[3], 10), parseInt(parts[4], 10))
         } else if (parts[1] === "off") {
             root.dragOver = ""
+            root.dragHere = false
             root.dragOverAnywhere = false
         } else if (parts[1] === "end") {
             root.windowDragging = false
             root.dragOver = ""
+            root.dragHere = false
             root.dragOverAnywhere = false
             root.dragAddress = ""
             dragSafetyTimer.stop()
@@ -163,8 +178,10 @@ Row {
     // the area of the monitor that's on - for purpura.lua to land a
     // floating window inside - and the box itself (bx/by/bw/bh), which
     // draws that area scaled down: from it, purpura.lua finds the window
-    // drawn under a mainMod + LMB press in a box and picks that window up,
-    // then and there, for Hyprland to drag like any other. Handed over as
+    // drawn under a press of the drag's combo in a box and picks that window
+    // up, then and there, for Hyprland to drag like any other. Then the
+    // separators' spans between monitors' boxes, where the window stays
+    // hidden though there's nothing to drop it on. Handed over as
     // Lua, through hyprctl eval: the only strings in it are the checked
     // monitor name and workspaceSelector()s, the rest are whole numbers.
     //
@@ -194,9 +211,16 @@ Row {
         root.forceLayout()
         const half = root.spacing / 2
         const boxes = []
+        const between = []
         for (const child of root.children) {
             const entry = child.modelData
             const box = child.item
+            if (entry && entry.kind === "separator" && box) {
+                const span = [child.mapToItem(null, -half, 0).x, child.mapToItem(null, child.width + half, 0).x]
+                if (span.every(n => Number.isFinite(n)))
+                    between.push(`{ from = ${Math.floor(span[0])}, to = ${Math.floor(span[1])} }`)
+                continue
+            }
             if (!entry || entry.kind !== "workspace" || !box) continue
             const workspace = root.workspaceSelector(entry.ws)
             const mon = entry.ws.monitor
@@ -213,7 +237,7 @@ Row {
             boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h}, `
                 + `bx = ${bx}, by = ${by}, bw = ${bw}, bh = ${bh} }`)
         }
-        return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} })`
+        return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} }, { ${between.join(", ")} })`
     }
 
     // Catches the boxes moving without the row hearing of it - the row
@@ -716,7 +740,7 @@ Row {
             // equivalent to HyprlandIpc.dispatch("workspace <name>").
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
-            // own to compete with). mainMod + LMB on a window drawn here
+            // own to compete with). The drag's combo on a window drawn here
             // never reaches it: purpura.lua picks that window up and
             // Hyprland drags it (see sendDropTargets()).
             MouseArea {

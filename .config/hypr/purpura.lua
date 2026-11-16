@@ -146,10 +146,12 @@ end)
 --   and the timer starts looking for one under the cursor.
 -- - On the cursor reaching a box, the window gets the purpura-dragged tag - the rule
 --   below turns a window with it invisible - and "purpura-drag,over,<monitor>,
---   <workspace>" lights the box up; on the cursor leaving the boxes, the tag comes off
---   and "purpura-drag,off" follows. While it's on one, "purpura-drag,at,<monitor>,<x>,
---   <y>" says where on that monitor the cursor is, whenever it moves (once a tick at
---   most), for the window's icon the shell shows under it.
+--   <workspace>" lights the box up. On a separator between two monitors' boxes it stays
+--   hidden too, with "purpura-drag,between,<monitor>" (no box lit); on the cursor
+--   leaving both, the tag comes off and "purpura-drag,off" follows. While it's on
+--   either, "purpura-drag,at,<monitor>,<x>,<y>" says where on that monitor the cursor
+--   is, whenever it moves (once a tick at most), for the window's icon the shell shows
+--   under it.
 -- - Letting go over a box - Hyprland has ended the drag by then - sends the window to
 --   that workspace without following it, a floating one back to where it was on its own
 --   monitor before the drag, only on the workspace's monitor (kept on it whole). Then
@@ -236,9 +238,10 @@ part("dropping a window on a workspace", function()
     })
 
     local targets = {}     -- each monitor's workspace boxes, from its bar
+    local separators = {}  -- and the spans between monitors' boxes there
     local dragged          -- { address, relX, relY } while the button's down
     local grabbed          -- { tiled, fullscreen } while it's one grabbed from the widget
-    local over             -- the box under the cursor, while there is one (the window's hidden)
+    local over             -- the box or separator under the cursor, while there's one (the window's hidden)
     -- A grabbed window is hidden before the box under the cursor's been posted.
     local HIDDEN_AT_START = {}
     local lastAt           -- the last "at" posted, so a still cursor isn't posted again
@@ -277,13 +280,24 @@ part("dropping a window on a workspace", function()
 
     -- A bar's boxes, from the shell through hyprctl eval:
     --   purpura.dropTargets("DP-1", { { from = 412, to = 498, workspace = "3",
-    --       x = 0, y = 0, w = 2560, h = 1440, bx = 414, by = 6, bw = 82, bh = 46 }, ... })
+    --       x = 0, y = 0, w = 2560, h = 1440, bx = 414, by = 6, bw = 82, bh = 46 }, ... },
+    --       { { from = 498, to = 534 }, ... })
     -- from/to: where it spans across the bar, in the bar's own coordinates; then the
     -- workspace to send a window to, the area of the monitor it's on, and the box itself
     -- (bx/by/bw/bh, in the bar's coordinates too), which draws that area scaled down.
+    -- Last, where the separators between one monitor's boxes and the next's span: the
+    -- window stays hidden there too, though there's nothing to drop it on - so it
+    -- doesn't flash up between two boxes.
     purpura = purpura or {}
-    function purpura.dropTargets(monitor, boxes)
+    function purpura.dropTargets(monitor, boxes, between)
         if type(monitor) ~= "string" or type(boxes) ~= "table" then return end
+        local spans = {}
+        for _, span in ipairs(type(between) == "table" and between or {}) do
+            if type(span) == "table" and type(span.from) == "number" and type(span.to) == "number" then
+                spans[#spans + 1] = span
+            end
+        end
+        separators[monitor] = spans
         local valid = {}
         for _, box in ipairs(boxes) do
             if type(box) == "table" and type(box.workspace) == "string" and type(box.from) == "number"
@@ -311,20 +325,29 @@ part("dropping a window on a workspace", function()
         return nil
     end
 
-    -- The box under the cursor, the monitor of the bar it's on, and where on that
-    -- monitor the cursor is.
-    local function boxUnderCursor()
+    -- The box or separator under the cursor (a box first, the other nil), the monitor
+    -- of the bar it's on, and where on that monitor the cursor is.
+    local function spotUnderCursor()
         local cursor = hl.get_cursor_pos()
         if not cursor then return nil end
         local monitor, x = barUnderCursor(cursor)
         if not monitor then return nil end
+        local function found(box, span)
+            return box, span, monitor.name,
+                math.floor(cursor.x - (monitor.x or 0)), math.floor(cursor.y - (monitor.y or 0))
+        end
         for _, box in ipairs(targets[monitor.name] or {}) do
-            if x >= box.from and x < box.to then
-                return box, monitor.name,
-                    math.floor(cursor.x - (monitor.x or 0)), math.floor(cursor.y - (monitor.y or 0))
-            end
+            if x >= box.from and x < box.to then return found(box, nil) end
+        end
+        for _, span in ipairs(separators[monitor.name] or {}) do
+            if x >= span.from and x < span.to then return found(nil, span) end
         end
         return nil
+    end
+
+    -- Just the box under the cursor, if any - somewhere to drop.
+    local function boxUnderCursor()
+        return (spotUnderCursor())
     end
 
     -- The window the widget draws under the cursor, if any (see above).
@@ -380,27 +403,29 @@ part("dropping a window on a workspace", function()
             return
         end
         if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
-        local box, monitor, x, y = boxUnderCursor()
+        local box, span, monitor, x, y = spotUnderCursor()
+        local spot = box or span
         -- First, so the icon's in place by the time "over" shows it - on reaching a
-        -- box whenever, otherwise once every AT_EVERY ticks at most.
+        -- box or separator whenever, otherwise once every AT_EVERY ticks at most.
         ticksSinceAt = ticksSinceAt + 1
-        if box then
+        if spot then
             local at = monitor .. "," .. x .. "," .. y
-            if at ~= lastAt and (box ~= over or ticksSinceAt >= AT_EVERY) then
+            if at ~= lastAt and (spot ~= over or ticksSinceAt >= AT_EVERY) then
                 lastAt, ticksSinceAt = at, 0
                 dragEvent("at," .. at)
             end
         else
             lastAt = nil
         end
-        if box == over then return end
-        if box and not over then
+        if spot == over then return end
+        if spot and not over then
             hide(dragged.address)
-        elseif over and not box then
+        elseif over and not spot then
             reappear(dragged.address)
         end
-        over = box
-        dragEvent(box and ("over," .. monitor .. "," .. box.workspace) or "off")
+        over = spot
+        dragEvent(box and ("over," .. monitor .. "," .. box.workspace)
+            or span and ("between," .. monitor) or "off")
     end
 
     local function startFollowing()

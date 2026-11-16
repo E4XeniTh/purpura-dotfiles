@@ -474,8 +474,9 @@ Scope {
             }
 
             // The dragged window's icon, right under the cursor (centred on it),
-            // while the cursor's on a workspace box on this screen - where the window
-            // itself turns invisible. The icon the workspace widget draws for
+            // while the cursor's on the workspace widget on this screen - a box,
+            // or a separator between monitors' boxes - where the window itself
+            // turns invisible. The icon the workspace widget draws for
             // it (WorkspaceRow's iconSourceFor()), moving as purpura.lua
             // reports the cursor; this bar's row follows the drag even while
             // the bar's hidden. A strip across the top of the screen, over
@@ -488,7 +489,7 @@ Scope {
 
                 readonly property real size: Config.scaled(32, bar.uiScale)
 
-                visible: workspaceRow.windowDragging && workspaceRow.dragOver !== "" && workspaceRow.dragIconSource !== ""
+                visible: workspaceRow.windowDragging && workspaceRow.dragHere && workspaceRow.dragIconSource !== ""
 
                 WlrLayershell.namespace: "dragicon"
                 WlrLayershell.layer: WlrLayer.Overlay
