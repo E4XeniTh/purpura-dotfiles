@@ -13,26 +13,28 @@ import "../settings/controls"
 // updates, surfaces a highlighted bar button (Bar.qml) when any are
 // found, and a dropdown saying what's waiting, in plain words:
 //
-//   - at the top, how many updates are ready (or that everything's up to
-//     date), when it last looked, and a button to look again now
+//   - at the top, how many updates are available (or that everything's up
+//     to date), when it last looked, and a button to look again now
 //   - a section for each kind - system packages (the Arch repositories and
-//     the AUR, which yay updates together) and Flatpak apps - with what it
-//     is, how many are waiting, each package's name, where it comes from
-//     and old -> new version, and its own Update button; a checker that
+//     the AUR, which yay updates together) and Flatpak apps - with how many
+//     are waiting and its own Update button. Each starts collapsed, every
+//     time the dropdown opens; clicking one opens it onto each package's
+//     name, where it comes from and old -> new version. A checker that
 //     isn't installed or couldn't reach its server says so there instead
 //     of passing for "up to date"
 //   - purpura itself: with "Follow Purpura versioning" on, whether there's
 //     a new version, how many changes and the newest one's description,
-//     the installed and newest dates; with it off, where to turn it on.
-//     Its Update button is there either way
+//     the installed and newest dates. Its Update button is there whether
+//     it's followed or not
 //   - firmware, which isn't checked here, with a button that checks and
 //     installs it (left out where fwupd isn't installed)
-//   - one big button installing everything (as right-clicking the bar
-//     button does), and a line saying that it all happens in a terminal
-//     window, asking for confirmation and the password
+//   - one big button running every update in turn (as right-clicking the
+//     bar button does), in a terminal window that asks for confirmation
+//     and the password
 //
 // The list scrolls once it's long, with a thin bar showing where; purpura,
-// firmware and the big button stay in view under it.
+// firmware and the big button stay in view under it. The dropdown is only
+// as tall as what's open in it.
 //
 // Mutually exclusive with Notification.qml's own history panel (each holds
 // a reference to the other and closes it when it itself opens, same
@@ -64,7 +66,20 @@ Scope {
             if (root.notification) root.notification.centerOpen = false
         } else {
             autoCloseTimer.stop()
+            // So it opens with every section collapsed again.
+            root.expandedSections = ({})
         }
+    }
+
+    // Which of the list's sections are open, by their step name ("packages",
+    // "flatpak") - kept here, not in the sections themselves, since those
+    // are made again each time a check changes what they hold.
+    property var expandedSections: ({})
+
+    function toggleSection(step) {
+        const next = Object.assign({}, root.expandedSections)
+        next[step] = !next[step]
+        root.expandedSections = next
     }
 
     // Same 5s "no hover" auto-close as Notification.qml's own history
@@ -259,24 +274,17 @@ Scope {
         return Qt.formatDate(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), "d MMM yyyy")
     }
 
-    readonly property string intervalText: {
-        const m = root.checkIntervalMinutes
-        if (m % 60 === 0) return m === 60 ? "hour" : (m / 60) + " hours"
-        return m === 1 ? "minute" : m + " minutes"
-    }
-
     readonly property string headline: {
         if (root.totalUpdates > 0)
-            return root.plural(root.totalUpdates, "update", "updates") + " ready to install"
+            return root.plural(root.totalUpdates, "update", "updates") + " available"
         if (root.checking && !root.lastChecked) return "Looking for updates..."
         return root.checkedEverything ? "Everything is up to date" : "No updates found"
     }
 
     readonly property string checkedLine: {
-        const every = "checks every " + root.intervalText
-        if (root.checking) return "Checking now · " + every
-        if (!root.lastChecked) return "Not checked yet · " + every
-        return "Last checked at " + Qt.formatTime(root.lastChecked, "hh:mm") + " · " + every
+        if (root.checking) return "Checking now"
+        if (!root.lastChecked) return "Not checked yet"
+        return "Last checked at " + Qt.formatTime(root.lastChecked, "hh:mm")
     }
 
     // Nothing's known yet: the very first check is still going.
@@ -297,8 +305,6 @@ Scope {
         const packagesKnown = root.repoCheck === "ok"
         out.push({
             title: "System packages",
-            about: root.hasYay ? "From the Arch repositories and the AUR, updated together with yay."
-                               : "From the Arch repositories, updated with pacman.",
             rows: packages,
             status: packages.length > 0 ? root.plural(packages.length, "update", "updates")
                   : waiting ? "Checking..." : packagesKnown ? "Up to date" : "Couldn't check",
@@ -310,7 +316,6 @@ Scope {
             const flatpakKnown = root.flatpakCheck === "ok"
             out.push({
                 title: "Flatpak apps",
-                about: "Apps installed with Flatpak.",
                 rows: root.flatpakUpdates,
                 status: root.flatpakUpdates.length > 0 ? root.plural(root.flatpakUpdates.length, "update", "updates")
                       : waiting ? "Checking..." : flatpakKnown ? "Up to date" : "Couldn't check",
@@ -746,7 +751,6 @@ Scope {
                         }
 
                         ActionButton {
-                            Layout.alignment: Qt.AlignTop
                             // Wide enough for either label, so it doesn't jump.
                             Layout.preferredWidth: Math.max(implicitWidth, Config.scaled(112, dropdownWindow.uiScale))
                             uiScale: dropdownWindow.uiScale
@@ -781,7 +785,7 @@ Scope {
                                 id: sectionsColumn
                                 // Room for the scroll bar while there is one.
                                 width: sectionsView.width - (sectionsView.interactive ? Config.scaled(12, dropdownWindow.uiScale) : 0)
-                                spacing: Config.scaled(16, dropdownWindow.uiScale)
+                                spacing: Config.scaled(8, dropdownWindow.uiScale)
 
                                 Repeater {
                                     model: root.sections
@@ -791,55 +795,93 @@ Scope {
 
                                         required property var modelData
 
+                                        // Something to open onto: its updates, or why it
+                                        // couldn't check.
+                                        readonly property bool hasContent: section.modelData.rows.length > 0
+                                            || section.modelData.note.length > 0
+                                        readonly property bool expanded: section.hasContent
+                                            && root.expandedSections[section.modelData.step] === true
+                                        // Its contents line up with its title, past the arrow.
+                                        readonly property real indent: Config.scaled(20, dropdownWindow.uiScale)
+
                                         Layout.fillWidth: true
+                                        // More room under an open section, before the next.
+                                        Layout.bottomMargin: section.expanded ? Config.scaled(8, dropdownWindow.uiScale) : 0
                                         spacing: Config.scaled(4, dropdownWindow.uiScale)
 
                                         // Its name, how it stands, and its own Update button.
-                                        RowLayout {
+                                        // Clicking it anywhere but the button opens or closes
+                                        // it. As tall as the button whether that's there or
+                                        // not, so the list doesn't jump.
+                                        Item {
                                             Layout.fillWidth: true
-                                            spacing: Config.scaled(10, dropdownWindow.uiScale)
+                                            implicitHeight: Math.max(headerRow.implicitHeight, Config.scaled(28, dropdownWindow.uiScale))
 
-                                            Text {
-                                                text: section.modelData.title
-                                                color: Config.fgcolor
-                                                font.family: Config.fontfamily
-                                                font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
-                                                font.bold: true
+                                            MouseArea {
+                                                id: headerMouse
+                                                anchors.fill: parent
+                                                enabled: section.hasContent
+                                                hoverEnabled: true
+                                                cursorShape: section.hasContent ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                                onClicked: root.toggleSection(section.modelData.step)
                                             }
 
-                                            Text {
-                                                Layout.fillWidth: true
-                                                text: section.modelData.status
-                                                color: section.modelData.rows.length > 0 ? Config.fgcolorlight : Config.fgcolorhint
-                                                font.family: Config.fontfamily
-                                                font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
-                                                font.bold: section.modelData.rows.length > 0
-                                                elide: Text.ElideRight
-                                            }
+                                            RowLayout {
+                                                id: headerRow
+                                                anchors.fill: parent
+                                                spacing: Config.scaled(8, dropdownWindow.uiScale)
 
-                                            ActionButton {
-                                                visible: section.modelData.canRun
-                                                uiScale: dropdownWindow.uiScale
-                                                implicitHeight: Config.scaled(28, dropdownWindow.uiScale)
-                                                text: "Update"
-                                                onClicked: root.runStep(section.modelData.step)
-                                            }
-                                        }
+                                                // Right while it's collapsed, down while it's
+                                                // open; dark with nothing to open onto.
+                                                Text {
+                                                    Layout.preferredWidth: Config.scaled(12, dropdownWindow.uiScale)
+                                                    horizontalAlignment: Text.AlignHCenter
+                                                    text: "▼"
+                                                    rotation: section.expanded ? 0 : -90
+                                                    color: !section.hasContent ? Config.fgcolordark
+                                                        : headerMouse.containsMouse ? Config.fgcolorlight
+                                                        : Config.fgcolor
+                                                    font.family: Config.fontfamily
+                                                    font.pixelSize: Config.scaled(10, dropdownWindow.uiScale)
 
-                                        // What it is, in a few words.
-                                        Text {
-                                            Layout.fillWidth: true
-                                            text: section.modelData.about
-                                            color: Config.fgcolorhint
-                                            font.family: Config.fontfamily
-                                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
-                                            wrapMode: Text.WordWrap
+                                                    Behavior on rotation {
+                                                        NumberAnimation { duration: 120 }
+                                                    }
+                                                }
+
+                                                Text {
+                                                    text: section.modelData.title
+                                                    color: headerMouse.containsMouse ? Config.fgcolorlight : Config.fgcolor
+                                                    font.family: Config.fontfamily
+                                                    font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    Layout.fillWidth: true
+                                                    text: section.modelData.status
+                                                    color: section.modelData.rows.length > 0 ? Config.fgcolorlight : Config.fgcolorhint
+                                                    font.family: Config.fontfamily
+                                                    font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                                                    font.bold: section.modelData.rows.length > 0
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                ActionButton {
+                                                    visible: section.modelData.canRun
+                                                    uiScale: dropdownWindow.uiScale
+                                                    implicitHeight: Config.scaled(28, dropdownWindow.uiScale)
+                                                    text: "Update"
+                                                    onClicked: root.runStep(section.modelData.step)
+                                                }
+                                            }
                                         }
 
                                         // Why it might not be showing everything.
                                         Text {
                                             Layout.fillWidth: true
-                                            visible: text.length > 0
+                                            Layout.leftMargin: section.indent
+                                            visible: section.expanded && text.length > 0
                                             text: section.modelData.note
                                             color: Config.fgcolorred
                                             font.family: Config.fontfamily
@@ -849,7 +891,7 @@ Scope {
 
                                         // The updates: name, where it's from, old -> new.
                                         Repeater {
-                                            model: section.modelData.rows
+                                            model: section.expanded ? section.modelData.rows : []
 
                                             RowLayout {
                                                 id: updateRow
@@ -857,6 +899,7 @@ Scope {
                                                 required property var modelData
 
                                                 Layout.fillWidth: true
+                                                Layout.leftMargin: section.indent
                                                 Layout.topMargin: Config.scaled(2, dropdownWindow.uiScale)
                                                 spacing: Config.scaled(8, dropdownWindow.uiScale)
 
@@ -956,17 +999,6 @@ Scope {
 
                         Text {
                             Layout.fillWidth: true
-                            text: root.followPurpura
-                                ? "These dotfiles: the shell, its themes and its settings."
-                                : "These dotfiles. To be told about new versions, turn on “Follow Purpura versioning” in Settings > General > Updater."
-                            color: Config.fgcolorhint
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
-                            wrapMode: Text.WordWrap
-                        }
-
-                        Text {
-                            Layout.fillWidth: true
                             visible: text.length > 0
                             text: root.purpuraChanges
                             color: Config.fgcolor
@@ -1033,8 +1065,9 @@ Scope {
                             }
                         }
 
+                        // Centred on the title and its line together.
                         ActionButton {
-                            Layout.alignment: Qt.AlignTop
+                            Layout.alignment: Qt.AlignVCenter
                             uiScale: dropdownWindow.uiScale
                             implicitHeight: Config.scaled(28, dropdownWindow.uiScale)
                             text: "Check & update"
@@ -1054,20 +1087,8 @@ Scope {
                         uiScale: dropdownWindow.uiScale
                         implicitHeight: Config.scaled(36, dropdownWindow.uiScale)
                         lit: root.totalUpdates > 0
-                        text: root.totalUpdates === 1 ? "Install 1 update"
-                            : root.totalUpdates > 1 ? "Install all " + root.totalUpdates + " updates"
-                            : "Run a full update anyway"
+                        text: root.totalUpdates > 0 ? "Update all [" + root.totalUpdates + "]" : "Run a full update anyway"
                         onClicked: root.runUpdate()
-                    }
-
-                    Text {
-                        Layout.fillWidth: true
-                        text: "Updates open in a terminal window, where you confirm them and enter your password. "
-                            + "“Install all” goes through every kind above in turn - so does right-clicking the update button in the bar."
-                        color: Config.fgcolorhint
-                        font.family: Config.fontfamily
-                        font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
-                        wrapMode: Text.WordWrap
                     }
                 }
             }

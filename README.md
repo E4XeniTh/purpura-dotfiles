@@ -132,15 +132,17 @@ newer on that checkout's upstream branch is an update.
   missing (never the optional apps).
 
 The dropdown itself says what's waiting in plain words: how many updates are
-ready (or that everything's up to date), when it last checked, with a
-**Check now** button; then a section each for system packages (Arch
-repositories and AUR), Flatpak apps, purpura and firmware, each with its
-updates (name, where it's from, old → new version) and its own **Update**
-button. A check that couldn't run says so in its section - pacman-contrib or
-yay not installed, no network - rather than passing for "up to date".
-**Install all** at the bottom runs every kind in turn, the same as
-right-clicking the updater button; it all happens in a terminal window, where
-you confirm and type your password.
+available (or that everything's up to date), when it last checked, with a
+**Check now** button;
+then a section each for system packages (Arch repositories and AUR), Flatpak
+apps, purpura and firmware, each with its own **Update** button. System
+packages and Flatpak apps start collapsed, showing just how many updates
+they have - click one to open it onto its updates (name, where it's from,
+old → new version); the dropdown grows with it. A check that couldn't run
+says so in its section - pacman-contrib or yay not installed, no network -
+rather than passing for "up to date". **Update all** at the bottom runs every
+kind in turn, the same as right-clicking the updater button; it all happens
+in a terminal window, where you confirm and type your password.
 
 An install from before this needs one `./purpura.sh --install` (or `--link`)
 so the checkout gets recorded; linked configs are found without it.
