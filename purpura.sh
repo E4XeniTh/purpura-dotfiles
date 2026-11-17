@@ -118,7 +118,8 @@ Usage: ./purpura.sh --install [options]
 With neither, it only shows this help.
 
 --install installs purpura-dotfiles: the packages it needs (pacman + AUR),
-its configs into ~/.config, and a highlight color applied across them.
+its configs into ~/.config (mpv's too, though mpv itself isn't installed),
+and a highlight color applied across them.
 Anything it would overwrite is backed up first.
 
 Changing the color inside Hyprland closes everything that's open when it

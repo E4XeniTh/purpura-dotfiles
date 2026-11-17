@@ -30,7 +30,8 @@ out to be copied straight into place.
 | **Tray** | System tray with a themed right-click menu per item |
 
 Also included: the Hyprland config (`hypr/`), and configs for kitty,
-fish, rofi, fastfetch, GTK, and ZapZap.
+fish, rofi, fastfetch, GTK, ZapZap, and mpv (with the uosc, thumbfast,
+chapters and slicing scripts).
 
 The shell (`.config/quickshell/`) is `shell.qml`, which puts it all
 together, `Config.js` (colors, font, sizes), `helpers/` (the C helpers and
@@ -89,7 +90,8 @@ The installer:
   (offering to set up `yay` if you have no AUR helper): rofi, Dolphin, fish
   and fastfetch come along, and only Solaar is asked about first
 - copies the configs into `~/.config`, backing up every file it changes
-  to `~/.config/purpura-backups/<date>/` first
+  to `~/.config/purpura-backups/<date>/` first - mpv's included, though
+  mpv itself isn't installed
 - creates `hyprland.lua`, `hyprpaper.conf` and `ZapZap.conf` from their
   `.example` once and never overwrites them after that (picking a new
   color only updates `hyprland.lua`'s border colors)
@@ -181,7 +183,7 @@ cp -r .config/hypr .config/quickshell ~/.config/
 ```
 
 Copy the rest (`fish`, `kitty`, `rofi`, `fastfetch`, `gtk-3.0`,
-`gtk-4.0`, `Kvantum`, `qt6ct`, `kdeglobals`, `ZapZap`, and
+`gtk-4.0`, `Kvantum`, `qt6ct`, `kdeglobals`, `ZapZap`, `mpv`, and
 `.local/share/color-schemes` into `~/.local/share/`) too if you want those
 as well. A few of them name the author's home directory (`kitty.conf`,
 `qt6ct.conf`, `ZapZap.conf`) - point those at yours.
@@ -281,6 +283,7 @@ package lists are the exact set):
 - `fish`
 - `fastfetch`
 - ZapZap (not installed by `purpura.sh`)
+- mpv - uosc, thumbfast, chapters and slicing scripts (not installed by `purpura.sh`)
 
 ## Notes
 
