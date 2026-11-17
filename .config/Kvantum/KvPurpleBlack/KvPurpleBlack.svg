@@ -82,8 +82,14 @@
 <rect width="2" x="-436.5" y="141.5" height="8" style="fill:#000000;fill-rule:evenodd" id="toolbar-handle0" transform="scale(-1,1)"/>
 </g>
 <g style="color:#000000;stroke:#000000;fill:#000000">
-<rect width="15" x="30.989519" y="-485.54205" height="15" id="checkbox-normal" transform="scale(1,-1)"/>
-<path id="radio-normal" d="m 107.9686,413.5316 a 7.5,7.5 0 0,1 -15,0 7.5,7.5 0 1,1 15,0 z "/>
+<g id="checkbox-normal" transform="translate(30.99,470.54)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#000000;stroke:none"/>
+</g>
+<g id="radio-normal" transform="translate(92.97,406.03)">
+<circle cx="8" cy="8" r="8" style="fill:#9600FA;stroke:none"/>
+<circle cx="8" cy="8" r="6" style="fill:#000000;stroke:none"/>
+</g>
 </g>
 <g style="fill-rule:evenodd" id="g188">
 <rect width="8" x="92" y="1106" height="4" style="fill:#9600FA" id="itemview-pressed-top"/>
@@ -177,8 +183,14 @@
 </g>
 </g>
 <g style="fill:#000000">
-<path id="radio-focused" d="m 181.5,413 a 8,8 0 1 1 -16,0 8,8 0 1 1 16,0 z"/>
-<rect width="16" x="100" y="-484" height="16" id="checkbox-focused" transform="scale(1,-1)"/>
+<g id="radio-focused" transform="translate(165.5,405)">
+<circle cx="8" cy="8" r="8" style="fill:#9600FA;stroke:none"/>
+<circle cx="8" cy="8" r="6" style="fill:#280043;stroke:none"/>
+</g>
+<g id="checkbox-focused" transform="translate(100,468)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#280043;stroke:none"/>
+</g>
 </g>
 <g style="fill:#9600FA">
 <rect width="2.5" x="55" y="757.75" height="7.25" id="menu-shadow-hint-bottom"/>
@@ -203,7 +215,7 @@
 </g>
 <g id="button-focused-topleft" transform="translate(73.75,-31.2516)">
 <path style="fill:#000000;fill-rule:evenodd" id="path8680" d="m 28.75,41.2516 c -3.80963,0 -7.5,3.69037 -7.5,7.5 h 7.5 v -7.5 z "/>
-<path style="fill:#9600FA;color:#000000" id="path8682" d="M 21.25,41.2516 h 7.5 v 7.5 h -7.5 z"/>
+<path style="fill:#9600FA;color:#000000" id="path8682" d="M 21.25,41.2516 h 7.5 v 3 h -4.5 v 4.5 h -3 z"/>
 </g>
 <g id="button-pressed-left" transform="matrix(1,0,0,1,170,-31.25)">
 <path style="fill:#000000;fill-rule:evenodd" id="path8719" d="m 28.75,81.25 0,-32.5 -7.5,0 0,32.5 7.5,0 z"/>
@@ -211,7 +223,7 @@
 </g>
 <g id="button-pressed-topleft" transform="translate(170,-31.2516)">
 <path style="fill:#000000;fill-rule:evenodd" id="path8731" d="m 28.75,41.2516 c -3.80963,0 -7.5,3.69037 -7.5,7.5 h 7.5 v -7.5 z "/>
-<path style="fill:#9600FA;color:#000000" id="path8733" d="M 21.25,41.2516 h 7.5 v 7.5 h -7.5 z"/>
+<path style="fill:#9600FA;color:#000000" id="path8733" d="M 21.25,41.2516 h 7.5 v 3 h -4.5 v 4.5 h -3 z"/>
 </g>
 <rect width="8" x="134" y="1106" height="4" style="fill:#9600FA;fill-rule:evenodd" id="itemview-toggled-top"/>
 <rect width="8" x="134" y="1122" height="4" style="fill:#3C0064;fill-rule:evenodd" id="itemview-toggled-bottom"/>
@@ -232,7 +244,7 @@
 </g>
 <g style="fill:#9600FA" id="tab-toggled-topleft" transform="matrix(0.66666667,0,0,0.66666667,30,106.33337)">
 <path style="fill-opacity:0" id="tab-toggled-topleft0" d="m 157.5,1042 0,6 6,0 0,-6 z"/>
-<path style="fill:#9600FA" id="path6354" d="M 159.75,1044.2499 h 3.75 v 3.75 h -3.75 z"/>
+<path style="fill:#9600FA" id="path6354" d="M 159.75,1044.2499 h 3.75 v 1.5 h -2.25 v 2.25 h -1.5 z"/>
 </g>
 <g style="fill:#9600FA" id="tab-toggled-bottomleft" transform="matrix(0.66666667,0,0,1,30,-243)">
 <path style="fill-opacity:0" id="tab-toggled-bottomleft0" d="m 157.5,1078 0,6 6,0 0,-6 z"/>
@@ -294,17 +306,20 @@
 <path style="fill:#000000;fill-rule:evenodd" id="path3993" d="m 283.75,95.0032 0,7.5 7.5,0 c 0,-3.80963 -3.77876,-7.5 -7.5,-7.5 z"/>
 <path style="fill:url(#linearGradient4787)" id="path4744" d="M 283.75,95.0032 h 7.5 v 7.5 h -7.5 z"/>
 </g>
-<g id="radio-checked-focused" transform="matrix(1.0666673,0,0,1.0666673,28.666288,-29)">
-<path style="fill:#000000;stroke-width:.819" id="path7234" d="m 665.4759,255.0668 a 4.50781,7.29378 0 0 1 -4.5078,7.29379 4.50781,7.29378 0 0 1 -4.50781,-7.29379 4.50781,7.29378 0 0 1 4.50781,-7.29378 4.50781,7.29378 0 0 1 4.5078,7.29378 z" transform="matrix(1.6637806,0,0,1.0282724,-757.20581,150.22177)"/>
-<path style="fill:#9600FA;stroke-width:1.274" id="path7236" d="m 665.4759,255.0668 a 4.50781,7.29378 0 0 1 -4.5078,7.29379 4.50781,7.29378 0 0 1 -4.50781,-7.29379 4.50781,7.29378 0 0 1 4.50781,-7.29378 4.50781,7.29378 0 0 1 4.5078,7.29378 z" transform="matrix(1.0398623,0,0,0.64266985,-344.81573,248.57618)"/>
+<g id="radio-checked-focused" transform="translate(386,403)">
+<circle cx="8" cy="8" r="8" style="fill:#9600FA;stroke:none"/>
+<circle cx="8" cy="8" r="6" style="fill:#280043;stroke:none"/>
+<circle cx="8" cy="8" r="3" style="fill:#9600FA;stroke:none"/>
 </g>
-<g id="checkbox-tristate-focused" transform="matrix(1.2307692,0,0,1.2307692,-55.23088,-127.44877)">
-<rect width="13" x="332.5" y="-498.021" height="13" style="fill:#000000" id="rect7317" transform="scale(1,-1)"/>
-<rect width="9.75" x="334.125" y="-492.73975" height="2.4375" style="fill:#9600FA" id="rect7319" transform="scale(1,-1)"/>
+<g id="checkbox-tristate-focused" transform="translate(354,469.5)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#280043;stroke:none"/>
+<rect x="4" y="7" width="8" height="2" style="fill:#9600FA;stroke:none"/>
 </g>
-<g id="checkbox-checked-focused" transform="matrix(1.0666666,0,0,1.0666666,16,-260)">
-<rect width="15" x="217.5" y="-697.5" height="15" style="fill:#000000" id="rect7329" transform="scale(1,-1)"/>
-<rect width="9.375001" x="220.3125" y="-694.6875" height="9.375001" style="fill:#9600FA" id="rect7331" transform="scale(1,-1)"/>
+<g id="checkbox-checked-focused" transform="translate(248,468)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#280043;stroke:none"/>
+<rect x="4" y="4" width="8" height="8" style="fill:#9600FA;stroke:none"/>
 </g>
 </g>
 <rect width="30" x="75" y="805" height="30" style="opacity:.3;fill:#3C0064" id="tab-focused"/>
@@ -319,17 +334,20 @@
 <path style="fill:#000000" id="path5095" d="M -25.0,1046.8541 h 2.5 v 2.5 h -2.5 z"/>
 </g>
 <g style="color:#000000">
-<g id="radio-checked-normal" transform="translate(24.50125,-1.49921)">
-<path style="fill:#000000;stroke:#000000" id="path5193" d="m 312,412.5 a 7.5,7.5 0 0 1 -7.5,7.5 7.5,7.5 0 0 1 -7.5,-7.5 7.5,7.5 0 0 1 7.5,-7.5 7.5,7.5 0 0 1 7.5,7.5 z"/>
-<path style="fill:#9600FA" id="path6309-3" d="m 308.4987,412.4992 a 4,4 0 0,1 -4,4 4,4 0 0,1 -4,-4 4,4 0 0,1 4,-4 4,4 0 0,1 4,4 z "/>
+<g id="radio-checked-normal" transform="translate(321.5,403.5)">
+<circle cx="8" cy="8" r="8" style="fill:#9600FA;stroke:none"/>
+<circle cx="8" cy="8" r="6" style="fill:#000000;stroke:none"/>
+<circle cx="8" cy="8" r="3" style="fill:#9600FA;stroke:none"/>
 </g>
-<g id="checkbox-checked-normal" transform="translate(-88.500118,-24.499869)">
-<rect width="15" x="280" y="-507.50012" height="15" style="fill:#000000;stroke:#000000" id="rect5201" transform="scale(1,-1)"/>
-<rect width="8" x="283.5" y="-504" height="8" style="fill:#9600FA" id="rect7291" transform="scale(1,-1)"/>
+<g id="checkbox-checked-normal" transform="translate(191.5,468)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#000000;stroke:none"/>
+<rect x="4" y="4" width="8" height="8" style="fill:#9600FA;stroke:none"/>
 </g>
-<g id="checkbox-tristate-normal" transform="translate(117.49989,-55)">
-<rect width="15" x="187.49988" y="-540" height="15" style="fill:#000000;stroke:#000000" id="rect5209" transform="scale(1,-1)"/>
-<rect width="10" x="190" y="-534" height="3" style="fill:#9600FA" id="rect7313" transform="scale(1,-1)"/>
+<g id="checkbox-tristate-normal" transform="translate(305,470)">
+<rect width="16" height="16" style="fill:#9600FA;stroke:none"/>
+<rect x="2" y="2" width="12" height="12" style="fill:#000000;stroke:none"/>
+<rect x="4" y="7" width="8" height="2" style="fill:#9600FA;stroke:none"/>
 </g>
 </g>
 <g style="fill:#9600FA" id="menuitem-right-focused" transform="translate(77.507,120)">
@@ -362,7 +380,7 @@
 </g>
 <g id="tbutton-focused-topleft" transform="translate(78.75,63.7484)">
 <path style="fill:#000000;fill-rule:evenodd;fill-opacity:0" id="path4831" d="m 28.75,41.2516 c -3.80963,0 -7.5,3.69037 -7.5,7.5 h 7.5 v -7.5 z "/>
-<path style="fill:#9600FA;color:#000000" id="path4833" d="M 21.25,41.2516 h 7.5 v 7.5 h -7.5 z"/>
+<path style="fill:#9600FA;color:#000000" id="path4833" d="M 21.25,41.2516 h 7.5 v 3.5 h -4 v 4 h -3.5 z"/>
 </g>
 <g id="common-normal-left" transform="translate(-269,-15)">
 <path style="fill:#000000" id="path5131" d="m 307,1179 0,30 2,0 0,-30 z"/>
@@ -398,7 +416,7 @@
 </g>
 <g id="button-focused-bottomleft" transform="matrix(0,-1,1,0,53.748446,78.746889)">
 <path style="fill:#000000;fill-rule:evenodd" id="path5816" d="m 28.75,41.2516 c -3.80963,0 -7.5,3.69037 -7.5,7.5 h 7.5 v -7.5 z "/>
-<path style="fill:#9600FA;color:#000000" id="path5818" d="M 21.25,41.2516 h 7.5 v 7.5 h -7.5 z"/>
+<path style="fill:#9600FA;color:#000000" id="path5818" d="M 21.25,41.2516 h 7.5 v 3 h -4.5 v 4.5 h -3 z"/>
 </g>
 <use width="450" height="1230" xlink:href="#button-pressed-left" id="button-pressed-top" transform="matrix(0,1,-1,0,248.7341,-181.24531)"/>
 <use width="450" height="1230" xlink:href="#button-pressed-topleft" id="button-pressed-topright" transform="matrix(0,1,-1,0,248.75,-181.25)"/>
@@ -642,7 +660,7 @@
 </g>
 <g id="common-focused-topleft" transform="translate(-225,-15)">
 <path style="fill:#000000" id="path4823" d="m 309,1176.5 c -1.23754,0 -2.49448,1.2403 -2.5,2.5 h 2.5 z "/>
-<path style="fill:#9600FA" id="path4825" d="M 305.0,1175.0 h 4.0 v 4.0 h -4.0 z"/>
+<path style="fill:#9600FA" id="path4825" d="M 305,1175 h 4 v 1.5 h -2.5 v 2.5 h -1.5 z"/>
 </g>
 <use width="100%" height="100%" xlink:href="#common-focused-left" id="common-focused-top" transform="matrix(0,1,-1,0,1278,1080)"/>
 <use width="100%" height="100%" xlink:href="#common-focused-topleft" id="common-focused-topright" transform="matrix(0,1,-1,0,1278,1080)"/>
