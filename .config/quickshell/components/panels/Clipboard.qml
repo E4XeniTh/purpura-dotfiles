@@ -43,7 +43,12 @@ Scope {
     onOpenChanged: {
         if (root.open) {
             autoCloseTimer.restart()
+            // Opens on the newest entry, ready for the keyboard - and on a
+            // newer one still if the refresh opening sets off finds it.
+            root.followNewest = true
+            if (clipModel.count > 0) root.selectIndex(0)
         } else {
+            root.followNewest = false
             root.previewedEntryId = ""
             root.previewedIsImage = false
             root.previewedImagePath = ""
@@ -114,6 +119,88 @@ Scope {
         listProcess.running = true
     }
 
+    // ---------------- the selection ----------------
+    // The selected entry is the previewed one: the keyboard moves it, the
+    // mouse moves it by pointing at an entry, Enter copies it. Entries are
+    // newest first.
+
+    // Until the first refresh after opening (or a key or the mouse moving
+    // the selection), it stays on whatever's newest.
+    property bool followNewest: false
+
+    // A move the panel scrolls to show (the mouse's own never need it).
+    signal selectionMoved(int index)
+
+    function indexOfEntry(entryId) {
+        for (let i = 0; i < clipModel.count; i++) {
+            if (clipModel.get(i).entryId === entryId) return i
+        }
+        return -1
+    }
+
+    function selectIndex(index) {
+        if (index < 0 || index >= clipModel.count) return
+        const entry = clipModel.get(index)
+        root.previewEntry(entry.entryId, entry.isImage, entry.imagePath)
+        root.selectionMoved(index)
+    }
+
+    // Up/Down (step -1/1), Page Up/Down, Home/End. With nothing selected,
+    // the first press lands on the newest entry.
+    function moveSelection(step) {
+        root.followNewest = false
+        if (clipModel.count === 0) return
+        const at = root.indexOfEntry(root.previewedEntryId)
+        root.selectIndex(at < 0 ? 0 : Math.max(0, Math.min(clipModel.count - 1, at + step)))
+    }
+
+    // The mouse pointing at an entry (see clipWindow.pointerAt).
+    function pointAt(entryId, isImage, imagePath) {
+        root.followNewest = false
+        root.previewEntry(entryId, isImage, imagePath)
+    }
+
+    // Delete: the selection moves on to the next entry (the one before, at
+    // the end of the list).
+    function deleteSelected() {
+        root.followNewest = false
+        const at = root.indexOfEntry(root.previewedEntryId)
+        if (at < 0) return
+        const gone = clipModel.get(at)
+        const goneId = gone.entryId
+        const gonePreview = gone.preview
+        const next = at + 1 < clipModel.count ? at + 1 : at - 1
+        let nextEntry = null
+        if (next >= 0) {
+            const e = clipModel.get(next)
+            nextEntry = { entryId: e.entryId, isImage: e.isImage, imagePath: e.imagePath }
+        }
+        root.deleteEntry(goneId, gonePreview)
+        if (nextEntry) {
+            root.previewEntry(nextEntry.entryId, nextEntry.isImage, nextEntry.imagePath)
+            root.selectionMoved(next)
+        }
+    }
+
+    // The panel's keys; true for one it used.
+    function handleKey(key) {
+        switch (key) {
+        case Qt.Key_Down: root.moveSelection(1); return true
+        case Qt.Key_Up: root.moveSelection(-1); return true
+        case Qt.Key_PageDown: root.moveSelection(5); return true
+        case Qt.Key_PageUp: root.moveSelection(-5); return true
+        case Qt.Key_End: root.moveSelection(clipModel.count); return true
+        case Qt.Key_Home: root.moveSelection(-clipModel.count); return true
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+            if (root.previewedEntryId !== "") root.selectEntry(root.previewedEntryId)
+            return true
+        case Qt.Key_Delete: root.deleteSelected(); return true
+        case Qt.Key_Escape: root.open = false; return true
+        }
+        return false
+    }
+
     // Hovering an entry (see entryMouseArea's onEntered below) previews
     // it - moving the mouse off that entry deliberately does NOT clear
     // the preview, only hovering a DIFFERENT one changes it, so the pane
@@ -130,7 +217,9 @@ Scope {
         root.previewText = ""
 
         if (!isImage) {
-            previewTextProcess.command = ["cliphist", "decode", entryId]
+            // The entry's id on the first line, so a decode finishing after
+            // the selection moved on is recognised (see previewTextProcess).
+            previewTextProcess.command = ["bash", "-c", 'printf "%s\\n" "$1"; cliphist decode "$1"', "clipboard-preview", entryId]
             previewTextProcess.running = true
         }
     }
@@ -169,6 +258,7 @@ Scope {
             onStreamFinished: {
                 if (listCollector.text === root.lastListText) {
                     root.pendingDeleteClose = false
+                    root.listRefreshed()
                     return
                 }
                 root.lastListText = listCollector.text
@@ -250,8 +340,16 @@ Scope {
                     root.pendingDeleteClose = false
                     if (clipModel.count === 0) root.open = false
                 }
+                root.listRefreshed()
             }
         }
+    }
+
+    // The first refresh after opening settles which entry is the newest.
+    function listRefreshed() {
+        if (!root.followNewest || !root.open) return
+        root.followNewest = false
+        if (clipModel.count > 0 && clipModel.get(0).entryId !== root.previewedEntryId) root.selectIndex(0)
     }
 
     // Command is set fresh per click by selectEntry() above - a single
@@ -283,9 +381,17 @@ Scope {
     Process {
         id: previewTextProcess
 
+        // A decode asked for while another runs starts once that one's done
+        // (Quickshell queues it), so the earlier one's text arrives first -
+        // and only the selected entry's own is shown.
         stdout: StdioCollector {
             id: previewTextCollector
-            onStreamFinished: root.previewText = previewTextCollector.text
+            onStreamFinished: {
+                const text = previewTextCollector.text
+                const newline = text.indexOf("\n")
+                if (newline < 0 || text.substring(0, newline) !== root.previewedEntryId) return
+                root.previewText = text.substring(newline + 1)
+            }
         }
     }
 
@@ -319,7 +425,57 @@ Scope {
             WlrLayershell.namespace: "clipboard"
             WlrLayershell.layer: WlrLayer.Overlay
 
-            Component.onCompleted: root.refresh()
+            // The keyboard is the panel's while it's open (see keyHandler
+            // below). Exclusive, not OnDemand: Hyprland hands an on-demand
+            // surface's focus back to the window under the mouse the moment
+            // the mouse moves over it.
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+
+            Component.onCompleted: {
+                root.refresh()
+                keyHandler.forceActiveFocus()
+            }
+
+            // Up/Down (Page Up/Down, Home/End) move the selection, Enter
+            // copies it, Delete removes it, Escape closes - see
+            // root.handleKey(). Each key used holds off the auto-close the
+            // way the mouse being over the panel does.
+            Item {
+                id: keyHandler
+                focus: true
+                Keys.onPressed: (event) => {
+                    if (!root.handleKey(event.key)) return
+                    event.accepted = true
+                    if (autoCloseTimer.running) autoCloseTimer.restart()
+                }
+            }
+
+            // Keeps a selection the keyboard moved in view.
+            Connections {
+                target: root
+                function onSelectionMoved(index) {
+                    clipList.positionViewAtIndex(index, ListView.Contain)
+                }
+            }
+
+            // Where the mouse last was, in window coordinates - unknown until
+            // it's first seen over an entry after opening.
+            property real pointerX: NaN
+            property real pointerY: NaN
+
+            // An entry under the mouse: selected only when the mouse itself
+            // moved. Qt also reports an entry sliding under a still mouse -
+            // the list scrolling to a selection the keyboard moved, or the
+            // panel opening right where the mouse rests - and that mustn't
+            // take the selection.
+            function pointerAt(area, x, y, entryId, isImage, imagePath) {
+                const p = area.mapToItem(null, x, y)
+                const moved = !isNaN(clipWindow.pointerX)
+                    && (Math.abs(p.x - clipWindow.pointerX) > 0.5 || Math.abs(p.y - clipWindow.pointerY) > 0.5)
+                clipWindow.pointerX = p.x
+                clipWindow.pointerY = p.y
+                if (moved) root.pointAt(entryId, isImage, imagePath)
+            }
 
             // Cliphist has no push-based "history changed" signal to
             // hook into, so this is a plain poll - cheap since refresh()
@@ -449,7 +605,10 @@ Scope {
                                 // (+16 margin) lands this at 96 - exactly
                                 // two base (48px) text-entry rows tall.
                                 height: Math.max(Config.scaled(64, clipWindow.uiScale), contentRow.implicitHeight + Config.scaled(16, clipWindow.uiScale))
-                                color: entryMouseArea.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                                // The selected entry (see root.previewEntry)
+                                // - the one under the mouse, or the one the
+                                // keyboard moved to.
+                                color: entryDelegate.isPreviewed ? Config.fgcolorhover : Config.fillcolor
                                 border.width: Config.scaled(2, clipWindow.uiScale)
                                 border.color: entryDelegate.isPreviewed ? Config.fgcolorlight : Config.fgcolor
 
@@ -546,13 +705,16 @@ Scope {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                    // Hovering previews (see
-                                    // root.previewEntry) - clicking no
+                                    // Pointing selects and previews (see
+                                    // clipWindow.pointerAt) - clicking no
                                     // longer previews at all, left click
                                     // copies+closes immediately, right
                                     // click deletes, same as every other
                                     // list in this shell.
-                                    onEntered: root.previewEntry(entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
+                                    onEntered: clipWindow.pointerAt(entryMouseArea, entryMouseArea.mouseX, entryMouseArea.mouseY,
+                                        entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
+                                    onPositionChanged: (mouse) => clipWindow.pointerAt(entryMouseArea, mouse.x, mouse.y,
+                                        entryDelegate.entryId, entryDelegate.isImage, entryDelegate.imagePath)
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) {
                                             root.deleteEntry(entryDelegate.entryId, entryDelegate.preview)
@@ -582,6 +744,20 @@ Scope {
                                 }
                             }
                         }
+
+                        // The keys, for anyone who'd rather not reach for
+                        // the mouse.
+                        Text {
+                            Layout.fillWidth: true
+                            visible: clipModel.count > 0
+                            text: "↑↓ choose  ·  Enter copy  ·  Del remove  ·  Esc close"
+                            color: Config.fgcolorhint
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(11, clipWindow.uiScale)
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                        }
+
                         Item { height: Config.scaled(8, clipWindow.uiScale) }
                     }
                 }
@@ -727,10 +903,32 @@ Scope {
                     border.color: Config.fgcolorlight
 
                     Image {
+                        id: previewImage
+
+                        // Opening selects the newest entry straight away,
+                        // and an image entry's file may still be being
+                        // written by its thumbnail's decode (see the list's
+                        // delegates) - so a failed load is tried again a few
+                        // times, a moment apart, by blanking the source.
+                        property bool reloading: false
+                        property string retriedPath: ""
+                        property int retries: 0
+
                         visible: root.previewedIsImage
                         anchors.fill: parent
                         anchors.margins: Config.scaled(10, previewWindow.uiScale)
-                        source: root.previewedIsImage ? ("file://" + root.previewedImagePath) : ""
+                        source: (root.previewedIsImage && !previewImage.reloading) ? ("file://" + root.previewedImagePath) : ""
+                        onStatusChanged: {
+                            if (status !== Image.Error) return
+                            if (previewImage.retriedPath !== root.previewedImagePath) {
+                                previewImage.retriedPath = root.previewedImagePath
+                                previewImage.retries = 0
+                            }
+                            if (previewImage.retries < 5) {
+                                previewImage.retries++
+                                previewRetryTimer.restart()
+                            }
+                        }
                         // Scale to fill as much of the square as possible
                         // without cropping or distorting - including
                         // upscaling an image that's smaller than the pane,
@@ -739,6 +937,15 @@ Scope {
                         fillMode: Image.PreserveAspectFit
                         asynchronous: true
                         cache: false
+
+                        Timer {
+                            id: previewRetryTimer
+                            interval: 250
+                            onTriggered: {
+                                previewImage.reloading = true
+                                previewImage.reloading = false
+                            }
+                        }
                     }
 
                     Flickable {
