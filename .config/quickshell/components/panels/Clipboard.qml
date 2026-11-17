@@ -750,19 +750,6 @@ Scope {
                             }
                         }
 
-                        // The keys, for anyone who'd rather not reach for
-                        // the mouse.
-                        Text {
-                            Layout.fillWidth: true
-                            visible: clipModel.count > 0
-                            text: "↑↓ choose  ·  Enter copy  ·  Del remove  ·  Esc close"
-                            color: Config.fgcolorhint
-                            font.family: Config.fontfamily
-                            font.pixelSize: Config.scaled(11, clipWindow.uiScale)
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                        }
-
                         Item { height: Config.scaled(8, clipWindow.uiScale) }
                     }
                 }
