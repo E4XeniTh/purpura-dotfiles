@@ -121,17 +121,26 @@ newer on that checkout's upstream branch is an update.
 - It's checked on the updater's own schedule (`git fetch`, never asking for
   credentials), and you get a notification once per new version - clicking it
   opens the updater.
-- The updater's dropdown shows purpura's state under the package list:
-  installed vs. newest version, and anything that would get in the way
-  (local commits or changes in the checkout, no network).
+- The updater's dropdown shows purpura's state under the package list: how
+  many new changes and the newest one's description, the installed and
+  newest versions, and anything that would get in the way (local commits or
+  changes in the checkout, no network).
 - Right-clicking the updater button runs purpura's update just before the
   firmware updates: a fast-forward `git pull` of the checkout, then
   `./purpura.sh --update`, which installs the new configs and helpers, keeps
   your color, and only adds core packages that are
   missing (never the optional apps).
-- The dropdown's **Update:** buttons run one step on its own - packages,
-  flatpak, firmware or purpura - or **everything**, the same as
-  right-clicking the updater button.
+
+The dropdown itself says what's waiting in plain words: how many updates are
+ready (or that everything's up to date), when it last checked, with a
+**Check now** button; then a section each for system packages (Arch
+repositories and AUR), Flatpak apps, purpura and firmware, each with its
+updates (name, where it's from, old → new version) and its own **Update**
+button. A check that couldn't run says so in its section - pacman-contrib or
+yay not installed, no network - rather than passing for "up to date".
+**Install all** at the bottom runs every kind in turn, the same as
+right-clicking the updater button; it all happens in a terminal window, where
+you confirm and type your password.
 
 An install from before this needs one `./purpura.sh --install` (or `--link`)
 so the checkout gets recorded; linked configs are found without it.
