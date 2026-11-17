@@ -741,15 +741,16 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Rectangle {
+                        CheckSquare {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.strictWorkspaceWidget ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                            uiScale: root.uiScale
+                            checked: root.strictWorkspaceWidget
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse1.containsMouse || checkLabelMouse1.containsMouse
 
                             MouseArea {
+                                id: checkBoxMouse1
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleStrictWorkspaceWidget()
@@ -764,6 +765,7 @@ Item {
                             font.bold: true
 
                             MouseArea {
+                                id: checkLabelMouse1
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleStrictWorkspaceWidget()
@@ -785,15 +787,16 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Rectangle {
+                        CheckSquare {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.showEmptyWidget ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                            uiScale: root.uiScale
+                            checked: root.showEmptyWidget
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse2.containsMouse || checkLabelMouse2.containsMouse
 
                             MouseArea {
+                                id: checkBoxMouse2
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowEmptyWidget()
@@ -808,6 +811,7 @@ Item {
                             font.bold: true
 
                             MouseArea {
+                                id: checkLabelMouse2
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowEmptyWidget()
@@ -830,15 +834,16 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Rectangle {
+                        CheckSquare {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.showBrightnessControl ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                            uiScale: root.uiScale
+                            checked: root.showBrightnessControl
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse3.containsMouse || checkLabelMouse3.containsMouse
 
                             MouseArea {
+                                id: checkBoxMouse3
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowBrightnessControl()
@@ -853,6 +858,7 @@ Item {
                             font.bold: true
 
                             MouseArea {
+                                id: checkLabelMouse3
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowBrightnessControl()
@@ -874,15 +880,16 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Rectangle {
+                        CheckSquare {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.showUpdater ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                            uiScale: root.uiScale
+                            checked: root.showUpdater
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse4.containsMouse || checkLabelMouse4.containsMouse
 
                             MouseArea {
+                                id: checkBoxMouse4
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowUpdater()
@@ -897,6 +904,7 @@ Item {
                             font.bold: true
 
                             MouseArea {
+                                id: checkLabelMouse4
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowUpdater()
@@ -918,15 +926,16 @@ Item {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
 
-                        Rectangle {
+                        CheckSquare {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                            color: root.showFullscreenHint ? Config.fgcolor : Config.fillcolor
-                            border.width: Config.scaled(2, root.uiScale)
-                            border.color: Config.fgcolor
-                            radius: 0
+                            uiScale: root.uiScale
+                            checked: root.showFullscreenHint
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse5.containsMouse || checkLabelMouse5.containsMouse
 
                             MouseArea {
+                                id: checkBoxMouse5
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowFullscreenHint()
@@ -941,6 +950,7 @@ Item {
                             font.bold: true
 
                             MouseArea {
+                                id: checkLabelMouse5
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onClicked: root.toggleShowFullscreenHint()
@@ -1439,12 +1449,13 @@ Item {
                                         anchors.rightMargin: Config.scaled(6, root.uiScale)
                                         spacing: Config.scaled(8, root.uiScale)
 
-                                        Rectangle {
+                                        CheckSquare {
                                             Layout.preferredWidth: Config.scaled(16, root.uiScale)
                                             Layout.preferredHeight: Config.scaled(16, root.uiScale)
-                                            color: layoutRow.ticked ? Config.fgcolor : Config.fillcolor
-                                            border.width: Config.scaled(2, root.uiScale)
-                                            border.color: Config.fgcolor
+                                            uiScale: root.uiScale
+                                            checked: layoutRow.ticked
+                                            tint: Config.fgcolor
+                                            hovered: layoutRowMouse.containsMouse
                                         }
 
                                         Text {
@@ -1528,15 +1539,16 @@ Item {
                             Layout.topMargin: Config.scaled(8, root.uiScale)
                             spacing: Config.scaled(8, root.uiScale)
 
-                            Rectangle {
+                            CheckSquare {
                                 Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: root.highlightOnUpdates ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
-                                radius: 0
+                                uiScale: root.uiScale
+                                checked: root.highlightOnUpdates
+                                tint: Config.fgcolor
+                                hovered: checkBoxMouse7.containsMouse || checkLabelMouse7.containsMouse
 
                                 MouseArea {
+                                    id: checkBoxMouse7
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.toggleHighlightOnUpdates()
@@ -1551,6 +1563,7 @@ Item {
                                 font.bold: true
 
                                 MouseArea {
+                                    id: checkLabelMouse7
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.toggleHighlightOnUpdates()
@@ -1578,15 +1591,16 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Config.scaled(8, root.uiScale)
 
-                                Rectangle {
+                                CheckSquare {
                                     Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                     Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                    color: root.followPurpura ? Config.fgcolor : Config.fillcolor
-                                    border.width: Config.scaled(2, root.uiScale)
-                                    border.color: Config.fgcolor
-                                    radius: 0
+                                    uiScale: root.uiScale
+                                    checked: root.followPurpura
+                                    tint: Config.fgcolor
+                                    hovered: checkBoxMouse8.containsMouse || checkLabelMouse8.containsMouse
 
                                     MouseArea {
+                                        id: checkBoxMouse8
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.toggleFollowPurpura()
@@ -1601,6 +1615,7 @@ Item {
                                     font.bold: true
 
                                     MouseArea {
+                                        id: checkLabelMouse8
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.toggleFollowPurpura()
@@ -1752,15 +1767,16 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Config.scaled(8, root.uiScale)
 
-                                Rectangle {
+                                CheckSquare {
                                     Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                     Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                    color: root.nlEnabled ? Config.fgcolor : Config.fillcolor
-                                    border.width: Config.scaled(2, root.uiScale)
-                                    border.color: Config.fgcolor
-                                    radius: 0
+                                    uiScale: root.uiScale
+                                    checked: root.nlEnabled
+                                    tint: Config.fgcolor
+                                    hovered: checkBoxMouse9.containsMouse || checkLabelMouse9.containsMouse
 
                                     MouseArea {
+                                        id: checkBoxMouse9
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.nightLight.setEnabled(!root.nlEnabled)
@@ -1775,6 +1791,7 @@ Item {
                                     font.bold: true
 
                                     MouseArea {
+                                        id: checkLabelMouse9
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.nightLight.setEnabled(!root.nlEnabled)
@@ -1848,15 +1865,16 @@ Item {
                                 Layout.topMargin: Config.scaled(8, root.uiScale)
                                 spacing: Config.scaled(8, root.uiScale)
 
-                                Rectangle {
+                                CheckSquare {
                                     Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                     Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                    color: root.nlScheduled ? Config.fgcolor : Config.fillcolor
-                                    border.width: Config.scaled(2, root.uiScale)
-                                    border.color: Config.fgcolor
-                                    radius: 0
+                                    uiScale: root.uiScale
+                                    checked: root.nlScheduled
+                                    tint: Config.fgcolor
+                                    hovered: checkBoxMouse10.containsMouse || checkLabelMouse10.containsMouse
 
                                     MouseArea {
+                                        id: checkBoxMouse10
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.nightLight.setScheduled(!root.nlScheduled)
@@ -1871,6 +1889,7 @@ Item {
                                     font.bold: true
 
                                     MouseArea {
+                                        id: checkLabelMouse10
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         onClicked: root.nightLight.setScheduled(!root.nlScheduled)
@@ -2171,14 +2190,16 @@ Item {
 
                             readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autoHideEnabled
 
-                            Rectangle {
+                            CheckSquare {
                                 Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: parent.on ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
+                                uiScale: root.uiScale
+                                checked: parent.on
+                                tint: Config.fgcolor
+                                hovered: checkBoxMouse11.containsMouse || checkLabelMouse11.containsMouse
 
                                 MouseArea {
+                                    id: checkBoxMouse11
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
@@ -2193,6 +2214,7 @@ Item {
                                 font.bold: true
 
                                 MouseArea {
+                                    id: checkLabelMouse11
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.dropdownConsole.setAutoHideEnabled(!root.dropdownConsole.autoHideEnabled)
@@ -2215,14 +2237,16 @@ Item {
 
                             readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillEnabled
 
-                            Rectangle {
+                            CheckSquare {
                                 Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: parent.on ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
+                                uiScale: root.uiScale
+                                checked: parent.on
+                                tint: Config.fgcolor
+                                hovered: checkBoxMouse12.containsMouse || checkLabelMouse12.containsMouse
 
                                 MouseArea {
+                                    id: checkBoxMouse12
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
@@ -2237,6 +2261,7 @@ Item {
                                 font.bold: true
 
                                 MouseArea {
+                                    id: checkLabelMouse12
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: root.dropdownConsole.setAutokillEnabled(!root.dropdownConsole.autokillEnabled)
@@ -2326,14 +2351,16 @@ Item {
                             readonly property bool on: !!root.dropdownConsole && root.dropdownConsole.autokillNotification
                             readonly property color shownColor: usable ? Config.fgcolor : Config.fgcolordark
 
-                            Rectangle {
+                            CheckSquare {
                                 Layout.preferredWidth: Config.scaled(20, root.uiScale)
                                 Layout.preferredHeight: Config.scaled(20, root.uiScale)
-                                color: autokillNotificationRow.on ? autokillNotificationRow.shownColor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: autokillNotificationRow.shownColor
+                                uiScale: root.uiScale
+                                checked: autokillNotificationRow.on
+                                tint: autokillNotificationRow.shownColor
+                                hovered: checkBoxMouse13.containsMouse || checkLabelMouse13.containsMouse
 
                                 MouseArea {
+                                    id: checkBoxMouse13
                                     anchors.fill: parent
                                     enabled: autokillNotificationRow.usable
                                     hoverEnabled: true
@@ -2349,6 +2376,7 @@ Item {
                                 font.bold: true
 
                                 MouseArea {
+                                    id: checkLabelMouse13
                                     anchors.fill: parent
                                     enabled: autokillNotificationRow.usable
                                     hoverEnabled: true

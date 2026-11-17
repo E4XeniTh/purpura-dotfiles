@@ -473,19 +473,17 @@ Rectangle {
                                 elide: Text.ElideRight
                             }
 
-                            // On or off - CheckRow.qml's box.
-                            Rectangle {
+                            // On or off - the settings' checkbox (CheckSquare.qml).
+                            CheckSquare {
                                 id: monitorBox
                                 anchors {
                                     right: parent.right
                                     verticalCenter: parent.verticalCenter
                                     rightMargin: Config.scaled(10, root.uiScale)
                                 }
-                                width: Config.scaled(20, root.uiScale)
-                                height: width
-                                color: monitorEntry.isOn ? Config.fgcolor : Config.fillcolor
-                                border.width: Config.scaled(2, root.uiScale)
-                                border.color: Config.fgcolor
+                                uiScale: root.uiScale
+                                checked: monitorEntry.isOn
+                                hovered: monitorMouse.containsMouse
                             }
 
                             MouseArea {

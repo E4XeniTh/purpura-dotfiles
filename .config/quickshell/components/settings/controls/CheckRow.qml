@@ -1,10 +1,12 @@
 import QtQuick
 import QtQuick.Layouts
 import "../../../Config.js" as Config
+import "../../common"
 
-// A checkbox and its label, drawn the way ShellSettings.qml's own are. Dark
-// and unclickable while `usable` is false - i.e. while the option it hangs
-// off is turned off.
+// A checkbox and its label, drawn the way ShellSettings.qml's own are (the box
+// is CheckSquare.qml, like the Qt apps' under the Kvantum theme). Dark and
+// unclickable while `usable` is false - i.e. while the option it hangs off is
+// turned off.
 RowLayout {
     id: root
 
@@ -19,15 +21,16 @@ RowLayout {
 
     spacing: Config.scaled(8, root.uiScale)
 
-    Rectangle {
+    CheckSquare {
         Layout.preferredWidth: Config.scaled(20, root.uiScale)
         Layout.preferredHeight: Config.scaled(20, root.uiScale)
-        color: root.checked ? root.shownColor : Config.fillcolor
-        border.width: Config.scaled(2, root.uiScale)
-        border.color: root.shownColor
-        radius: 0
+        uiScale: root.uiScale
+        checked: root.checked
+        tint: root.shownColor
+        hovered: boxMouse.containsMouse || labelMouse.containsMouse
 
         MouseArea {
+            id: boxMouse
             anchors.fill: parent
             enabled: root.usable
             hoverEnabled: true
@@ -43,6 +46,7 @@ RowLayout {
         font.bold: true
 
         MouseArea {
+            id: labelMouse
             anchors.fill: parent
             enabled: root.usable
             hoverEnabled: true
