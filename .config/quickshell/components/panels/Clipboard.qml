@@ -49,6 +49,7 @@ Scope {
             if (clipModel.count > 0) root.selectIndex(0)
         } else {
             root.followNewest = false
+            root.panelOpened = false
             root.previewedEntryId = ""
             root.previewedIsImage = false
             root.previewedImagePath = ""
@@ -56,6 +57,10 @@ Scope {
             autoCloseTimer.stop()
         }
     }
+
+    // Whether the panel has finished its opening animation - the preview
+    // pane waits for it (see its LazyLoader).
+    property bool panelOpened: false
 
     // Auto-close after 5s with the mouse over neither the clipboard
     // panel nor the preview pane - HoverHandler on each (below) restarts
@@ -794,7 +799,19 @@ Scope {
                     id: openTimer
                     interval: 300
                     repeat: false
-                    onTriggered: panelBox.state = "open"
+                    onTriggered: {
+                        panelBox.state = "open"
+                        openedTimer.start()
+                    }
+                }
+
+                // The second phase's length (the transition above): the
+                // panel is all the way open when this fires.
+                Timer {
+                    id: openedTimer
+                    interval: 300
+                    repeat: false
+                    onTriggered: root.panelOpened = true
                 }
             }
         }
@@ -805,9 +822,11 @@ Scope {
     // clipboard for any reason (selecting an entry, re-pressing META + V,
     // an IpcHandler hide()) always takes this down with it instead of
     // needing every one of those paths to separately remember to clear
-    // previewedEntryId.
+    // previewedEntryId. It also waits for the panel to finish opening
+    // (root.panelOpened), so the newest entry, selected straight away,
+    // isn't previewed beside a panel still growing.
     LazyLoader {
-        active: root.open && root.previewedEntryId !== ""
+        active: root.open && root.panelOpened && root.previewedEntryId !== ""
 
         PanelWindow {
             id: previewWindow

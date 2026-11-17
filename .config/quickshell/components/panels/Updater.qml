@@ -32,9 +32,10 @@ import "../settings/controls"
 //     bar button does), in a terminal window that asks for confirmation
 //     and the password
 //
-// The list scrolls once it's long, with a thin bar showing where; purpura,
-// firmware and the big button stay in view under it. The dropdown is only
-// as tall as what's open in it.
+// The list scrolls once it's long, with a scroll bar that can be dragged;
+// purpura, firmware and the big button stay in view under it. Sections
+// slide open and shut, and the dropdown is only as tall as what's open in
+// it - inside a window that never changes size itself (see dropdownWindow).
 //
 // Mutually exclusive with Notification.qml's own history panel (each holds
 // a reference to the other and closes it when it itself opens, same
@@ -662,19 +663,21 @@ Scope {
         readonly property real panelWidth: Config.scaled(440, dropdownWindow.uiScale)
         readonly property real pad: Config.scaled(14, dropdownWindow.uiScale)
 
+        // A fixed size: everything from below the bar down to the screen's
+        // bottom, transparent but for the dropdown at its top, which grows
+        // and shrinks inside it - opening, sections sliding open and shut, a
+        // check finding more - without the surface itself ever changing
+        // size. Hyprland draws a resized layer's last frame stretched to the
+        // new size until the next one arrives, which smeared the border
+        // down the screen whenever the dropdown changed height. Only the
+        // dropdown takes clicks (mask); the rest of the strip lets them
+        // through to whatever's below.
         margins { top: Config.scaled(root.ignoresBarPadding ? 10 : 4, dropdownWindow.uiScale); right: root.edgeGaps ? root.edgeGaps.right : 10 }
-        anchors { top: true; right: true }
+        anchors { top: true; right: true; bottom: true }
         exclusiveZone: root.ignoresBarPadding ? -1 : 0
         visible: root.dropdownOpen
-
-        // Content-derived, NOT bound to panelBox's currently-animating
-        // height - see Notification.qml's own identical fix/comment:
-        // binding the window itself to the live animation resizes the
-        // actual Wayland surface every frame (a real compositor
-        // round-trip), which is what made this feel sluggish and gave it
-        // a wrong height mid-spread.
         implicitWidth: dropdownWindow.panelWidth
-        implicitHeight: Math.max(centerCol.implicitHeight + 2 * dropdownWindow.pad, 1)
+        mask: Region { item: panelBox }
 
         color: "transparent"
 
@@ -781,33 +784,46 @@ Scope {
                             boundsBehavior: Flickable.StopAtBounds
                             interactive: contentHeight > height
 
+                            // A section closing can leave the list scrolled past
+                            // its new end: it follows the end back up instead.
+                            function keepInRange() {
+                                const end = Math.max(0, sectionsView.contentHeight - sectionsView.height)
+                                if (sectionsView.contentY > end) sectionsView.contentY = end
+                            }
+                            onContentHeightChanged: sectionsView.keepInRange()
+                            onHeightChanged: sectionsView.keepInRange()
+
                             ColumnLayout {
                                 id: sectionsColumn
                                 // Room for the scroll bar while there is one.
-                                width: sectionsView.width - (sectionsView.interactive ? Config.scaled(12, dropdownWindow.uiScale) : 0)
+                                width: sectionsView.width - (sectionsView.interactive ? scrollBar.width : 0)
                                 spacing: Config.scaled(8, dropdownWindow.uiScale)
 
+                                // By position rather than the sections themselves:
+                                // a check changing what one holds then updates it
+                                // in place, where a new list of sections would make
+                                // each one again (and replay its opening).
                                 Repeater {
-                                    model: root.sections
+                                    model: root.sections.length
 
                                     ColumnLayout {
                                         id: section
 
-                                        required property var modelData
+                                        required property int index
+                                        readonly property var info: root.sections[section.index]
+                                            || ({ title: "", status: "", rows: [], note: "", step: "", canRun: false })
 
                                         // Something to open onto: its updates, or why it
                                         // couldn't check.
-                                        readonly property bool hasContent: section.modelData.rows.length > 0
-                                            || section.modelData.note.length > 0
+                                        readonly property bool hasContent: section.info.rows.length > 0
+                                            || section.info.note.length > 0
                                         readonly property bool expanded: section.hasContent
-                                            && root.expandedSections[section.modelData.step] === true
+                                            && root.expandedSections[section.info.step] === true
                                         // Its contents line up with its title, past the arrow.
                                         readonly property real indent: Config.scaled(20, dropdownWindow.uiScale)
 
                                         Layout.fillWidth: true
-                                        // More room under an open section, before the next.
-                                        Layout.bottomMargin: section.expanded ? Config.scaled(8, dropdownWindow.uiScale) : 0
-                                        spacing: Config.scaled(4, dropdownWindow.uiScale)
+                                        spacing: 0
 
                                         // Its name, how it stands, and its own Update button.
                                         // Clicking it anywhere but the button opens or closes
@@ -823,7 +839,7 @@ Scope {
                                                 enabled: section.hasContent
                                                 hoverEnabled: true
                                                 cursorShape: section.hasContent ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                                onClicked: root.toggleSection(section.modelData.step)
+                                                onClicked: root.toggleSection(section.info.step)
                                             }
 
                                             RowLayout {
@@ -845,12 +861,12 @@ Scope {
                                                     font.pixelSize: Config.scaled(10, dropdownWindow.uiScale)
 
                                                     Behavior on rotation {
-                                                        NumberAnimation { duration: 120 }
+                                                        NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
                                                     }
                                                 }
 
                                                 Text {
-                                                    text: section.modelData.title
+                                                    text: section.info.title
                                                     color: headerMouse.containsMouse ? Config.fgcolorlight : Config.fgcolor
                                                     font.family: Config.fontfamily
                                                     font.pixelSize: Config.scaled(14, dropdownWindow.uiScale)
@@ -859,78 +875,109 @@ Scope {
 
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: section.modelData.status
-                                                    color: section.modelData.rows.length > 0 ? Config.fgcolorlight : Config.fgcolorhint
+                                                    text: section.info.status
+                                                    color: section.info.rows.length > 0 ? Config.fgcolorlight : Config.fgcolorhint
                                                     font.family: Config.fontfamily
                                                     font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
-                                                    font.bold: section.modelData.rows.length > 0
+                                                    font.bold: section.info.rows.length > 0
                                                     elide: Text.ElideRight
                                                 }
 
                                                 ActionButton {
-                                                    visible: section.modelData.canRun
+                                                    visible: section.info.canRun
                                                     uiScale: dropdownWindow.uiScale
                                                     implicitHeight: Config.scaled(28, dropdownWindow.uiScale)
                                                     text: "Update"
-                                                    onClicked: root.runStep(section.modelData.step)
+                                                    onClicked: root.runStep(section.info.step)
                                                 }
                                             }
                                         }
 
-                                        // Why it might not be showing everything.
-                                        Text {
+                                        // What it opens onto: why it couldn't check, and
+                                        // its updates. Slides open and shut - its height
+                                        // runs between nothing and all of it, the rest
+                                        // clipped - and the dropdown grows and shrinks
+                                        // along with it.
+                                        Item {
+                                            id: sectionBody
+
+                                            readonly property real topRoom: Config.scaled(4, dropdownWindow.uiScale)
+                                            // More room under an open section, before the next.
+                                            readonly property real bottomRoom: Config.scaled(8, dropdownWindow.uiScale)
+                                            property real shown: section.expanded
+                                                ? bodyColumn.implicitHeight + sectionBody.topRoom + sectionBody.bottomRoom
+                                                : 0
+
                                             Layout.fillWidth: true
-                                            Layout.leftMargin: section.indent
-                                            visible: section.expanded && text.length > 0
-                                            text: section.modelData.note
-                                            color: Config.fgcolorred
-                                            font.family: Config.fontfamily
-                                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
-                                            wrapMode: Text.WordWrap
-                                        }
+                                            Layout.preferredHeight: sectionBody.shown
+                                            visible: sectionBody.shown > 0
+                                            clip: true
 
-                                        // The updates: name, where it's from, old -> new.
-                                        Repeater {
-                                            model: section.expanded ? section.modelData.rows : []
+                                            Behavior on shown {
+                                                NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                                            }
 
-                                            RowLayout {
-                                                id: updateRow
+                                            ColumnLayout {
+                                                id: bodyColumn
+                                                x: section.indent
+                                                y: sectionBody.topRoom
+                                                width: sectionBody.width - section.indent
+                                                spacing: Config.scaled(4, dropdownWindow.uiScale)
 
-                                                required property var modelData
-
-                                                Layout.fillWidth: true
-                                                Layout.leftMargin: section.indent
-                                                Layout.topMargin: Config.scaled(2, dropdownWindow.uiScale)
-                                                spacing: Config.scaled(8, dropdownWindow.uiScale)
-
+                                                // Why it might not be showing everything.
                                                 Text {
                                                     Layout.fillWidth: true
-                                                    text: updateRow.modelData.name
-                                                    color: Config.fgcolor
-                                                    font.family: Config.fontfamily
-                                                    font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
-                                                    elide: Text.ElideRight
-                                                }
-
-                                                // The repository it's from (core, extra, AUR...),
-                                                // where that's worth saying.
-                                                Text {
-                                                    visible: updateRow.modelData.category !== "flatpak"
-                                                    text: updateRow.modelData.category === "aur" ? "AUR" : updateRow.modelData.category
-                                                    color: Config.fgcolorhint
+                                                    visible: text.length > 0
+                                                    text: section.info.note
+                                                    color: Config.fgcolorred
                                                     font.family: Config.fontfamily
                                                     font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
+                                                    wrapMode: Text.WordWrap
                                                 }
 
-                                                Text {
-                                                    Layout.maximumWidth: sectionsView.width * 0.5
-                                                    text: (updateRow.modelData.oldVersion ? updateRow.modelData.oldVersion + "  →  " : "→  ")
-                                                        + updateRow.modelData.newVersion
-                                                    color: Config.fgcolorlight
-                                                    font.family: Config.fontfamily
-                                                    font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
-                                                    horizontalAlignment: Text.AlignRight
-                                                    elide: Text.ElideLeft
+                                                // The updates: name, where it's from, old -> new.
+                                                Repeater {
+                                                    model: section.info.rows
+
+                                                    RowLayout {
+                                                        id: updateRow
+
+                                                        required property var modelData
+
+                                                        Layout.fillWidth: true
+                                                        Layout.topMargin: Config.scaled(2, dropdownWindow.uiScale)
+                                                        spacing: Config.scaled(8, dropdownWindow.uiScale)
+
+                                                        Text {
+                                                            Layout.fillWidth: true
+                                                            text: updateRow.modelData.name
+                                                            color: Config.fgcolor
+                                                            font.family: Config.fontfamily
+                                                            font.pixelSize: Config.scaled(13, dropdownWindow.uiScale)
+                                                            elide: Text.ElideRight
+                                                        }
+
+                                                        // The repository it's from (core, extra, AUR...),
+                                                        // where that's worth saying.
+                                                        Text {
+                                                            visible: updateRow.modelData.category !== "flatpak"
+                                                            text: updateRow.modelData.category === "aur" ? "AUR" : updateRow.modelData.category
+                                                            color: Config.fgcolorhint
+                                                            font.family: Config.fontfamily
+                                                            font.pixelSize: Config.scaled(11, dropdownWindow.uiScale)
+                                                        }
+
+                                                        Text {
+                                                            Layout.maximumWidth: sectionsView.width * 0.5
+                                                            text: (updateRow.modelData.oldVersion ? updateRow.modelData.oldVersion + "  →  " : "→  ")
+                                                                + updateRow.modelData.newVersion
+                                                            color: Config.fgcolorlight
+                                                            font.family: Config.fontfamily
+                                                            font.pixelSize: Config.scaled(12, dropdownWindow.uiScale)
+                                                            horizontalAlignment: Text.AlignRight
+                                                            elide: Text.ElideLeft
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
@@ -939,15 +986,62 @@ Scope {
                             }
                         }
 
-                        // How far down the list is, while it's longer than the
-                        // room it has.
-                        Rectangle {
-                            anchors.right: parent.right
-                            y: sectionsView.visibleArea.yPosition * sectionsView.height
-                            width: Config.scaled(4, dropdownWindow.uiScale)
-                            height: sectionsView.visibleArea.heightRatio * sectionsView.height
+                        // The scroll bar, while the list is longer than the room it
+                        // has: drag the handle, or press anywhere on the bar to
+                        // bring the handle there and drag on from it. The wheel
+                        // scrolls over it as over the list.
+                        Item {
+                            id: scrollBar
+
+                            // How far the list scrolls, and how far the handle
+                            // travels for it.
+                            readonly property real range: Math.max(0, sectionsView.contentHeight - sectionsView.height)
+                            readonly property real travel: Math.max(0, scrollBar.height - scrollHandle.height)
+
+                            function scrollTo(handleY) {
+                                if (scrollBar.range <= 0 || scrollBar.travel <= 0) return
+                                sectionsView.contentY = Math.max(0, Math.min(1, handleY / scrollBar.travel)) * scrollBar.range
+                            }
+
+                            anchors { top: parent.top; bottom: parent.bottom; right: parent.right }
+                            width: Config.scaled(12, dropdownWindow.uiScale)
                             visible: sectionsView.interactive
-                            color: Config.fgcolor
+
+                            Rectangle {
+                                id: scrollHandle
+                                anchors.right: parent.right
+                                y: scrollBar.range > 0 ? sectionsView.contentY / scrollBar.range * scrollBar.travel : 0
+                                // Wider under the mouse, to say it can be taken hold of.
+                                width: (scrollMouse.containsMouse || scrollMouse.pressed)
+                                    ? Config.scaled(6, dropdownWindow.uiScale) : Config.scaled(4, dropdownWindow.uiScale)
+                                height: Math.max(Config.scaled(24, dropdownWindow.uiScale),
+                                    scrollBar.height * sectionsView.height / Math.max(1, sectionsView.contentHeight))
+                                color: scrollMouse.pressed ? Config.fgcolorlight : Config.fgcolor
+                            }
+
+                            MouseArea {
+                                id: scrollMouse
+
+                                // Where on the handle it was taken hold of.
+                                property real grab: 0
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onPressed: (mouse) => {
+                                    sectionsView.cancelFlick()
+                                    const onHandle = mouse.y >= scrollHandle.y && mouse.y <= scrollHandle.y + scrollHandle.height
+                                    scrollMouse.grab = onHandle ? mouse.y - scrollHandle.y : scrollHandle.height / 2
+                                    if (!onHandle) scrollBar.scrollTo(mouse.y - scrollMouse.grab)
+                                }
+                                onPositionChanged: (mouse) => {
+                                    if (scrollMouse.pressed) scrollBar.scrollTo(mouse.y - scrollMouse.grab)
+                                }
+                                onWheel: (wheel) => {
+                                    sectionsView.cancelFlick()
+                                    sectionsView.contentY = Math.max(0, Math.min(scrollBar.range,
+                                        sectionsView.contentY - wheel.angleDelta.y / 120 * Config.scaled(60, dropdownWindow.uiScale)))
+                                }
+                            }
                         }
                     }
 

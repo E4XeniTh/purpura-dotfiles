@@ -137,8 +137,9 @@ available (or that everything's up to date), when it last checked, with a
 then a section each for system packages (Arch repositories and AUR), Flatpak
 apps, purpura and firmware, each with its own **Update** button. System
 packages and Flatpak apps start collapsed, showing just how many updates
-they have - click one to open it onto its updates (name, where it's from,
-old → new version); the dropdown grows with it. A check that couldn't run
+they have - click one to slide it open onto its updates (name, where it's
+from, old → new version); the dropdown grows with it, and a long list
+scrolls, with a scroll bar you can drag. A check that couldn't run
 says so in its section - pacman-contrib or yay not installed, no network -
 rather than passing for "up to date". **Update all** at the bottom runs every
 kind in turn, the same as right-clicking the updater button; it all happens
