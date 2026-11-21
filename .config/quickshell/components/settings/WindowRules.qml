@@ -449,7 +449,7 @@ ColumnLayout {
             Layout.leftMargin: root.labelWidth + Config.scaled(8, root.uiScale)
             uiScale: root.uiScale
             indented: false
-            text: "As it likes leaves it to the app. Opening fullscreen, it gets an empty workspace of its own."
+            text: "As it likes leaves it to the app. Maximized counts only beside other windows: one alone on its workspace isn't let be maximized. Opening fullscreen, it gets an empty workspace of its own when Create Workspace For Fullscreen Apps (Shell > Main Bar) is on."
         }
 
         // ---------------- size, centered (floating) ----------------

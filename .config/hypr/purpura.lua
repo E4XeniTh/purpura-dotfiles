@@ -12,7 +12,7 @@
 --
 -- Before the binds, since Close Window works by replacing the action every close
 -- bind is made from, dropping a window on a workspace makes its binds along with
--- every "Drag window" bind made after it, and "Reserve workspace" and "New workspace"
+-- every "Drag window" bind made after it, and "Next workspace" and "New workspace"
 -- are actions made here. (The mainMod handed over is only for the default binds made
 -- here for a hyprland.lua without them - see A workspace of its own.) loadfile rather
 -- than require: Hyprland watches each file require loads and reloads the whole config
@@ -201,12 +201,13 @@ end)
 -- and comes back at once over the boxes. Let go, it's put down as any drag: on a
 -- box, sent there; anywhere else, left there. One that was tiled goes back into the
 -- tiling either way, and one that was fullscreen is fullscreen again on a box. Let
--- go without moving, it's over its own box - so it's back where it was.
+-- go without moving, it's over its own box - so it's back where it was, and that
+-- workspace is switched to, as a plain click on its box does.
 --
 -- A press on the widget that's on no window drawn there - an empty workspace, the gap
 -- between two, the floating widget's edge - drags nothing at all, rather than the
 -- window under the widget: it turns "Drag window" off for that one press (see
--- holdOffDrag()).
+-- holdOffDrag()). Let go without moving, on a box, that workspace is switched to too.
 --
 -- non_consuming: the drag's combo clicked on no window still reaches the app below.
 -- These have no description, so Settings > Shortcuts keeps showing the drag bind's.
@@ -844,8 +845,9 @@ part("dropping a window on a workspace", function()
 
     -- The three binds on the drag's combo (see above): the press, the release after
     -- a drag, and the release after a click - which puts a grabbed window down even
-    -- without a move (back on its own box), and just ends any other drag. And the
-    -- modifiers it needs, for the widget while they're held.
+    -- without a move (back on its own box), and just ends any other drag; and then, on
+    -- one of the widget's boxes, switches to that workspace, as a plain click there
+    -- does. And the modifiers it needs, for the widget while they're held.
     local function bindAlong(bind, keys, key)
         bind(keys, function() press(key) end, { non_consuming = true })
         bind(keys, function()
@@ -854,7 +856,9 @@ part("dropping a window on a workspace", function()
         end, { drag = true })
         bind(keys, function()
             letDragsBe()
+            local box = boxUnderCursor()
             if grabbed then drop() else endDrag() end
+            if box then hl.dispatch(hl.dsp.focus({ workspace = box.workspace })) end
         end, { click = true })
         comboMods[key] = modifiersOf(keys)
     end
@@ -954,7 +958,6 @@ end)
 -- Types:
 --   pinned      one of 1-5, which Display settings has on a monitor
 --   spare       what a monitor none of 1-5 is on is given, to have somewhere to be
---   reserved    Reserve workspace's, for a window (its app and address kept)
 --   fullscreen  a fullscreen app's own, from as it opened (its app and address kept)
 --   new         New workspace's
 --   other       one purpura didn't make - a hyprland.lua rule's, a plain `workspace 9`
@@ -964,8 +967,8 @@ end)
 -- rules on it, its lowest its default - so Hyprland keeps them, makes one that's
 -- missing, moves one home when its monitor's back, and starts a monitor on its
 -- default. Rules for one workspace merge, so hyprland.lua's own for it (gaps, a
--- layout) stay as they are. A reserved, fullscreen or new one is bound to its monitor
--- the same way, but not kept.
+-- layout) stay as they are. A fullscreen or new one is bound to its monitor the same
+-- way, but not kept.
 --
 -- Remembered for the session, in $XDG_RUNTIME_DIR: purpura-workspaces.lua for this
 -- file, read back as it loads - a config reload starts a new Lua state and clears
@@ -979,7 +982,7 @@ end)
 -- each monitor with its workspaces of 1-5 (anything past 5 is left out), one with none
 -- given a spare. pins are what Display settings' buttons picked, kept for them. Each
 -- monitor that isn't showing one of its own then shows its default - unless it's
--- showing a reserved, fullscreen or new workspace, which stays - and a workspace one
+-- showing a fullscreen or new workspace, which stays - and a workspace one
 -- leaves that's spare or other and no monitor's any more has its windows brought
 -- along, as has each in opts.rescue (what a monitor being switched off showed).
 -- opts.home switches every monitor to its default, and opts.primary is focused last,
@@ -990,8 +993,8 @@ end)
 
 part("workspaces", function()
     local FIRST = 6
-    local OWN = { reserved = true, fullscreen = true, new = true }
-    local TYPES = { pinned = true, spare = true, reserved = true, fullscreen = true, new = true, other = true }
+    local OWN = { fullscreen = true, new = true }
+    local TYPES = { pinned = true, spare = true, fullscreen = true, new = true, other = true }
     local DIR = os.getenv("XDG_RUNTIME_DIR") or ((os.getenv("HOME") or "") .. "/.cache")
     local STATE = DIR .. "/purpura-workspaces.lua"
     local SHARED = DIR .. "/purpura-workspaces.json"
@@ -1529,18 +1532,16 @@ end)
 --#######################################################################################
 --## A WORKSPACE OF ITS OWN                                                             #
 --#######################################################################################
--- "Reserve workspace" (hyprland.lua.example: META + CTRL + W) gives the focused window
--- an empty unmanaged workspace (see WORKSPACES): the one the focused monitor's
--- showing, when that's past 5, isn't pinned and holds nothing else, or else a new one,
--- numbered from 6. The window goes there, the monitor's switched to it, and the
--- workspace is bound to that monitor (a workspace rule, so it's made there and comes
--- back there). The book has it as reserved, for that window's app.
---
 -- With Create Workspace For Fullscreen Apps on (Settings > General > Shell > Main Bar;
--- off unless it's been turned on), a fullscreen app opening is given one the same way,
--- on its own monitor, kept as fullscreen: a window that's fullscreen as it opens, or
--- goes fullscreen within its first few seconds, as games do; maximized doesn't count,
--- nor a window going fullscreen later on. Then
+-- off unless it's been turned on), a fullscreen app opening is given an empty
+-- unmanaged workspace of its own (see WORKSPACES) on its monitor: the one that
+-- monitor's showing, when that's past 5, isn't pinned and holds nothing else, or else
+-- a new one, numbered from 6. A fullscreen app opening is a window that's fullscreen
+-- as it opens, or goes fullscreen within its first few seconds, as games do;
+-- maximized doesn't count, nor a window going fullscreen later on. The window goes
+-- there, kept as fullscreen, the monitor's switched to it, and the workspace is bound
+-- to that monitor (a workspace rule, so it's made there and comes back there) - the
+-- book has it as fullscreen, for that window's app. Then
 -- "purpura-workspace,fullscreen,<monitor>,<workspace>" goes out on Hyprland's event
 -- socket, for the workspace OSD to show it (components/osd/WorkspaceOsd.qml). Each
 -- move comes a moment after what prompts it, never inside Hyprland's handling of that;
@@ -1559,12 +1560,34 @@ end)
 -- there or the cursor moving, and the next move of the mouse focuses that monitor as
 -- any does (see WORKSPACES).
 --
--- hyprland.lua.example binds all three; a hyprland.lua from before doesn't. So each is
+-- hyprland.lua.example binds both; a hyprland.lua from before doesn't. So each is
 -- made here once the config has loaded, unless hyprland.lua or shortcuts.lua bound
 -- that combo to something (or unbound it - Settings > Shortcuts taking it off), or
 -- bound that action somewhere else.
 
 part("workspaces of their own", function()
+    -- Reserve workspace is no more. A bind of it Settings > Shortcuts saved would stop
+    -- the rest of hypr/shortcuts.lua loading (hyprland.lua loads that after this
+    -- file, in one pcall), so such a line's taken out of there first - Settings drops
+    -- it from shortcuts.json as well, the next time that tab's open.
+    do
+        local path = (os.getenv("HOME") or "") .. "/.config/hypr/shortcuts.lua"
+        local file = io.open(path, "r")
+        local text = file and file:read("a") or ""
+        if file then file:close() end
+        if text:find("reserve_workspace", 1, true) then
+            local kept = {}
+            for line in (text .. "\n"):gmatch("(.-)\n") do
+                if not line:find("reserve_workspace", 1, true) then kept[#kept + 1] = line end
+            end
+            local out = io.open(path, "w")
+            if out then
+                out:write(table.concat(kept, "\n"))
+                out:close()
+            end
+        end
+    end
+
     local book = purpura and purpura.workspaces
     if not book then error("needs the workspaces part, which didn't load", 0) end
     local GRACE_S = 5   -- fullscreen this soon after opening counts as opening fullscreen
@@ -1635,19 +1658,6 @@ part("workspaces of their own", function()
         if id and moved then
             hl.dispatch(hl.dsp.event("purpura-workspace,fullscreen," .. monitor.name .. "," .. id))
         end
-    end
-
-    local reserveActions = setmetatable({}, { __mode = "k" }) -- every action reserve_workspace() has made
-    hl.dsp.window.reserve_workspace = function()
-        local action = function()
-            local ok, err = pcall(function()
-                local window = hl.get_active_window()
-                if isObject(window) then giveOwn(window, hl.get_active_monitor(), "reserved") end
-            end)
-            if not ok then report("workspaces of their own", err) end
-        end
-        reserveActions[action] = true
-        return action
     end
 
     if type(hl.dsp.workspace) ~= "table" then hl.dsp.workspace = {} end
@@ -1726,8 +1736,6 @@ part("workspaces of their own", function()
         return table.concat(mods, "+") .. "+" .. key
     end
     local defaults = {
-        { keys = mainMod .. " + CTRL + W", description = "Reserve workspace", made = reserveActions,
-          action = function() return hl.dsp.window.reserve_workspace() end },
         { keys = mainMod .. " + Tab", description = "Next workspace", made = nextActions,
           action = function() return hl.dsp.workspace.next_on_hovered() end },
         { keys = mainMod .. " + CTRL + Tab", description = "New workspace", made = newActions,
@@ -1760,6 +1768,113 @@ part("workspaces of their own", function()
                 if not ok then report("workspaces of their own", err) end
             end
         end
+    end)
+end)
+
+--#######################################################################################
+--## NO MAXIMIZING A WINDOW ON ITS OWN                                                  #
+--#######################################################################################
+-- A window that's the only one on its workspace isn't let be maximized. A maximize bind
+-- (one made with hl.dsp.window.fullscreen({ mode = "maximized" }), as
+-- hyprland.lua.example's META + W and Settings > Shortcuts' Maximize are) does nothing
+-- on one, though it still takes one that's maximized out of it. Maximized any other
+-- way (the app itself asking, or a window rule, Settings > General > Windows'
+-- "maximized" among them), it's taken back out a moment later; and one left on its
+-- own while maximized, the others there closed or moved off, comes out of it too.
+-- Fullscreen (the whole monitor) is left be, and so are special workspaces. A window
+-- being picked up from the workspace widget is off its workspace for the moment (see
+-- Grabbing), so nothing's looked at again till it's put down. An app that maximizes
+-- itself again and again is let be after TRIES goes in TRIES_S seconds, rather than
+-- fought.
+
+part("no maximizing a window on its own", function()
+    local NAME = "no maximizing a window on its own"
+    local GRABBED = "purpura-grabbed" -- dropping a window on a workspace's: one picked up
+    local RETRY_MS = 250
+    local TRIES, TRIES_S = 3, 2
+
+    local function alone(window)
+        local workspace = isObject(window) and window.workspace
+        return isObject(workspace) and not workspace.special and workspace.windows == 1
+    end
+
+    -- The binds (see above): each maximize action as it's made, with what it was made
+    -- with, so hl.bind can tell one.
+    local maximizes = setmetatable({}, { __mode = "k" })
+    local makeFullscreen = hl.dsp.window.fullscreen
+    hl.dsp.window.fullscreen = function(opts, ...)
+        local action = makeFullscreen(opts, ...)
+        if action ~= nil and type(opts) == "table" and opts.mode == "maximized" and opts.action ~= "unset" then
+            maximizes[action] = opts
+        end
+        return action
+    end
+    local bind = hl.bind
+    hl.bind = function(keys, action, ...)
+        local opts = action ~= nil and maximizes[action]
+        if opts then
+            local maximize = action
+            action = function()
+                local ok, err = pcall(function()
+                    local window = type(opts.window) == "string" and hl.get_window(opts.window) or hl.get_active_window()
+                    if isObject(window) and (window.fullscreen or 0) == 0 and alone(window) then return end
+                    hl.dispatch(maximize)
+                end)
+                if not ok then report(NAME, err) end
+            end
+        end
+        return bind(keys, action, ...)
+    end
+
+    -- Every other way: looked at a moment after anything that could have changed it.
+    local scheduled = false
+    local tries = {} -- by address: { n, since } - how often it's been taken out lately
+
+    local function grabbing(windows)
+        for _, window in ipairs(windows) do
+            for _, name in ipairs(window.tags or {}) do
+                if name == GRABBED then return true end
+            end
+        end
+        return false
+    end
+
+    local look
+    local function soon(ms)
+        if scheduled then return end
+        scheduled = true
+        hl.timer(function()
+            scheduled = false
+            local ok, err = pcall(look)
+            if not ok then report(NAME, err) end
+        end, { timeout = ms or 1, type = "oneshot" })
+    end
+
+    look = function()
+        local windows = hl.get_windows({ mapped = true })
+        if grabbing(windows) then return soon(RETRY_MS) end
+        local now = os.time()
+        for _, window in ipairs(windows) do
+            if window.fullscreen == 1 and window.address and alone(window) then
+                local t = tries[window.address]
+                if not t or now - t.since > TRIES_S then t = { n = 0, since = now } end
+                if t.n < TRIES then
+                    t.n = t.n + 1
+                    tries[window.address] = t
+                    hl.dispatch(hl.dsp.window.fullscreen({
+                        mode = "maximized", action = "unset", window = "address:" .. window.address,
+                    }))
+                end
+            end
+        end
+    end
+
+    for _, event in ipairs({ "window.open", "window.fullscreen", "window.move_to_workspace" }) do
+        hl.on(event, function() soon() end)
+    end
+    hl.on("window.close", function(window)
+        if isObject(window) and window.address then tries[window.address] = nil end
+        soon()
     end)
 end)
 

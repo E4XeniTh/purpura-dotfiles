@@ -7,9 +7,9 @@
 //     workspaces: { "<Hyprland id>": { id, number, type, monitor, since, app?, window? } } }
 // - each monitor's assigned workspaces (its pins, or its spare) and what Display
 // settings' buttons picked for it; each workspace's purpura number and type:
-// pinned (the only managed one), spare, reserved, fullscreen, new or other.
+// pinned (the only managed one), spare, fullscreen, new or other.
 
-var TYPES = ["pinned", "spare", "reserved", "fullscreen", "new", "other"]
+var TYPES = ["pinned", "spare", "fullscreen", "new", "other"]
 
 function isName(name) {
     return typeof name === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(name)

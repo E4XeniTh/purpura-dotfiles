@@ -690,9 +690,10 @@ Row {
             // equivalent to HyprlandIpc.dispatch("workspace <name>").
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
-            // own to compete with). The drag's combo on a window drawn here
-            // never reaches it: purpura.lua picks that window up and
-            // Hyprland drags it (see sendDropTargets()).
+            // own to compete with). The drag's combo never reaches it:
+            // purpura.lua picks up a window drawn here and Hyprland drags it
+            // (see sendDropTargets()) - and that combo clicked here without
+            // moving switches to this workspace too, from purpura.lua.
             MouseArea {
                 anchors.fill: parent
                 onClicked: wsBox.modelData.activate()

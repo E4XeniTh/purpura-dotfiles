@@ -204,14 +204,10 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + return", hl.dsp.exec_cmd("kitty"), { description = "Open terminal" })
     hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "Close window" })
     hl.bind(mainMod .. " + S", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating" })
+    -- Does nothing on a window alone on its workspace - purpura.lua's (see No
+    -- maximizing a window on its own there).
     hl.bind(mainMod .. " + W", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "Toggle maximized" })
     hl.bind(mainMod .. " + F11", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "Toggle fullscreen" })
-    -- An empty unmanaged workspace for the focused window, switched to and bound to
-    -- its monitor - purpura.lua's (see A workspace of its own there), so only with
-    -- that loaded.
-    if hl.dsp.window.reserve_workspace then
-        hl.bind(mainMod .. " + CTRL + W", hl.dsp.window.reserve_workspace(), { description = "Reserve workspace" })
-    end
 
 
     hl.bind(mainMod .. " + space", hl.dsp.exec_cmd("rofi -show drun"), { description = "App launcher" })

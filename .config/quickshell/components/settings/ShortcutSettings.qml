@@ -147,10 +147,9 @@ Item {
         { label: "Toggle floating", lua: "hl.dsp.window.float({ action = \"toggle\" })" },
         { label: "Maximize", lua: "hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })" },
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
-        // purpura.lua's (see A workspace of its own there).
-        { label: "Reserve workspace", lua: "hl.dsp.window.reserve_workspace()" },
         { label: "Go to workspace", workspace: "hl.dsp.focus({ workspace = %1 })" },
-        // purpura.lua's too: both on the monitor under the cursor.
+        // purpura.lua's (see A workspace of its own there): both on the monitor under
+        // the cursor.
         { label: "Next workspace", lua: "hl.dsp.workspace.next_on_hovered()" },
         { label: "New workspace", lua: "hl.dsp.workspace.new_on_hovered()" },
         { label: "Move window to workspace", workspace: "hl.dsp.window.move({ workspace = %1, follow = false })" },
@@ -244,13 +243,12 @@ Item {
             found[id] = bind[2].slice(0, end).replace(/\((\w+)\)$/, (call, name) =>
                 locals[name] !== undefined ? "(" + JSON.stringify(locals[name]) + ")" : call)
         }
-        // A hyprland.lua from before Reserve, Next and New workspace has no binds
-        // for them, so purpura.lua makes them (see A workspace of its own there):
-        // each on its own combo, unless something else is bound there or that
-        // action is bound somewhere already.
+        // A hyprland.lua from before Next and New workspace has no binds for them,
+        // so purpura.lua makes them (see A workspace of its own there): each on its
+        // own combo, unless something else is bound there or that action is bound
+        // somewhere already.
         const mod = locals.mainMod || "SUPER"
         const defaults = [
-            { combo: mod + " + CTRL + W", lua: "hl.dsp.window.reserve_workspace()" },
             { combo: mod + " + Tab", lua: "hl.dsp.workspace.next_on_hovered()" },
             { combo: mod + " + CTRL + Tab", lua: "hl.dsp.workspace.new_on_hovered()" }
         ]
@@ -656,7 +654,17 @@ Item {
             onStreamFinished: {
                 try {
                     const parsed = JSON.parse(text)
-                    root.store = { binds: parsed.binds || [], removed: parsed.removed || [], descriptions: parsed.descriptions || {} }
+                    const binds = parsed.binds || []
+                    // Reserve workspace is gone from purpura.lua: a bind of it saved
+                    // here would stop the rest of shortcuts.lua loading (purpura.lua
+                    // takes it out of there too, as it loads), so it's dropped - and
+                    // taken off at once, should it still be bound.
+                    const kept = binds.filter(b => !(b && typeof b.lua === "string" && b.lua.indexOf("reserve_workspace") !== -1))
+                    root.store = { binds: kept, removed: parsed.removed || [], descriptions: parsed.descriptions || {} }
+                    if (kept.length !== binds.length) {
+                        root.saveStore(root.store)
+                        root.applyLive(binds.filter(b => kept.indexOf(b) === -1).map(b => "hl.unbind(" + root.luaString(b.combo) + ")"))
+                    }
                 } catch (e) {
                     root.store = { binds: [], removed: [], descriptions: {} }
                 }

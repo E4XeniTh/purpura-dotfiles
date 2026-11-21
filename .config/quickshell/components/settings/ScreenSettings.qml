@@ -483,8 +483,8 @@ Item {
         // the monitor's left with an empty list here, and purpura.lua's book
         // gives it a spare of its own - numbered from 6, and an id no other
         // workspace has. This can't see the workspaces an app or a bind made
-        // (a reserved one, say), so a spare picked here past 5 could have landed
-        // on one of those and carried it off.
+        // (a fullscreen app's own, say), so a spare picked here past 5 could have
+        // landed on one of those and carried it off.
         let nextSpare = 1
         for (const name of activeNames) {
             if (desired[name].length > 0) continue
@@ -1222,7 +1222,7 @@ Item {
         // list - Hyprland then keeps those on it (persistent rules), its lowest its
         // default - with what the buttons picked, for them. The book switches a
         // monitor that isn't showing one of its own to its default (but not one
-        // showing an app's own workspace: a reserved, fullscreen or new one), and
+        // showing a workspace of its own: a fullscreen app's, or a new one), and
         // brings windows along off a spare or stray workspace no monitor has any
         // more - and off each workspace in `rescue`: what a monitor being switched
         // off this Apply showed, which Hyprland hands to another monitor as it

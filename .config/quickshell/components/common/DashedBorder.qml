@@ -1,6 +1,6 @@
 import QtQuick
 
-// A dashed outline round its parent - a reserved workspace's box in the
+// A dashed outline round its parent - a fullscreen workspace's box in the
 // workspace widget and OSD - drawn as short bars along each edge, as a
 // Rectangle's own border can't be dashed. Each edge starts and ends on a
 // dash, with the gaps between spread evenly, so every corner is drawn.
