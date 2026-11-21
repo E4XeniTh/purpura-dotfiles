@@ -626,26 +626,25 @@ part("dropping a window on a workspace", function()
     -- window can be grabbed from it before any drag starts. Posted as
     -- "purpura-drag,mod,<monitor>" a moment after the modifier goes down (so a quick
     -- META + key shortcut doesn't flash it up), again whenever the cursor moves to
-    -- another monitor, and as "purpura-drag,mod," once it's let go. Each side of the
-    -- modifier (SUPER_L, SUPER_R) gets a press and a release bind of its own, which
-    -- neither take the key from anything else nor care what else is held; "locked",
-    -- so a release while the screen's locked still counts; and "transparent": after a
-    -- bind that takes its input (META + LMB's drag), Hyprland shadows every bind that
-    -- matches a key still held - the release here among them, which then never ran,
-    -- leaving the widget up for good.
+    -- another monitor, and as "purpura-drag,mod," once it's let go.
+    --
+    -- Which keys are down comes from Hyprland's input.keyboard.key event: every key's
+    -- press and release, by keycode, before any bind sees it - so nothing a bind does
+    -- can lose one. Binds on the modifier keys themselves did lose releases: after a
+    -- bind that takes its input (META + LMB's drag, META + Q), Hyprland shadows or
+    -- skips binds on a key still held, which left the widget up for good.
     local MOD_FOLLOW_MS = 50
     local MOD_DELAY_TICKS = 3 -- 150ms
     local MOD_NAMES = {
         SUPER = "META", WIN = "META", LOGO = "META", MOD4 = "META", META = "META",
         ALT = "ALT", MOD1 = "ALT", CTRL = "CTRL", CONTROL = "CTRL", SHIFT = "SHIFT",
     }
+    -- Each modifier's two keys, by keycode (xkb's, the evdev code + 8): left and right.
     local SIDES = {
-        META = { "SUPER_L", "SUPER_R" }, ALT = { "ALT_L", "ALT_R" },
-        CTRL = { "CONTROL_L", "CONTROL_R" }, SHIFT = { "SHIFT_L", "SHIFT_R" },
+        META = { 133, 134 }, ALT = { 64, 108 }, CTRL = { 37, 105 }, SHIFT = { 50, 62 },
     }
     local comboMods = {} -- by combo (see comboKey below): the modifiers each drag combo needs
-    local sideDown = {}  -- by side: held now
-    local sideBound = {} -- by side: its binds made
+    local sideDown = {}  -- by keycode: held now
     local modShown       -- the monitor posted, while the widget's shown for it
     local modWatch, modWatching = nil, false
     local modTicks, modSince = 0, 0
@@ -717,34 +716,28 @@ part("dropping a window on a workspace", function()
         end, { timeout = MOD_FOLLOW_MS, type = "repeat" })
     end
 
-    local function bindModifiers(bind, keys, key)
-        local mods = modifiersOf(keys)
-        comboMods[key] = mods
-        for name in pairs(mods) do
-            for _, side in ipairs(SIDES[name] or {}) do
-                if not sideBound[side] then
-                    bind(side, function() modSide(side, true) end,
-                        { non_consuming = true, ignore_mods = true, locked = true, transparent = true })
-                    bind(side, function() modSide(side, false) end,
-                        { non_consuming = true, ignore_mods = true, locked = true, transparent = true, release = true })
-                    sideBound[side] = true
-                end
-            end
-        end
+    local modCodes = {} -- every modifier key's keycode, to tell them from the rest
+    for _, codes in pairs(SIDES) do
+        for _, code in ipairs(codes) do modCodes[code] = true end
     end
+
+    hl.on("input.keyboard.key", function(code, _, state)
+        if not modCodes[code] then return end
+        local ok, err = pcall(modSide, code, state ~= 0) -- 0 is a release
+        if not ok then report("showing the workspace widget while the modifier's held", err) end
+    end)
 
     -- The three binds on the drag's combo (see above): the press, the release after
     -- a drag, and the release after a click - which puts a grabbed window down even
-    -- without a move (back on its own box), and just ends any other drag. Then its
-    -- modifier's, for the widget while that's held.
+    -- without a move (back on its own box), and just ends any other drag. And the
+    -- modifiers it needs, for the widget while they're held.
     local function bindAlong(bind, keys, key)
         bind(keys, press, { non_consuming = true })
         bind(keys, function() drop() end, { drag = true })
         bind(keys, function()
             if grabbed then drop() else endDrag() end
         end, { click = true })
-        local ok, err = pcall(bindModifiers, bind, keys, key)
-        if not ok then report("showing the workspace widget while the modifier's held", err) end
+        comboMods[key] = modifiersOf(keys)
     end
 
     -- Made along with every bind of hl.dsp.window.drag(), on whatever combo that's
@@ -781,14 +774,11 @@ part("dropping a window on a workspace", function()
     if unbind then
         hl.unbind = function(keys, ...)
             if keys == "all" and select("#", ...) == 0 then
-                along, comboMods, sideBound, sideDown = {}, {}, {}, {}
+                along, comboMods = {}, {}
                 modHide()
             elseif type(keys) == "string" then
                 local key = comboKey(keys)
                 along[key], comboMods[key] = nil, nil
-                for side in pairs(sideBound) do
-                    if comboKey(side) == key then sideBound[side], sideDown[side] = nil, nil end
-                end
                 if not modHeld() then modHide() end
             end
             return unbind(keys, ...)
