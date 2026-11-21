@@ -58,6 +58,9 @@ Row {
     // The monitor the cursor's on during a drag - Bar.qml shows its floating
     // copy of the widget only there.
     property string dragMonitor: ""
+    // The monitor the cursor's on while the drag's modifier is held (META, for
+    // META + LMB), drag or not - Bar.qml shows the floating copy there too.
+    property string modMonitor: ""
     // The cursor's on this bar's widget - a box or a separator - where the
     // window itself is hidden, so Bar.qml shows its icon instead.
     property bool dragHere: false
@@ -106,6 +109,8 @@ Row {
             root.dragOver = parts[2] === root.screenName ? (parts[3] || "") : ""
             root.dragHere = parts[2] === root.screenName
             root.dragOverAnywhere = true
+        } else if (parts[1] === "mod") {
+            root.modMonitor = /^[A-Za-z0-9_.-]{1,64}$/.test(parts[2] || "") ? parts[2] : ""
         } else if (parts[1] === "monitor") {
             root.dragMonitor = /^[A-Za-z0-9_.-]{1,64}$/.test(parts[2] || "") ? parts[2] : ""
         } else if (parts[1] === "between") {
@@ -472,6 +477,8 @@ Row {
             }
             // purpura.lua starts over without the boxes (see sendDropTargets()).
             if (event.name === "configreloaded") {
+                // Its release won't be posted by the purpura.lua there is now.
+                root.modMonitor = ""
                 root.sentDropTargets = ""
                 Qt.callLater(root.refreshDropTargets)
             }

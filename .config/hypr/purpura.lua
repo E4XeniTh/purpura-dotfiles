@@ -621,15 +621,127 @@ part("dropping a window on a workspace", function()
         startFollowing()
     end
 
+    -- Holding the drag's modifier - META, for META + LMB - shows the widget too where
+    -- there's no bar, on the monitor the cursor's on (Bar.qml), as during a drag: so a
+    -- window can be grabbed from it before any drag starts. Posted as
+    -- "purpura-drag,mod,<monitor>" a moment after the modifier goes down (so a quick
+    -- META + key shortcut doesn't flash it up), again whenever the cursor moves to
+    -- another monitor, and as "purpura-drag,mod," once it's let go. Each side of the
+    -- modifier (SUPER_L, SUPER_R) gets a press and a release bind of its own, which
+    -- neither take the key from anything else nor care what else is held; "locked",
+    -- so a release while the screen's locked still counts.
+    local MOD_FOLLOW_MS = 50
+    local MOD_DELAY_TICKS = 3 -- 150ms
+    local MOD_NAMES = {
+        SUPER = "META", WIN = "META", LOGO = "META", MOD4 = "META", META = "META",
+        ALT = "ALT", MOD1 = "ALT", CTRL = "CTRL", CONTROL = "CTRL", SHIFT = "SHIFT",
+    }
+    local SIDES = {
+        META = { "SUPER_L", "SUPER_R" }, ALT = { "ALT_L", "ALT_R" },
+        CTRL = { "CONTROL_L", "CONTROL_R" }, SHIFT = { "SHIFT_L", "SHIFT_R" },
+    }
+    local comboMods = {} -- by combo (see comboKey below): the modifiers each drag combo needs
+    local sideDown = {}  -- by side: held now
+    local sideBound = {} -- by side: its binds made
+    local modShown       -- the monitor posted, while the widget's shown for it
+    local modWatch, modWatching = nil, false
+    local modTicks, modSince = 0, 0
+
+    local function modifiersOf(keys)
+        local mods = {}
+        for token in keys:gmatch("[^+]+") do
+            local name = MOD_NAMES[(token:gsub("%s", "")):upper()]
+            if name then mods[name] = true end
+        end
+        return mods
+    end
+
+    -- Every modifier of some drag combo held, on either side.
+    local function modHeld()
+        for _, mods in pairs(comboMods) do
+            local any, all = false, true
+            for name in pairs(mods) do
+                any = true
+                local down = false
+                for _, side in ipairs(SIDES[name] or {}) do down = down or sideDown[side] == true end
+                all = all and down
+            end
+            if any and all then return true end
+        end
+        return false
+    end
+
+    local function modHide()
+        modWatching = false
+        if modWatch then modWatch:set_enabled(false) end
+        if modShown then
+            modShown = nil
+            dragEvent("mod,")
+        end
+    end
+
+    local function modTick()
+        -- A release that never came (the session switched away, say) lets it go
+        -- after as long as a drag gets.
+        if not modHeld() or os.time() - modSince > FOLLOW_FOR_S then return modHide() end
+        modTicks = modTicks + 1
+        if modTicks < MOD_DELAY_TICKS then return end
+        local monitor = hl.get_monitor_at_cursor()
+        local name = monitor and monitor.name
+        if name and name ~= modShown then
+            modShown = name
+            dragEvent("mod," .. name)
+        end
+    end
+
+    local function modSide(side, down)
+        sideDown[side] = down
+        if not modHeld() then return modHide() end
+        if modWatching then return end
+        modWatching, modTicks, modSince = true, 0, os.time()
+        if modWatch then
+            modWatch:set_enabled(true)
+            return
+        end
+        -- Made at the first press rather than as the file loads.
+        modWatch = hl.timer(function()
+            local ok, err = pcall(modTick)
+            if not ok then
+                modWatching = false
+                modWatch:set_enabled(false)
+                report("showing the workspace widget while the modifier's held", err)
+            end
+        end, { timeout = MOD_FOLLOW_MS, type = "repeat" })
+    end
+
+    local function bindModifiers(bind, keys, key)
+        local mods = modifiersOf(keys)
+        comboMods[key] = mods
+        for name in pairs(mods) do
+            for _, side in ipairs(SIDES[name] or {}) do
+                if not sideBound[side] then
+                    bind(side, function() modSide(side, true) end,
+                        { non_consuming = true, ignore_mods = true, locked = true })
+                    bind(side, function() modSide(side, false) end,
+                        { non_consuming = true, ignore_mods = true, locked = true, release = true })
+                    sideBound[side] = true
+                end
+            end
+        end
+    end
+
     -- The three binds on the drag's combo (see above): the press, the release after
     -- a drag, and the release after a click - which puts a grabbed window down even
-    -- without a move (back on its own box), and just ends any other drag.
-    local function bindAlong(bind, keys)
+    -- without a move (back on its own box), and just ends any other drag. Then its
+    -- modifier's, for the widget while that's held.
+    local function bindAlong(bind, keys, key)
         bind(keys, press, { non_consuming = true })
         bind(keys, function() drop() end, { drag = true })
         bind(keys, function()
             if grabbed then drop() else endDrag() end
         end, { click = true })
+        local ok, err = pcall(bindModifiers, bind, keys, key)
+        if not ok then report("showing the workspace widget while the modifier's held", err) end
     end
 
     -- Made along with every bind of hl.dsp.window.drag(), on whatever combo that's
@@ -656,7 +768,7 @@ part("dropping a window on a workspace", function()
     local bind = hl.bind
     hl.bind = function(keys, action, ...)
         if type(keys) == "string" and action ~= nil and drags[action] and not along[comboKey(keys)] then
-            local ok, err = pcall(bindAlong, bind, keys)
+            local ok, err = pcall(bindAlong, bind, keys, comboKey(keys))
             if ok then along[comboKey(keys)] = true else report("dropping a window on a workspace", err) end
         end
         return bind(keys, action, ...)
@@ -666,9 +778,15 @@ part("dropping a window on a workspace", function()
     if unbind then
         hl.unbind = function(keys, ...)
             if keys == "all" and select("#", ...) == 0 then
-                along = {}
+                along, comboMods, sideBound, sideDown = {}, {}, {}, {}
+                modHide()
             elseif type(keys) == "string" then
-                along[comboKey(keys)] = nil
+                local key = comboKey(keys)
+                along[key], comboMods[key] = nil, nil
+                for side in pairs(sideBound) do
+                    if comboKey(side) == key then sideBound[side], sideDown[side] = nil, nil end
+                end
+                if not modHeld() then modHide() end
             end
             return unbind(keys, ...)
         end

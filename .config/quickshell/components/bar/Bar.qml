@@ -519,7 +519,9 @@ Scope {
             // During a window drag, on a screen this bar isn't showing on (any
             // but the primary, or the primary while something fullscreen hides
             // it) - and only while the cursor's on that screen (purpura.lua
-            // says which one it's on): the same workspace widget, floating at
+            // says which one it's on) - or while the drag's modifier is held
+            // there (META, for META + LMB), so a window can be grabbed from it
+            // before any drag: the same workspace widget, floating at
             // the top of the screen - over everything and reserving no room -
             // so the window can be dropped on a workspace there too. Its layer
             // is a "bar" as well, which is what purpura.lua looks for.
@@ -529,7 +531,9 @@ Scope {
 
                 readonly property real pad: Config.scaled(8, bar.uiScale)
 
-                visible: !bar.visible && dragRow.windowDragging && !!modelData && dragRow.dragMonitor === modelData.name
+                visible: !bar.visible && !!modelData
+                    && ((dragRow.windowDragging && dragRow.dragMonitor === modelData.name)
+                        || dragRow.modMonitor === modelData.name)
 
                 WlrLayershell.namespace: "bar"
                 WlrLayershell.layer: WlrLayer.Overlay
