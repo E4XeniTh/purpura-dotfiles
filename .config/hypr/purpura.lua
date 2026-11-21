@@ -199,6 +199,11 @@ end)
 -- tiling either way, and one that was fullscreen is fullscreen again on a box. Let
 -- go without moving, it's over its own box - so it's back where it was.
 --
+-- A press on the widget that's on no window drawn there - an empty workspace, the gap
+-- between two, the floating widget's edge - drags nothing at all, rather than the
+-- window under the widget: it turns "Drag window" off for that one press (see
+-- holdOffDrag()).
+--
 -- non_consuming: the drag's combo clicked on no window still reaches the app below.
 -- These have no description, so Settings > Shortcuts keeps showing the drag bind's.
 
@@ -353,14 +358,15 @@ part("dropping a window on a workspace", function()
         return modName ~= nil or (dragged ~= nil and cursorMonitor == name)
     end
 
-    -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
+    -- The bar the cursor's on: its monitor, the cursor in the bar's coordinates, and
+    -- whether it's the floating widget rather than the bar itself.
     local function barUnderCursor(cursor)
         for _, namespace in ipairs({ "bar", FLOATING }) do
             for _, bar in ipairs(hl.get_layers({ namespace = namespace })) do
                 local monitor = bar.monitor
                 if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor)
                     and (namespace ~= FLOATING or floatingShown(monitor.name)) then
-                    return monitor, cursor.x - bar.x, cursor.y - bar.y
+                    return monitor, cursor.x - bar.x, cursor.y - bar.y, namespace == FLOATING
                 end
             end
         end
@@ -370,9 +376,25 @@ part("dropping a window on a workspace", function()
         local monitor = hl.get_monitor_at_cursor()
         local at = monitor and floatingAt[monitor.name]
         if at and floatingShown(monitor.name) and contains(at.x, at.y, at.w, at.h, cursor) then
-            return monitor, cursor.x - at.x, cursor.y - at.y
+            return monitor, cursor.x - at.x, cursor.y - at.y, true
         end
         return nil
+    end
+
+    -- The cursor's on a workspace widget: anywhere on the floating one - it's nothing
+    -- else - or along the bar's row of boxes, the gaps and its ends included.
+    local function onWidget(cursor)
+        local monitor, x, _, floating = barUnderCursor(cursor)
+        if not monitor then return false end
+        if floating then return true end
+        local from, to
+        for _, spans in ipairs({ targets[monitor.name] or {}, separators[monitor.name] or {} }) do
+            for _, span in ipairs(spans) do
+                if not from or span.from < from then from = span.from end
+                if not to or span.to > to then to = span.to end
+            end
+        end
+        return from ~= nil and x >= from and x < to
     end
 
     -- The box or separator under the cursor (a box first, the other nil), the monitor
@@ -637,11 +659,44 @@ part("dropping a window on a workspace", function()
         endDrag(sentAway)
     end
 
-    local function press()
+    -- Each combo's "Drag window" binds, as hl.bind made them (see below), and those a
+    -- press has turned off for now.
+    local dragBinds = {} -- by comboKey
+    local heldOff = {}
+
+    -- Back on, whichever press turned them off.
+    local function letDragsBe()
+        local list = heldOff
+        heldOff = {}
+        for _, made in ipairs(list) do pcall(function() made:set_enabled(true) end) end
+    end
+
+    -- For a press on the widget that's on no window drawn there: no drag at all, not
+    -- even of the window under the widget, which "Drag window" would go for next.
+    -- Hyprland runs a combo's binds in the order they were made, and passes over one
+    -- that's off when its turn comes - so turned off here, by the press, which comes
+    -- before it, it never starts a drag. On again a moment later, that press dealt
+    -- with, or at its release if that comes first.
+    local function holdOffDrag(key)
+        for _, made in ipairs(dragBinds[key] or {}) do
+            pcall(function()
+                if made:is_enabled() then
+                    made:set_enabled(false)
+                    heldOff[#heldOff + 1] = made
+                end
+            end)
+        end
+        if #heldOff > 0 then hl.timer(letDragsBe, { timeout = 1, type = "oneshot" }) end
+    end
+
+    local function press(key)
         endDrag() -- one whose release never came
         if showModNow then showModNow() end -- in use: no waiting to see it
         local cursor = hl.get_cursor_pos()
         if not cursor or grab(cursor) then return end
+        -- On the widget, though on no window drawn there - an empty workspace, a gap
+        -- between them, its edge: nothing's dragged.
+        if onWidget(cursor) then return holdOffDrag(key) end
         local window = windowUnderCursor(cursor)
         if not window then return end
         settleAway(window.address) -- still going from a drop a moment ago
@@ -788,9 +843,13 @@ part("dropping a window on a workspace", function()
     -- without a move (back on its own box), and just ends any other drag. And the
     -- modifiers it needs, for the widget while they're held.
     local function bindAlong(bind, keys, key)
-        bind(keys, press, { non_consuming = true })
-        bind(keys, function() drop() end, { drag = true })
+        bind(keys, function() press(key) end, { non_consuming = true })
         bind(keys, function()
+            letDragsBe()
+            drop()
+        end, { drag = true })
+        bind(keys, function()
+            letDragsBe()
             if grabbed then drop() else endDrag() end
         end, { click = true })
         comboMods[key] = modifiersOf(keys)
@@ -817,24 +876,32 @@ part("dropping a window on a workspace", function()
     end
     local along = {} -- by comboKey, the combos holding them now
 
+    -- The drag's own bind is kept too, as Hyprland hands it back, for holdOffDrag().
     local bind = hl.bind
     hl.bind = function(keys, action, ...)
-        if type(keys) == "string" and action ~= nil and drags[action] and not along[comboKey(keys)] then
-            local ok, err = pcall(bindAlong, bind, keys, comboKey(keys))
-            if ok then along[comboKey(keys)] = true else report("dropping a window on a workspace", err) end
+        local isDrag = type(keys) == "string" and action ~= nil and drags[action]
+        local key = isDrag and comboKey(keys)
+        if isDrag and not along[key] then
+            local ok, err = pcall(bindAlong, bind, keys, key)
+            if ok then along[key] = true else report("dropping a window on a workspace", err) end
         end
-        return bind(keys, action, ...)
+        local made = table.pack(bind(keys, action, ...))
+        if isDrag and made[1] ~= nil then
+            dragBinds[key] = dragBinds[key] or {}
+            table.insert(dragBinds[key], made[1])
+        end
+        return table.unpack(made, 1, made.n)
     end
 
     local unbind = hl.unbind
     if unbind then
         hl.unbind = function(keys, ...)
             if keys == "all" and select("#", ...) == 0 then
-                along, comboMods = {}, {}
+                along, comboMods, dragBinds = {}, {}, {}
                 modHide()
             elseif type(keys) == "string" then
                 local key = comboKey(keys)
-                along[key], comboMods[key] = nil, nil
+                along[key], comboMods[key], dragBinds[key] = nil, nil, nil
                 if not modHeld() then modHide() end
             end
             return unbind(keys, ...)
