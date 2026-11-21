@@ -812,7 +812,7 @@ Item {
                         // Close under the setting it's for, like the Power category's.
                         Layout.topMargin: -Config.scaled(6, root.uiScale)
                         uiScale: root.uiScale
-                        text: "A monitor with only one workspace pinned to it in Display settings shows its unmanaged ones too (an app's own, new ones - any not pinned) in the bar's workspace list. Off, it shows just its one until it has more than two unmanaged ones. Other monitors always show theirs."
+                        text: "Unmanaged workspaces (an app's own, new ones - any not pinned in Display settings) show in the bar's workspace list even where a monitor has just one. Off, a monitor shows its unmanaged ones only once it has two or more."
                     }
 
                     // ---------------- show empty workspaces (widget) ----------------

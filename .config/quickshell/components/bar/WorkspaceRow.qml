@@ -399,11 +399,9 @@ Row {
 
         // Unmanaged workspaces (see isManaged) - an app's own (purpura.lua's
         // Reserve workspace, or a fullscreen app's), META + CTRL + Tab's new
-        // ones, a monitor's auto-assigned spare - show on every monitor but
-        // one that Display settings pins a single workspace to. There they
-        // show with Show Single Workspace Monitors on; with it off, only once
-        // there are more than two of them on it, the monitor keeping to its
-        // one workspace until then.
+        // ones, a monitor's auto-assigned spare. With Show Single Workspace
+        // Monitors on, every one shows. With it off, a monitor's show only
+        // when it has two or more of them: a lone one is left out.
         let workspaces = Array.from(byId.values())
         if (!root.showSingleWorkspaceMonitors) {
             const unmanagedOn = {}
@@ -412,8 +410,7 @@ Row {
                     unmanagedOn[w.monitor.name] = (unmanagedOn[w.monitor.name] || 0) + 1
             }
             workspaces = workspaces.filter(w => !w.monitor || root.isManaged(w)
-                || root.managedCount(w.monitor.name) !== 1
-                || unmanagedOn[w.monitor.name] > root.singleMonitorUnmanagedHidden)
+                || unmanagedOn[w.monitor.name] >= 2)
         }
 
         workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
@@ -557,13 +554,6 @@ Row {
         return workspace.id <= 5 && root.isPinned(workspace)
     }
 
-    // How many workspaces Display settings pins to that monitor - its 1-5s.
-    function managedCount(monitorName) {
-        const stored = root.liveWorkspacesStore[monitorName]
-        if (!stored || !Array.isArray(stored.workspaces)) return 0
-        return stored.workspaces.filter(id => id >= 1 && id <= 5).length
-    }
-
     // General > Shell settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since these are simple
     // immediately-saved toggles rather than staged/Apply-dependent
@@ -590,9 +580,6 @@ Row {
     readonly property bool showSingleWorkspaceMonitors: root.barSettingsStore.showSingleWorkspaceMonitors !== undefined
         ? !!root.barSettingsStore.showSingleWorkspaceMonitors
         : !root.barSettingsStore.strictWorkspaceWidget
-    // With it off, a single workspace monitor's unmanaged workspaces show only
-    // once it has more than this many.
-    readonly property int singleMonitorUnmanagedHidden: 2
 
     Repeater {
         model: root.settledEntries
