@@ -374,11 +374,11 @@ Scope {
                                 gap: Config.scaled(5, osdWindow.uiScale)
                             }
 
-                            // purpura's number for it - the fullscreen app's own
-                            // one's too, from 6 up (see WorkspaceRegistry.qml).
+                            // purpura's number for it - a managed one's only: the
+                            // fullscreen app's own shows none.
                             Text {
                                 anchors.centerIn: parent
-                                visible: registry.numberOf(osdBox.modelData) >= 1
+                                visible: registry.isManaged(osdBox.modelData) && registry.numberOf(osdBox.modelData) >= 1
                                 text: String(registry.numberOf(osdBox.modelData))
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily

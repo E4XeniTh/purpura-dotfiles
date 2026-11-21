@@ -346,10 +346,11 @@ Row {
 
         // Which of them get a box, in what order (WorkspaceRegistryLogic.js's
         // rowWorkspaces): by monitor, left to right, then by purpura number; an
-        // empty one not on screen only with Show Empty Workspaces In Widget; a
-        // monitor's unmanaged ones (anything not pinned - an app's own, a new one,
-        // a spare) only when it has two or more, unless Show Single Workspace
-        // Monitors.
+        // empty one not on screen only with Show Empty Workspaces In Widget. A
+        // monitor's unmanaged ones (anything not pinned - an app's own, a new
+        // one, a spare) always when it has pinned ones of its own; one with none
+        // pinned shows them only when it has two or more, unless Show Single
+        // Workspace Monitors.
         const records = Array.from(byId.values()).map(w => ({
             id: w.id,
             monitor: w.monitor ? w.monitor.name : "",
@@ -519,8 +520,10 @@ Row {
 
             readonly property var mon: wsBox.modelData.monitor
 
-            // purpura's number for it (see the label below).
+            // purpura's number for it, and whether it's managed (see the
+            // label below).
             readonly property int number: registry.numberOf(wsBox.modelData)
+            readonly property bool managed: registry.isManaged(wsBox.modelData)
 
             // Compared by id against the monitor's live activeWorkspace,
             // not read off modelData.active: the boxes are a settled
@@ -657,10 +660,9 @@ Row {
             // Faint workspace number, drawn above the window grid (z
             // higher than the Repeater's default stacking) so it stays
             // legible regardless of how many window/icon rectangles are
-            // packed underneath it: purpura's number for it (the book's -
-            // see WorkspaceRegistry.qml), 1-5 for the pinned ones and from 6
-            // up for the rest. None for one the book can't number (a special
-            // workspace, or with no book, anything past 5).
+            // packed underneath it - on a managed workspace only, one of the
+            // 1-5 Display settings pins (see WorkspaceRegistry.qml). An
+            // unmanaged one - an app's own, a new one, a spare - shows none.
             Text {
                 anchors {
                     bottom: parent.bottom
@@ -670,7 +672,7 @@ Row {
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignBottom
                 z: 10
-                visible: wsBox.number >= 1
+                visible: wsBox.managed && wsBox.number >= 1
                 text: String(wsBox.number)
                 color: Config.fgcolor
                 opacity: 0.75

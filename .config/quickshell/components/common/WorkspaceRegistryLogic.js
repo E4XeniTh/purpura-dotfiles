@@ -99,23 +99,42 @@ function monitorsOf(book) {
     return book ? book.monitors : {}
 }
 
+// In number order - one without a number (no book, or one it hasn't seen) after
+// the rest, by id.
+function byNumber(book) {
+    const key = w => {
+        const n = numberOf(book, w.id)
+        return n >= 1 ? n : 1e6 + w.id
+    }
+    return (a, b) => key(a) - key(b)
+}
+
 // The workspace widget's boxes: `list` is Hyprland's workspaces as
 // { id, monitor (name), rank (the monitor's place, left to right), empty, shown },
 // and comes back filtered and in order - by monitor, then number.
 //   A workspace that's empty and not on screen only with opts.showEmpty (Show Empty
 //   Workspaces In Widget) - Display settings' are kept by Hyprland, there or not.
-//   A monitor's unmanaged workspaces only when it has two or more of them, unless
-//   opts.showSingle (Show Single Workspace Monitors).
+//   A monitor with managed workspaces of its own shows its unmanaged ones, every
+//   one. One without (a monitor none of 1-5 is pinned to) shows them only when it
+//   has two or more, unless opts.showSingle (Show Single Workspace Monitors). Which
+//   monitors have managed ones goes by all Hyprland has, empty and hidden ones
+//   included: the pins are there whether they get a box or not.
 function rowWorkspaces(book, list, opts) {
     const o = opts || {}
+    const managedOn = {}
+    for (const w of list) {
+        if (w.monitor && isManaged(book, w.id)) managedOn[w.monitor] = true
+    }
     const kept = list.filter(w => !w.monitor || o.showEmpty || !w.empty || w.shown)
     const unmanagedOn = {}
     for (const w of kept) {
         if (w.monitor && !isManaged(book, w.id)) unmanagedOn[w.monitor] = (unmanagedOn[w.monitor] || 0) + 1
     }
+    const order = byNumber(book)
     return kept
-        .filter(w => !w.monitor || isManaged(book, w.id) || o.showSingle || unmanagedOn[w.monitor] >= 2)
-        .sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : numberOf(book, a.id) - numberOf(book, b.id))
+        .filter(w => !w.monitor || isManaged(book, w.id) || managedOn[w.monitor] || o.showSingle
+            || unmanagedOn[w.monitor] >= 2)
+        .sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : order(a, b))
 }
 
 // The workspace OSD's boxes for one monitor: its managed workspaces - an empty one
@@ -126,5 +145,5 @@ function osdWorkspaces(book, list, monitorName, opts) {
     return list
         .filter(w => w.monitor === monitorName
             && (isManaged(book, w.id) ? (o.showEmpty || !w.empty || w.shown) : w.id === o.signalled))
-        .sort((a, b) => numberOf(book, a.id) - numberOf(book, b.id))
+        .sort(byNumber(book))
 }
