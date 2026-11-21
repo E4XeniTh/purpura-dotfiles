@@ -192,9 +192,10 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
 
 
     -- The shell's side of Hyprland: Close Window closing what's under the mouse,
-    -- dropping a dragged window on a workspace in the bar, the shell's layer
-    -- rules. Kept current by the dotfiles; see that file. Before the binds, which
-    -- take its Close Window.
+    -- dropping a dragged window on a workspace in the bar, the book of workspaces
+    -- (Display settings' pins, and the workspaces of their own below), the shell's
+    -- layer rules. Kept current by the dotfiles; see that file. Before the binds,
+    -- which take its Close Window.
     pcall(loadfile(os.getenv("HOME") .. "/.config/hypr/purpura.lua") or function() end, mainMod)
 
     hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(), { description = "Drag window" })

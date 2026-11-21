@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import "../../Config.js" as Config
 import "../common"
+import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
 
 // One rectangle per current Hyprland workspace, sorted by owning
 // monitor position first and workspace number second - meant to sit
@@ -191,8 +192,9 @@ Row {
             : Quickshell.iconPath("application-x-executable")
     }
 
-    // A real workspace by number, or by name when it has one (no quotes or
-    // anything else that could end the Lua string); a placeholder by number.
+    // A workspace by its Hyprland id (purpura.lua's selectors go by those, not
+    // by purpura's numbers), or by name when it has one (no quotes or anything
+    // else that could end the Lua string).
     function workspaceSelector(workspace) {
         if (workspace.id > 0) return String(workspace.id)
         const name = workspace.name || ""
@@ -308,73 +310,18 @@ Row {
         return Math.abs(a.y) - Math.abs(b.y)
     })
 
-    // showEmptyWidget (General settings' Shell category, "Show empty
-    // workspaces: In widget" toggle - see barSettingsStore below) - any
-    // workspace 1-5 pinned to a monitor (liveworkspaces.json) but not
-    // existing in Hyprland yet (nobody's switched to it this session, so
-    // Hyprland hasn't created it) gets synthesized as a placeholder
-    // here, matching just enough of a real HyprlandWorkspace's shape
-    // for wsBox/winBox below to render an empty box for it: .monitor
-    // (a real HyprlandMonitor, for aspect ratio/geometry), .hasFullscreen
-    // (always false), .toplevels.values (empty - nothing to draw in the
-    // window grid), and .activate() (dispatches straight to Hyprland,
-    // same as a real workspace's own method, since clicking one of these
-    // should actually create/switch to it).
+    // Show Empty Workspaces In Widget (Settings > General > Shell > Main Bar): a
+    // workspace that's empty and not on screen gets a box too. Display settings'
+    // pins are kept by Hyprland (persistent - purpura.lua's WORKSPACES), so they're
+    // there whether anything's on them or not; without this, the empty ones not
+    // shown are left out, as when Hyprland let them go.
     readonly property bool showEmptyWidget: !!root.barSettingsStore.showEmptyWidget
 
-    // existingIds: every workspace id currently real in Hyprland,
-    // computed once in sortedWorkspaces below and passed in here rather
-    // than re-derived per-monitor - workspace ids are globally unique
-    // (never two monitors sharing one), so checking existence against a
-    // single flat set is both simpler and immune to a real workspace's
-    // own .monitor being momentarily null right as it's created (see
-    // sortedWorkspaces' dedup comment below) - keying existence off
-    // per-monitor buckets used to let a placeholder for the same id
-    // sneak in right alongside that real, momentarily-monitor-less
-    // object, showing as a spurious extra box for the ~20ms it took
-    // Hyprland to finish assigning the new workspace to its monitor.
-    function placeholderWorkspaces(existingIds) {
-        if (!root.showEmptyWidget) return []
-
-        const placeholders = []
-        for (const monName in root.liveWorkspacesStore) {
-            if (monName.startsWith("__")) continue
-            const stored = root.liveWorkspacesStore[monName]
-            if (!stored || !stored.workspaces) continue
-
-            const mon = Hyprland.monitors.values.find(m => m.name === monName)
-            if (!mon) continue
-
-            for (const num of stored.workspaces) {
-                if (existingIds.has(num)) continue
-                placeholders.push({
-                    id: num,
-                    monitor: mon,
-                    hasFullscreen: false,
-                    toplevels: { values: [] },
-                    // A plain workspace focus only reliably lands on the
-                    // pinned monitor if Hyprland still has its
-                    // workspace_rule (from the last Apply) in effect for
-                    // this id - focusing the monitor first makes this
-                    // correct regardless, rather than silently creating/
-                    // switching to workspace N on whatever monitor
-                    // happens to be focused right now instead of the one
-                    // this box is actually sitting under.
-                    //
-                    // Lua syntax because hyprland.lua rejects the legacy
-                    // "focusmonitor X"/"workspace N" dispatch strings. A
-                    // single eval rather than two Hyprland.dispatch()
-                    // calls, since each of those opens its own socket
-                    // and nothing guarantees they land in order.
-                    activate: () => {
-                        Quickshell.execDetached(["hyprctl", "eval",
-                            `hl.dispatch(hl.dsp.focus({ monitor = "${monName}" })) `
-                            + `hl.dispatch(hl.dsp.focus({ workspace = "${num}" }))`])
-                    }
-                })
-            }
-        }
-        return placeholders
+    // purpura.lua's book of the workspaces - each one's purpura number and type
+    // (WorkspaceRegistry.qml).
+    WorkspaceRegistry {
+        id: registry
+        onBookChanged: renderSettleTimer.restart()
     }
 
     readonly property var sortedWorkspaces: {
@@ -389,37 +336,32 @@ Row {
         // before Hyprland finishes assigning it. Deduped by id here
         // (globally unique) rather than trusting the raw list
         // untouched, preferring whichever copy already has a resolved
-        // monitor - this (plus existingIds below) is what let an
-        // extra/duplicate box flash for ~20ms during a workspace swap.
+        // monitor - this is what let an extra/duplicate box flash for
+        // ~20ms during a workspace swap.
         const byId = new Map()
         for (const w of Hyprland.workspaces.values) {
             const prev = byId.get(w.id)
             if (!prev || (!prev.monitor && w.monitor)) byId.set(w.id, w)
         }
 
-        // Unmanaged workspaces (see isManaged) - an app's own (purpura.lua's
-        // Reserve workspace, or a fullscreen app's), META + CTRL + Tab's new
-        // ones, a monitor's auto-assigned spare. With Show Single Workspace
-        // Monitors on, every one shows. With it off, a monitor's show only
-        // when it has two or more of them: a lone one is left out.
-        let workspaces = Array.from(byId.values())
-        if (!root.showSingleWorkspaceMonitors) {
-            const unmanagedOn = {}
-            for (const w of workspaces) {
-                if (w.monitor && !root.isManaged(w))
-                    unmanagedOn[w.monitor.name] = (unmanagedOn[w.monitor.name] || 0) + 1
-            }
-            workspaces = workspaces.filter(w => !w.monitor || root.isManaged(w)
-                || unmanagedOn[w.monitor.name] >= 2)
-        }
-
-        workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
-        return workspaces.sort((a, b) => {
-            const rankA = (a.monitor && monitorRank[a.monitor.name] !== undefined) ? monitorRank[a.monitor.name] : 999
-            const rankB = (b.monitor && monitorRank[b.monitor.name] !== undefined) ? monitorRank[b.monitor.name] : 999
-            if (rankA !== rankB) return rankA - rankB
-            return a.id - b.id
-        })
+        // Which of them get a box, in what order (WorkspaceRegistryLogic.js's
+        // rowWorkspaces): by monitor, left to right, then by purpura number; an
+        // empty one not on screen only with Show Empty Workspaces In Widget; a
+        // monitor's unmanaged ones (anything not pinned - an app's own, a new one,
+        // a spare) only when it has two or more, unless Show Single Workspace
+        // Monitors.
+        const records = Array.from(byId.values()).map(w => ({
+            id: w.id,
+            monitor: w.monitor ? w.monitor.name : "",
+            rank: (w.monitor && monitorRank[w.monitor.name] !== undefined) ? monitorRank[w.monitor.name] : 999,
+            empty: w.toplevels.values.length === 0,
+            shown: !!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id,
+            ws: w
+        }))
+        return RegistryLogic.rowWorkspaces(registry.book, records, {
+            showEmpty: root.showEmptyWidget,
+            showSingle: root.showSingleWorkspaceMonitors
+        }).map(r => r.ws)
     }
 
     // sortedWorkspaces with a "separator" marker spliced in wherever the
@@ -428,7 +370,7 @@ Row {
     // workspace boxes instead of one continuous, ungrouped run of them.
     //
     // This is the "live" computation - re-evaluates the instant any
-    // dependency changes (Hyprland.workspaces, liveWorkspacesStore, etc).
+    // dependency changes (Hyprland.workspaces, the book, etc).
     // Deliberately NOT what the Repeater below renders directly - see
     // settledEntries.
     readonly property var rowEntries: {
@@ -499,59 +441,6 @@ Row {
         // Seed the very first render immediately - no reason to wait out
         // a settle delay before anything has been drawn at all.
         root.settledEntries = root.rowEntries
-    }
-
-    // Which workspace numbers (1-5) are actually pinned to each monitor
-    // via Screen Settings - read straight off liveworkspaces.json
-    // (ScreenSettings.qml's Apply writes this on every Apply; Set
-    // Default writes monitors.json instead, which is only a startup
-    // default and no longer reflects what's actually live), via
-    // liveWorkspacesFile's watchChanges below (real OS-level file
-    // watching, not polling) - lets the number label below tell "a real
-    // pin" apart from whatever spare workspace number Hyprland happened
-    // to assign a monitor with nothing pinned to it, and updates the
-    // instant Apply writes the file rather than waiting on a poll
-    // interval or Hyprland's own raw-event stream (a checkbox-only
-    // Apply's workspace_rule/move dispatches are all no-ops when nothing
-    // physically changed, so no raw event necessarily fires at all -
-    // reported live as "Show Empty"/"Only managed workspaces" (now Show
-    // Single Workspace Monitors) not
-    // visibly taking effect until switching workspaces or clicking
-    // elsewhere happened to force some other refresh first).
-    FileView {
-        id: liveWorkspacesFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
-        watchChanges: true
-        onFileChanged: reload()
-    }
-
-    readonly property var liveWorkspacesStore: {
-        try {
-            return JSON.parse(liveWorkspacesFile.text())
-        } catch (e) {
-            return {}
-        }
-    }
-
-    onLiveWorkspacesStoreChanged: renderSettleTimer.restart()
-
-    function isPinned(workspace) {
-        if (!workspace.monitor) return false
-        const stored = root.liveWorkspacesStore[workspace.monitor.name]
-        return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
-    }
-
-    // One of its monitor's own workspaces: an explicit 1-5 pin belonging to
-    // that monitor - two conditions, both needed. id <= 5: only the
-    // button-driven range counts as a deliberate pin (resolveWorkspaceAssignment()
-    // in ScreenSettings.qml never lets anything past 5 be anything but an
-    // auto-assigned filler for a monitor nothing was explicitly chosen for, and
-    // still lists it in liveworkspaces.json). isPinned(): straight off
-    // liveworkspaces.json's per-monitor list, so a stray 1-5 that isn't pinned
-    // to its own monitor (left over from before a reassignment, say) doesn't
-    // count. Everything else is unmanaged.
-    function isManaged(workspace) {
-        return workspace.id <= 5 && root.isPinned(workspace)
     }
 
     // General > Shell settings (ShellSettings.qml) - a separate file from
@@ -630,12 +519,13 @@ Row {
 
             readonly property var mon: wsBox.modelData.monitor
 
+            // purpura's number for it (see the label below).
+            readonly property int number: registry.numberOf(wsBox.modelData)
+
             // Compared by id against the monitor's live activeWorkspace,
-            // not read off modelData.active: the box being rendered can
-            // be a placeholder, and the real workspace that replaces it
-            // only arrives once renderSettleTimer fires, which left the
-            // border unlit for that long after switching to an empty
-            // workspace.
+            // not read off modelData.active: the boxes are a settled
+            // snapshot (see renderSettleTimer), and the border's to light
+            // up the moment the switch happens, not once that catches up.
             readonly property bool isActive: !!wsBox.mon
                 && !!wsBox.mon.activeWorkspace
                 && wsBox.mon.activeWorkspace.id === wsBox.modelData.id
@@ -767,16 +657,10 @@ Row {
             // Faint workspace number, drawn above the window grid (z
             // higher than the Repeater's default stacking) so it stays
             // legible regardless of how many window/icon rectangles are
-            // packed underneath it. Hidden entirely - not just dimmed -
-            // for a workspace number past 5 (always an auto-assigned
-            // filler for a monitor nothing was explicitly chosen for -
-            // see resolveWorkspaceAssignment() in ScreenSettings.qml,
-            // never something the 1-5 buttons themselves produce) or one
-            // that was never actually pinned to this monitor through
-            // Screen Settings (see isPinned()/liveWorkspacesStore above) - the
-            // box and its window grid still show either way, just
-            // without a number that would otherwise look like a
-            // deliberate pin.
+            // packed underneath it: purpura's number for it (the book's -
+            // see WorkspaceRegistry.qml), 1-5 for the pinned ones and from 6
+            // up for the rest. None for one the book can't number (a special
+            // workspace, or with no book, anything past 5).
             Text {
                 anchors {
                     bottom: parent.bottom
@@ -786,8 +670,8 @@ Row {
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignBottom
                 z: 10
-                visible: wsBox.modelData.id <= 5 && root.isPinned(wsBox.modelData)
-                text: String(wsBox.modelData.id)
+                visible: wsBox.number >= 1
+                text: String(wsBox.number)
                 color: Config.fgcolor
                 opacity: 0.75
                 // Outline so the number stays legible over whatever's

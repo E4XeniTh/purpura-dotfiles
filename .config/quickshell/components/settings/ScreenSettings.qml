@@ -233,11 +233,11 @@ Item {
     // monitor on a fresh setup or once a monitor gets disabled.
     property var pendingWorkspaces: ({})
 
-    // A monitor's pins: staged here, else what the last Apply this login
-    // pinned (liveworkspaces.json's "pins" - Apply doesn't touch
-    // monitors.json, so without this the buttons fell back to the saved
-    // default right after applying, and Set Default saw nothing new to
-    // save), else the saved default.
+    // A monitor's pins: staged here, else what's pinned now (the book's
+    // "pins" - see liveWorkspaces: Apply doesn't touch monitors.json, so
+    // without this the buttons fell back to the saved default right after
+    // applying, and Set Default saw nothing new to save), else the saved
+    // default.
     function workspacesFor(name) {
         // The only monitor that's on (or will be, with what's staged) has
         // every workspace - see setPendingEnabled() for what the others
@@ -255,21 +255,41 @@ Item {
         return on.length === 1 ? on[0].name : ""
     }
 
-    // liveworkspaces.json: per monitor, "workspaces" - what's live, read by
-    // WorkspaceRow.qml/WorkspaceOsd.qml - and "pins", what was picked with
-    // the buttons. They differ while a monitor's off: its pins are kept for
-    // when it's back, its workspaces are live on another monitor. Login
-    // (apply-monitors.sh) writes it fresh from monitors.json, with no pins.
-    property var liveWorkspacesWritten: null
-    readonly property var liveWorkspaces: {
-        if (root.liveWorkspacesWritten !== null) return root.liveWorkspacesWritten
-        try {
-            const parsed = JSON.parse(liveWorkspacesFile.text())
-            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}
-        } catch (e) {
-            return {}
+    // The book's monitors - purpura.lua's WORKSPACES, read through
+    // WorkspaceRegistry.qml: per monitor, "workspaces", its assigned ones as
+    // they're live, and "pins", what was picked with the buttons. They differ
+    // while a monitor's off: its pins are kept for when it's back, its
+    // workspaces are live on another monitor. Login (apply-monitors.sh) hands it
+    // monitors.json's. Right after an Apply, what that handed over, until the
+    // book reads back with it - or a few seconds have gone (the book never took
+    // it: purpura.lua not loaded).
+    WorkspaceRegistry {
+        id: registry
+        onBookChanged: {
+            if (root.liveWorkspacesWritten !== null && root.samePins(registry.monitors, root.liveWorkspacesWritten))
+                root.liveWorkspacesWritten = null
         }
     }
+
+    property var liveWorkspacesWritten: null
+    readonly property var liveWorkspaces: root.liveWorkspacesWritten !== null ? root.liveWorkspacesWritten : registry.monitors
+
+    Timer {
+        id: appliedOverrideTimer
+        interval: 5000
+        onTriggered: root.liveWorkspacesWritten = null
+    }
+
+    // Whether the book has every monitor's pins as `written` has them.
+    function samePins(book, written) {
+        for (const name in written) {
+            const a = (book[name] && book[name].pins) || []
+            const b = written[name].pins || []
+            if (a.length !== b.length || a.some((n, i) => n !== b[i])) return false
+        }
+        return true
+    }
+
     readonly property bool hasLivePins: Object.keys(root.liveWorkspaces).some(k => {
         const entry = root.liveWorkspaces[k]
         return entry && Array.isArray(entry.pins)
@@ -458,10 +478,18 @@ Item {
         // distinction either - every number is equally real now, so this
         // can (and normally will) land within 1-5 if those aren't all
         // already claimed by another active monitor.
+        //
+        // Only within 1-5, though. Once those are all another active monitor's,
+        // the monitor's left with an empty list here, and purpura.lua's book
+        // gives it a spare of its own - numbered from 6, and an id no other
+        // workspace has. This can't see the workspaces an app or a bind made
+        // (a reserved one, say), so a spare picked here past 5 could have landed
+        // on one of those and carried it off.
         let nextSpare = 1
         for (const name of activeNames) {
             if (desired[name].length > 0) continue
             while (claimedByActive.has(nextSpare)) nextSpare++
+            if (nextSpare > 5) continue
             desired[name] = [nextSpare]
             claimedByActive.add(nextSpare)
         }
@@ -1189,152 +1217,39 @@ Item {
             if (line) monitorLines.push(line)
         }
 
-        // Every active monitor's FULL resolved workspace list is resent
-        // in full on EVERY Apply - not just the ones this Apply's UI
-        // edits touched, and not just a diff against what was there
-        // before. This is deliberately more than the strict minimum:
-        // resending an already-correct workspace_rule/move is a cheap,
-        // idempotent no-op, and always fully re-asserting the entire
-        // exclusive mapping is what actually guarantees Hyprland's live
-        // rule table can never silently drift out of sync with
-        // monitors.json, regardless of what specifically changed this
-        // time - the previous, more "targeted" incremental approach is
-        // exactly what kept leaving edge cases unhandled. Each
-        // workspace_rule is paired with an explicit
-        // hl.dispatch(hl.dsp.workspace.move(...)) - the rule alone only
-        // steers where a workspace goes at *creation*, not one that's
-        // already live and sitting on a different monitor with real
-        // windows open.
-        const workspaceLines = []
-        for (const name of activeNames) {
-            for (const num of resolved[name] || []) {
-                workspaceLines.push(`hl.workspace_rule({ workspace = "${num}", monitor = "${name}" })`)
-                workspaceLines.push(`hl.dispatch(hl.dsp.workspace.move({ workspace = "${num}", monitor = "${name}" }))`)
-            }
-        }
-
-        // Monitors whose CURRENT LIVE active workspace (root.baseFor(name),
-        // the last hyprctl fetch this panel did) isn't part of its newly
-        // resolved set at all - forced onto their new lowest workspace
-        // immediately (focus monitor, then workspace) rather than left
-        // showing whatever they were on until someone manually switches
-        // away from it. Deliberately keyed off LIVE reality, not
-        // monitors.json's previously-persisted list - an earlier version
-        // used "the persisted list was empty" as the trigger instead,
-        // which silently never fired for a monitor whose monitors.json
-        // still remembered some stale entry from long before (e.g. an old
-        // auto-assigned spare number that had nothing to do with this
-        // Apply) even though its actual live workspace was never part of
-        // this Apply's newly-resolved set either - reported live as a
-        // monitor given fresh workspace pins not getting switched off
-        // its old unmanaged workspace at all, only fixable by hand.
-        const newlyManaged = []
-        for (const name of activeNames) {
-            const targets = resolved[name] || []
-            if (targets.length === 0) continue
-            const base = root.baseFor(name)
-            const currentLive = (base && base.activeWorkspace) ? base.activeWorkspace.id : undefined
-            if (currentLive !== undefined && targets.includes(currentLive)) continue
-            newlyManaged.push({
-                monitor: name,
-                oldWorkspace: currentLive,
-                newWorkspace: targets.reduce((a, b) => Math.min(a, b))
-            })
-        }
-
-        for (const entry of newlyManaged) {
-            workspaceLines.push(`hl.dispatch(hl.dsp.focus({ monitor = "${entry.monitor}" }))`)
-            workspaceLines.push(`hl.dispatch(hl.dsp.focus({ workspace = "${entry.newWorkspace}" }))`)
-        }
-
-        // Every workspace number that belongs to ANY active monitor after
-        // this Apply - used right below to tell "this old workspace was
-        // truly orphaned" apart from "this old workspace still exists,
-        // just reassigned to a different monitor". Reassigning a pinned
-        // workspace elsewhere (e.g. moving workspace 2 from DP-2 to
-        // DP-1 while Discord's open on it) already gets its windows
-        // carried along for free by the ordinary workspace_rule/move
-        // pair above, which moves the whole workspace (and everything on
-        // it) as a unit - the same thing happens when a monitor gets
-        // disabled and its pinned numbers get recaptured onto the
-        // primary. Individually rescuing windows off that same old
-        // workspace id here would fight that move instead of
-        // complementing it - both dispatches would target windows
-        // sitting on "workspace 2", one relocating them as part of the
-        // whole workspace to DP-1, the other yanking them individually
-        // onto DP-2's own new filler workspace - reported live as
-        // Discord left behind on an unmanaged filler after explicitly
-        // reassigning its workspace elsewhere, or after disabling the
-        // monitor it was on entirely.
-        const allResolvedNumbers = new Set()
-        for (const name of activeNames) {
-            for (const num of resolved[name] || []) allResolvedNumbers.add(num)
-        }
-
-        // Any of those same monitors that also had a real window open on
-        // their old (live, pre-Apply) active workspace gets that window
-        // rescued onto the new one too, via clientsQueryProcess below,
-        // rather than left stranded on the now-orphaned workspace only
-        // reachable through WorkspaceRow - but only when that old
-        // workspace is genuinely orphaned (see allResolvedNumbers above),
-        // not merely reassigned to a different monitor.
-        const rescues = []
-        for (const entry of newlyManaged) {
-            if (entry.oldWorkspace === undefined || entry.oldWorkspace === entry.newWorkspace) continue
-            if (allResolvedNumbers.has(entry.oldWorkspace)) continue
-            rescues.push({ monitor: entry.monitor, oldWorkspace: entry.oldWorkspace, newWorkspace: entry.newWorkspace })
-        }
-
-        // A monitor being newly DISABLED this Apply never goes through
-        // newlyManaged above at all - that loop only ever looks at
-        // monitors still ACTIVE after this Apply. If its old (live,
-        // pre-Apply) workspace was genuinely unmanaged, left alone here
-        // Hyprland's own default disable-a-monitor behavior takes over
-        // instead, which knows nothing about this panel's managed
-        // numbers - it just shoves the orphaned workspace (and every
-        // window on it) onto whatever monitor absorbs it, creating a
-        // brand new unmanaged workspace there too - reported live as
-        // windows from a disabled monitor's unmanaged workspace landing
-        // on another fresh unmanaged workspace on the primary, even
-        // though all 5 real workspaces were managed and available.
-        // Rescued onto the lowest managed number still available
-        // anywhere post-Apply instead, same mechanism as the loop above.
+        // The workspaces, handed to purpura.lua's book (WORKSPACES there) in one
+        // go, rather than line by line from here: each active monitor's resolved
+        // list - Hyprland then keeps those on it (persistent rules), its lowest its
+        // default - with what the buttons picked, for them. The book switches a
+        // monitor that isn't showing one of its own to its default (but not one
+        // showing an app's own workspace: a reserved, fullscreen or new one), and
+        // brings windows along off a spare or stray workspace no monitor has any
+        // more - and off each workspace in `rescue`: what a monitor being switched
+        // off this Apply showed, which Hyprland hands to another monitor as it
+        // goes. Other monitors switch without the focus going there, so nothing's
+        // put back afterwards. Every active monitor's whole list goes every time,
+        // not just what this Apply's edits touched: sending an already-right one
+        // again is a no-op, and the full mapping each time is what keeps it from
+        // drifting.
+        const map = {}
+        for (const name of activeNames) map[name] = resolved[name] || []
+        const picked = {}
+        for (const m of root.monitors) picked[m.name] = root.workspacesFor(m.name).filter(num => num <= 5)
+        const rescue = []
         for (const name of Object.keys(root.pendingEnabled)) {
             if (root.pendingEnabled[name] !== false) continue
             const base = root.baseFor(name)
-            if (!base || base.disabled) continue
-            const oldWorkspace = base.activeWorkspace ? base.activeWorkspace.id : undefined
-            if (oldWorkspace === undefined || allResolvedNumbers.has(oldWorkspace)) continue
-            if (allResolvedNumbers.size === 0) continue
-            const newWorkspace = Array.from(allResolvedNumbers).reduce((a, b) => Math.min(a, b))
-            rescues.push({ monitor: name, oldWorkspace, newWorkspace })
+            if (!base || base.disabled || !base.activeWorkspace) continue
+            rescue.push(base.activeWorkspace.id)
         }
+        const workspaceLines = [root.assignLine(map, picked, rescue)]
 
-        // No monitors.json write here anymore - Apply is purely a live,
-        // this-boot-only dispatch now. See setDefault() below for the
-        // only thing that persists a layout as what happens on the next
-        // Hyprland login.
-        //
-        // liveworkspaces.json is different - it's not a "default", it's
-        // this Apply's own just-dispatched workspace-to-monitor mapping,
-        // and WorkspaceRow.qml/WorkspaceOsd.qml need to see it update
-        // every single Apply (not just a Set Default) to know which
-        // pins/placeholders are actually live right now. Same shape as
-        // monitors.json's own per-entry "workspaces" list (only that
-        // field - no geometry) so those two files' existing `stored.
-        // workspaces` reads need no changes of their own, only their
-        // file path. apply-monitors.sh seeds this same file fresh at
-        // every login from whatever it just replayed off monitors.json,
-        // so it's never stale even before this session's first Apply.
-        const liveWorkspacesSnapshot = {}
-        for (const name in resolved) {
-            liveWorkspacesSnapshot[name] = {
-                workspaces: resolved[name],
-                pins: root.workspacesFor(name).filter(num => num <= 5)
-            }
-        }
-        root.liveWorkspacesWritten = liveWorkspacesSnapshot
-        liveWorkspacesFile.setText(JSON.stringify(liveWorkspacesSnapshot, null, 2) + "\n")
+        // What the buttons show until the book reads back with it (see
+        // liveWorkspaces).
+        const snapshot = {}
+        for (const m of root.monitors) snapshot[m.name] = { workspaces: map[m.name] || [], pins: picked[m.name] }
+        root.liveWorkspacesWritten = snapshot
+        appliedOverrideTimer.restart()
 
         // Monitor enable/disable/geometry lines go out first. If any
         // touched monitor is transitioning disabled -> enabled this
@@ -1358,25 +1273,11 @@ Item {
         if (newlyEnabledMonitors.length > 0 && monitorLines.length > 0) {
             root.runApplyScript(monitorLines)
             root.pendingWorkspaceLines = workspaceLines
-            root.pendingRescues = rescues
             root.pendingSettleMonitors = newlyEnabledMonitors
             root.monitorSettleAttempts = 0
             monitorSettleTimer.restart()
         } else {
-            const sendLines = monitorLines.concat(workspaceLines)
-            // Rescuing needs a fresh window list first - deferred
-            // through clientsQueryProcess/runApplyScript() rather than
-            // sent immediately, so the rescue dispatches land in the
-            // same script (and thus the same capture/restore-wrapped
-            // run) instead of a separate, later Apply.
-            if (rescues.length > 0) {
-                root.pendingSendLines = sendLines
-                root.pendingRescues = rescues
-                clientsQueryProcess.running = false
-                clientsQueryProcess.running = true
-            } else {
-                root.runApplyScript(sendLines)
-            }
+            root.runApplyScript(monitorLines.concat(workspaceLines))
         }
 
         root.applyBrightness()
@@ -1597,12 +1498,11 @@ Item {
         root.applyChanges()
     }
 
-    // An Apply still sending its lines, waiting for a monitor to come up,
-    // rescuing windows or reading the result back.
+    // An Apply still sending its lines, waiting for a monitor to come up or
+    // reading the result back.
     readonly property bool applyBusy: applyProcess.running || applySettleTimer.running
-        || clientsQueryProcess.running
         || monitorSettleTimer.running || monitorSettleQueryProcess.running
-        || root.pendingSettleMonitors.length > 0 || root.pendingRescues.length > 0
+        || root.pendingSettleMonitors.length > 0
 
     onApplyBusyChanged: {
         if (!root.applyBusy && Object.keys(root.queuedEnable).length > 0) root.readMonitorsAfresh()
@@ -1716,13 +1616,7 @@ Item {
         const sendLines = root.pendingWorkspaceLines
         root.pendingWorkspaceLines = []
         root.pendingSettleMonitors = []
-        if (root.pendingRescues.length > 0) {
-            root.pendingSendLines = sendLines
-            clientsQueryProcess.running = false
-            clientsQueryProcess.running = true
-        } else {
-            root.runApplyScript(sendLines)
-        }
+        root.runApplyScript(sendLines)
     }
 
     Timer {
@@ -1764,76 +1658,26 @@ Item {
         }
     }
 
-    // Carries applyChanges()'s already-built sendLines and rescues
-    // array across the async hyprctl clients query below - only
-    // actually populated when applyChanges() found at least one
-    // monitor to rescue windows for.
-    property var pendingSendLines: []
-    property var pendingRescues: []
-
-    Process {
-        id: clientsQueryProcess
-        command: ["hyprctl", "-j", "clients"]
-
-        stdout: StdioCollector {
-            onStreamFinished: {
-                const sendLines = root.pendingSendLines.slice()
-                try {
-                    const clients = JSON.parse(text)
-                    // Every open window still sitting on a monitor's old,
-                    // now-orphaned unmanaged workspace gets silently
-                    // (follow = false, so focus isn't disturbed) relocated
-                    // onto whichever workspace that monitor was just
-                    // assigned - see the rescues array built in
-                    // applyChanges().
-                    for (const rescue of root.pendingRescues) {
-                        for (const c of clients) {
-                            if (c.workspace && c.workspace.id === rescue.oldWorkspace) {
-                                sendLines.push(`hl.dispatch(hl.dsp.window.move({ workspace = "${rescue.newWorkspace}", window = "address:${c.address}", follow = false }))`)
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.warn("ScreenSettings: hyprctl clients query failed, skipping unmanaged-window rescue:\n" + text)
-                }
-                root.pendingSendLines = []
-                root.pendingRescues = []
-                root.runApplyScript(sendLines)
-            }
-        }
+    // purpura.workspaces.assign(...) as Lua, for one hyprctl eval: each monitor's
+    // list of workspaces, what the buttons picked, and the workspaces to rescue
+    // windows off (see applyChanges()). Names are checked, everything else is a
+    // whole number - and no single quote, which would end the shell's quoting in
+    // runApplyScript().
+    function assignLine(map, picked, rescue) {
+        const valid = name => /^[A-Za-z0-9_.-]{1,64}$/.test(name)
+        const list = nums => "{ " + (nums || []).filter(n => Number.isInteger(n)).join(", ") + " }"
+        const table = t => "{ " + Object.keys(t).filter(valid).sort()
+            .map(name => `["${name}"] = ${list(t[name])}`).join(", ") + " }"
+        return `purpura.workspaces.assign(${table(map)}, ${table(picked)}, { rescue = ${list(rescue)} })`
     }
 
-    // Actually sends this Apply's built-up Lua lines to Hyprland -
-    // split out from applyChanges() itself since the window-rescue
-    // dispatches need a fresh hyprctl clients query first, deferring
-    // this call, whenever applyChanges() found a monitor to rescue
-    // windows for (clientsQueryProcess above).
-    //
-    // Wraps the real lines with a capture/restore pair so Apply never
-    // leaves the cursor/focus wherever the *last* dispatch in the chain
-    // happened to land (e.g. on whichever monitor just got a fresh spare
-    // workspace forced onto it, or the TV a rescue above just moved
-    // windows onto) - reported live as every Apply visibly yanking focus
-    // over to some other monitor entirely. hl.get_active_workspace()
-    // captures whatever's actually focused (wherever the dashboard/this
-    // panel was opened) before any of this Apply's own dispatches run,
-    // into a plain Lua global - relies on every hyprctl eval call in
-    // this chain sharing one persistent Lua state for the whole
-    // Hyprland session (the same reason hl.dsp.* is even resolvable
-    // this way at all, called bare with no keybind context), so a
-    // global set in the first eval call is still readable in the last
-    // one. Restored as the very last dispatch in the chain - untested
-    // live (no way to run Hyprland from here), so if the cursor still
-    // ends up somewhere unexpected after Apply, this global-persistence
-    // assumption is the first thing to check.
+    // Sends this Apply's Lua lines to Hyprland, one hyprctl eval each, in order.
+    // Where the focus ends up is the book's to keep - it switches other monitors
+    // without the focus going there - so there's nothing to put back afterwards.
     function runApplyScript(sendLines) {
         if (sendLines.length === 0) return
 
-        const captureLine = "do local w = hl.get_active_workspace(); if w then _PurpuraRestoreWorkspace = tostring(w.id) end end"
-        const restoreLine = "if _PurpuraRestoreWorkspace then hl.dispatch(hl.dsp.focus({ workspace = _PurpuraRestoreWorkspace })) end"
-        const finalLines = [captureLine].concat(sendLines).concat([restoreLine])
-
-        const script = finalLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
+        const script = sendLines.map(l => `hyprctl eval '${l}'`).join(" ; ")
         console.log("ScreenSettings: applying:\n" + script)
         applyProcess.command = ["sh", "-c", script]
         applyProcess.running = false
@@ -1972,22 +1816,6 @@ Item {
         // it back, and apply-monitors.sh is what replays it at login) -
         // no need to preload/read it back through this FileView too.
         preload: false
-    }
-
-    // WorkspaceRow.qml/WorkspaceOsd.qml read this file's "workspaces" back
-    // through their own watchChanges FileView; this one reads its "pins"
-    // (see liveWorkspaces) - watched too, since the bar's brightness menu
-    // applies through its own copy of this file. See applyChanges()'s own
-    // comment on liveWorkspacesSnapshot for why this is a separate file from
-    // monitors.json.
-    FileView {
-        id: liveWorkspacesFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
-        blockLoading: true
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onLoaded: root.liveWorkspacesWritten = null
     }
 
     // ---------------- DDC/CI + brightnessctl brightness ----------------

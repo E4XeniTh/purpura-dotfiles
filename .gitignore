@@ -8,11 +8,9 @@
 # same reasoning the old ~/.config/hypr/screens.json was never tracked
 # either.
 .config/quickshell/monitors.json
-# This-session's live workspace-to-monitor pins, written by
-# ScreenSettings.qml's Apply on every Apply and seeded at every Hyprland
-# login by apply-monitors.sh - read by WorkspaceRow.qml/WorkspaceOsd.qml,
-# deliberately a separate file from monitors.json (see ScreenSettings.qml's
-# own top comment for why Apply and Set Default write two different files).
+# What used to hold the session's workspace pins - written no more (purpura.lua's
+# book of workspaces, in $XDG_RUNTIME_DIR, has them now), but an old copy may
+# still be about.
 .config/quickshell/liveworkspaces.json
 .config/quickshell/barsettings.json
 .config/quickshell/peripheralsettings.json

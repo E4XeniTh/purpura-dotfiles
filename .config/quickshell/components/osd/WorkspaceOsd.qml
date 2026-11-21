@@ -5,6 +5,7 @@ import Quickshell.Hyprland
 import Quickshell.Io
 import "../../Config.js" as Config
 import "../common"
+import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
 
 // Small "you just switched workspace" indicator, one per screen, shown
 // briefly whenever that screen's active workspace changes - e.g. the
@@ -27,33 +28,13 @@ Scope {
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
-    // Read once here (rather than per-screen inside osdWindow below) and
-    // shared by every screen's own instance - liveworkspaces.json,
-    // ScreenSettings.qml's Apply writes this on every Apply (Set
-    // Default writes monitors.json instead, which is only a startup
-    // default and no longer reflects what's actually live), holding
-    // per-monitor pinned workspaces. Backed by watchChanges (real
-    // OS-level file watching), not polling - updates the instant Apply
-    // writes the file rather than waiting on a poll interval or
-    // Hyprland's own raw-event stream (a checkbox-only Apply's
-    // workspace_rule/move dispatches are all no-ops when nothing
-    // physically changed, so no raw event necessarily fires at all).
-    FileView {
-        id: liveWorkspacesFile
-        path: Quickshell.env("HOME") + "/.config/quickshell/liveworkspaces.json"
-        watchChanges: true
-        onFileChanged: reload()
+    // purpura.lua's book of the workspaces (WorkspaceRegistry.qml): which are
+    // pinned to which monitor, and each one's purpura number. Read once here and
+    // shared by every screen's own window below.
+    WorkspaceRegistry {
+        id: registry
+        onBookChanged: renderSettleTimer.restart()
     }
-
-    readonly property var liveWorkspacesStore: {
-        try {
-            return JSON.parse(liveWorkspacesFile.text())
-        } catch (e) {
-            return {}
-        }
-    }
-
-    onLiveWorkspacesStoreChanged: renderSettleTimer.restart()
 
     // General > Shell settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since the "Show empty
@@ -116,7 +97,7 @@ Scope {
     // for a frame, which is what read live as boxes jittering or a
     // workspace appearing to blink in and back out during a workspace/
     // display swap. settleTick increments once the burst of raw events
-    // from one Apply actually stops (or liveWorkspacesStore itself changes, see
+    // from one Apply actually stops (or the book itself changes, see
     // above), and each osdWindow only copies its live computation into
     // what it actually renders when settleTick changes - see
     // monitorWorkspaces/liveMonitorWorkspaces below.
@@ -188,68 +169,31 @@ Scope {
 
             readonly property bool showEmptyOsd: !!root.barSettingsStore.showEmptyOsd
 
-            // Every workspace number actually, deliberately pinned to
-            // *this* monitor per liveworkspaces.json (i.e. chosen via
-            // the 1-5 buttons in Screen Settings) - straight off
-            // liveWorkspacesStore, used both to filter the real
-            // Hyprland.workspaces list below
-            // and to build showEmptyOsd's placeholders. Explicitly capped
-            // at id <= 5: resolveWorkspaceAssignment() in
-            // ScreenSettings.qml never lets anything past 5 be anything
-            // other than an auto-assigned filler for a monitor nothing
-            // was explicitly chosen for, and this OSD is meant to show
-            // deliberate pins, not "whatever number this monitor happens
-            // to be functioning on" - a monitor with nothing chosen
-            // showing its filler workspace here would just be visual
-            // noise nobody asked for. isPinned membership is still
-            // checked separately from the id cutoff (not "any id <= 5
-            // this monitor happens to be showing") so a genuinely stray/
-            // misattributed workspace with an id <= 5 doesn't slip
-            // through either - dropping either check broke this one way
-            // or the other, reported live as the OSD always showing a
-            // monitor's auto-filled spare even with nothing pinned.
-            readonly property var pinnedNumbers: {
-                if (!osdWindow.hyprMonitor) return []
-                const stored = root.liveWorkspacesStore[osdWindow.hyprMonitor.name]
-                const workspaces = (stored && stored.workspaces) ? stored.workspaces : []
-                return workspaces.filter(num => num <= 5)
-            }
-
-            // Every workspace currently assigned to *this* monitor, sorted
-            // by id - re-evaluates live off Hyprland.workspaces (an
-            // ObjectModel, same reactive-list pattern as
-            // Networking.devices/Pipewire.nodes elsewhere in this shell),
-            // filtered down to only those actually pinned (see
-            // pinnedNumbers above).
-            //
-            // When showEmptyOsd is on, any pinned number not existing in
-            // Hyprland yet (nobody's switched to it this session) is
-            // added as a bare placeholder ({ id }) - the delegate below
-            // only ever reads .id off each entry, so nothing more is
-            // needed. It'll never match activeId (a real workspace has to
-            // be switched to for that), so the sliding highlight simply
-            // never lands on one.
-            //
-            // The workspace a fullscreen app has just been given here (see
-            // root.fullscreenMoved) is in it too, while the OSD's up for it.
+            // This monitor's workspaces in the row (WorkspaceRegistryLogic.js's
+            // osdWorkspaces): the ones Display settings pinned to it - by the
+            // book, deliberate pins rather than whatever this monitor happens to
+            // be showing (an app's own, a spare - those would just be noise
+            // here) - with an empty one not on screen only with showEmptyOsd
+            // (pins are kept by Hyprland, there or not), in purpura's number
+            // order. And the workspace a fullscreen app has just been given here
+            // (see root.fullscreenMoved), while the OSD's up for it.
             //
             // This is the "live" computation - see monitorWorkspaces
             // below for what the Repeater actually renders.
             readonly property var liveMonitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
-                let list = Hyprland.workspaces.values
-                    .filter(w => w.monitor === osdWindow.hyprMonitor
-                        && (osdWindow.pinnedNumbers.includes(w.id) || w.id === osdWindow.signalledId))
-
-                if (osdWindow.showEmptyOsd) {
-                    const existing = new Set(list.map(w => w.id))
-                    for (const num of osdWindow.pinnedNumbers) {
-                        if (existing.has(num)) continue
-                        list = list.concat([{ id: num }])
-                    }
-                }
-
-                return list.slice().sort((a, b) => a.id - b.id)
+                const name = osdWindow.hyprMonitor.name
+                const records = Hyprland.workspaces.values.map(w => ({
+                    id: w.id,
+                    monitor: w.monitor ? w.monitor.name : "",
+                    empty: w.toplevels.values.length === 0,
+                    shown: !!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id,
+                    ws: w
+                }))
+                return RegistryLogic.osdWorkspaces(registry.book, records, name, {
+                    showEmpty: osdWindow.showEmptyOsd,
+                    signalled: osdWindow.signalledId
+                }).map(r => r.ws)
             }
 
             // What the Repeater below actually renders - a debounced
@@ -311,7 +255,7 @@ Scope {
                 // "Show Workspace OSD on switch" off: nothing (a fullscreen
                 // app's own workspace still shows it - see above).
                 if (!root.showOnSwitch) return
-                // pinnedNumbers can leave this monitor with nothing at
+                // The book can leave this monitor with nothing at
                 // all to show (e.g. nothing pinned to it yet and
                 // showEmptyOsd is off) - popping up an empty box row
                 // would just be a floating border for no reason, so skip
@@ -411,10 +355,9 @@ Scope {
                             // The one a fullscreen app's just been given (see
                             // signalledId): dashed, in the fullscreen color, as
                             // the workspace widget draws a workspace holding a
-                            // window in real fullscreen - and with no number, as
-                            // it isn't one of the pinned ones.
+                            // window in real fullscreen.
                             readonly property bool own: osdBox.modelData.id === osdWindow.signalledId
-                                && !osdWindow.pinnedNumbers.includes(osdBox.modelData.id)
+                                && !registry.isManaged(osdBox.modelData)
 
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
@@ -431,10 +374,12 @@ Scope {
                                 gap: Config.scaled(5, osdWindow.uiScale)
                             }
 
+                            // purpura's number for it - the fullscreen app's own
+                            // one's too, from 6 up (see WorkspaceRegistry.qml).
                             Text {
                                 anchors.centerIn: parent
-                                visible: !osdBox.own
-                                text: String(osdBox.modelData.id)
+                                visible: registry.numberOf(osdBox.modelData) >= 1
+                                text: String(registry.numberOf(osdBox.modelData))
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(32, osdWindow.uiScale)

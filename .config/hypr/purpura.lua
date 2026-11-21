@@ -937,66 +937,635 @@ part("dropping a window on a workspace", function()
 end)
 
 --#######################################################################################
+--## WORKSPACES                                                                         #
+--#######################################################################################
+-- Purpura's book of workspaces, kept over Hyprland's own: every workspace Hyprland has,
+-- by its id, with the number purpura shows for it, what kind it is and what it's for.
+-- The shell reads it (components/common/WorkspaceRegistry.qml) and the rest of this
+-- file asks it (purpura.workspaces).
+--
+-- Numbers. 1-5 are the workspaces Display settings pins to the monitors, one monitor
+-- each, and keep Hyprland's own numbers - META + 1-5 go to them as Hyprland's. Any
+-- other gets the lowest number from 6 that no other has, the moment it's seen, and
+-- keeps it till it's gone. One purpura makes is given that number as its Hyprland id
+-- too when no workspace has it, else the lowest id from 6 none has - the book
+-- remembers which is which.
+--
+-- Types:
+--   pinned      one of 1-5, which Display settings has on a monitor
+--   spare       what a monitor none of 1-5 is on is given, to have somewhere to be
+--   reserved    Reserve workspace's, for a window (its app and address kept)
+--   fullscreen  a fullscreen app's own, from as it opened (its app and address kept)
+--   new         New workspace's
+--   other       one purpura didn't make - a hyprland.lua rule's, a plain `workspace 9`
+-- Only a pinned one is managed. Special workspaces aren't in the book.
+--
+-- On Hyprland's own workspace rules: a monitor's assigned workspaces are persistent
+-- rules on it, its lowest its default - so Hyprland keeps them, makes one that's
+-- missing, moves one home when its monitor's back, and starts a monitor on its
+-- default. Rules for one workspace merge, so hyprland.lua's own for it (gaps, a
+-- layout) stay as they are. A reserved, fullscreen or new one is bound to its monitor
+-- the same way, but not kept.
+--
+-- Remembered for the session, in $XDG_RUNTIME_DIR: purpura-workspaces.lua for this
+-- file, read back as it loads - a config reload starts a new Lua state and clears
+-- every workspace rule, so the rules are made again then, from it - and
+-- purpura-workspaces.json for the shell. Another Hyprland's (one that's since
+-- restarted) is left be: the login's scripts/apply-monitors.sh assigns them afresh.
+--
+-- purpura.workspaces.assign(map, pins, opts) - Display settings' Apply, and
+-- apply-monitors.sh at login:
+--     purpura.workspaces.assign({ ["DP-1"] = { 1, 2, 3, 4 }, ["DP-2"] = { 5 } }, pins)
+-- each monitor with its workspaces of 1-5 (anything past 5 is left out), one with none
+-- given a spare. pins are what Display settings' buttons picked, kept for them. Each
+-- monitor that isn't showing one of its own then shows its default - unless it's
+-- showing a reserved, fullscreen or new workspace, which stays - and a workspace one
+-- leaves that's spare or other and no monitor's any more has its windows brought
+-- along, as has each in opts.rescue (what a monitor being switched off showed).
+-- opts.home switches every monitor to its default, and opts.primary is focused last,
+-- so the focus ends there (both at login). The focused monitor switches as any switch
+-- does; another without the cursor moving or the focus going there, and then the
+-- shell's told, as Hyprland says nothing of a switch like that:
+-- "purpura-workspace,shown,<monitor>" (components/osd/WorkspaceOsd.qml).
+
+part("workspaces", function()
+    local FIRST = 6
+    local OWN = { reserved = true, fullscreen = true, new = true }
+    local TYPES = { pinned = true, spare = true, reserved = true, fullscreen = true, new = true, other = true }
+    local DIR = os.getenv("XDG_RUNTIME_DIR") or ((os.getenv("HOME") or "") .. "/.cache")
+    local STATE = DIR .. "/purpura-workspaces.lua"
+    local SHARED = DIR .. "/purpura-workspaces.json"
+    local INSTANCE = os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or ""
+    local INTENT_S = 10 -- a workspace that's to be made and isn't by then won't be
+
+    local entries = {}  -- [Hyprland id] = { id, number, type, monitor, since, app, window }
+    local assigned = {} -- [monitor] = its workspaces, lowest (its default) first
+    local pins = {}     -- [monitor] = what Display settings' buttons picked
+    local intended = {} -- [id] = { type, number, app, window, at }: one about to be made
+
+    local api = {}
+
+    local function validName(name)
+        return type(name) == "string" and #name <= 64 and name:match("^[%w_%.%-]+$") ~= nil
+    end
+
+    local function integer(n)
+        return math.type(n) == "integer"
+    end
+
+    local function later(fn)
+        hl.timer(function()
+            local ok, err = pcall(fn)
+            if not ok then report("workspaces", err) end
+        end, { timeout = 1, type = "oneshot" })
+    end
+
+    local function sortedKeys(t)
+        local keys = {}
+        for k in pairs(t) do keys[#keys + 1] = k end
+        table.sort(keys, function(a, b)
+            if type(a) == type(b) then return a < b end
+            return type(a) == "number"
+        end)
+        return keys
+    end
+
+    -- Hyprland's workspaces, but the special ones.
+    local function live()
+        local ok, list = pcall(hl.get_workspaces)
+        local out = {}
+        for _, ws in ipairs(ok and type(list) == "table" and list or {}) do
+            if isObject(ws) and not ws.special and integer(ws.id) then out[#out + 1] = ws end
+        end
+        return out
+    end
+
+    local function assignedTo(id)
+        for name, ids in pairs(assigned) do
+            for _, x in ipairs(ids) do
+                if x == id then return name end
+            end
+        end
+    end
+
+    local function pruneIntended()
+        local now = os.time()
+        for id, want in pairs(intended) do
+            if now - want.at > INTENT_S then intended[id] = nil end
+        end
+    end
+
+    local function numberTaken(n)
+        for _, e in pairs(entries) do
+            if e.number == n then return true end
+        end
+        for _, want in pairs(intended) do
+            if want.number == n then return true end
+        end
+        return false
+    end
+
+    local function nextNumber()
+        local n = FIRST
+        while numberTaken(n) do n = n + 1 end
+        return n
+    end
+
+    -- A Hyprland id and a number for one purpura's to make (see above).
+    local function allocate()
+        pruneIntended()
+        local number = nextNumber()
+        local taken = {}
+        for id in pairs(entries) do taken[id] = true end
+        for id in pairs(intended) do taken[id] = true end
+        for _, ws in ipairs(live()) do taken[ws.id] = true end
+        local id = number
+        if taken[id] then
+            id = FIRST
+            while taken[id] do id = id + 1 end
+        end
+        return id, number
+    end
+
+    -- ---- the files ----
+    local queued = false
+    local flush
+
+    local function changed()
+        if queued then return end
+        queued = true
+        later(function()
+            queued = false
+            flush()
+        end)
+    end
+
+    local function numbers(list, sep)
+        local out = {}
+        for _, n in ipairs(list) do out[#out + 1] = tostring(n) end
+        return table.concat(out, sep)
+    end
+
+    local function jsonString(s)
+        return '"' .. (s:gsub('[%c"\\]', function(c)
+            if c == '"' then return '\\"' end
+            if c == "\\" then return "\\\\" end
+            return string.format("\\u%04x", c:byte())
+        end)) .. '"'
+    end
+
+    local function write(path, text)
+        local file = io.open(path, "w")
+        if not file then return end
+        file:write(text)
+        file:close()
+    end
+
+    flush = function()
+        local names = {}
+        for name in pairs(assigned) do names[name] = true end
+        for name in pairs(pins) do names[name] = true end
+        local luaMonitors, jsonMonitors = {}, {}
+        for _, name in ipairs(sortedKeys(names)) do
+            local a, p = assigned[name] or {}, pins[name] or {}
+            luaMonitors[#luaMonitors + 1] = string.format("        [%q] = { assigned = { %s }, pins = { %s } },",
+                name, numbers(a, ", "), numbers(p, ", "))
+            jsonMonitors[#jsonMonitors + 1] = string.format('%s:{"workspaces":[%s],"pins":[%s]}',
+                jsonString(name), numbers(a, ","), numbers(p, ","))
+        end
+        local luaEntries, jsonEntries = {}, {}
+        for _, id in ipairs(sortedKeys(entries)) do
+            local e = entries[id]
+            local luaFields = { "number = " .. e.number, string.format("type = %q", e.type), "since = " .. e.since }
+            local jsonFields = { '"id":' .. id, '"number":' .. e.number, '"type":' .. jsonString(e.type), '"since":' .. e.since }
+            for _, key in ipairs({ "monitor", "app", "window" }) do
+                if e[key] then
+                    luaFields[#luaFields + 1] = string.format("%s = %q", key, e[key])
+                    jsonFields[#jsonFields + 1] = jsonString(key) .. ":" .. jsonString(e[key])
+                end
+            end
+            luaEntries[#luaEntries + 1] = string.format("        [%d] = { %s },", id, table.concat(luaFields, ", "))
+            jsonEntries[#jsonEntries + 1] = jsonString(tostring(id)) .. ":{" .. table.concat(jsonFields, ",") .. "}"
+        end
+        write(STATE, table.concat({
+            "-- purpura.lua's workspaces (WORKSPACES there), for this Hyprland - rewritten as they change.",
+            "return {",
+            string.format("    instance = %q,", INSTANCE),
+            "    monitors = {", table.concat(luaMonitors, "\n"), "    },",
+            "    entries = {", table.concat(luaEntries, "\n"), "    },",
+            "}",
+            "",
+        }, "\n"))
+        write(SHARED, '{"instance":' .. jsonString(INSTANCE) .. ',"monitors":{' .. table.concat(jsonMonitors, ",")
+            .. '},"workspaces":{' .. table.concat(jsonEntries, ",") .. "}}\n")
+    end
+
+    -- This Hyprland's book, as it was before a reload.
+    local function restore()
+        if INSTANCE == "" then return end
+        local chunk = loadfile(STATE)
+        if not chunk then return end
+        local ok, saved = pcall(chunk)
+        if not ok or type(saved) ~= "table" or saved.instance ~= INSTANCE then return end
+        for name, m in pairs(type(saved.monitors) == "table" and saved.monitors or {}) do
+            if validName(name) and type(m) == "table" then
+                local a, p = {}, {}
+                for _, id in ipairs(type(m.assigned) == "table" and m.assigned or {}) do
+                    if integer(id) then a[#a + 1] = id end
+                end
+                for _, n in ipairs(type(m.pins) == "table" and m.pins or {}) do
+                    if integer(n) and n >= 1 and n <= 5 then p[#p + 1] = n end
+                end
+                table.sort(a)
+                table.sort(p)
+                if #a > 0 then assigned[name] = a end
+                pins[name] = p
+            end
+        end
+        for id, e in pairs(type(saved.entries) == "table" and saved.entries or {}) do
+            if integer(id) and type(e) == "table" and integer(e.number) and TYPES[e.type] then
+                entries[id] = {
+                    id = id,
+                    number = e.number,
+                    type = e.type,
+                    monitor = validName(e.monitor) and e.monitor or nil,
+                    since = integer(e.since) and e.since or os.time(),
+                    app = type(e.app) == "string" and e.app:sub(1, 256) or nil,
+                    window = type(e.window) == "string" and e.window:match("^0x%x+$") and e.window or nil,
+                }
+            end
+        end
+    end
+
+    -- ---- keeping it in step with Hyprland ----
+    -- In the book, as it's made or first seen: what it was made for, else pinned or
+    -- spare by Display settings, else other. One that's in it already has its monitor
+    -- looked at.
+    local function register(ws)
+        if not isObject(ws) or ws.special or not integer(ws.id) then return nil end
+        local id = ws.id
+        local monitor = isObject(ws.monitor) and validName(ws.monitor.name) and ws.monitor.name or nil
+        local e = entries[id]
+        if e then
+            if monitor and e.monitor ~= monitor then
+                e.monitor = monitor
+                changed()
+            end
+            return e
+        end
+        local want = intended[id]
+        intended[id] = nil
+        local kind = want and want.type or (assignedTo(id) and "spare") or "other"
+        if id >= 1 and id <= 5 and assignedTo(id) then kind = "pinned" end
+        local app = want and want.app or nil
+        e = {
+            id = id,
+            number = (id >= 1 and id <= 5) and id or (want and want.number) or nextNumber(),
+            type = kind,
+            monitor = monitor,
+            since = os.time(),
+            app = type(app) == "string" and app ~= "" and app:sub(1, 256) or nil,
+            window = want and want.window or nil,
+        }
+        entries[id] = e
+        changed()
+        return e
+    end
+
+    -- Gone ones out, unknown ones in. (workspace.removed comes from the workspace's
+    -- end, too late to ask it which it was - so this looks a moment after.)
+    local function reconcile()
+        local seen = {}
+        for _, ws in ipairs(live()) do
+            seen[ws.id] = true
+            register(ws)
+        end
+        for id in pairs(entries) do
+            if not seen[id] then
+                entries[id] = nil
+                changed()
+            end
+        end
+    end
+
+    -- ---- rules ----
+    -- Kept on its monitor, and its default when it's the monitor's lowest.
+    local function keep(id, monitor, default)
+        pcall(hl.workspace_rule, { workspace = tostring(id), monitor = monitor, persistent = true, default = default })
+    end
+
+    -- Made on, and brought back to, its monitor - not kept.
+    local function bind(id, monitor)
+        pcall(hl.workspace_rule, { workspace = tostring(id), monitor = monitor })
+    end
+
+    -- Kept no longer, nor a default. (A rule can't be told to forget its monitor; a
+    -- reload drops it.)
+    local function release(id)
+        pcall(hl.workspace_rule, { workspace = tostring(id), persistent = false, default = false })
+    end
+
+    local function makeRules()
+        for _, name in ipairs(sortedKeys(assigned)) do
+            for i, id in ipairs(assigned[name]) do keep(id, name, i == 1) end
+        end
+        for _, id in ipairs(sortedKeys(entries)) do
+            local e = entries[id]
+            if OWN[e.type] and e.monitor and not assignedTo(id) then bind(id, e.monitor) end
+        end
+    end
+
+    -- ---- switching and bringing windows along ----
+    local function showOn(monitor, selector)
+        local focused = hl.get_active_monitor()
+        if isObject(focused) and focused.name == monitor.name then
+            hl.dispatch(hl.dsp.focus({ workspace = selector }))
+            return
+        end
+        monitor:set_workspace(selector)
+        hl.dispatch(hl.dsp.event("purpura-workspace,shown," .. monitor.name))
+    end
+
+    local function bringAlong(from, to)
+        local ok, windows = pcall(hl.get_workspace_windows, tostring(from))
+        if not ok or type(windows) ~= "table" then return end
+        for _, window in ipairs(windows) do
+            if isObject(window) and window.address then
+                hl.dispatch(hl.dsp.window.move({ workspace = tostring(to), window = "address:" .. window.address, follow = false }))
+            end
+        end
+    end
+
+    local function workspaceById(id)
+        local ok, ws = pcall(hl.get_workspace, tostring(id))
+        return ok and isObject(ws) and ws or nil
+    end
+
+    -- ---- the book's own ways in ----
+    function api.assign(map, picked, opts)
+        if type(map) ~= "table" then error("expected { [monitor] = { workspaces } }", 0) end
+        opts = type(opts) == "table" and opts or {}
+
+        -- Each monitor's of 1-5, one monitor each.
+        local wanted, owner = {}, {}
+        for _, name in ipairs(sortedKeys(map)) do
+            local list = map[name]
+            if validName(name) and type(list) == "table" then
+                local ids = {}
+                for _, n in ipairs(list) do
+                    if integer(n) and n >= 1 and n <= 5 and not owner[n] then
+                        owner[n] = name
+                        ids[#ids + 1] = n
+                    end
+                end
+                table.sort(ids)
+                wanted[name] = ids
+            end
+        end
+
+        -- A spare for a monitor with none of them: its own from before, else the one
+        -- it's showing if that's past 5 and nobody's, else a new one.
+        for _, name in ipairs(sortedKeys(wanted)) do
+            if #wanted[name] == 0 then
+                local spare
+                for _, id in ipairs(assigned[name] or {}) do
+                    if id > 5 and entries[id] then spare = id end
+                end
+                if not spare then
+                    local monitor = hl.get_monitor(name)
+                    local active = isObject(monitor) and monitor.active_workspace or nil
+                    local e = isObject(active) and register(active) or nil
+                    if e and e.type == "other" and e.number >= FIRST and not assignedTo(active.id) then spare = active.id end
+                end
+                if not spare then
+                    local id, number = allocate()
+                    intended[id] = { type = "spare", number = number, at = os.time() }
+                    spare = id
+                end
+                wanted[name] = { spare }
+            end
+        end
+
+        local still = {}
+        for _, ids in pairs(wanted) do
+            for _, id in ipairs(ids) do still[id] = true end
+        end
+        for _, name in ipairs(sortedKeys(assigned)) do
+            for _, id in ipairs(assigned[name]) do
+                if not still[id] then
+                    release(id)
+                    local e = entries[id]
+                    if e and (e.type == "pinned" or e.type == "spare") then e.type = "other" end
+                end
+            end
+        end
+        assigned = wanted
+
+        pins = {}
+        for name, list in pairs(type(picked) == "table" and picked or {}) do
+            if validName(name) and type(list) == "table" then
+                local p = {}
+                for _, n in ipairs(list) do
+                    if integer(n) and n >= 1 and n <= 5 then p[#p + 1] = n end
+                end
+                table.sort(p)
+                pins[name] = p
+            end
+        end
+
+        for id in pairs(still) do
+            local e = entries[id]
+            if e then
+                if id <= 5 then
+                    e.type, e.app, e.window = "pinned", nil, nil
+                elseif not OWN[e.type] then
+                    e.type = "spare"
+                end
+            end
+        end
+        makeRules()
+        -- Written as soon as it's decided, should a switch below fail.
+        changed()
+
+        -- Home now, rather than when Hyprland next gets to its rules: the switches
+        -- below go by where they are.
+        for _, name in ipairs(sortedKeys(assigned)) do
+            if hl.get_monitor(name) then
+                for _, id in ipairs(assigned[name]) do
+                    local ws = workspaceById(id)
+                    if ws and isObject(ws.monitor) and ws.monitor.name ~= name then
+                        hl.dispatch(hl.dsp.workspace.move({ workspace = tostring(id), monitor = name }))
+                    end
+                end
+            end
+        end
+
+        local bring = {}
+        for _, name in ipairs(sortedKeys(assigned)) do
+            local monitor = hl.get_monitor(name)
+            local ids = assigned[name]
+            local active = isObject(monitor) and monitor.active_workspace or nil
+            if isObject(active) and ids[1] then
+                local e = register(active)
+                local own = false
+                for _, id in ipairs(ids) do
+                    if id == active.id then own = true end
+                end
+                local stays = e and OWN[e.type] and not own
+                if not stays and (not own or (opts.home and active.id ~= ids[1])) then
+                    showOn(monitor, tostring(ids[1]))
+                    if e and (e.type == "spare" or e.type == "other") and not still[active.id] then
+                        bring[active.id] = ids[1]
+                    end
+                end
+            end
+        end
+        for _, id in ipairs(type(opts.rescue) == "table" and opts.rescue or {}) do
+            local e = integer(id) and entries[id] or nil
+            if e and (e.type == "spare" or e.type == "other") and not still[id] and not bring[id] then
+                local home = e.monitor and assigned[e.monitor] and assigned[e.monitor][1]
+                if not home then
+                    for _, ids in pairs(assigned) do
+                        if ids[1] and (not home or ids[1] < home) then home = ids[1] end
+                    end
+                end
+                if home then bring[id] = home end
+            end
+        end
+        for _, from in ipairs(sortedKeys(bring)) do bringAlong(from, bring[from]) end
+
+        if validName(opts.primary) and hl.get_monitor(opts.primary) then
+            hl.dispatch(hl.dsp.focus({ monitor = opts.primary }))
+        end
+        changed()
+    end
+
+    function api.entry(id)
+        return entries[id]
+    end
+
+    -- Not one Display settings pinned.
+    function api.unmanaged(id)
+        local e = entries[id]
+        return e ~= nil and e.type ~= "pinned"
+    end
+
+    -- Where that window's to have a workspace of its own, of that kind, on that
+    -- monitor: the one the monitor's showing if that's past 5, unmanaged, and holds
+    -- nothing else; else a new one, bound to the monitor.
+    function api.claim(window, monitor, kind)
+        local here = isObject(window.workspace) and window.workspace.id or nil
+        local app = window.class ~= "" and window.class or window.initial_class
+        local current = monitor.active_workspace
+        local e = isObject(current) and register(current) or nil
+        if e and e.type ~= "pinned" and e.number >= FIRST then
+            local others = (current.windows or 0) - (here == current.id and 1 or 0)
+            if others <= 0 then
+                e.type, e.window = kind, window.address
+                e.app = type(app) == "string" and app ~= "" and app:sub(1, 256) or nil
+                bind(current.id, monitor.name)
+                changed()
+                return current.id
+            end
+        end
+        local id, number = allocate()
+        intended[id] = { type = kind, number = number, app = app, window = window.address, at = os.time() }
+        bind(id, monitor.name)
+        return id
+    end
+
+    -- A new workspace of that kind for that monitor, bound to it - made once it's
+    -- gone to.
+    function api.make(monitor, kind)
+        local id, number = allocate()
+        intended[id] = { type = kind, number = number, at = os.time() }
+        bind(id, monitor.name)
+        return id
+    end
+
+    -- That monitor's workspaces, by number.
+    function api.onMonitor(name)
+        local list = {}
+        for _, ws in ipairs(live()) do
+            if isObject(ws.monitor) and ws.monitor.name == name then
+                local e = register(ws)
+                list[#list + 1] = { id = ws.id, number = e and e.number or ws.id }
+            end
+        end
+        table.sort(list, function(a, b) return a.number < b.number end)
+        return list
+    end
+
+    -- That monitor showing that workspace, as described above.
+    api.showOn = showOn
+
+    hl.on("workspace.created", function(ws)
+        register(ws)
+    end)
+
+    hl.on("workspace.move_to_monitor", function(ws, monitor)
+        local e = isObject(ws) and integer(ws.id) and entries[ws.id] or nil
+        if e and isObject(monitor) and validName(monitor.name) and e.monitor ~= monitor.name then
+            e.monitor = monitor.name
+            changed()
+        end
+    end)
+
+    hl.on("workspace.removed", function()
+        later(reconcile)
+    end)
+
+    hl.on("config.reloaded", function()
+        reconcile()
+        changed()
+    end)
+
+    restore()
+    makeRules()
+    purpura = purpura or {}
+    purpura.workspaces = api
+end)
+
+--#######################################################################################
 --## A WORKSPACE OF ITS OWN                                                             #
 --#######################################################################################
 -- "Reserve workspace" (hyprland.lua.example: META + CTRL + W) gives the focused window
--- an empty unmanaged workspace - one past 5, as the shell only ever pins 1-5 to a
--- monitor: the one the focused monitor's showing, when it's one of those and holds
--- nothing else, or else a new one, the lowest free number past 5. The window goes
--- there, the monitor's switched to it, and the workspace is bound to that monitor
--- (a workspace rule, so it's made there and stays there).
+-- an empty unmanaged workspace (see WORKSPACES): the one the focused monitor's
+-- showing, when that's past 5, isn't pinned and holds nothing else, or else a new one,
+-- numbered from 6. The window goes there, the monitor's switched to it, and the
+-- workspace is bound to that monitor (a workspace rule, so it's made there and comes
+-- back there). The book has it as reserved, for that window's app.
 --
 -- A fullscreen app opening - a window that's fullscreen as it opens, or goes
 -- fullscreen within its first few seconds, as games do - is given one the same way,
--- on its own monitor; maximized doesn't count, nor a window going fullscreen later on.
--- Then "purpura-workspace,fullscreen,<monitor>,<workspace>" goes out on Hyprland's
--- event socket, for the workspace OSD to show it (components/osd/WorkspaceOsd.qml).
--- Each move comes a moment after what prompts it, never inside Hyprland's handling of
--- that; and Hyprland's own move of a fullscreen window takes it out of fullscreen and
--- back in, which is let pass.
+-- on its own monitor, kept as fullscreen; maximized doesn't count, nor a window going
+-- fullscreen later on. Then "purpura-workspace,fullscreen,<monitor>,<workspace>" goes
+-- out on Hyprland's event socket, for the workspace OSD to show it
+-- (components/osd/WorkspaceOsd.qml). Each move comes a moment after what prompts it,
+-- never inside Hyprland's handling of that; and Hyprland's own move of a fullscreen
+-- window takes it out of fullscreen and back in, which is let pass.
 --
 -- "Next workspace" (META + TAB) switches the monitor under the cursor to its next
--- workspace, round to the first after the last (Hyprland's own m+1, from that monitor).
--- "New workspace" (META + CTRL + TAB) makes an empty one - the lowest free number past
--- 5 - on the monitor under the cursor, bound to it, and switches that monitor to it.
--- On the focused monitor - which the cursor's nearly always on, as moving onto a
--- monitor focuses it - each is an ordinary switch. On another (something else took the
--- focus while the cursor rested there), the switch is made there without taking the
--- focus or moving the cursor, and the next move of the mouse focuses that monitor as
--- any does. Hyprland says nothing of a switch like that, so the shell's told
--- (components/osd/WorkspaceOsd.qml): "purpura-workspace,shown,<monitor>".
+-- workspace by the book's numbers - left to right in the workspace widget - round to
+-- the first after the last. "New workspace" (META + CTRL + TAB) makes an empty one,
+-- numbered from 6, on the monitor under the cursor, bound to it, and switches that
+-- monitor to it. On the focused monitor - which the cursor's nearly always on, as
+-- moving onto a monitor focuses it - each is an ordinary switch; on another (something
+-- else took the focus while the cursor rested there), one without the focus going
+-- there or the cursor moving, and the next move of the mouse focuses that monitor as
+-- any does (see WORKSPACES).
 --
 -- hyprland.lua.example binds all three; a hyprland.lua from before doesn't. So each is
 -- made here once the config has loaded, unless hyprland.lua or shortcuts.lua bound
--- that combo to something (or unbound it - Settings > Shortcuts taking it off), or -
--- for the two whose actions are made here - bound that action somewhere else.
+-- that combo to something (or unbound it - Settings > Shortcuts taking it off), or
+-- bound that action somewhere else.
 
 part("workspaces of their own", function()
-    local FIRST = 6     -- past the ones the shell pins to a monitor, 1-5
+    local book = purpura and purpura.workspaces
+    if not book then error("needs the workspaces part, which didn't load", 0) end
     local GRACE_S = 5   -- fullscreen this soon after opening counts as opening fullscreen
     local opened = {}   -- by address: when each window opened, for GRACE_S
     local moving = false -- one of ours under way: the fullscreen changes it makes pass
-
-    local function unmanaged(workspace)
-        return isObject(workspace) and not workspace.special
-            and type(workspace.id) == "number" and workspace.id >= FIRST
-    end
-
-    local function allWorkspaces()
-        local ok, list = pcall(hl.get_workspaces)
-        return ok and type(list) == "table" and list or {}
-    end
-
-    -- The lowest number past 5 that no workspace has.
-    local function freeNumber()
-        local taken = {}
-        for _, workspace in ipairs(allWorkspaces()) do
-            if type(workspace.id) == "number" then taken[workspace.id] = true end
-        end
-        local id = FIRST
-        while taken[id] do id = id + 1 end
-        return id
-    end
 
     local function later(fn)
         hl.timer(function()
@@ -1012,45 +1581,20 @@ part("workspaces of their own", function()
         end
     end
 
-    -- That workspace made on, and kept to, that monitor.
-    local function bindTo(id, monitor)
-        hl.workspace_rule({ workspace = tostring(id), monitor = monitor.name })
-    end
-
-    -- That monitor switched to that workspace (a selector, from that monitor): an
-    -- ordinary switch when it's the focused one, otherwise one that leaves the focus and
-    -- the cursor as they are - said to the shell (see above).
-    local function showOn(monitor, selector)
-        local focused = hl.get_active_monitor()
-        if isObject(focused) and focused.name == monitor.name then
-            hl.dispatch(hl.dsp.focus({ workspace = selector }))
-            return
-        end
-        monitor:set_workspace(selector)
-        hl.dispatch(hl.dsp.event("purpura-workspace,shown," .. monitor.name))
-    end
-
     local function hoveredMonitor()
         local monitor = hl.get_monitor_at_cursor()
         if isObject(monitor) and monitor.name then return monitor end
     end
 
-    -- An empty unmanaged workspace on that monitor for the window (see above), the
-    -- window on it and the monitor showing it. Its number, and whether the window had
+    -- A workspace of its own on that monitor for the window, of that kind (see above),
+    -- the window on it and the monitor showing it. Its id, and whether the window had
     -- to move there - or nil, for a window on a special workspace.
-    local function giveOwn(window, monitor)
+    local function giveOwn(window, monitor, kind)
         if not isObject(window) or window.mapped == false or not isObject(monitor) or not monitor.name then return nil end
         local workspace = window.workspace
         if isObject(workspace) and workspace.special then return nil end
         local here = isObject(workspace) and workspace.id or nil
-        local current = monitor.active_workspace
-        local id
-        if unmanaged(current) then
-            local others = (current.windows or 0) - (here == current.id and 1 or 0)
-            if others <= 0 then id = current.id end
-        end
-        id = id or freeNumber()
-        bindTo(id, monitor)
+        local id = book.claim(window, monitor, kind)
         focusMonitor(monitor)
         if here == id then
             hl.dispatch(hl.dsp.focus({ window = "address:" .. window.address }))
@@ -1071,7 +1615,7 @@ part("workspaces of their own", function()
         local window = hl.get_window("address:" .. address)
         if not isObject(window) or window.fullscreen ~= 2 then return end
         local monitor = window.monitor
-        local id, moved = giveOwn(window, monitor)
+        local id, moved = giveOwn(window, monitor, "fullscreen")
         if id and moved then
             hl.dispatch(hl.dsp.event("purpura-workspace,fullscreen," .. monitor.name .. "," .. id))
         end
@@ -1082,7 +1626,7 @@ part("workspaces of their own", function()
         local action = function()
             local ok, err = pcall(function()
                 local window = hl.get_active_window()
-                if isObject(window) then giveOwn(window, hl.get_active_monitor()) end
+                if isObject(window) then giveOwn(window, hl.get_active_monitor(), "reserved") end
             end)
             if not ok then report("workspaces of their own", err) end
         end
@@ -1097,7 +1641,15 @@ part("workspaces of their own", function()
         local action = function()
             local ok, err = pcall(function()
                 local monitor = hoveredMonitor()
-                if monitor then showOn(monitor, "m+1") end
+                if not monitor then return end
+                local list = book.onMonitor(monitor.name)
+                if #list < 2 then return end
+                local active = monitor.active_workspace
+                local at = 0
+                for i, ws in ipairs(list) do
+                    if isObject(active) and ws.id == active.id then at = i end
+                end
+                book.showOn(monitor, tostring(list[at % #list + 1].id))
             end)
             if not ok then report("workspaces of their own", err) end
         end
@@ -1111,9 +1663,7 @@ part("workspaces of their own", function()
             local ok, err = pcall(function()
                 local monitor = hoveredMonitor()
                 if not monitor then return end
-                local id = freeNumber()
-                bindTo(id, monitor)
-                showOn(monitor, tostring(id))
+                book.showOn(monitor, tostring(book.make(monitor, "new")))
             end)
             if not ok then report("workspaces of their own", err) end
         end

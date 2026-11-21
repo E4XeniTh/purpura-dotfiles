@@ -858,7 +858,7 @@ Item {
                         // Close under the setting it's for, like the Power category's.
                         Layout.topMargin: -Config.scaled(6, root.uiScale)
                         uiScale: root.uiScale
-                        text: "Pinned workspaces that haven't been opened yet still get a box in the bar's workspace list, to click straight to."
+                        text: "Pinned workspaces with nothing on them still get a box in the bar's workspace list, to click straight to."
                     }
 
                     Item {}
@@ -1256,7 +1256,7 @@ Item {
 
                         SettingHint {
                             uiScale: root.uiScale
-                            text: "Pinned workspaces that haven't been opened yet still get a box in it."
+                            text: "Pinned workspaces with nothing on them still get a box in it."
                         }
                     }
 
