@@ -116,6 +116,9 @@ Item {
     readonly property bool showFullscreenHint: root.barStore.showFullscreenHint !== false
     // On unless turned off, as it always showed before - WorkspaceOsd.qml reads it back.
     readonly property bool showWorkspaceOsdOnSwitch: root.barStore.showWorkspaceOsdOnSwitch !== false
+    // Off unless turned on - purpura.lua reads it back from barsettings.json each
+    // time a fullscreen app opens (A workspace of its own there).
+    readonly property bool createFullscreenWorkspaces: root.barStore.createFullscreenWorkspaces === true
 
     function toggleShowSingleWorkspaceMonitors() { root.setBarSetting("showSingleWorkspaceMonitors", !root.showSingleWorkspaceMonitors) }
     function toggleShowEmptyWidget() { root.setBarSetting("showEmptyWidget", !root.showEmptyWidget) }
@@ -124,6 +127,7 @@ Item {
     function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
     function toggleShowFullscreenHint() { root.setBarSetting("showFullscreenHint", !root.showFullscreenHint) }
     function toggleShowWorkspaceOsdOnSwitch() { root.setBarSetting("showWorkspaceOsdOnSwitch", !root.showWorkspaceOsdOnSwitch) }
+    function toggleCreateFullscreenWorkspaces() { root.setBarSetting("createFullscreenWorkspaces", !root.createFullscreenWorkspaces) }
 
     // The volume, brightness and input language OSDs - OsdHost.qml reads
     // these back (and shows a preview whenever one changes).
@@ -861,6 +865,52 @@ Item {
                         text: "Pinned workspaces with nothing on them still get a box in the bar's workspace list, to click straight to."
                     }
 
+                    // ---------------- workspaces for fullscreen apps ----------------
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(8, root.uiScale)
+
+                        CheckSquare {
+                            Layout.preferredWidth: Config.scaled(20, root.uiScale)
+                            Layout.preferredHeight: Config.scaled(20, root.uiScale)
+                            uiScale: root.uiScale
+                            checked: root.createFullscreenWorkspaces
+                            tint: Config.fgcolor
+                            hovered: checkBoxMouse14.containsMouse || checkLabelMouse14.containsMouse
+
+                            MouseArea {
+                                id: checkBoxMouse14
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleCreateFullscreenWorkspaces()
+                            }
+                        }
+
+                        Text {
+                            text: "Create Workspace For Fullscreen Apps"
+                            color: Config.fgcolor
+                            font.family: Config.fontfamily
+                            font.pixelSize: Config.scaled(13, root.uiScale)
+                            font.bold: true
+
+                            MouseArea {
+                                id: checkLabelMouse14
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: root.toggleCreateFullscreenWorkspaces()
+                            }
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    SettingHint {
+                        // Close under the setting it's for, like the Power category's.
+                        Layout.topMargin: -Config.scaled(6, root.uiScale)
+                        uiScale: root.uiScale
+                        text: "An app that starts in fullscreen - as it opens, or within its first five seconds, as games do; maximized doesn't count - is moved to an empty workspace of its own on its monitor, which the workspace OSD then shows. Off, it stays on the workspace it opened on."
+                    }
+
                     Item {}
                     // ---------------- brightness control ----------------
                     RowLayout {
@@ -1238,7 +1288,7 @@ Item {
 
                         SettingHint {
                             uiScale: root.uiScale
-                            text: "It shows for a moment whenever a monitor switches workspace. A fullscreen app opening on a workspace of its own shows it either way."
+                            text: "It shows for a moment whenever a monitor with more than one workspace switches workspace - every one it has, an app's own included, with a fullscreen window's in the fullscreen color (dashed for real fullscreen, solid for maximized). A fullscreen app given a workspace of its own (Create Workspace For Fullscreen Apps, under Main Bar) shows it either way."
                         }
                     }
 

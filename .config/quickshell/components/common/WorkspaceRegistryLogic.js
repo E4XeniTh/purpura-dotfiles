@@ -137,13 +137,29 @@ function rowWorkspaces(book, list, opts) {
         .sort((a, b) => a.rank !== b.rank ? a.rank - b.rank : order(a, b))
 }
 
-// The workspace OSD's boxes for one monitor: its managed workspaces - an empty one
-// not on screen only with opts.showEmpty (Show Empty Workspaces In OSD) - and
-// opts.signalled (a fullscreen app's own, just given), by number.
+// The workspace OSD's boxes for one monitor, by number: once it has more than one
+// workspace, every one - managed or not, an app's own, one with a window fullscreen
+// on it - with an empty one not on screen only with opts.showEmpty (Show Empty
+// Workspaces In OSD); a monitor with just the one, none. opts.signalled (a
+// fullscreen app's own, just given) gets one either way.
+//   `list` is Hyprland's workspaces as { id, monitor (name), empty, shown,
+// persistent }. What a monitor has goes by what Hyprland keeps: an empty workspace
+// that's neither on screen nor persistent is one it's about to remove (one just
+// switched away from), so it neither counts nor gets a box. Numbered ones only - a
+// special workspace (a scratchpad) isn't one of a monitor's own, and Quickshell has
+// every unnumbered one as -1. Two entries for one id (one Hyprland's just made
+// again, for a moment) count once, the one with a monitor kept.
 function osdWorkspaces(book, list, monitorName, opts) {
     const o = opts || {}
-    return list
-        .filter(w => w.monitor === monitorName
-            && (isManaged(book, w.id) ? (o.showEmpty || !w.empty || w.shown) : w.id === o.signalled))
-        .sort(byNumber(book))
+    const byId = new Map()
+    for (const w of list) {
+        if (!isInt(w.id) || w.id < 1) continue
+        const prev = byId.get(w.id)
+        if (!prev || (!prev.monitor && w.monitor)) byId.set(w.id, w)
+    }
+    const signalled = w => w.id === o.signalled
+    const mine = Array.from(byId.values())
+        .filter(w => w.monitor === monitorName && (!w.empty || w.shown || w.persistent || signalled(w)))
+    const boxed = mine.filter(w => o.showEmpty || !w.empty || w.shown || signalled(w))
+    return (mine.length >= 2 ? boxed : boxed.filter(signalled)).sort(byNumber(book))
 }

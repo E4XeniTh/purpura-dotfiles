@@ -9,7 +9,8 @@ import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
 
 // Small "you just switched workspace" indicator, one per screen, shown
 // briefly whenever that screen's active workspace changes - e.g. the
-// SUPER+1..5 focus keybinds in hyprland.lua. Not shown for a window
+// SUPER+1..5 focus keybinds in hyprland.lua - on a screen with more than
+// one workspace, every one of them in the row. Not shown for a window
 // being moved to another workspace without following it
 // (SUPER+CTRL+1..5, "follow = false"), since that never changes which
 // workspace is active.
@@ -110,9 +111,9 @@ Scope {
 
     // purpura.lua's "purpura-workspace,fullscreen,<monitor>,<workspace>": a
     // fullscreen app that opened has been sent to a workspace of its own
-    // there - an unmanaged one, so not one of the row's own. That
-    // monitor's OSD shows it, that workspace in the row with it,
-    // highlighted, whether switches show it or not.
+    // there (with Create Workspace For Fullscreen Apps on). That monitor's
+    // OSD shows it, that workspace in the row - dashed, even should it be the
+    // monitor's only one - whether switches show it or not.
     signal fullscreenMoved(string monitor, int workspace)
 
     Connections {
@@ -170,31 +171,46 @@ Scope {
             readonly property bool showEmptyOsd: !!root.barSettingsStore.showEmptyOsd
 
             // This monitor's workspaces in the row (WorkspaceRegistryLogic.js's
-            // osdWorkspaces): the ones Display settings pinned to it - by the
-            // book, deliberate pins rather than whatever this monitor happens to
-            // be showing (an app's own, a spare - those would just be noise
-            // here) - with an empty one not on screen only with showEmptyOsd
-            // (pins are kept by Hyprland, there or not), in purpura's number
-            // order. And the workspace a fullscreen app has just been given here
-            // (see root.fullscreenMoved), while the OSD's up for it.
+            // osdWorkspaces), as they are this moment: once it has more than
+            // one, every one - the ones Display settings pinned to it, an app's
+            // own, a new one, one with a window fullscreen - in purpura's number
+            // order, with an empty one not on screen only with showEmptyOsd
+            // (pins are kept by Hyprland, there or not). With just the one,
+            // none, so nothing shows. And the workspace a fullscreen app has
+            // just been given here (see root.fullscreenMoved), while the OSD's
+            // up for it, either way.
             //
-            // This is the "live" computation - see monitorWorkspaces
-            // below for what the Repeater actually renders.
-            readonly property var liveMonitorWorkspaces: {
+            // A workspace Hyprland's only just made has no monitor yet - not
+            // until Quickshell's asked for the list again, a moment after it
+            // shows - so the one this monitor's showing counts as its own
+            // here, as does the one purpura.lua's said a fullscreen app's
+            // been given here.
+            function workspacesNow() {
                 if (!osdWindow.hyprMonitor) return []
                 const name = osdWindow.hyprMonitor.name
-                const records = Hyprland.workspaces.values.map(w => ({
-                    id: w.id,
-                    monitor: w.monitor ? w.monitor.name : "",
-                    empty: w.toplevels.values.length === 0,
-                    shown: !!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id,
-                    ws: w
-                }))
+                const active = osdWindow.hyprMonitor.activeWorkspace
+                const activeId = active ? active.id : -1
+                const records = Hyprland.workspaces.values.map(w => {
+                    const showing = w.id >= 1 && w.id === activeId
+                    const ours = showing || (w.id >= 1 && w.id === osdWindow.signalledId)
+                    return {
+                        id: w.id,
+                        monitor: w.monitor ? w.monitor.name : (ours ? name : ""),
+                        empty: w.toplevels.values.length === 0,
+                        shown: showing || (!!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id),
+                        persistent: !!w.lastIpcObject && w.lastIpcObject.ispersistent === true,
+                        ws: w
+                    }
+                })
                 return RegistryLogic.osdWorkspaces(registry.book, records, name, {
                     showEmpty: osdWindow.showEmptyOsd,
                     signalled: osdWindow.signalledId
                 }).map(r => r.ws)
             }
+
+            // The "live" computation - see monitorWorkspaces below for what
+            // the Repeater actually renders.
+            readonly property var liveMonitorWorkspaces: osdWindow.workspacesNow()
 
             // What the Repeater below actually renders - a debounced
             // snapshot of liveMonitorWorkspaces, copied over only when
@@ -223,6 +239,24 @@ Scope {
                 : -1
             readonly property int activeIndex: osdWindow.monitorWorkspaces.findIndex(w => w.id === osdWindow.activeId)
 
+            // How a window on that workspace is fullscreen, as the bar's
+            // workspace widget draws it: 2 - one in real fullscreen, the whole
+            // monitor (Hyprland's mode 2), or the workspace a fullscreen app's
+            // just been given here (signalledId), whether or not that's caught
+            // up here yet - a dashed border; 1 - one maximized - a solid one;
+            // both in the fullscreen color. 0 - neither.
+            function fullscreenOf(ws) {
+                if (!ws) return 0
+                if (ws.id === osdWindow.signalledId && !registry.isManaged(ws)) return 2
+                if (!ws.hasFullscreen) return 0
+                return ws.toplevels.values.some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2) ? 2 : 1
+            }
+
+            // The active one's, for the highlight round it (activeHighlight).
+            readonly property int activeFullscreen: osdWindow.activeIndex >= 0
+                ? osdWindow.fullscreenOf(osdWindow.monitorWorkspaces[osdWindow.activeIndex])
+                : 0
+
             // Stays true through the ~250ms slide even after hideTimer
             // fires visually (only actually hides once reallyVisible
             // flips), matching the reallyVisible/closing-animation
@@ -241,6 +275,9 @@ Scope {
                 function onFullscreenMoved(monitor, workspace) {
                     if (!osdWindow.hyprMonitor || monitor !== osdWindow.hyprMonitor.name) return
                     osdWindow.signalledId = workspace
+                    // Coming up: drawn from what's there now (see onActiveIdChanged).
+                    const now = osdWindow.workspacesNow()
+                    if (!osdWindow.reallyVisible && now.length > 0) osdWindow.monitorWorkspaces = now
                     osdWindow.reallyVisible = true
                     hideTimer.interval = 2500
                     hideTimer.restart()
@@ -255,12 +292,14 @@ Scope {
                 // "Show Workspace OSD on switch" off: nothing (a fullscreen
                 // app's own workspace still shows it - see above).
                 if (!root.showOnSwitch) return
-                // The book can leave this monitor with nothing at
-                // all to show (e.g. nothing pinned to it yet and
-                // showEmptyOsd is off) - popping up an empty box row
-                // would just be a floating border for no reason, so skip
-                // entirely rather than show it. Checked against
-                // liveMonitorWorkspaces here, NOT the debounced
+                // This monitor can have nothing to show - just the one
+                // workspace, or nothing at all - and popping up an empty
+                // box row would just be a floating border for no reason,
+                // so skip entirely rather than show it. Checked against
+                // the workspaces as they are this moment (workspacesNow(),
+                // worked out afresh rather than read off the
+                // liveMonitorWorkspaces binding, which may not have caught
+                // up with this same change yet), NOT the debounced
                 // monitorWorkspaces the Repeater actually renders -
                 // activeId changes the instant Hyprland's own event
                 // fires, while monitorWorkspaces only catches up once
@@ -274,7 +313,14 @@ Scope {
                 // nothing once monitorWorkspaces actually caught up -
                 // reported live as an empty bordered box appearing on a
                 // monitor with no managed workspaces left.
-                if (osdWindow.liveMonitorWorkspaces.length === 0) return
+                const now = osdWindow.workspacesNow()
+                if (now.length === 0) return
+                // Coming up (not already showing, so nothing on screen to
+                // jump): drawn from those, rather than the last settled
+                // list, which is from before this switch - without a
+                // workspace Hyprland's just made for it, or empty, the
+                // monitor having had just the one until now.
+                if (!osdWindow.reallyVisible) osdWindow.monitorWorkspaces = now
                 osdWindow.reallyVisible = true
                 if (osdWindow.signalledId < 0) hideTimer.interval = 1200
                 hideTimer.restart()
@@ -352,30 +398,31 @@ Scope {
                             id: osdBox
                             required property var modelData
 
-                            // The one a fullscreen app's just been given (see
-                            // signalledId): dashed, in the fullscreen color, as
-                            // the workspace widget draws a workspace holding a
-                            // window in real fullscreen.
-                            readonly property bool own: osdBox.modelData.id === osdWindow.signalledId
-                                && !registry.isManaged(osdBox.modelData)
+                            // A window on it fullscreen (fullscreenOf): its border
+                            // in the fullscreen color, as the workspace widget
+                            // draws it - dashed for real fullscreen (the one a
+                            // fullscreen app's just been given too), solid for
+                            // one maximized.
+                            readonly property int fullscreen: osdWindow.fullscreenOf(osdBox.modelData)
 
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
                             color: Config.fillcolor
-                            border.width: osdBox.own ? 0 : Config.scaled(2, osdWindow.baseScale)
-                            border.color: Config.fgcolor
+                            border.width: osdBox.fullscreen === 2 ? 0 : Config.scaled(2, osdWindow.baseScale)
+                            border.color: osdBox.fullscreen > 0 ? Config.fgcolorfullscreen : Config.fgcolor
                             radius: 0
 
                             DashedBorder {
-                                visible: osdBox.own
+                                visible: osdBox.fullscreen === 2
                                 color: Config.fgcolorfullscreen
                                 thickness: Config.scaled(2, osdWindow.baseScale)
                                 dash: Config.scaled(8, osdWindow.uiScale)
                                 gap: Config.scaled(5, osdWindow.uiScale)
                             }
 
-                            // purpura's number for it - a managed one's only: the
-                            // fullscreen app's own shows none.
+                            // purpura's number for it - a managed one's only: an
+                            // unmanaged one (an app's own, a new one, a spare)
+                            // shows none.
                             Text {
                                 anchors.centerIn: parent
                                 visible: registry.isManaged(osdBox.modelData) && registry.numberOf(osdBox.modelData) >= 1
@@ -394,17 +441,26 @@ Scope {
                 // drawn per-box, so it can animate its position instead
                 // of just snapping between boxes. z above the per-box
                 // Repeater so this border draws over each box's own
-                // border rather than under/behind it.
+                // border rather than under/behind it. Round one with a
+                // window fullscreen (activeFullscreen) it's that box's
+                // fullscreen color, lightened as fgcolorlight is fgcolor -
+                // and dashed like it for real fullscreen, its dashes laid
+                // over the box's own (the same size, dash and gap, so the
+                // same places), not a solid line drawn over them.
                 Rectangle {
                     id: activeHighlight
+
+                    readonly property color tone: osdWindow.activeFullscreen > 0
+                        ? Qt.lighter(Config.fgcolorfullscreen, 1.55)
+                        : Config.fgcolorlight
 
                     z: 1
                     y: contentRow.y
                     width: osdWindow.boxWidth
                     height: osdWindow.boxHeight
                     color: "transparent"
-                    border.width: Config.scaled(3, osdWindow.baseScale)
-                    border.color: Config.fgcolorlight
+                    border.width: osdWindow.activeFullscreen === 2 ? 0 : Config.scaled(3, osdWindow.baseScale)
+                    border.color: activeHighlight.tone
                     radius: 0
                     visible: osdWindow.activeIndex >= 0
 
@@ -414,6 +470,14 @@ Scope {
 
                     Behavior on x {
                         NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                    }
+
+                    DashedBorder {
+                        visible: osdWindow.activeFullscreen === 2
+                        color: activeHighlight.tone
+                        thickness: Config.scaled(3, osdWindow.baseScale)
+                        dash: Config.scaled(8, osdWindow.uiScale)
+                        gap: Config.scaled(5, osdWindow.uiScale)
                     }
                 }
             }

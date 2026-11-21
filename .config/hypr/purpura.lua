@@ -1536,14 +1536,18 @@ end)
 -- workspace is bound to that monitor (a workspace rule, so it's made there and comes
 -- back there). The book has it as reserved, for that window's app.
 --
--- A fullscreen app opening - a window that's fullscreen as it opens, or goes
--- fullscreen within its first few seconds, as games do - is given one the same way,
--- on its own monitor, kept as fullscreen; maximized doesn't count, nor a window going
--- fullscreen later on. Then "purpura-workspace,fullscreen,<monitor>,<workspace>" goes
--- out on Hyprland's event socket, for the workspace OSD to show it
--- (components/osd/WorkspaceOsd.qml). Each move comes a moment after what prompts it,
--- never inside Hyprland's handling of that; and Hyprland's own move of a fullscreen
--- window takes it out of fullscreen and back in, which is let pass.
+-- With Create Workspace For Fullscreen Apps on (Settings > General > Shell > Main Bar;
+-- off unless it's been turned on), a fullscreen app opening is given one the same way,
+-- on its own monitor, kept as fullscreen: a window that's fullscreen as it opens, or
+-- goes fullscreen within its first few seconds, as games do; maximized doesn't count,
+-- nor a window going fullscreen later on. Then
+-- "purpura-workspace,fullscreen,<monitor>,<workspace>" goes out on Hyprland's event
+-- socket, for the workspace OSD to show it (components/osd/WorkspaceOsd.qml). Each
+-- move comes a moment after what prompts it, never inside Hyprland's handling of that;
+-- and Hyprland's own move of a fullscreen window takes it out of fullscreen and back
+-- in, which is let pass. The setting's read from the shell's barsettings.json each
+-- time a fullscreen app opens, so it counts the moment it's changed, with no reload;
+-- off (or with no shell to have saved it), the app's left where it opened.
 --
 -- "Next workspace" (META + TAB) switches the monitor under the cursor to its next
 -- workspace by the book's numbers - left to right in the workspace widget - round to
@@ -1609,9 +1613,21 @@ part("workspaces of their own", function()
         return id, true
     end
 
+    -- Create Workspace For Fullscreen Apps (see above): on only when the shell's saved
+    -- it on - JSON.stringify's own spacing or none.
+    local SETTINGS = (os.getenv("HOME") or "") .. "/.config/quickshell/barsettings.json"
+    local function fullscreenWorkspaces()
+        local file = io.open(SETTINGS, "r")
+        if not file then return false end
+        local text = file:read(65536) or ""
+        file:close()
+        return text:find('"createFullscreenWorkspaces"%s*:%s*true') ~= nil
+    end
+
     -- A fullscreen app that's opened: its own workspace, on its own monitor - said.
     local function fullscreenOpened(address)
         opened[address] = nil
+        if not fullscreenWorkspaces() then return end
         local window = hl.get_window("address:" .. address)
         if not isObject(window) or window.fullscreen ~= 2 then return end
         local monitor = window.monitor
