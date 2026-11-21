@@ -524,21 +524,36 @@ Scope {
             // before any drag: the same workspace widget, floating at
             // the top of the screen - over everything and reserving no room -
             // so the window can be dropped on a workspace there too. Its layer
-            // is a "bar" as well, which is what purpura.lua looks for.
+            // is "bar-floating", which purpura.lua looks for along with "bar".
             PanelWindow {
                 id: dragBar
                 screen: modelData
 
                 readonly property real pad: Config.scaled(8, bar.uiScale)
 
-                visible: !bar.visible && !!modelData
+                // Shown: during a drag with the cursor on this screen, or a
+                // moment after the drag's modifier went down here.
+                readonly property bool shown: !!modelData
                     && ((dragRow.windowDragging && dragRow.dragMonitor === modelData.name)
-                        || dragRow.modMonitor === modelData.name)
+                        || (dragRow.modMonitor === modelData.name && dragRow.modShown))
 
-                WlrLayershell.namespace: "bar"
+                // On screen from the moment the modifier goes down here, but
+                // empty and taking no clicks until shown: by then the window's
+                // been made, mapped and laid out, so a grab in it works the
+                // moment it's seen. Made only once it was to be shown, it came
+                // up a moment after it was meant to, and a grab right away
+                // found nothing. purpura.lua ignores it until it's shown too.
+                visible: !bar.visible && !!modelData
+                    && (dragBar.shown || dragRow.modMonitor === modelData.name)
+
+                WlrLayershell.namespace: "bar-floating"
                 WlrLayershell.layer: WlrLayer.Overlay
                 WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
                 exclusiveZone: -1
+
+                // Until shown, the mouse goes through it to what's below.
+                mask: dragBar.shown ? null : noInput
+                Region { id: noInput }
 
                 anchors { top: true }
                 margins { top: Config.scaled(10, bar.uiScale) }
@@ -551,30 +566,41 @@ Scope {
                 implicitHeight: Config.scaled(Config.barheight, bar.uiScale)
                 color: "transparent"
 
-                Rectangle {
+                // Everything it draws: see-through until shown, then faded in
+                // (its window's been on screen all along, so Hyprland's own
+                // fade for a new layer never plays).
+                Item {
                     anchors.fill: parent
-                    color: Config.fillcolor
-                    border.width: Config.scaled(2, bar.uiScale)
-                    border.color: Config.fgcolor
-                }
+                    opacity: dragBar.shown ? 1 : 0
 
-                WorkspaceRow {
-                    id: dragRow
-                    // At a fixed spot rather than centred, so where its boxes
-                    // are doesn't wait on the window's size.
-                    x: dragBar.pad
-                    anchors.verticalCenter: parent.verticalCenter
-                    uiScale: bar.uiScale
-                    screenName: modelData ? modelData.name : ""
-                    // Whenever the bar isn't on this screen - shown or not -
-                    // so purpura.lua has its boxes the moment it appears:
-                    // sent only then, they took a moment through hyprctl to
-                    // arrive, and a grab in it right away found nothing. Out
-                    // of sight, they're never matched (purpura.lua looks for
-                    // a mapped "bar" layer under the cursor), and the bar's
-                    // own row sends in their place whenever it's shown.
-                    sendsDropTargets: !bar.visible
-                    height: bar.buttonHeight
+                    Behavior on opacity {
+                        NumberAnimation { duration: 120 }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: Config.fillcolor
+                        border.width: Config.scaled(2, bar.uiScale)
+                        border.color: Config.fgcolor
+                    }
+
+                    WorkspaceRow {
+                        id: dragRow
+                        // At a fixed spot rather than centred, so where its boxes
+                        // are doesn't wait on the window's size.
+                        x: dragBar.pad
+                        anchors.verticalCenter: parent.verticalCenter
+                        uiScale: bar.uiScale
+                        screenName: modelData ? modelData.name : ""
+                        // Whenever the bar isn't on this screen - shown or not -
+                        // so purpura.lua has its boxes before it appears. Until
+                        // it's shown they're never matched (purpura.lua only
+                        // looks at a shown "bar-floating" layer under the
+                        // cursor), and the bar's own row sends in their place
+                        // whenever the bar's on this screen.
+                        sendsDropTargets: !bar.visible
+                        height: bar.buttonHeight
+                    }
                 }
             }
         }

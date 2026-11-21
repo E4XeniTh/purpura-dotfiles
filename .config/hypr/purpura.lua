@@ -259,6 +259,9 @@ part("dropping a window on a workspace", function()
     local HIDDEN_AT_START = {}
     local lastAt           -- the last "at" posted, so a still cursor isn't posted again
     local cursorMonitor    -- the monitor last posted as the cursor's
+    -- Where the widget's posted to be while the drag's modifier is held (see Holding
+    -- the modifier, below), and whether it's been shown there yet.
+    local modName, modShown = nil, false
     local ticksSinceAt = 0
     local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
@@ -328,12 +331,24 @@ part("dropping a window on a workspace", function()
         targets[monitor] = valid
     end
 
+    -- Bar.qml's floating copy of the widget, on a monitor without the bar: on screen
+    -- from the moment the drag's modifier goes down, but empty and taking no clicks
+    -- until it's shown - a moment later, or during a drag with the cursor on that
+    -- monitor. Only then is it something to grab from or drop on.
+    local FLOATING = "bar-floating"
+    local function floatingShown(name)
+        return (dragged ~= nil and cursorMonitor == name) or (modShown and modName == name)
+    end
+
     -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
     local function barUnderCursor(cursor)
-        for _, bar in ipairs(hl.get_layers({ namespace = "bar" })) do
-            local monitor = bar.monitor
-            if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor) then
-                return monitor, cursor.x - bar.x, cursor.y - bar.y
+        for _, namespace in ipairs({ "bar", FLOATING }) do
+            for _, bar in ipairs(hl.get_layers({ namespace = namespace })) do
+                local monitor = bar.monitor
+                if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor)
+                    and (namespace ~= FLOATING or floatingShown(monitor.name)) then
+                    return monitor, cursor.x - bar.x, cursor.y - bar.y
+                end
             end
         end
         return nil
@@ -624,9 +639,14 @@ part("dropping a window on a workspace", function()
     -- Holding the drag's modifier - META, for META + LMB - shows the widget too where
     -- there's no bar, on the monitor the cursor's on (Bar.qml), as during a drag: so a
     -- window can be grabbed from it before any drag starts. Posted as
-    -- "purpura-drag,mod,<monitor>" a moment after the modifier goes down (so a quick
-    -- META + key shortcut doesn't flash it up), again whenever the cursor moves to
-    -- another monitor, and as "purpura-drag,mod," once it's let go.
+    -- "purpura-drag,mod,<monitor>,0" the moment the modifier goes down: the widget's
+    -- window is made and put on screen there, empty and taking no clicks, so that it's
+    -- all there - mapped and laid out, its boxes with purpura.lua - by the time it's
+    -- shown, with "purpura-drag,mod,<monitor>,1", a moment later (so a quick META + key
+    -- shortcut doesn't flash it up). Again whenever the cursor moves to another
+    -- monitor, and "purpura-drag,mod," once it's let go. Made only once it was to be
+    -- shown, it took a moment more to come up than to be seen, and a grab in it right
+    -- away found nothing.
     --
     -- Which keys are down comes from Hyprland's input.keyboard.key event: every key's
     -- press and release, by keycode, before any bind sees it - so nothing a bind does
@@ -645,7 +665,6 @@ part("dropping a window on a workspace", function()
     }
     local comboMods = {} -- by combo (see comboKey below): the modifiers each drag combo needs
     local sideDown = {}  -- by keycode: held now
-    local modShown       -- the monitor posted, while the widget's shown for it
     local modWatch, modWatching = nil, false
     local modTicks, modSince = 0, 0
 
@@ -676,9 +695,20 @@ part("dropping a window on a workspace", function()
     local function modHide()
         modWatching = false
         if modWatch then modWatch:set_enabled(false) end
-        if modShown then
-            modShown = nil
+        if modName then
+            modName, modShown = nil, false
             dragEvent("mod,")
+        end
+    end
+
+    -- On the cursor's monitor: got ready at once, shown MOD_DELAY_TICKS on.
+    local function modUpdate()
+        local monitor = hl.get_monitor_at_cursor()
+        local name = monitor and monitor.name
+        local shown = modTicks >= MOD_DELAY_TICKS
+        if name and (name ~= modName or shown ~= modShown) then
+            modName, modShown = name, shown
+            dragEvent("mod," .. name .. (shown and ",1" or ",0"))
         end
     end
 
@@ -687,13 +717,7 @@ part("dropping a window on a workspace", function()
         -- after as long as a drag gets.
         if not modHeld() or os.time() - modSince > FOLLOW_FOR_S then return modHide() end
         modTicks = modTicks + 1
-        if modTicks < MOD_DELAY_TICKS then return end
-        local monitor = hl.get_monitor_at_cursor()
-        local name = monitor and monitor.name
-        if name and name ~= modShown then
-            modShown = name
-            dragEvent("mod," .. name)
-        end
+        modUpdate()
     end
 
     local function modSide(side, down)
@@ -701,6 +725,7 @@ part("dropping a window on a workspace", function()
         if not modHeld() then return modHide() end
         if modWatching then return end
         modWatching, modTicks, modSince = true, 0, os.time()
+        modUpdate()
         if modWatch then
             modWatch:set_enabled(true)
             return
