@@ -629,7 +629,10 @@ part("dropping a window on a workspace", function()
     -- another monitor, and as "purpura-drag,mod," once it's let go. Each side of the
     -- modifier (SUPER_L, SUPER_R) gets a press and a release bind of its own, which
     -- neither take the key from anything else nor care what else is held; "locked",
-    -- so a release while the screen's locked still counts.
+    -- so a release while the screen's locked still counts; and "transparent": after a
+    -- bind that takes its input (META + LMB's drag), Hyprland shadows every bind that
+    -- matches a key still held - the release here among them, which then never ran,
+    -- leaving the widget up for good.
     local MOD_FOLLOW_MS = 50
     local MOD_DELAY_TICKS = 3 -- 150ms
     local MOD_NAMES = {
@@ -721,9 +724,9 @@ part("dropping a window on a workspace", function()
             for _, side in ipairs(SIDES[name] or {}) do
                 if not sideBound[side] then
                     bind(side, function() modSide(side, true) end,
-                        { non_consuming = true, ignore_mods = true, locked = true })
+                        { non_consuming = true, ignore_mods = true, locked = true, transparent = true })
                     bind(side, function() modSide(side, false) end,
-                        { non_consuming = true, ignore_mods = true, locked = true, release = true })
+                        { non_consuming = true, ignore_mods = true, locked = true, transparent = true, release = true })
                     sideBound[side] = true
                 end
             end
