@@ -147,7 +147,12 @@ Item {
         { label: "Toggle floating", lua: "hl.dsp.window.float({ action = \"toggle\" })" },
         { label: "Maximize", lua: "hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })" },
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
+        // purpura.lua's (see A workspace of its own there).
+        { label: "Reserve workspace", lua: "hl.dsp.window.reserve_workspace()" },
         { label: "Go to workspace", workspace: "hl.dsp.focus({ workspace = %1 })" },
+        { label: "Next workspace", lua: "hl.dsp.focus({ workspace = \"m+1\" })" },
+        // purpura.lua's too.
+        { label: "New workspace", lua: "hl.dsp.workspace.new_on_hovered()" },
         { label: "Move window to workspace", workspace: "hl.dsp.window.move({ workspace = %1, follow = false })" },
         { label: "Lock screen", lua: "hl.dsp.global(\"quickshell:lockscreen\")" },
         { label: "Power menu", lua: "hl.dsp.global(\"quickshell:powermenu\")" },
@@ -238,6 +243,22 @@ Item {
             if (found[id] !== undefined) continue
             found[id] = bind[2].slice(0, end).replace(/\((\w+)\)$/, (call, name) =>
                 locals[name] !== undefined ? "(" + JSON.stringify(locals[name]) + ")" : call)
+        }
+        // A hyprland.lua from before Reserve, Next and New workspace has no binds
+        // for them, so purpura.lua makes them (see A workspace of its own there):
+        // each on its own combo, unless something else is bound there - or, for
+        // the two whose actions it makes, that action is bound somewhere already.
+        const mod = locals.mainMod || "SUPER"
+        const defaults = [
+            { combo: mod + " + SHIFT + W", lua: "hl.dsp.window.reserve_workspace()", own: true },
+            { combo: mod + " + Tab", lua: "hl.dsp.focus({ workspace = \"m+1\" })", own: false },
+            { combo: mod + " + CTRL + Tab", lua: "hl.dsp.workspace.new_on_hovered()", own: true }
+        ]
+        const bound = Object.keys(found).map(id => found[id])
+        for (const d of defaults) {
+            const id = root.comboKey(d.combo)
+            if (found[id] !== undefined || (d.own && bound.indexOf(d.lua) !== -1)) continue
+            found[id] = d.lua
         }
         return found
     }

@@ -67,7 +67,7 @@ Item {
     anchors.fill: parent
 
     // 0 = Shell, 1 = Input, 2 = Updater, 3 = Night Light, 4 = Dropdown Console,
-    // 5 = Power.
+    // 5 = Power, 6 = Windows.
     property int currentCategory: 0
     onCurrentCategoryChanged: categoryScroll.contentY = 0
 
@@ -110,6 +110,8 @@ Item {
     readonly property bool showBrightnessControl: root.barStore.showBrightnessControl !== false
     readonly property bool showUpdater: root.barStore.showUpdater !== false
     readonly property bool showFullscreenHint: root.barStore.showFullscreenHint !== false
+    // On unless turned off, as it always showed before - WorkspaceOsd.qml reads it back.
+    readonly property bool showWorkspaceOsdOnSwitch: root.barStore.showWorkspaceOsdOnSwitch !== false
 
     function toggleStrictWorkspaceWidget() { root.setBarSetting("strictWorkspaceWidget", !root.strictWorkspaceWidget) }
     function toggleShowEmptyWidget() { root.setBarSetting("showEmptyWidget", !root.showEmptyWidget) }
@@ -117,6 +119,7 @@ Item {
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
     function toggleShowUpdater() { root.setBarSetting("showUpdater", !root.showUpdater) }
     function toggleShowFullscreenHint() { root.setBarSetting("showFullscreenHint", !root.showFullscreenHint) }
+    function toggleShowWorkspaceOsdOnSwitch() { root.setBarSetting("showWorkspaceOsdOnSwitch", !root.showWorkspaceOsdOnSwitch) }
 
     // The volume, brightness and input language OSDs - OsdHost.qml reads
     // these back (and shows a preview whenever one changes).
@@ -628,6 +631,32 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: root.currentCategory = 5
+                    }
+                }
+
+                DashCard {
+                    id: windowsCategoryCard
+
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Config.scaled(40, root.uiScale)
+                    uiScale: root.uiScale
+                    color: windowsCategoryMouse.containsMouse ? Config.fgcolorhover : Config.fillcolor
+                    border.color: root.currentCategory === 6 ? Config.fgcolorlight : Config.fgcolor
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Windows"
+                        color: windowsCategoryCard.border.color
+                        font.family: Config.fontfamily
+                        font.pixelSize: Config.scaled(14, root.uiScale)
+                        font.bold: true
+                    }
+
+                    MouseArea {
+                        id: windowsCategoryMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.currentCategory = 6
                     }
                 }
 
@@ -1188,6 +1217,24 @@ Item {
                             uiScale: root.uiScale
                             indented: false
                             text: "How big the row of workspaces is that shows for a moment when you switch workspace."
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Config.scaled(4, root.uiScale)
+
+                        CheckRow {
+                            Layout.fillWidth: true
+                            uiScale: root.uiScale
+                            text: "Show Workspace OSD on switch"
+                            checked: root.showWorkspaceOsdOnSwitch
+                            onToggled: root.toggleShowWorkspaceOsdOnSwitch()
+                        }
+
+                        SettingHint {
+                            uiScale: root.uiScale
+                            text: "It shows for a moment whenever a monitor switches workspace. A fullscreen app opening on a workspace of its own shows it either way."
                         }
                     }
 
@@ -2848,6 +2895,17 @@ Item {
                                 }
                             }
                         }
+                    }
+
+                    // ---------------- Windows category ----------------
+                    // How apps look as they start and open: WindowRules.qml,
+                    // which keeps its own file (windowrules.json) and hands it
+                    // to Hyprland itself.
+                    WindowRules {
+                        Layout.fillWidth: true
+                        visible: root.currentCategory === 6
+                        uiScale: root.uiScale
+                        active: root.active && root.currentCategory === 6
                     }
 
                 }

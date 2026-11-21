@@ -4,6 +4,7 @@ import Quickshell.Widgets
 import Quickshell.Hyprland
 import Quickshell.Io
 import "../../Config.js" as Config
+import "../common"
 
 // One rectangle per current Hyprland workspace, sorted by owning
 // monitor position first and workspace number second - meant to sit
@@ -647,10 +648,16 @@ Row {
             readonly property bool dropTarget: root.windowDragging && root.dragOver !== ""
                 && root.workspaceSelector(wsBox.modelData) === root.dragOver
 
+            // One of its windows in real fullscreen - exclusive, the whole
+            // monitor (Hyprland's internal mode 2), not just maximized: its
+            // border's dashed (DashedBorder, below), in the same colors.
+            readonly property bool exclusiveFullscreen: !!wsBox.modelData.hasFullscreen
+                && wsBox.modelData.toplevels.values.some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2)
+
             height: root.height
             width: wsBox.height * wsBox.aspect
             color: wsBox.dropTarget ? Config.fgcolorhover : Config.fillcolor
-            border.width: Config.scaled(2, root.uiScale)
+            border.width: wsBox.exclusiveFullscreen ? 0 : Config.scaled(2, root.uiScale)
             // A workspace holding a fullscreen app takes the border
             // Hyprland gives that app (fgcolorfullscreen) - dimmed the way
             // fgcolordarklight is to fgcolorlight when it isn't the one
@@ -732,6 +739,18 @@ Row {
                         source: root.iconSourceFor(winBox.winClass)
                     }
                 }
+            }
+
+            // The border of one holding a window in real fullscreen (see
+            // exclusiveFullscreen): over its windows the way a border is,
+            // under the number.
+            DashedBorder {
+                z: 5
+                visible: wsBox.exclusiveFullscreen
+                color: wsBox.border.color
+                thickness: Config.scaled(2, root.uiScale)
+                dash: Config.scaled(6, root.uiScale)
+                gap: Config.scaled(4, root.uiScale)
             }
 
             // Faint workspace number, drawn above the window grid (z

@@ -4,6 +4,7 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import Quickshell.Io
 import "../../Config.js" as Config
+import "../common"
 
 // Small "you just switched workspace" indicator, one per screen, shown
 // briefly whenever that screen's active workspace changes - e.g. the
@@ -121,11 +122,32 @@ Scope {
     // monitorWorkspaces/liveMonitorWorkspaces below.
     property int settleTick: 0
 
+    // Settings > General > Shell > Workspace OSD's "Show Workspace OSD on
+    // switch": on unless turned off. Off, a switch shows nothing - a
+    // fullscreen app given a workspace of its own still does (below).
+    readonly property bool showOnSwitch: root.barSettingsStore.showWorkspaceOsdOnSwitch !== false
+
+    // purpura.lua's "purpura-workspace,fullscreen,<monitor>,<workspace>": a
+    // fullscreen app that opened has been sent to a workspace of its own
+    // there - an unmanaged one, so not one of the row's own. That
+    // monitor's OSD shows it, that workspace in the row with it,
+    // highlighted, whether switches show it or not.
+    signal fullscreenMoved(string monitor, int workspace)
+
     Connections {
         target: Hyprland
         function onRawEvent(event) {
             // Not purpura.lua's drag events (see Bar.qml's).
-            if (event.name === "custom") return
+            if (event.name === "custom") {
+                const parts = String(event.data).split(",")
+                if (parts.length === 4 && parts[0] === "purpura-workspace" && parts[1] === "fullscreen"
+                        && /^[A-Za-z0-9_.-]{1,64}$/.test(parts[2]) && /^\d{1,6}$/.test(parts[3])) {
+                    root.fullscreenMoved(parts[2], parseInt(parts[3], 10))
+                    // The row's looked at again once it's settled, that one in it.
+                    renderSettleTimer.restart()
+                }
+                return
+            }
             renderSettleTimer.restart()
         }
     }
@@ -200,12 +222,16 @@ Scope {
             // be switched to for that), so the sliding highlight simply
             // never lands on one.
             //
+            // The workspace a fullscreen app has just been given here (see
+            // root.fullscreenMoved) is in it too, while the OSD's up for it.
+            //
             // This is the "live" computation - see monitorWorkspaces
             // below for what the Repeater actually renders.
             readonly property var liveMonitorWorkspaces: {
                 if (!osdWindow.hyprMonitor) return []
                 let list = Hyprland.workspaces.values
-                    .filter(w => w.monitor === osdWindow.hyprMonitor && osdWindow.pinnedNumbers.includes(w.id))
+                    .filter(w => w.monitor === osdWindow.hyprMonitor
+                        && (osdWindow.pinnedNumbers.includes(w.id) || w.id === osdWindow.signalledId))
 
                 if (osdWindow.showEmptyOsd) {
                     const existing = new Set(list.map(w => w.id))
@@ -253,11 +279,30 @@ Scope {
             // would vanish mid-slide instead of finishing it.
             property bool reallyVisible: false
 
+            // The workspace a fullscreen app's just been given on this
+            // monitor - shown, and kept in the row, a little longer than a
+            // switch is; -1 the rest of the time.
+            property int signalledId: -1
+
+            Connections {
+                target: root
+                function onFullscreenMoved(monitor, workspace) {
+                    if (!osdWindow.hyprMonitor || monitor !== osdWindow.hyprMonitor.name) return
+                    osdWindow.signalledId = workspace
+                    osdWindow.reallyVisible = true
+                    hideTimer.interval = 2500
+                    hideTimer.restart()
+                }
+            }
+
             onActiveIdChanged: {
                 // Only the very first evaluation (component just created,
                 // nothing has actually changed yet) has no prior value to
                 // slide *from* - skip showing then, only on real switches.
                 if (!osdWindow.hyprMonitor || osdWindow.activeId < 0) return
+                // "Show Workspace OSD on switch" off: nothing (a fullscreen
+                // app's own workspace still shows it - see above).
+                if (!root.showOnSwitch) return
                 // pinnedNumbers can leave this monitor with nothing at
                 // all to show (e.g. nothing pinned to it yet and
                 // showEmptyOsd is off) - popping up an empty box row
@@ -279,6 +324,7 @@ Scope {
                 // monitor with no managed workspaces left.
                 if (osdWindow.liveMonitorWorkspaces.length === 0) return
                 osdWindow.reallyVisible = true
+                if (osdWindow.signalledId < 0) hideTimer.interval = 1200
                 hideTimer.restart()
             }
 
@@ -294,7 +340,11 @@ Scope {
             Timer {
                 id: hideTimer
                 interval: 1200
-                onTriggered: osdWindow.reallyVisible = false
+                onTriggered: {
+                    osdWindow.reallyVisible = false
+                    osdWindow.signalledId = -1
+                    hideTimer.interval = 1200
+                }
             }
 
             visible: osdWindow.reallyVisible || (root.previewing && osdWindow.monitorWorkspaces.length > 0)
@@ -347,18 +397,36 @@ Scope {
                         model: osdWindow.monitorWorkspaces
 
                         Rectangle {
+                            id: osdBox
                             required property var modelData
+
+                            // The one a fullscreen app's just been given (see
+                            // signalledId): dashed, in the fullscreen color, as
+                            // the workspace widget draws a workspace holding a
+                            // window in real fullscreen - and with no number, as
+                            // it isn't one of the pinned ones.
+                            readonly property bool own: osdBox.modelData.id === osdWindow.signalledId
+                                && !osdWindow.pinnedNumbers.includes(osdBox.modelData.id)
 
                             width: osdWindow.boxWidth
                             height: osdWindow.boxHeight
                             color: Config.fillcolor
-                            border.width: Config.scaled(2, osdWindow.baseScale)
+                            border.width: osdBox.own ? 0 : Config.scaled(2, osdWindow.baseScale)
                             border.color: Config.fgcolor
                             radius: 0
 
+                            DashedBorder {
+                                visible: osdBox.own
+                                color: Config.fgcolorfullscreen
+                                thickness: Config.scaled(2, osdWindow.baseScale)
+                                dash: Config.scaled(8, osdWindow.uiScale)
+                                gap: Config.scaled(5, osdWindow.uiScale)
+                            }
+
                             Text {
                                 anchors.centerIn: parent
-                                text: String(parent.modelData.id)
+                                visible: !osdBox.own
+                                text: String(osdBox.modelData.id)
                                 color: Config.fgcolor
                                 font.family: Config.fontfamily
                                 font.pixelSize: Config.scaled(32, osdWindow.uiScale)

@@ -26,7 +26,9 @@
 .config/quickshell/audioaliases.json
 .config/quickshell/monitoraliases.json
 .config/quickshell/solaarsettings.json
+.config/quickshell/windowrules.json
 .config/hypr/shortcuts.lua
+.config/hypr/windowrules.lua
 
 .config/ZapZap/ZapZap.conf
 .config/hypr/hyprpaper.conf

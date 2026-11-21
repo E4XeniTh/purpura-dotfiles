@@ -204,7 +204,12 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + Q", hl.dsp.window.close(), { description = "Close window" })
     hl.bind(mainMod .. " + S", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating" })
     hl.bind(mainMod .. " + W", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }), { description = "Toggle maximized" })
-    hl.bind(mainMod .. " + F11", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "toggle" }), { description = "Toggle fullscreen" })
+    -- An empty unmanaged workspace for the focused window, switched to and bound to
+    -- its monitor - purpura.lua's (see A workspace of its own there), so only with
+    -- that loaded.
+    if hl.dsp.window.reserve_workspace then
+        hl.bind(mainMod .. " + SHIFT + W", hl.dsp.window.reserve_workspace(), { description = "Reserve workspace" })
+    end
 
 
     hl.bind(mainMod .. " + space", hl.dsp.exec_cmd("rofi -show drun"), { description = "App launcher" })
@@ -228,6 +233,13 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     hl.bind(mainMod .. " + 3", hl.dsp.focus({ workspace = 3 }), { description = "Go to workspace 3" })
     hl.bind(mainMod .. " + 4", hl.dsp.focus({ workspace = 4 }), { description = "Go to workspace 4" })
     hl.bind(mainMod .. " + 5", hl.dsp.focus({ workspace = 5 }), { description = "Go to workspace 5" })
+    -- The next of the monitor's workspaces, round to the first after the last.
+    hl.bind(mainMod .. " + Tab", hl.dsp.focus({ workspace = "m+1" }), { description = "Next workspace" })
+    -- A new, empty workspace on the monitor under the cursor, bound to it - purpura.lua's,
+    -- so only with that loaded.
+    if type(hl.dsp.workspace) == "table" and hl.dsp.workspace.new_on_hovered then
+        hl.bind(mainMod .. " + CTRL + Tab", hl.dsp.workspace.new_on_hovered(), { description = "New workspace" })
+    end
 
     hl.bind(mainMod .. " + CTRL + 1", hl.dsp.window.move({ workspace = 1, follow = false }), { description = "Move window to workspace 1" })
     hl.bind(mainMod .. " + CTRL + 2", hl.dsp.window.move({ workspace = 2, follow = false }), { description = "Move window to workspace 2" })
@@ -297,6 +309,8 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
     })
 
     -- KITTY STARTS AS FLOATING WINDOW
+    -- Settings > General > Windows lists this as kitty's, and takes it over - turning
+    -- this one off - once an app's changed there (purpura.lua, How apps open).
     hl.window_rule({
         name = "kittyrule",
         match = {

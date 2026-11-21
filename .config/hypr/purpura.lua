@@ -11,16 +11,20 @@
 --     pcall(loadfile(os.getenv("HOME") .. "/.config/hypr/purpura.lua") or function() end, mainMod)
 --
 -- Before the binds, since Close Window works by replacing the action every close
--- bind is made from, and dropping a window on a workspace makes its binds along with
--- every "Drag window" bind made after it. (The mainMod handed over isn't needed any
--- more - those binds go wherever "Drag window" is.) loadfile rather than require:
--- Hyprland watches each file require loads and reloads the whole config when one
--- changes - an update of this file would put the monitors back to hyprland.lua's
--- MONITORS rule. And a missing or broken file leaves hyprland.lua loading as if the
--- line weren't there.
+-- bind is made from, dropping a window on a workspace makes its binds along with
+-- every "Drag window" bind made after it, and "Reserve workspace" and "New workspace"
+-- are actions made here. (The mainMod handed over is only for the default binds made
+-- here for a hyprland.lua without them - see A workspace of its own.) loadfile rather
+-- than require: Hyprland watches each file require loads and reloads the whole config
+-- when one changes - an update of this file would put the monitors back to
+-- hyprland.lua's MONITORS rule. And a missing or broken file leaves hyprland.lua
+-- loading as if the line weren't there.
 --
 -- Each part below runs on its own: should one fail (a Hyprland update renaming
 -- something it uses), a notification says which, and the rest still load.
+
+local handedOver = ...
+local mainMod = type(handedOver) == "string" and handedOver ~= "" and handedOver or "SUPER"
 
 local function report(name, err)
     pcall(hl.notification.create, {
@@ -929,6 +933,322 @@ part("dropping a window on a workspace", function()
                 end
             end
         end
+    end)
+end)
+
+--#######################################################################################
+--## A WORKSPACE OF ITS OWN                                                             #
+--#######################################################################################
+-- "Reserve workspace" (hyprland.lua.example: META + SHIFT + W) gives the focused window
+-- an empty unmanaged workspace - one past 5, as the shell only ever pins 1-5 to a
+-- monitor: the one the focused monitor's showing, when it's one of those and holds
+-- nothing else, or else a new one, the lowest free number past 5. The window goes
+-- there, the monitor's switched to it, and the workspace is bound to that monitor
+-- (a workspace rule, so it's made there and stays there).
+--
+-- A fullscreen app opening - a window that's fullscreen as it opens, or goes
+-- fullscreen within its first few seconds, as games do - is given one the same way,
+-- on its own monitor; maximized doesn't count, nor a window going fullscreen later on.
+-- Then "purpura-workspace,fullscreen,<monitor>,<workspace>" goes out on Hyprland's
+-- event socket, for the workspace OSD to show it (components/osd/WorkspaceOsd.qml).
+-- Each move comes a moment after what prompts it, never inside Hyprland's handling of
+-- that; and Hyprland's own move of a fullscreen window takes it out of fullscreen and
+-- back in, which is let pass.
+--
+-- "Next workspace" (META + TAB) is Hyprland's own: the next of the focused monitor's
+-- workspaces, round to the first after the last. "New workspace" (META + CTRL + TAB)
+-- makes an empty one - the lowest free number past 5 - on the monitor under the
+-- cursor, bound to it, and switches that monitor to it.
+--
+-- hyprland.lua.example binds all three; a hyprland.lua from before doesn't. So each is
+-- made here once the config has loaded, unless hyprland.lua or shortcuts.lua bound
+-- that combo to something (or unbound it - Settings > Shortcuts taking it off), or -
+-- for the two whose actions are made here - bound that action somewhere else.
+
+part("workspaces of their own", function()
+    local FIRST = 6     -- past the ones the shell pins to a monitor, 1-5
+    local GRACE_S = 5   -- fullscreen this soon after opening counts as opening fullscreen
+    local opened = {}   -- by address: when each window opened, for GRACE_S
+    local moving = false -- one of ours under way: the fullscreen changes it makes pass
+
+    local function unmanaged(workspace)
+        return isObject(workspace) and not workspace.special
+            and type(workspace.id) == "number" and workspace.id >= FIRST
+    end
+
+    local function allWorkspaces()
+        local ok, list = pcall(hl.get_workspaces)
+        return ok and type(list) == "table" and list or {}
+    end
+
+    -- The lowest number past 5 that no workspace has.
+    local function freeNumber()
+        local taken = {}
+        for _, workspace in ipairs(allWorkspaces()) do
+            if type(workspace.id) == "number" then taken[workspace.id] = true end
+        end
+        local id = FIRST
+        while taken[id] do id = id + 1 end
+        return id
+    end
+
+    local function later(fn)
+        hl.timer(function()
+            local ok, err = pcall(fn)
+            if not ok then report("workspaces of their own", err) end
+        end, { timeout = 1, type = "oneshot" })
+    end
+
+    local function focusMonitor(monitor)
+        local focused = hl.get_active_monitor()
+        if not (isObject(focused) and focused.name == monitor.name) then
+            hl.dispatch(hl.dsp.focus({ monitor = monitor.name }))
+        end
+    end
+
+    -- That workspace made on, and kept to, that monitor.
+    local function bindTo(id, monitor)
+        hl.workspace_rule({ workspace = tostring(id), monitor = monitor.name })
+    end
+
+    -- An empty unmanaged workspace on that monitor for the window (see above), the
+    -- window on it and the monitor showing it. Its number, and whether the window had
+    -- to move there - or nil, for a window on a special workspace.
+    local function giveOwn(window, monitor)
+        if not isObject(window) or window.mapped == false or not isObject(monitor) or not monitor.name then return nil end
+        local workspace = window.workspace
+        if isObject(workspace) and workspace.special then return nil end
+        local here = isObject(workspace) and workspace.id or nil
+        local current = monitor.active_workspace
+        local id
+        if unmanaged(current) then
+            local others = (current.windows or 0) - (here == current.id and 1 or 0)
+            if others <= 0 then id = current.id end
+        end
+        id = id or freeNumber()
+        bindTo(id, monitor)
+        focusMonitor(monitor)
+        if here == id then
+            hl.dispatch(hl.dsp.focus({ window = "address:" .. window.address }))
+            return id, false
+        end
+        moving = true
+        local ok, err = pcall(hl.dispatch, hl.dsp.window.move({
+            workspace = tostring(id), window = "address:" .. window.address, follow = true,
+        }))
+        moving = false
+        if not ok then error(err, 0) end
+        return id, true
+    end
+
+    -- A fullscreen app that's opened: its own workspace, on its own monitor - said.
+    local function fullscreenOpened(address)
+        opened[address] = nil
+        local window = hl.get_window("address:" .. address)
+        if not isObject(window) or window.fullscreen ~= 2 then return end
+        local monitor = window.monitor
+        local id, moved = giveOwn(window, monitor)
+        if id and moved then
+            hl.dispatch(hl.dsp.event("purpura-workspace,fullscreen," .. monitor.name .. "," .. id))
+        end
+    end
+
+    local reserveActions = setmetatable({}, { __mode = "k" }) -- every action reserve_workspace() has made
+    hl.dsp.window.reserve_workspace = function()
+        local action = function()
+            local ok, err = pcall(function()
+                local window = hl.get_active_window()
+                if isObject(window) then giveOwn(window, hl.get_active_monitor()) end
+            end)
+            if not ok then report("workspaces of their own", err) end
+        end
+        reserveActions[action] = true
+        return action
+    end
+
+    local newActions = setmetatable({}, { __mode = "k" }) -- every action new_on_hovered() has made
+    if type(hl.dsp.workspace) ~= "table" then hl.dsp.workspace = {} end
+    hl.dsp.workspace.new_on_hovered = function()
+        local action = function()
+            local ok, err = pcall(function()
+                local monitor = hl.get_monitor_at_cursor()
+                if not isObject(monitor) or not monitor.name then return end
+                local id = freeNumber()
+                bindTo(id, monitor)
+                focusMonitor(monitor)
+                hl.dispatch(hl.dsp.focus({ workspace = tostring(id) }))
+            end)
+            if not ok then report("workspaces of their own", err) end
+        end
+        newActions[action] = true
+        return action
+    end
+
+    hl.on("window.open", function(window)
+        if not isObject(window) or not window.address then return end
+        local now = os.time()
+        for address, at in pairs(opened) do
+            if now - at > GRACE_S then opened[address] = nil end
+        end
+        local address = window.address
+        opened[address] = now
+        if window.fullscreen == 2 then later(function() fullscreenOpened(address) end) end
+    end)
+
+    -- Looked at again a moment later, as it is by then.
+    hl.on("window.fullscreen", function(window)
+        if moving or not isObject(window) or window.fullscreen ~= 2 then return end
+        local address = window.address
+        local at = address and opened[address]
+        if not at or os.time() - at > GRACE_S then return end
+        later(function() fullscreenOpened(address) end)
+    end)
+
+    hl.on("window.close", function(window)
+        if isObject(window) and window.address then opened[window.address] = nil end
+    end)
+
+    -- The default binds, for a config with none of them (see above).
+    local MODIFIERS = {
+        SUPER = "SUPER", WIN = "SUPER", LOGO = "SUPER", MOD4 = "SUPER", META = "SUPER",
+        CTRL = "CTRL", CONTROL = "CTRL", ALT = "ALT", MOD1 = "ALT", SHIFT = "SHIFT",
+    }
+    local function comboOf(keys)
+        local mods, key = {}, ""
+        for token in keys:gmatch("[^+]+") do
+            local name = token:gsub("%s", ""):upper()
+            if MODIFIERS[name] then mods[#mods + 1] = MODIFIERS[name] elseif name ~= "" then key = name end
+        end
+        table.sort(mods)
+        return table.concat(mods, "+") .. "+" .. key
+    end
+    local defaults = {
+        { keys = mainMod .. " + SHIFT + W", description = "Reserve workspace", made = reserveActions,
+          action = function() return hl.dsp.window.reserve_workspace() end },
+        { keys = mainMod .. " + Tab", description = "Next workspace",
+          action = function() return hl.dsp.focus({ workspace = "m+1" }) end },
+        { keys = mainMod .. " + CTRL + Tab", description = "New workspace", made = newActions,
+          action = function() return hl.dsp.workspace.new_on_hovered() end },
+    }
+    for _, default in ipairs(defaults) do default.combo = comboOf(default.keys) end
+
+    local bind = hl.bind
+    hl.bind = function(keys, action, ...)
+        for _, default in ipairs(defaults) do
+            if action ~= nil and default.made and default.made[action] then default.bound = true end
+            if type(keys) == "string" and comboOf(keys) == default.combo then default.used = true end
+        end
+        return bind(keys, action, ...)
+    end
+    local unbind = hl.unbind
+    if unbind then
+        hl.unbind = function(keys, ...)
+            for _, default in ipairs(defaults) do
+                if type(keys) == "string" and comboOf(keys) == default.combo then default.used = true end
+            end
+            return unbind(keys, ...)
+        end
+    end
+
+    hl.on("config.reloaded", function()
+        for _, default in ipairs(defaults) do
+            if not default.used and not default.bound then
+                local ok, err = pcall(bind, default.keys, default.action(), { description = default.description })
+                if not ok then report("workspaces of their own", err) end
+            end
+        end
+    end)
+end)
+
+--#######################################################################################
+--## HOW APPS OPEN                                                                      #
+--#######################################################################################
+-- Settings > General > Windows: for each app picked there, how its windows look as
+-- they open - tiled, floating (at a size, centered), maximized or fullscreen; how
+-- see-through; with which animation. The shell keeps them in
+-- ~/.config/quickshell/windowrules.json and writes them out as hypr/windowrules.lua -
+--     return { { app = "kitty", layout = "float", width = 1500, height = 760 }, ... }
+-- - read here once the config has loaded (loadfile, not require: see the top of this
+-- file). A change there is handed over at once, through hyprctl eval, as
+-- purpura.windowRules({ ... }).
+--
+-- Each app gets a rule of its own, on its windows' initial class. Hyprland adds a
+-- named rule's effects to those it has rather than replacing them, so each change
+-- makes its rules afresh, under new names, and turns the last ones off. kitty's
+-- floating window comes pre-included there: until the shell's rules take over, it's
+-- hyprland.lua's own "kittyrule", turned off once they do - kitty's among them. With
+-- no windowrules.lua yet, nothing here changes anything.
+
+part("how apps open", function()
+    local FILE = os.getenv("HOME") .. "/.config/hypr/windowrules.lua"
+    local LAYOUTS = { tile = true, float = true, maximize = true, fullscreen = true }
+    -- Pop in from further than hyprland.lua.example's own default does (87%), so
+    -- it's something else.
+    local ANIMATIONS = { popin = "popin 60%", slide = "slide", gnomed = "gnomed" }
+    local made, generation = {}, 0
+
+    -- The class as Hyprland matches it: the whole of it, as it is.
+    local function wholly(app)
+        return "^(" .. (app:gsub("[%^%$%(%)%.%[%]%*%+%?{}|\\]", "\\%0")) .. ")$"
+    end
+
+    local function effectsOf(entry)
+        local rule = {}
+        if LAYOUTS[entry.layout] then rule[entry.layout] = true end
+        if entry.layout == "float" then
+            local w, h = tonumber(entry.width), tonumber(entry.height)
+            if w and h and w >= 100 and h >= 100 and w <= 16384 and h <= 16384 then
+                rule.size = string.format("%d %d", math.floor(w), math.floor(h))
+                rule.persistent_size = false
+            end
+            if entry.center == true then rule.center = true end
+        end
+        local opacity = tonumber(entry.opacity)
+        if opacity and opacity >= 0.1 and opacity < 1 then rule.opacity = string.format("%.2f", opacity) end
+        if entry.animation == "none" then
+            rule.no_anim = true
+        elseif ANIMATIONS[entry.animation] then
+            rule.animation = ANIMATIONS[entry.animation]
+        end
+        return rule
+    end
+
+    local function apply(list)
+        if type(list) ~= "table" then error("not a list of apps", 0) end
+        generation = generation + 1
+        local old = made
+        made = {}
+        for i, entry in ipairs(list) do
+            if type(entry) == "table" and type(entry.app) == "string" and #entry.app <= 128
+                and entry.app:match("^[%w%._%+%- ]+$") then
+                local rule = effectsOf(entry)
+                if next(rule) ~= nil then
+                    rule.name = "purpura-app-" .. generation .. "-" .. i
+                    rule.match = { initial_class = wholly(entry.app) }
+                    local ok, result = pcall(hl.window_rule, rule)
+                    if ok and result ~= nil then made[#made + 1] = result end
+                end
+            end
+        end
+        for _, rule in ipairs(old) do pcall(function() rule:set_enabled(false) end) end
+        -- hyprland.lua's own rule for kitty, from before kitty's was the shell's.
+        pcall(hl.window_rule, { name = "kittyrule", enabled = false })
+    end
+
+    purpura = purpura or {}
+    function purpura.windowRules(list)
+        apply(list)
+    end
+
+    hl.on("config.reloaded", function()
+        local present = io.open(FILE, "r")
+        if not present then return end
+        present:close()
+        local chunk, err = loadfile(FILE)
+        if not chunk then return report("how apps open", err) end
+        local ok, list = pcall(chunk)
+        if ok then ok, err = pcall(apply, list) else err = list end
+        if not ok then report("how apps open", err) end
     end)
 end)
 

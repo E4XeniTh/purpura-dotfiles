@@ -7,9 +7,10 @@ import "../../Config.js" as Config
 
 // Brief "META + D toggles Dashboard" reminder, shown on whichever
 // monitor's active window just entered GENUINE internal fullscreen
-// (META+F11) - the bar (and its dashboard-opening clock button) sits
-// behind a fullscreen window, so this is the one nudge that it's still
-// reachable via keybind.
+// (the app's own - there's no bind for it by default; one opening that
+// way gets a workspace of its own, see purpura.lua) - the bar (and its
+// dashboard-opening clock button) sits behind a fullscreen window, so
+// this is the one nudge that it's still reachable via keybind.
 //
 // There's no dedicated reactive "fullscreen" property on Quickshell's
 // Hyprland toplevel type (HyprlandToplevel only exposes title/
@@ -151,9 +152,11 @@ Scope {
 
             // Top-anchored only (no left/right) - centers horizontally
             // the same way VolumeOsd/WorkspaceOsd do with no explicit
-            // horizontal anchor of their own. Margin/height match
-            // Bar.qml exactly, so this sits flush in the bar's own
-            // spot instead of floating lower on the screen.
+            // horizontal anchor of their own. As tall as Bar.qml, and just
+            // below where Bar.qml's floating copy of the workspace widget
+            // comes up (its top gap, its height, the same gap again) -
+            // that one shows over a fullscreen window too, while META's
+            // held, and sat right on top of this in the bar's own spot.
             //
             // exclusiveZone: -1 (not 0) - 0 only means "I don't reserve
             // space myself", it does NOT opt out of being pushed by
@@ -163,7 +166,7 @@ Scope {
             // entirely and just overlays at the requested margin,
             // same as Screenshot.qml's own overlay.
             anchors.top: true
-            margins.top: Config.scaled(10, hintWindow.uiScale)
+            margins.top: Config.scaled(10 + Config.barheight + 10, hintWindow.uiScale)
             exclusiveZone: -1
             color: "transparent"
 
