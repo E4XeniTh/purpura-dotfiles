@@ -53,6 +53,11 @@ Row {
     // hidden bar's row would otherwise send its own, wrong, spans for the
     // same monitor.
     property bool sendsDropTargets: true
+    // Bar.qml's floating copy only: where on the screen its window sits,
+    // { x, y, w, h } - handed over with the boxes, so purpura.lua can grab from
+    // it before Hyprland's even mapped the window (a META + click as quick as
+    // the META).
+    property var floatingRect: null
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
     property string dragOver: ""
@@ -257,7 +262,11 @@ Row {
             boxes.push(`{ from = ${from}, to = ${to}, workspace = "${workspace}", x = ${x}, y = ${y}, w = ${w}, h = ${h}, `
                 + `bx = ${bx}, by = ${by}, bw = ${bw}, bh = ${bh} }`)
         }
-        return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} }, { ${between.join(", ")} })`
+        const rect = root.floatingRect
+        const at = rect && [rect.x, rect.y, rect.w, rect.h].every(n => Number.isFinite(n))
+            ? `, { x = ${Math.round(rect.x)}, y = ${Math.round(rect.y)}, w = ${Math.round(rect.w)}, h = ${Math.round(rect.h)} }`
+            : ""
+        return `purpura.dropTargets("${root.screenName}", { ${boxes.join(", ")} }, { ${between.join(", ")} }${at})`
     }
 
     // Catches the boxes moving without the row hearing of it - the row
@@ -280,6 +289,7 @@ Row {
         if (root.sendsDropTargets) Qt.callLater(root.refreshDropTargets)
     }
     onSettledEntriesChanged: Qt.callLater(root.refreshDropTargets)
+    onFloatingRectChanged: Qt.callLater(root.refreshDropTargets)
     onXChanged: Qt.callLater(root.refreshDropTargets)
     onWidthChanged: Qt.callLater(root.refreshDropTargets)
     onHeightChanged: Qt.callLater(root.refreshDropTargets)

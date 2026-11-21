@@ -304,11 +304,14 @@ part("dropping a window on a workspace", function()
     -- from/to: where it spans across the bar, in the bar's own coordinates; then the
     -- workspace to send a window to, the area of the monitor it's on, and the box itself
     -- (bx/by/bw/bh, in the bar's coordinates too), which draws that area scaled down.
-    -- Last, where the separators between one monitor's boxes and the next's span: the
+    -- Then where the separators between one monitor's boxes and the next's span: the
     -- window stays hidden there too, though there's nothing to drop it on - so it
-    -- doesn't flash up between two boxes.
+    -- doesn't flash up between two boxes. Last, from Bar.qml's floating copy only,
+    -- where on the screen its window sits - { x = 1880, y = 10, w = 640, h = 48 } -
+    -- for a press that comes before Hyprland's mapped it (see barUnderCursor()).
+    local floatingAt = {} -- by monitor
     purpura = purpura or {}
-    function purpura.dropTargets(monitor, boxes, between)
+    function purpura.dropTargets(monitor, boxes, between, floating)
         if type(monitor) ~= "string" or type(boxes) ~= "table" then return end
         local spans = {}
         for _, span in ipairs(type(between) == "table" and between or {}) do
@@ -331,6 +334,12 @@ part("dropping a window on a workspace", function()
             end
         end
         targets[monitor] = valid
+        local at
+        if type(floating) == "table" and type(floating.x) == "number" and type(floating.y) == "number"
+            and type(floating.w) == "number" and type(floating.h) == "number" and floating.w > 0 and floating.h > 0 then
+            at = { x = floating.x, y = floating.y, w = floating.w, h = floating.h }
+        end
+        floatingAt[monitor] = at
     end
 
     -- Bar.qml's floating copy of the widget, on a monitor without the bar: on screen
@@ -346,14 +355,27 @@ part("dropping a window on a workspace", function()
 
     -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
     local function barUnderCursor(cursor)
+        local floatingUp = {} -- monitors whose floating widget Hyprland has mapped
         for _, namespace in ipairs({ "bar", FLOATING }) do
             for _, bar in ipairs(hl.get_layers({ namespace = namespace })) do
                 local monitor = bar.monitor
-                if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor)
-                    and (namespace ~= FLOATING or floatingShown(monitor.name)) then
-                    return monitor, cursor.x - bar.x, cursor.y - bar.y
+                if bar.mapped and monitor then
+                    if namespace == FLOATING then floatingUp[monitor.name] = true end
+                    if contains(bar.x, bar.y, bar.w, bar.h, cursor)
+                        and (namespace ~= FLOATING or floatingShown(monitor.name)) then
+                        return monitor, cursor.x - bar.x, cursor.y - bar.y
+                    end
                 end
             end
+        end
+        -- A floating widget that's there but not mapped yet - a META + click as quick
+        -- as the META, before Hyprland's put its window up: where it's to sit, as its
+        -- row said.
+        local monitor = hl.get_monitor_at_cursor()
+        local at = monitor and floatingAt[monitor.name]
+        if at and not floatingUp[monitor.name] and floatingShown(monitor.name)
+            and contains(at.x, at.y, at.w, at.h, cursor) then
+            return monitor, cursor.x - at.x, cursor.y - at.y
         end
         return nil
     end

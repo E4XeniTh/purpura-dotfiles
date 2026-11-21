@@ -530,6 +530,15 @@ Scope {
                 screen: modelData
 
                 readonly property real pad: Config.scaled(8, bar.uiScale)
+                readonly property real topGap: Config.scaled(10, bar.uiScale)
+                // Where Hyprland puts it: centred along the top of the screen,
+                // topGap down (as it places any layer anchored to the top alone).
+                readonly property var expectedRect: modelData ? ({
+                    x: Math.round(modelData.x + modelData.width / 2 - dragBar.implicitWidth / 2),
+                    y: Math.round(modelData.y + dragBar.topGap),
+                    w: dragBar.implicitWidth,
+                    h: dragBar.implicitHeight
+                }) : null
 
                 // Shown: during a drag with the cursor on this screen, or a
                 // moment after the drag's modifier went down here.
@@ -558,7 +567,7 @@ Scope {
                 Region { id: noInput }
 
                 anchors { top: true }
-                margins { top: Config.scaled(10, bar.uiScale) }
+                margins { top: dragBar.topGap }
 
                 // Laid out on screen now, in case that moved a box: sent
                 // again only if it did.
@@ -601,6 +610,9 @@ Scope {
                         // cursor), and the bar's own row sends in their place
                         // whenever the bar's on this screen.
                         sendsDropTargets: !bar.visible
+                        // With where its window sits - for a META + click that
+                        // comes before the window's up.
+                        floatingRect: dragBar.expectedRect
                         height: bar.buttonHeight
                     }
                 }
