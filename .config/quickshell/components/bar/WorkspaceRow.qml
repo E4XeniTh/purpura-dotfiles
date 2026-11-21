@@ -291,6 +291,7 @@ Row {
     onSettledEntriesChanged: Qt.callLater(root.refreshDropTargets)
     onFloatingRectChanged: Qt.callLater(root.refreshDropTargets)
     onXChanged: Qt.callLater(root.refreshDropTargets)
+    onYChanged: Qt.callLater(root.refreshDropTargets)
     onWidthChanged: Qt.callLater(root.refreshDropTargets)
     onHeightChanged: Qt.callLater(root.refreshDropTargets)
 

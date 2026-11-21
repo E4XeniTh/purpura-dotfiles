@@ -598,9 +598,14 @@ Scope {
                     WorkspaceRow {
                         id: dragRow
                         // At a fixed spot rather than centred, so where its boxes
-                        // are doesn't wait on the window's size.
+                        // are never waits on the window's size: a window that's
+                        // just been made is 0 high for a moment, and centred in
+                        // that, the boxes handed over put themselves half a row
+                        // too high - a META + click right after META found no
+                        // window in them. Placed as centring would, the odd
+                        // pixel below.
                         x: dragBar.pad
-                        anchors.verticalCenter: parent.verticalCenter
+                        y: Math.floor((dragBar.implicitHeight - dragRow.height) / 2)
                         uiScale: bar.uiScale
                         screenName: modelData ? modelData.name : ""
                         // Whenever the bar isn't on this screen - shown or not -
