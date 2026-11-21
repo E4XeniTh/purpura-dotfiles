@@ -47,10 +47,11 @@ Row {
     // pressed with the drag's combo, for Hyprland to drag from there. Here,
     // the box under the cursor just lights up.
     property bool windowDragging: false
-    // Whether this row hands purpura.lua its boxes: only while it's on
-    // screen - the bar on the primary monitor, or Bar.qml's floating copy on
-    // another during a drag. A hidden bar's row would otherwise send its
-    // own, wrong, spans for the same monitor.
+    // Whether this row hands purpura.lua its boxes: one row per monitor -
+    // the bar's while it's shown, Bar.qml's floating copy's whenever it
+    // isn't (shown or not, so they're there the moment it appears). A
+    // hidden bar's row would otherwise send its own, wrong, spans for the
+    // same monitor.
     property bool sendsDropTargets: true
     // The box under the cursor on this bar, by workspaceSelector() - only
     // ever compared, never run.
@@ -204,8 +205,8 @@ Row {
     // The press needs them there already, so they're handed over whenever
     // they'd come out different - looked at on any change the row knows of
     // and once a second besides (dropTargetsCheck) - and again at a drag's
-    // start, for Bar.qml's floating copy, only on screen from then, and
-    // after a config reload, which starts purpura.lua over without them.
+    // start, and after a config reload, which starts purpura.lua over
+    // without them.
     property string sentDropTargets: ""
 
     function sendDropTargets(force) {

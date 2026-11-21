@@ -543,6 +543,10 @@ Scope {
                 anchors { top: true }
                 margins { top: Config.scaled(10, bar.uiScale) }
 
+                // Laid out on screen now, in case that moved a box: sent
+                // again only if it did.
+                onVisibleChanged: if (visible) Qt.callLater(dragRow.refreshDropTargets)
+
                 implicitWidth: dragRow.width + 2 * dragBar.pad
                 implicitHeight: Config.scaled(Config.barheight, bar.uiScale)
                 color: "transparent"
@@ -562,7 +566,14 @@ Scope {
                     anchors.verticalCenter: parent.verticalCenter
                     uiScale: bar.uiScale
                     screenName: modelData ? modelData.name : ""
-                    sendsDropTargets: dragBar.visible
+                    // Whenever the bar isn't on this screen - shown or not -
+                    // so purpura.lua has its boxes the moment it appears:
+                    // sent only then, they took a moment through hyprctl to
+                    // arrive, and a grab in it right away found nothing. Out
+                    // of sight, they're never matched (purpura.lua looks for
+                    // a mapped "bar" layer under the cursor), and the bar's
+                    // own row sends in their place whenever it's shown.
+                    sendsDropTargets: !bar.visible
                     height: bar.buttonHeight
                 }
             }
