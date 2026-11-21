@@ -268,7 +268,22 @@ part("dropping a window on a workspace", function()
     local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
 
+    -- FOR NOW (see pressLog() below): what led up to each press, with when it
+    -- happened - seconds since boot, from /proc/uptime (to a hundredth).
+    local trail = {}
+    local function note(what)
+        local ok = pcall(function()
+            local f = io.open("/proc/uptime", "r")
+            local t = f and f:read("n")
+            if f then f:close() end
+            trail[#trail + 1] = (t and string.format("%.2f", t) or "?") .. "  " .. what
+            if #trail > 60 then table.remove(trail, 1) end
+        end)
+        return ok
+    end
+
     local function dragEvent(data)
+        if data:sub(1, 4) == "mod," or data:sub(1, 6) == "start," or data == "end" then note("posted " .. data) end
         hl.dispatch(hl.dsp.event("purpura-drag," .. data))
     end
 
@@ -340,6 +355,10 @@ part("dropping a window on a workspace", function()
             at = { x = floating.x, y = floating.y, w = floating.w, h = floating.h }
         end
         floatingAt[monitor] = at
+        local first = valid[1]
+        note("boxes for " .. monitor .. ": " .. #valid
+            .. (first and first.bw and (", the first drawn at " .. string.format("%.0f,%.0f %.0fx%.0f", first.bx, first.by, first.bw, first.bh)) or "")
+            .. (at and string.format(", to sit at %.0f,%.0f %.0fx%.0f", at.x, at.y, at.w, at.h) or ", no spot"))
     end
 
     -- Bar.qml's floating copy of the widget, on a monitor without the bar: on screen
@@ -641,8 +660,8 @@ part("dropping a window on a workspace", function()
     -- $XDG_RUNTIME_DIR/purpura-grab.log - to see why a grab from the floating widget
     -- right after META goes down misses. Goes once that's sorted.
     local function pressLog(lines)
-        local dir = os.getenv("XDG_RUNTIME_DIR")
-        local path = dir and dir .. "/purpura-grab.log"
+        local dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
+        local path = dir .. "/purpura-grab.log"
         local f = path and io.open(path, "a")
         if not f then return end
         if (f:seek("end") or 0) > 200000 then -- started over past 200KB
@@ -654,39 +673,69 @@ part("dropping a window on a workspace", function()
         f:close()
     end
 
+    -- Numbers as whole ones, whatever they are (the cursor's position isn't): %d
+    -- refuses anything with a fraction.
+    local function n(v)
+        return type(v) == "number" and string.format("%.0f", v) or tostring(v)
+    end
+
     local function windowState(window)
         if not window then return "none" end
         local x, y = pair(window.at, "x", "y")
         local w, h = pair(window.size, "x", "y")
-        return string.format("%s %s ws=%s mon=%s floating=%s at %d,%d %dx%d", tostring(window.address),
-            tostring(window.class), window.workspace and tostring(workspaceSelector(window.workspace)) or "?",
-            window.monitor and tostring(window.monitor.name) or "?", tostring(window.floating), x, y, w, h)
+        return tostring(window.address) .. " " .. tostring(window.class)
+            .. " ws=" .. (window.workspace and tostring(workspaceSelector(window.workspace)) or "?")
+            .. " mon=" .. (window.monitor and tostring(window.monitor.name) or "?")
+            .. " floating=" .. tostring(window.floating)
+            .. " at " .. n(x) .. "," .. n(y) .. " " .. n(w) .. "x" .. n(h)
     end
 
     local function describePress(cursor, wasShown)
         local out = {}
-        out[#out + 1] = string.format("press at %d,%d  t=%d  modifier on %s, seen=%s, drag=%s", cursor.x, cursor.y,
-            os.time(), tostring(modName), tostring(wasShown), tostring(dragged ~= nil))
+        for _, line in ipairs(trail) do out[#out + 1] = line end
+        trail = {}
+        out[#out + 1] = "press at " .. n(cursor.x) .. "," .. n(cursor.y)
+            .. "  modifier on " .. tostring(modName) .. ", seen=" .. tostring(wasShown) .. ", drag=" .. tostring(dragged ~= nil)
         for _, namespace in ipairs({ "bar", FLOATING }) do
             for _, l in ipairs(hl.get_layers({ namespace = namespace })) do
-                out[#out + 1] = string.format("  layer %s on %s mapped=%s at %d,%d %dx%d", namespace,
-                    l.monitor and tostring(l.monitor.name) or "?", tostring(l.mapped), l.x or -1, l.y or -1, l.w or -1, l.h or -1)
+                out[#out + 1] = "  layer " .. namespace .. " on " .. (l.monitor and tostring(l.monitor.name) or "?")
+                    .. " mapped=" .. tostring(l.mapped) .. " at " .. n(l.x) .. "," .. n(l.y) .. " " .. n(l.w) .. "x" .. n(l.h)
+                    .. (l.mapped and l.monitor and contains(l.x, l.y, l.w, l.h, cursor) and "  <- the cursor's on it" or "")
             end
         end
         for name, at in pairs(floatingAt) do
-            out[#out + 1] = string.format("  to sit on %s at %d,%d %dx%d", name, at.x, at.y, at.w, at.h)
+            out[#out + 1] = "  to sit on " .. tostring(name) .. " at " .. n(at.x) .. "," .. n(at.y) .. " " .. n(at.w) .. "x" .. n(at.h)
+                .. (contains(at.x, at.y, at.w, at.h, cursor) and "  <- the cursor's in it" or "")
         end
         local monitor = hl.get_monitor_at_cursor()
         local name = monitor and tostring(monitor.name) or "?"
+        if monitor then
+            out[#out + 1] = "  cursor's monitor " .. name .. " at " .. n(monitor.x) .. "," .. n(monitor.y)
+                .. " " .. n(monitor.width) .. "x" .. n(monitor.height) .. " scale " .. tostring(monitor.scale)
+                .. ", showing " .. (monitor.active_workspace and tostring(workspaceSelector(monitor.active_workspace)) or "?")
+                .. (monitor.active_special_workspace and " (and a special one)" or "")
+        end
         local boxes = targets[name] or {}
-        out[#out + 1] = string.format("  cursor's monitor %s: %d boxes", name, #boxes)
+        out[#out + 1] = "  its boxes: " .. #boxes
         for i, b in ipairs(boxes) do
             if i > 10 then break end
-            out[#out + 1] = string.format("    %s spans %d-%d, drawn %s", b.workspace, b.from, b.to,
-                b.bw and string.format("at %d,%d %dx%d", b.bx, b.by, b.bw, b.bh) or "nowhere")
+            out[#out + 1] = "    " .. tostring(b.workspace) .. " spans " .. n(b.from) .. "-" .. n(b.to) .. ", drawn "
+                .. (b.bw and ("at " .. n(b.bx) .. "," .. n(b.by) .. " " .. n(b.bw) .. "x" .. n(b.bh)) or "nowhere")
         end
         local bm, bx, by = barUnderCursor(cursor)
-        out[#out + 1] = string.format("  bar under the cursor: %s at %s,%s", bm and tostring(bm.name) or "none", tostring(bx), tostring(by))
+        out[#out + 1] = "  bar under the cursor: " .. (bm and tostring(bm.name) or "none") .. " at " .. n(bx) .. "," .. n(by)
+        for _, b in ipairs(bm and targets[bm.name] or {}) do
+            if b.bw and bx >= b.bx and bx < b.bx + b.bw and by >= b.by and by < b.by + b.bh then
+                local px = b.x + (bx - b.bx) / b.bw * b.w
+                local py = b.y + (by - b.by) / b.bh * b.h
+                out[#out + 1] = "  in box " .. tostring(b.workspace) .. ", which draws " .. n(px) .. "," .. n(py) .. " there; its windows:"
+                for _, w in ipairs(hl.get_windows({ mapped = true })) do
+                    if w.workspace and workspaceSelector(w.workspace) == b.workspace then
+                        out[#out + 1] = "    " .. windowState(w) .. (w.hidden and " hidden" or "")
+                    end
+                end
+            end
+        end
         out[#out + 1] = "  window drawn there: " .. windowState(windowInWidget(cursor))
         return out
     end
@@ -698,18 +747,18 @@ part("dropping a window on a workspace", function()
         local cursor = hl.get_cursor_pos()
         if not cursor then return end
         local okLog, log = pcall(describePress, cursor, wasShown)
+        if not okLog then log = { "press: couldn't describe it: " .. tostring(log) } end
         local grabbedNow = grab(cursor)
-        if okLog then
-            pcall(function()
-                log[#log + 1] = "  grabbed: " .. tostring(grabbedNow)
-                if grabbedNow and dragged then
-                    log[#log + 1] = "  now: " .. windowState(hl.get_window("address:" .. dragged.address))
-                else
-                    log[#log + 1] = "  window under the cursor: " .. windowState(windowUnderCursor(cursor))
-                end
-                pressLog(log)
-            end)
-        end
+        local okEnd, err = pcall(function()
+            log[#log + 1] = "  grabbed: " .. tostring(grabbedNow)
+            if grabbedNow and dragged then
+                log[#log + 1] = "  now: " .. windowState(hl.get_window("address:" .. dragged.address))
+            else
+                log[#log + 1] = "  window under the cursor: " .. windowState(windowUnderCursor(cursor))
+            end
+        end)
+        if not okEnd then log[#log + 1] = "  couldn't finish: " .. tostring(err) end
+        pcall(pressLog, log)
         if grabbedNow then return end
         local window = windowUnderCursor(cursor)
         if not window then return end
@@ -848,6 +897,7 @@ part("dropping a window on a workspace", function()
 
     hl.on("input.keyboard.key", function(code, _, state)
         if not modCodes[code] then return end
+        note("key " .. tostring(code) .. (state ~= 0 and " down" or " up"))
         local ok, err = pcall(modSide, code, state ~= 0) -- 0 is a release
         if not ok then report("showing the workspace widget while the modifier's held", err) end
     end)
