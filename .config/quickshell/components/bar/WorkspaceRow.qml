@@ -397,29 +397,23 @@ Row {
             if (!prev || (!prev.monitor && w.monitor)) byId.set(w.id, w)
         }
 
-        // strictWorkspaceWidget (Screen Settings' toggle, above Identify)
-        // drops anything that isn't an explicit 1-5 pin actually
-        // belonging to its own monitor when on - two conditions, both
-        // needed: id <= 5 (only the button-driven range counts as a
-        // deliberate pin; resolveWorkspaceAssignment() in
-        // ScreenSettings.qml never lets anything past 5 be anything
-        // other than an auto-assigned filler for a monitor nothing was
-        // explicitly chosen for, and "managed" here means "I picked
-        // this", not "this monitor happens to be functional") and
-        // isPinned() (straight off liveworkspaces.json's per-monitor
-        // "workspaces" list - catches a genuinely stray/misattributed
-        // workspace with an id <= 5 that isn't actually pinned to its
-        // own monitor, e.g. left over from before a reassignment).
-        // Dropping either check broke this one way or the other: id <= 5
-        // alone let an auto-filled spare above 5 through, which is what
-        // read live as this checkbox "doing nothing" for a monitor with
-        // nothing explicitly chosen; isPinned() alone let an auto-filled
-        // spare through too, since it's still technically present in
-        // liveworkspaces.json (fully exclusive/real, just never
-        // something a button produced).
+        // Unmanaged workspaces (see isManaged) - an app's own (purpura.lua's
+        // Reserve workspace, or a fullscreen app's), META + CTRL + Tab's new
+        // ones, a monitor's auto-assigned spare - show on every monitor but
+        // one that Display settings pins a single workspace to. There they
+        // show with Show Single Workspace Monitors on; with it off, only once
+        // there are more than two of them on it, the monitor keeping to its
+        // one workspace until then.
         let workspaces = Array.from(byId.values())
-        if (root.strictWorkspaceWidget) {
-            workspaces = workspaces.filter(w => w.id <= 5 && root.isPinned(w))
+        if (!root.showSingleWorkspaceMonitors) {
+            const unmanagedOn = {}
+            for (const w of workspaces) {
+                if (w.monitor && !root.isManaged(w))
+                    unmanagedOn[w.monitor.name] = (unmanagedOn[w.monitor.name] || 0) + 1
+            }
+            workspaces = workspaces.filter(w => !w.monitor || root.isManaged(w)
+                || root.managedCount(w.monitor.name) !== 1
+                || unmanagedOn[w.monitor.name] > root.singleMonitorUnmanagedHidden)
         }
 
         workspaces = workspaces.concat(root.placeholderWorkspaces(new Set(byId.keys())))
@@ -523,7 +517,8 @@ Row {
     // interval or Hyprland's own raw-event stream (a checkbox-only
     // Apply's workspace_rule/move dispatches are all no-ops when nothing
     // physically changed, so no raw event necessarily fires at all -
-    // reported live as "Show Empty"/"Only managed workspaces" not
+    // reported live as "Show Empty"/"Only managed workspaces" (now Show
+    // Single Workspace Monitors) not
     // visibly taking effect until switching workspaces or clicking
     // elsewhere happened to force some other refresh first).
     FileView {
@@ -549,6 +544,26 @@ Row {
         return !!(stored && stored.workspaces && stored.workspaces.includes(workspace.id))
     }
 
+    // One of its monitor's own workspaces: an explicit 1-5 pin belonging to
+    // that monitor - two conditions, both needed. id <= 5: only the
+    // button-driven range counts as a deliberate pin (resolveWorkspaceAssignment()
+    // in ScreenSettings.qml never lets anything past 5 be anything but an
+    // auto-assigned filler for a monitor nothing was explicitly chosen for, and
+    // still lists it in liveworkspaces.json). isPinned(): straight off
+    // liveworkspaces.json's per-monitor list, so a stray 1-5 that isn't pinned
+    // to its own monitor (left over from before a reassignment, say) doesn't
+    // count. Everything else is unmanaged.
+    function isManaged(workspace) {
+        return workspace.id <= 5 && root.isPinned(workspace)
+    }
+
+    // How many workspaces Display settings pins to that monitor - its 1-5s.
+    function managedCount(monitorName) {
+        const stored = root.liveWorkspacesStore[monitorName]
+        if (!stored || !Array.isArray(stored.workspaces)) return 0
+        return stored.workspaces.filter(id => id >= 1 && id <= 5).length
+    }
+
     // General > Shell settings (ShellSettings.qml) - a separate file from
     // monitors.json, watched the same way, since these are simple
     // immediately-saved toggles rather than staged/Apply-dependent
@@ -568,7 +583,16 @@ Row {
         }
     }
 
-    readonly property bool strictWorkspaceWidget: !!root.barSettingsStore.strictWorkspaceWidget
+    // Settings > General > Shell > Main Bar's "Show Single Workspace Monitors"
+    // (see sortedWorkspaces): on unless turned off. A barsettings.json from
+    // before it goes by the "Only Managed Workspaces In Widget" it replaced -
+    // on there is off here.
+    readonly property bool showSingleWorkspaceMonitors: root.barSettingsStore.showSingleWorkspaceMonitors !== undefined
+        ? !!root.barSettingsStore.showSingleWorkspaceMonitors
+        : !root.barSettingsStore.strictWorkspaceWidget
+    // With it off, a single workspace monitor's unmanaged workspaces show only
+    // once it has more than this many.
+    readonly property int singleMonitorUnmanagedHidden: 2
 
     Repeater {
         model: root.settledEntries

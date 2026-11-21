@@ -50,7 +50,7 @@ Scope {
     // General > Shell settings (ShellSettings.qml) - watched directly rather
     // than routed through Dashboard.qml's object tree, same convention
     // WorkspaceRow.qml/WorkspaceOsd.qml already use for their own Bar
-    // settings (strictWorkspaceWidget/showEmptyWidget/showEmptyOsd).
+    // settings (showSingleWorkspaceMonitors/showEmptyWidget/showEmptyOsd).
     FileView {
         id: barSettingsFile
         path: Quickshell.env("HOME") + "/.config/quickshell/barsettings.json"

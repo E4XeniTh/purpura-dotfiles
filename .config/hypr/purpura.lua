@@ -939,7 +939,7 @@ end)
 --#######################################################################################
 --## A WORKSPACE OF ITS OWN                                                             #
 --#######################################################################################
--- "Reserve workspace" (hyprland.lua.example: META + SHIFT + W) gives the focused window
+-- "Reserve workspace" (hyprland.lua.example: META + CTRL + W) gives the focused window
 -- an empty unmanaged workspace - one past 5, as the shell only ever pins 1-5 to a
 -- monitor: the one the focused monitor's showing, when it's one of those and holds
 -- nothing else, or else a new one, the lowest free number past 5. The window goes
@@ -955,10 +955,16 @@ end)
 -- that; and Hyprland's own move of a fullscreen window takes it out of fullscreen and
 -- back in, which is let pass.
 --
--- "Next workspace" (META + TAB) is Hyprland's own: the next of the focused monitor's
--- workspaces, round to the first after the last. "New workspace" (META + CTRL + TAB)
--- makes an empty one - the lowest free number past 5 - on the monitor under the
--- cursor, bound to it, and switches that monitor to it.
+-- "Next workspace" (META + TAB) switches the monitor under the cursor to its next
+-- workspace, round to the first after the last (Hyprland's own m+1, from that monitor).
+-- "New workspace" (META + CTRL + TAB) makes an empty one - the lowest free number past
+-- 5 - on the monitor under the cursor, bound to it, and switches that monitor to it.
+-- On the focused monitor - which the cursor's nearly always on, as moving onto a
+-- monitor focuses it - each is an ordinary switch. On another (something else took the
+-- focus while the cursor rested there), the switch is made there without taking the
+-- focus or moving the cursor, and the next move of the mouse focuses that monitor as
+-- any does. Hyprland says nothing of a switch like that, so the shell's told
+-- (components/osd/WorkspaceOsd.qml): "purpura-workspace,shown,<monitor>".
 --
 -- hyprland.lua.example binds all three; a hyprland.lua from before doesn't. So each is
 -- made here once the config has loaded, unless hyprland.lua or shortcuts.lua bound
@@ -1009,6 +1015,24 @@ part("workspaces of their own", function()
     -- That workspace made on, and kept to, that monitor.
     local function bindTo(id, monitor)
         hl.workspace_rule({ workspace = tostring(id), monitor = monitor.name })
+    end
+
+    -- That monitor switched to that workspace (a selector, from that monitor): an
+    -- ordinary switch when it's the focused one, otherwise one that leaves the focus and
+    -- the cursor as they are - said to the shell (see above).
+    local function showOn(monitor, selector)
+        local focused = hl.get_active_monitor()
+        if isObject(focused) and focused.name == monitor.name then
+            hl.dispatch(hl.dsp.focus({ workspace = selector }))
+            return
+        end
+        monitor:set_workspace(selector)
+        hl.dispatch(hl.dsp.event("purpura-workspace,shown," .. monitor.name))
+    end
+
+    local function hoveredMonitor()
+        local monitor = hl.get_monitor_at_cursor()
+        if isObject(monitor) and monitor.name then return monitor end
     end
 
     -- An empty unmanaged workspace on that monitor for the window (see above), the
@@ -1066,17 +1090,30 @@ part("workspaces of their own", function()
         return action
     end
 
-    local newActions = setmetatable({}, { __mode = "k" }) -- every action new_on_hovered() has made
     if type(hl.dsp.workspace) ~= "table" then hl.dsp.workspace = {} end
+
+    local nextActions = setmetatable({}, { __mode = "k" }) -- every action next_on_hovered() has made
+    hl.dsp.workspace.next_on_hovered = function()
+        local action = function()
+            local ok, err = pcall(function()
+                local monitor = hoveredMonitor()
+                if monitor then showOn(monitor, "m+1") end
+            end)
+            if not ok then report("workspaces of their own", err) end
+        end
+        nextActions[action] = true
+        return action
+    end
+
+    local newActions = setmetatable({}, { __mode = "k" }) -- every action new_on_hovered() has made
     hl.dsp.workspace.new_on_hovered = function()
         local action = function()
             local ok, err = pcall(function()
-                local monitor = hl.get_monitor_at_cursor()
-                if not isObject(monitor) or not monitor.name then return end
+                local monitor = hoveredMonitor()
+                if not monitor then return end
                 local id = freeNumber()
                 bindTo(id, monitor)
-                focusMonitor(monitor)
-                hl.dispatch(hl.dsp.focus({ workspace = tostring(id) }))
+                showOn(monitor, tostring(id))
             end)
             if not ok then report("workspaces of their own", err) end
         end
@@ -1123,10 +1160,10 @@ part("workspaces of their own", function()
         return table.concat(mods, "+") .. "+" .. key
     end
     local defaults = {
-        { keys = mainMod .. " + SHIFT + W", description = "Reserve workspace", made = reserveActions,
+        { keys = mainMod .. " + CTRL + W", description = "Reserve workspace", made = reserveActions,
           action = function() return hl.dsp.window.reserve_workspace() end },
-        { keys = mainMod .. " + Tab", description = "Next workspace",
-          action = function() return hl.dsp.focus({ workspace = "m+1" }) end },
+        { keys = mainMod .. " + Tab", description = "Next workspace", made = nextActions,
+          action = function() return hl.dsp.workspace.next_on_hovered() end },
         { keys = mainMod .. " + CTRL + Tab", description = "New workspace", made = newActions,
           action = function() return hl.dsp.workspace.new_on_hovered() end },
     }

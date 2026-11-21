@@ -101,7 +101,11 @@ Item {
         barSettingsFile.setText(JSON.stringify(updated, null, 2) + "\n")
     }
 
-    readonly property bool strictWorkspaceWidget: !!root.barStore.strictWorkspaceWidget
+    // On unless turned off - or, from before it, as "Only Managed Workspaces In
+    // Widget" (the one it replaced) wasn't. WorkspaceRow.qml reads it back.
+    readonly property bool showSingleWorkspaceMonitors: root.barStore.showSingleWorkspaceMonitors !== undefined
+        ? !!root.barStore.showSingleWorkspaceMonitors
+        : !root.barStore.strictWorkspaceWidget
     readonly property bool showEmptyWidget: !!root.barStore.showEmptyWidget
     readonly property bool showEmptyOsd: !!root.barStore.showEmptyOsd
     // Defaults true (rather than !! which would default false) - matches
@@ -113,7 +117,7 @@ Item {
     // On unless turned off, as it always showed before - WorkspaceOsd.qml reads it back.
     readonly property bool showWorkspaceOsdOnSwitch: root.barStore.showWorkspaceOsdOnSwitch !== false
 
-    function toggleStrictWorkspaceWidget() { root.setBarSetting("strictWorkspaceWidget", !root.strictWorkspaceWidget) }
+    function toggleShowSingleWorkspaceMonitors() { root.setBarSetting("showSingleWorkspaceMonitors", !root.showSingleWorkspaceMonitors) }
     function toggleShowEmptyWidget() { root.setBarSetting("showEmptyWidget", !root.showEmptyWidget) }
     function toggleShowEmptyOsd() { root.setBarSetting("showEmptyOsd", !root.showEmptyOsd) }
     function toggleShowBrightnessControl() { root.setBarSetting("showBrightnessControl", !root.showBrightnessControl) }
@@ -765,7 +769,7 @@ Item {
                         text: "Main Bar"
                     }
 
-                    // ---------------- only managed workspaces in widget ----------------
+                    // ---------------- single workspace monitors in widget ----------------
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Config.scaled(8, root.uiScale)
@@ -774,7 +778,7 @@ Item {
                             Layout.preferredWidth: Config.scaled(20, root.uiScale)
                             Layout.preferredHeight: Config.scaled(20, root.uiScale)
                             uiScale: root.uiScale
-                            checked: root.strictWorkspaceWidget
+                            checked: root.showSingleWorkspaceMonitors
                             tint: Config.fgcolor
                             hovered: checkBoxMouse1.containsMouse || checkLabelMouse1.containsMouse
 
@@ -782,12 +786,12 @@ Item {
                                 id: checkBoxMouse1
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.toggleStrictWorkspaceWidget()
+                                onClicked: root.toggleShowSingleWorkspaceMonitors()
                             }
                         }
 
                         Text {
-                            text: "Only Managed Workspaces In Widget"
+                            text: "Show Single Workspace Monitors"
                             color: Config.fgcolor
                             font.family: Config.fontfamily
                             font.pixelSize: Config.scaled(13, root.uiScale)
@@ -797,7 +801,7 @@ Item {
                                 id: checkLabelMouse1
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                onClicked: root.toggleStrictWorkspaceWidget()
+                                onClicked: root.toggleShowSingleWorkspaceMonitors()
                             }
                         }
 
@@ -808,7 +812,7 @@ Item {
                         // Close under the setting it's for, like the Power category's.
                         Layout.topMargin: -Config.scaled(6, root.uiScale)
                         uiScale: root.uiScale
-                        text: "The bar's workspace list shows only workspaces 1-5 that are pinned to a monitor in Display settings, each on its own monitor."
+                        text: "A monitor with only one workspace pinned to it in Display settings shows its unmanaged ones too (an app's own, new ones - any not pinned) in the bar's workspace list. Off, it shows just its one until it has more than two unmanaged ones. Other monitors always show theirs."
                     }
 
                     // ---------------- show empty workspaces (widget) ----------------

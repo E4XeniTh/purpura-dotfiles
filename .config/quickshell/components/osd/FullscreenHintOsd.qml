@@ -7,10 +7,10 @@ import "../../Config.js" as Config
 
 // Brief "META + D toggles Dashboard" reminder, shown on whichever
 // monitor's active window just entered GENUINE internal fullscreen
-// (the app's own - there's no bind for it by default; one opening that
-// way gets a workspace of its own, see purpura.lua) - the bar (and its
-// dashboard-opening clock button) sits behind a fullscreen window, so
-// this is the one nudge that it's still reachable via keybind.
+// (META+F11, or the app's own - one opening that way gets a workspace
+// of its own, see purpura.lua) - the bar (and its dashboard-opening
+// clock button) sits behind a fullscreen window, so this is the one
+// nudge that it's still reachable via keybind.
 //
 // There's no dedicated reactive "fullscreen" property on Quickshell's
 // Hyprland toplevel type (HyprlandToplevel only exposes title/

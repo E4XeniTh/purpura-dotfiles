@@ -145,6 +145,14 @@ Scope {
                     root.fullscreenMoved(parts[2], parseInt(parts[3], 10))
                     // The row's looked at again once it's settled, that one in it.
                     renderSettleTimer.restart()
+                } else if (parts.length === 3 && parts[0] === "purpura-workspace" && parts[1] === "shown") {
+                    // purpura.lua's "purpura-workspace,shown,<monitor>": META + Tab
+                    // or META + CTRL + Tab switched the monitor under the cursor
+                    // while another had the focus - which Hyprland says nothing
+                    // of, so every monitor's workspace (this OSD's, the bar's) is
+                    // asked for again. Done here, once for the whole shell.
+                    Hyprland.refreshMonitors()
+                    renderSettleTimer.restart()
                 }
                 return
             }
