@@ -355,26 +355,21 @@ part("dropping a window on a workspace", function()
 
     -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
     local function barUnderCursor(cursor)
-        local floatingUp = {} -- monitors whose floating widget Hyprland has mapped
         for _, namespace in ipairs({ "bar", FLOATING }) do
             for _, bar in ipairs(hl.get_layers({ namespace = namespace })) do
                 local monitor = bar.monitor
-                if bar.mapped and monitor then
-                    if namespace == FLOATING then floatingUp[monitor.name] = true end
-                    if contains(bar.x, bar.y, bar.w, bar.h, cursor)
-                        and (namespace ~= FLOATING or floatingShown(monitor.name)) then
-                        return monitor, cursor.x - bar.x, cursor.y - bar.y
-                    end
+                if bar.mapped and monitor and contains(bar.x, bar.y, bar.w, bar.h, cursor)
+                    and (namespace ~= FLOATING or floatingShown(monitor.name)) then
+                    return monitor, cursor.x - bar.x, cursor.y - bar.y
                 end
             end
         end
-        -- A floating widget that's there but not mapped yet - a META + click as quick
-        -- as the META, before Hyprland's put its window up: where it's to sit, as its
-        -- row said.
+        -- A floating widget that's to be there but isn't mapped yet - a META + click as
+        -- quick as the META, before Hyprland's put its window up - or is, but not yet
+        -- where Hyprland says: where it's to sit, as its row said.
         local monitor = hl.get_monitor_at_cursor()
         local at = monitor and floatingAt[monitor.name]
-        if at and not floatingUp[monitor.name] and floatingShown(monitor.name)
-            and contains(at.x, at.y, at.w, at.h, cursor) then
+        if at and floatingShown(monitor.name) and contains(at.x, at.y, at.w, at.h, cursor) then
             return monitor, cursor.x - at.x, cursor.y - at.y
         end
         return nil
@@ -642,11 +637,80 @@ part("dropping a window on a workspace", function()
         endDrag(sentAway)
     end
 
+    -- FOR NOW: what each press of the drag's combo found, appended to
+    -- $XDG_RUNTIME_DIR/purpura-grab.log - to see why a grab from the floating widget
+    -- right after META goes down misses. Goes once that's sorted.
+    local function pressLog(lines)
+        local dir = os.getenv("XDG_RUNTIME_DIR")
+        local path = dir and dir .. "/purpura-grab.log"
+        local f = path and io.open(path, "a")
+        if not f then return end
+        if (f:seek("end") or 0) > 200000 then -- started over past 200KB
+            f:close()
+            f = io.open(path, "w")
+            if not f then return end
+        end
+        f:write(table.concat(lines, "\n"), "\n\n")
+        f:close()
+    end
+
+    local function windowState(window)
+        if not window then return "none" end
+        local x, y = pair(window.at, "x", "y")
+        local w, h = pair(window.size, "x", "y")
+        return string.format("%s %s ws=%s mon=%s floating=%s at %d,%d %dx%d", tostring(window.address),
+            tostring(window.class), window.workspace and tostring(workspaceSelector(window.workspace)) or "?",
+            window.monitor and tostring(window.monitor.name) or "?", tostring(window.floating), x, y, w, h)
+    end
+
+    local function describePress(cursor, wasShown)
+        local out = {}
+        out[#out + 1] = string.format("press at %d,%d  t=%d  modifier on %s, seen=%s, drag=%s", cursor.x, cursor.y,
+            os.time(), tostring(modName), tostring(wasShown), tostring(dragged ~= nil))
+        for _, namespace in ipairs({ "bar", FLOATING }) do
+            for _, l in ipairs(hl.get_layers({ namespace = namespace })) do
+                out[#out + 1] = string.format("  layer %s on %s mapped=%s at %d,%d %dx%d", namespace,
+                    l.monitor and tostring(l.monitor.name) or "?", tostring(l.mapped), l.x or -1, l.y or -1, l.w or -1, l.h or -1)
+            end
+        end
+        for name, at in pairs(floatingAt) do
+            out[#out + 1] = string.format("  to sit on %s at %d,%d %dx%d", name, at.x, at.y, at.w, at.h)
+        end
+        local monitor = hl.get_monitor_at_cursor()
+        local name = monitor and tostring(monitor.name) or "?"
+        local boxes = targets[name] or {}
+        out[#out + 1] = string.format("  cursor's monitor %s: %d boxes", name, #boxes)
+        for i, b in ipairs(boxes) do
+            if i > 10 then break end
+            out[#out + 1] = string.format("    %s spans %d-%d, drawn %s", b.workspace, b.from, b.to,
+                b.bw and string.format("at %d,%d %dx%d", b.bx, b.by, b.bw, b.bh) or "nowhere")
+        end
+        local bm, bx, by = barUnderCursor(cursor)
+        out[#out + 1] = string.format("  bar under the cursor: %s at %s,%s", bm and tostring(bm.name) or "none", tostring(bx), tostring(by))
+        out[#out + 1] = "  window drawn there: " .. windowState(windowInWidget(cursor))
+        return out
+    end
+
     local function press()
         endDrag() -- one whose release never came
+        local wasShown = modShown
         if showModNow then showModNow() end -- in use: no waiting to see it
         local cursor = hl.get_cursor_pos()
-        if not cursor or grab(cursor) then return end
+        if not cursor then return end
+        local okLog, log = pcall(describePress, cursor, wasShown)
+        local grabbedNow = grab(cursor)
+        if okLog then
+            pcall(function()
+                log[#log + 1] = "  grabbed: " .. tostring(grabbedNow)
+                if grabbedNow and dragged then
+                    log[#log + 1] = "  now: " .. windowState(hl.get_window("address:" .. dragged.address))
+                else
+                    log[#log + 1] = "  window under the cursor: " .. windowState(windowUnderCursor(cursor))
+                end
+                pressLog(log)
+            end)
+        end
+        if grabbedNow then return end
         local window = windowUnderCursor(cursor)
         if not window then return end
         settleAway(window.address) -- still going from a drop a moment ago
