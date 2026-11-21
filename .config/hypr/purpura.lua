@@ -260,8 +260,10 @@ part("dropping a window on a workspace", function()
     local lastAt           -- the last "at" posted, so a still cursor isn't posted again
     local cursorMonitor    -- the monitor last posted as the cursor's
     -- Where the widget's posted to be while the drag's modifier is held (see Holding
-    -- the modifier, below), and whether it's been shown there yet.
+    -- the modifier, below), and whether it's been shown there yet; and what shows it
+    -- at once, set there.
     local modName, modShown = nil, false
+    local showModNow
     local ticksSinceAt = 0
     local reappearing = {} -- each window's latest reappearance, till its blur's back
     local follower, startedAt
@@ -332,12 +334,14 @@ part("dropping a window on a workspace", function()
     end
 
     -- Bar.qml's floating copy of the widget, on a monitor without the bar: on screen
-    -- from the moment the drag's modifier goes down, but empty and taking no clicks
-    -- until it's shown - a moment later, or during a drag with the cursor on that
-    -- monitor. Only then is it something to grab from or drop on.
+    -- (on every such monitor) from the moment the drag's modifier goes down, though
+    -- only seen a moment later; and during a drag, on the cursor's monitor. All that
+    -- while it's something to grab from or drop on - from the press on, not from when
+    -- it's seen, as that's what a quick META + click goes for. Otherwise it's not
+    -- looked at: it isn't there.
     local FLOATING = "bar-floating"
     local function floatingShown(name)
-        return (dragged ~= nil and cursorMonitor == name) or (modShown and modName == name)
+        return modName ~= nil or (dragged ~= nil and cursorMonitor == name)
     end
 
     -- The bar the cursor's on: its monitor, and the cursor in the bar's coordinates.
@@ -618,6 +622,7 @@ part("dropping a window on a workspace", function()
 
     local function press()
         endDrag() -- one whose release never came
+        if showModNow then showModNow() end -- in use: no waiting to see it
         local cursor = hl.get_cursor_pos()
         if not cursor or grab(cursor) then return end
         local window = windowUnderCursor(cursor)
@@ -640,13 +645,14 @@ part("dropping a window on a workspace", function()
     -- there's no bar, on the monitor the cursor's on (Bar.qml), as during a drag: so a
     -- window can be grabbed from it before any drag starts. Posted as
     -- "purpura-drag,mod,<monitor>,0" the moment the modifier goes down: the widget's
-    -- window is made and put on screen there, empty and taking no clicks, so that it's
-    -- all there - mapped and laid out, its boxes with purpura.lua - by the time it's
-    -- shown, with "purpura-drag,mod,<monitor>,1", a moment later (so a quick META + key
-    -- shortcut doesn't flash it up). Again whenever the cursor moves to another
+    -- windows are made and put on screen, on every monitor without the bar, empty and
+    -- taking no clicks - and they can be grabbed from at once (see floatingShown()) -
+    -- and it's seen on the cursor's monitor with "purpura-drag,mod,<monitor>,1", a
+    -- moment later (so a quick META + key shortcut doesn't flash it up), or at once on
+    -- a press of the drag's combo. Again whenever the cursor moves to another
     -- monitor, and "purpura-drag,mod," once it's let go. Made only once it was to be
-    -- shown, it took a moment more to come up than to be seen, and a grab in it right
-    -- away found nothing.
+    -- seen, it came up a moment after; and grabbed from only once seen, a META + click
+    -- right away went to the window under it.
     --
     -- Which keys are down comes from Hyprland's input.keyboard.key event: every key's
     -- press and release, by keycode, before any bind sees it - so nothing a bind does
@@ -710,6 +716,14 @@ part("dropping a window on a workspace", function()
             modName, modShown = name, shown
             dragEvent("mod," .. name .. (shown and ",1" or ",0"))
         end
+    end
+
+    -- The widget shown at once, the wait cut short: a press of the drag's combo while
+    -- the modifier's held is using it.
+    showModNow = function()
+        if not modWatching then return end
+        modTicks = math.max(modTicks, MOD_DELAY_TICKS)
+        modUpdate()
     end
 
     local function modTick()

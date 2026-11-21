@@ -537,14 +537,16 @@ Scope {
                     && ((dragRow.windowDragging && dragRow.dragMonitor === modelData.name)
                         || (dragRow.modMonitor === modelData.name && dragRow.modShown))
 
-                // On screen from the moment the modifier goes down here, but
-                // empty and taking no clicks until shown: by then the window's
-                // been made, mapped and laid out, so a grab in it works the
-                // moment it's seen. Made only once it was to be shown, it came
-                // up a moment after it was meant to, and a grab right away
-                // found nothing. purpura.lua ignores it until it's shown too.
+                // On screen from the moment the modifier goes down - on every
+                // screen without the bar, the cursor's or not - but see-through
+                // and letting the mouse through until shown: by then, or by the
+                // time the cursor's moved here, the window's been made, mapped
+                // and laid out. purpura.lua grabs from it from the press on,
+                // seen yet or not. Made only once it was to be shown, it came up
+                // a moment after it was meant to, and a grab right away found
+                // nothing.
                 visible: !bar.visible && !!modelData
-                    && (dragBar.shown || dragRow.modMonitor === modelData.name)
+                    && (dragBar.shown || dragRow.modMonitor !== "")
 
                 WlrLayershell.namespace: "bar-floating"
                 WlrLayershell.layer: WlrLayer.Overlay
