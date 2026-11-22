@@ -6,6 +6,7 @@ import Quickshell.Io
 import "../../Config.js" as Config
 import "../common"
 import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
+import "../common/HyprlandWindows.js" as HyprlandWindows
 
 // Small "you just switched workspace" indicator, one per screen, shown
 // briefly whenever that screen's active workspace changes - e.g. the
@@ -196,7 +197,7 @@ Scope {
                     return {
                         id: w.id,
                         monitor: w.monitor ? w.monitor.name : (ours ? name : ""),
-                        empty: w.toplevels.values.length === 0,
+                        empty: HyprlandWindows.on(Hyprland.toplevels.values, w).length === 0,
                         shown: showing || (!!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id),
                         persistent: !!w.lastIpcObject && w.lastIpcObject.ispersistent === true,
                         ws: w
@@ -249,7 +250,8 @@ Scope {
                 if (!ws) return 0
                 if (ws.id === osdWindow.signalledId && !registry.isManaged(ws)) return 2
                 if (!ws.hasFullscreen) return 0
-                return ws.toplevels.values.some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2) ? 2 : 1
+                return HyprlandWindows.on(Hyprland.toplevels.values, ws)
+                    .some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2) ? 2 : 1
             }
 
             // The active one's, for the highlight round it (activeHighlight).

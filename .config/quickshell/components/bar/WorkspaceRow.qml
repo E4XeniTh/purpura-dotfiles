@@ -6,6 +6,7 @@ import Quickshell.Io
 import "../../Config.js" as Config
 import "../common"
 import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
+import "../common/HyprlandWindows.js" as HyprlandWindows
 
 // One rectangle per current Hyprland workspace, sorted by owning
 // monitor position first and workspace number second - meant to sit
@@ -220,6 +221,16 @@ Row {
     // without them.
     property string sentDropTargets: ""
 
+    // Nothing handed over for this row's monitor - no boxes, nor where its
+    // window sits - while it's set (Bar.qml's floating copy, under the
+    // dashboard): purpura.lua then grabs from nothing there and drops on
+    // nothing there.
+    property bool withheld: false
+    onWithheldChanged: {
+        root.sentDropTargets = ""
+        Qt.callLater(root.refreshDropTargets)
+    }
+
     function sendDropTargets(force) {
         if (!root.sendsDropTargets) return
         const lua = root.dropTargetsLua()
@@ -234,6 +245,7 @@ Row {
 
     function dropTargetsLua() {
         if (!/^[A-Za-z0-9_.-]{1,64}$/.test(root.screenName)) return ""
+        if (root.withheld) return `purpura.dropTargets("${root.screenName}", {}, {})`
         // A row that's only just been put on screen (Bar.qml's floating
         // copy), or just changed, may not have placed its boxes yet.
         root.forceLayout()
@@ -355,7 +367,7 @@ Row {
             id: w.id,
             monitor: w.monitor ? w.monitor.name : "",
             rank: (w.monitor && monitorRank[w.monitor.name] !== undefined) ? monitorRank[w.monitor.name] : 999,
-            empty: w.toplevels.values.length === 0,
+            empty: HyprlandWindows.on(Hyprland.toplevels.values, w).length === 0,
             shown: !!w.monitor && !!w.monitor.activeWorkspace && w.monitor.activeWorkspace.id === w.id,
             ws: w
         }))
@@ -411,6 +423,28 @@ Row {
         repeat: false
         onTriggered: root.settledEntries = root.rowEntries
     }
+    // Settled again whenever what they'd be changes with no event of
+    // Hyprland's to say so - a j/clients reply putting a window right (see
+    // windowsRefresh).
+    onRowEntriesChanged: renderSettleTimer.restart()
+
+    // Hyprland's windows asked for once more, a moment after the events stop,
+    // and again a little later: Quickshell drops an ask that comes while one's
+    // still out, so a burst's last ones can all be dropped - and the one
+    // that's answered be from before a window moved, putting it back where it
+    // was (see HyprlandWindows.js). A fullscreen app purpura.lua sends to a
+    // workspace of its own the moment it opens is one: shown on the workspace
+    // it opened on, till the next event, without this.
+    Timer {
+        id: windowsRefresh
+        interval: 200
+        repeat: true
+        property int left: 0
+        onTriggered: {
+            Hyprland.refreshToplevels()
+            if (--windowsRefresh.left <= 0) windowsRefresh.stop()
+        }
+    }
 
     // A toplevel's lastIpcObject (the only place its at/size/class live
     // - see WindowBox below) is only ever as fresh as the last
@@ -435,6 +469,8 @@ Row {
             }
             Hyprland.refreshToplevels()
             renderSettleTimer.restart()
+            windowsRefresh.left = 2
+            windowsRefresh.restart()
         }
     }
     Component.onCompleted: {
@@ -552,11 +588,15 @@ Row {
             readonly property bool dropTarget: root.windowDragging && root.dragOver !== ""
                 && root.workspaceSelector(wsBox.modelData) === root.dragOver
 
+            // The windows on it, by each one's own workspace (see
+            // HyprlandWindows.js).
+            readonly property var windows: HyprlandWindows.on(Hyprland.toplevels.values, wsBox.modelData)
+
             // One of its windows in real fullscreen - exclusive, the whole
             // monitor (Hyprland's internal mode 2), not just maximized: its
             // border's dashed (DashedBorder, below), in the same colors.
             readonly property bool exclusiveFullscreen: !!wsBox.modelData.hasFullscreen
-                && wsBox.modelData.toplevels.values.some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2)
+                && wsBox.windows.some(t => !!t.lastIpcObject && t.lastIpcObject.fullscreen === 2)
 
             height: root.height
             width: wsBox.height * wsBox.aspect
@@ -585,7 +625,7 @@ Row {
             // it lands in the same relative spot inside this miniature
             // box.
             Repeater {
-                model: wsBox.modelData.toplevels.values
+                model: wsBox.windows
 
                 Rectangle {
                     id: winBox

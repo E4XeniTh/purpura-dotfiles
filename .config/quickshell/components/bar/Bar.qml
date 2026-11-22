@@ -540,9 +540,16 @@ Scope {
                     h: dragBar.implicitHeight
                 }) : null
 
+                // The dashboard's open on this screen (the primary, as META + D
+                // opens it - where something fullscreen hides the bar, so this
+                // would show on META's press): nothing of it then, drawn or
+                // handed over to purpura.lua (dragRow.withheld).
+                readonly property bool underDashboard: !!root.dashboard && root.dashboard.open
+                    && !!root.dashboard.screen && !!modelData && root.dashboard.screen.name === modelData.name
+
                 // Shown: during a drag with the cursor on this screen, or a
                 // moment after the drag's modifier went down here.
-                readonly property bool shown: !!modelData
+                readonly property bool shown: !!modelData && !dragBar.underDashboard
                     && ((dragRow.windowDragging && dragRow.dragMonitor === modelData.name)
                         || (dragRow.modMonitor === modelData.name && dragRow.modShown))
 
@@ -554,7 +561,7 @@ Scope {
                 // seen yet or not. Made only once it was to be shown, it came up
                 // a moment after it was meant to, and a grab right away found
                 // nothing.
-                visible: !bar.visible && !!modelData
+                visible: !bar.visible && !!modelData && !dragBar.underDashboard
                     && (dragBar.shown || dragRow.modMonitor !== "")
 
                 WlrLayershell.namespace: "bar-floating"
@@ -615,6 +622,7 @@ Scope {
                         // cursor), and the bar's own row sends in their place
                         // whenever the bar's on this screen.
                         sendsDropTargets: !bar.visible
+                        withheld: dragBar.underDashboard
                         // With where its window sits - for a META + click that
                         // comes before the window's up.
                         floatingRect: dragBar.expectedRect
