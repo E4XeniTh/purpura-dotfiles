@@ -26,6 +26,7 @@ SEEDED=()
 DOTFILES_INSTALLED=0
 CONFIGS_CHANGED=0
 CLOSE_APPS=0
+SHELL_STOPPED=0
 APPS_RESTARTED=0
 
 PRESETS=(
@@ -366,7 +367,7 @@ stage_dotfiles() {
     local -a files=()
     local f target home_esc
     STAGE=$(mktemp -d)
-    trap 'rm -rf "$STAGE"' EXIT
+    trap 'rm -rf "$STAGE"; start_shell' EXIT
 
     # Tracked files only: a checkout can also hold the gitignored personal
     # files (hyprland.lua, monitors.json, built helpers...), and those must
@@ -565,6 +566,7 @@ install_dotfiles() {
     recolor_stage
     recolor_live_hyprland
     match_fullscreen_color
+    stop_shell_for_update
     sync_stage
     mkdir -p -- "$(dirname -- "$STATE_FILE")"
     printf '#%s\n' "$COLOR" >"$STATE_FILE"
@@ -764,6 +766,79 @@ build_helpers() {
     fi
 }
 
+# ---------------- the running shell ----------------
+# Quickshell reloads the moment one of its files changes - here, the first of
+# the many an install replaces, the rest still the old ones - and again for
+# each after it. A reload like that hands the old windows to the half-new
+# code, and it can bring the whole shell down (a crash in QWindow::setScreen),
+# though everything's installed by then. So when an install changes the
+# shell's files, the shell's stopped first - hyprsunset with it, which it
+# respawns - and started again once everything's in place, through Hyprland,
+# as at login. Not while the screen's locked: the lock is the shell's, and a
+# session whose lock goes away stays locked with nothing to unlock it.
+shell_pids() {
+    pgrep -u "$EUID" -x 'qs|quickshell' || true
+}
+
+shell_locked() {
+    [[ $(qs ipc call lockscreen isLocked 2>/dev/null) == true ]]
+}
+
+# Whether installing the stage changes any of the shell's own files: one
+# that's new or different, or one the repo no longer has (see sync_stage).
+# A file linked into this checkout has already changed with it.
+stage_changes_shell() {
+    local rel live=$HOME/.config/quickshell
+    [[ -d $STAGE/.config/quickshell ]] || return 1
+    while IFS= read -r -d '' rel; do
+        [[ $(realpath -m -- "$HOME/$rel") == "$REPO"/* ]] && continue
+        cmp -s -- "$STAGE/$rel" "$HOME/$rel" || return 0
+    done < <(cd "$STAGE" && find .config/quickshell -type f -print0)
+    if [[ -d $live/components && $(realpath -m -- "$live/components") != "$REPO"/* ]]; then
+        while IFS= read -r -d '' rel; do
+            [[ -e $STAGE/.config/quickshell/components/$rel ]] || return 0
+        done < <(cd "$live/components" && find . \( -type f -o -type l \) -printf '%P\0')
+    fi
+    return 1
+}
+
+stop_shell_for_update() {
+    local -a pids=()
+    mapfile -t pids < <(shell_pids)
+    ((${#pids[@]})) || return 0
+    # Only when it can be brought back.
+    [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && command -v hyprctl >/dev/null || return 0
+    stage_changes_shell || return 0
+    if shell_locked; then
+        info "The screen is locked - carrying on once it's unlocked."
+        while shell_locked; do sleep 5; done
+    fi
+    info "Stopping the shell while its files are replaced - it starts again at the end."
+    mapfile -t -O "${#pids[@]}" pids < <(pgrep -u "$EUID" -x hyprsunset || true)
+    SHELL_STOPPED=1
+    stop_pids "${pids[@]}"
+}
+
+# The shell started again, if stop_shell_for_update stopped it and nothing
+# else (restart_apps) has - and waited for, so whatever runs next (the
+# updater's own check) finds it there.
+start_shell() {
+    local out try
+    ((SHELL_STOPPED)) || return 0
+    SHELL_STOPPED=0
+    [[ -z $(shell_pids) ]] || return 0
+    out=$(hyprctl dispatch 'hl.dsp.exec_cmd("qs")' 2>&1) || true
+    if [[ $out != *ok* ]]; then
+        warn "Couldn't start the shell again (${out:-no answer from Hyprland}) - start it with: qs"
+        return 0
+    fi
+    for ((try = 0; try < 50; try++)); do
+        [[ -n $(qs ipc call lockscreen isLocked 2>/dev/null) ]] && break
+        sleep 0.2
+    done
+    info "The shell's running again."
+}
+
 # ---------------- open apps ----------------
 # Apps read their theme when they start, so a new color only takes over
 # completely once everything open has been restarted. The warning comes
@@ -895,6 +970,7 @@ main() {
     if ((CLOSE_APPS && CONFIGS_CHANGED)); then
         restart_apps
     fi
+    start_shell
     final_notes
 }
 

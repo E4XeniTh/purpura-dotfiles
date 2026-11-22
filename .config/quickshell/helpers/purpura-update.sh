@@ -127,6 +127,62 @@ wait_until_unlocked() {
     done
 }
 
+# Quickshell reloads the moment one of its files changes, and a reload in the
+# middle of many changing, the rest still the old ones, can bring the whole
+# shell down. A copied config is purpura.sh's to look after: it stops the
+# shell while it replaces the files. A linked one changes with the pull
+# itself, so for that the shell's stopped here first - hyprsunset with it,
+# which it respawns - and started again once everything's done (on exit),
+# through Hyprland, as at login. Only when it can be: in Hyprland.
+SHELL_STOPPED=0
+
+shell_pids() {
+    pgrep -u "$EUID" -x 'qs|quickshell' || true
+}
+
+stop_shell_for_pull() {
+    local dir=$1 try pid alive
+    local -a pids=()
+    mapfile -t pids < <(shell_pids)
+    ((${#pids[@]})) || return 0
+    [[ -n ${HYPRLAND_INSTANCE_SIGNATURE:-} ]] && command -v hyprctl >/dev/null || return 0
+    # Only when the pull changes the shell's files.
+    git -C "$dir" fetch --quiet 2>/dev/null || return 0
+    git -C "$dir" diff --quiet HEAD '@{u}' -- .config/quickshell 2>/dev/null && return 0
+    info "Stopping the shell while its files change - it starts again at the end."
+    mapfile -t -O "${#pids[@]}" pids < <(pgrep -u "$EUID" -x hyprsunset || true)
+    SHELL_STOPPED=1
+    trap start_shell EXIT
+    kill -TERM -- "${pids[@]}" 2>/dev/null
+    for ((try = 0; try < 50; try++)); do
+        alive=0
+        for pid in "${pids[@]}"; do
+            kill -0 -- "$pid" 2>/dev/null && alive=1
+        done
+        ((alive)) || return 0
+        sleep 0.1
+    done
+    kill -KILL -- "${pids[@]}" 2>/dev/null
+}
+
+start_shell() {
+    local out try
+    ((SHELL_STOPPED)) || return 0
+    SHELL_STOPPED=0
+    [[ -z $(shell_pids) ]] || return 0
+    out=$(hyprctl dispatch 'hl.dsp.exec_cmd("qs")' 2>&1)
+    if [[ $out != *ok* ]]; then
+        warn "Couldn't start the shell again (${out:-no answer from Hyprland}) - start it with: qs"
+        return 0
+    fi
+    # Up before this exits - so the updater's own check, right after, reaches it.
+    for ((try = 0; try < 50; try++)); do
+        [[ -n $(qs ipc call lockscreen isLocked 2>/dev/null) ]] && break
+        sleep 0.2
+    done
+    info "The shell's running again."
+}
+
 apply() {
     local dir before after installed
     say "Purpura"
@@ -138,6 +194,9 @@ apply() {
     wait_until_unlocked
     info "Updating ${dir/#$HOME/\~}"
     before=$(git -C "$dir" rev-parse HEAD) || return 1
+    if is_linked "$dir"; then
+        stop_shell_for_pull "$dir"
+    fi
     # Fast-forward only: local commits or edits in the way are yours to sort
     # out, not something to merge or throw away from here.
     if ! git -C "$dir" pull --ff-only; then

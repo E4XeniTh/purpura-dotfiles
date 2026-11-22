@@ -136,6 +136,14 @@ newer on that checkout's upstream branch is an update.
   `./purpura.sh --update`, which installs the new configs and helpers, keeps
   your color, and only adds core packages that are
   missing (never the optional apps).
+- When an update (or a re-run of `--install`) changes the shell's own files,
+  the shell is stopped while they're replaced and started again once
+  everything's in place - with a linked checkout, around the `git pull`. Left
+  running, Quickshell reloads at the first file that changes, the rest still
+  the old ones, and again at each after it, and a reload like that can crash
+  it outright (in `QWindow::setScreen`), though the update itself goes through.
+  It's never stopped while the screen's locked, and an install that fails
+  partway still starts it again.
 
 The dropdown itself says what's waiting in plain words: how many updates are
 available (or that everything's up to date), when it last checked, with a
