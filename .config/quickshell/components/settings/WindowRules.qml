@@ -59,10 +59,12 @@ ColumnLayout {
     onActiveChanged: if (root.active) root.load()
     Component.onCompleted: root.load()
 
+    // Nothing's picked until an app's clicked (or added): none at first, and none
+    // once the one picked is removed.
     function show(list) {
         root.rules = list
         root.loaded = true
-        if (!list.some(r => r.app === root.selectedApp)) root.selectedApp = list.length > 0 ? list[0].app : ""
+        if (!list.some(r => r.app === root.selectedApp)) root.selectedApp = ""
     }
 
     function save(list) {
@@ -395,18 +397,12 @@ ColumnLayout {
     }
 
     // ---------------- How it opens ----------------
+    // Only once an app's picked above: the hint up there says to.
     SectionHeader {
         Layout.topMargin: Config.scaled(14, root.uiScale)
+        visible: !!root.selectedRule
         uiScale: root.uiScale
-        text: root.selectedRule ? "How " + root.nameOf(root.selectedApp) + " opens" : "How it opens"
-    }
-
-    Text {
-        visible: root.loaded && !root.selectedRule
-        text: "Pick an app above, or add one."
-        color: Config.fgcolorhint
-        font.family: Config.fontfamily
-        font.pixelSize: Config.scaled(13, root.uiScale)
+        text: root.selectedRule ? "How " + root.nameOf(root.selectedApp) + " opens" : ""
     }
 
     ColumnLayout {

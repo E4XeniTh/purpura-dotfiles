@@ -178,45 +178,39 @@ end)
 -- the blur off with the opacity, and a second one (purpura-reappearing) keeps it off
 -- until the fade back in is over.
 --
--- Grabbing from the widget: the drag's combo on a window drawn in the widget picks
--- that window up from whichever workspace it's on, at the press - nothing waits for
--- the mouse to move. The window there is found from the box under the cursor (the
--- bars hand over where their boxes are): the cursor's spot in it, scaled up to that
+-- Grabbing from the widget: the drag's combo pressed on a window drawn in the widget,
+-- and the mouse moved a little (CLICK_SLACK) with the button down, picks that window
+-- up from whichever workspace it's on. Until then nothing's touched: let go first,
+-- it's a click on that box, and that workspace is switched to, as a plain click on
+-- it does. The window's found from the box under the cursor as it's pressed (the bars
+-- hand over where their boxes are): the cursor's spot in it, scaled up to that
 -- workspace's monitor - a fullscreen window wherever it's pressed, as the widget
 -- draws only that one then, otherwise floating over tiled, the most recently focused
--- among equals. The press bind runs before the "Drag window" bind for the same press
--- (binds go in the order they're made, and it's made just before), so by the time
--- that one looks for a window to drag, the grabbed one is already under the cursor,
--- on the workspace shown there: out of sight first, then out of fullscreen, floating
--- if it was tiled, raised, and held by its top edge, centred on the cursor. That bind
--- starts Hyprland's own drag of it, the very drag as any other from there on - hidden
--- over a box, that box lit up.
---
--- Hyprland's drag looks for its window where it's drawn right now, which mid-
--- animation is still where it was - so for that one moment the window also has
--- dim_around (purpura-grabbing), for which Hyprland counts a window as covering its
--- whole monitor. Being invisible, it dims nothing; the tag comes off a millisecond
--- later, the drag under way by then. Until it's let go, purpura-grabbed keeps its
--- animations off, so it never fades out or glides where it lands - and it vanishes
--- and comes back at once over the boxes. Let go, it's put down as any drag: on a
--- box, sent there; anywhere else, left there. One that was tiled goes back into the
--- tiling either way, and one that was fullscreen is fullscreen again on a box. Let
--- go without moving, it's over its own box - so it's back where it was, and that
--- workspace is switched to, as a plain click on its box does.
+-- among equals. Picked up, it's put under the cursor on the workspace shown there:
+-- out of sight first, then out of fullscreen, floating if it was tiled, raised, and
+-- held by its top edge, centred on the cursor - and carried there from then on, kept
+-- under the cursor here, Hyprland's own drag having had to start at the press (it
+-- only ever starts then, on what's under the cursor that moment) - hidden over a box,
+-- that box lit up. Until it's let go, purpura-grabbed keeps its animations off, so it
+-- never glides after the cursor, fades out or glides where it lands - and it vanishes
+-- and comes back at once over the boxes. Let go, it's put down as any drag: on a box,
+-- sent there; anywhere else, left there - on the workspace shown on the monitor it's
+-- let go on. One that was tiled goes back into the tiling either way, and one that
+-- was fullscreen is fullscreen again on a box.
 --
 -- A press on the widget that's on no window drawn there - an empty workspace, the gap
 -- between two, the floating widget's edge - drags nothing at all, rather than the
--- window under the widget: it turns "Drag window" off for that one press (see
--- holdOffDrag()). Let go without moving, on a box, that workspace is switched to too.
---
--- non_consuming: the drag's combo clicked on no window still reaches the app below.
--- These have no description, so Settings > Shortcuts keeps showing the drag bind's.
+-- window under the widget; let go without moving, on a box, that workspace is
+-- switched to too. Either way "Drag window" is turned off for that one press (see
+-- holdOffDrag()), and the press is kept from the widget and whatever's under it.
+-- Anywhere else, the press and its release go on to the app below as well (a bind's
+-- pass_event), as Hyprland's own drag lets them on no window. These have no
+-- description, so Settings > Shortcuts keeps showing the drag bind's.
 
 part("dropping a window on a workspace", function()
     local TAG = "purpura-dragged"
     local REAPPEARING = "purpura-reappearing"
     local GRABBED = "purpura-grabbed"
-    local GRABBING = "purpura-grabbing"
     -- Longer than the fade back in: hyprland.lua.example's takes 0.3s, Hyprland's
     -- default 1s. An opaque window shows nothing of its blur once it's back anyway.
     local REAPPEAR_MS = 1200
@@ -227,6 +221,11 @@ part("dropping a window on a workspace", function()
     -- How far below a grabbed window's top edge the cursor holds it - by its top, as
     -- by a title bar.
     local GRIP = 16
+    -- How far the cursor can go from where the widget was pressed and it's still a
+    -- click there, rather than a drag.
+    local CLICK_SLACK = 4
+    -- What a bind hands Hyprland back for the press or release to go on to the app.
+    local PASS = { pass_event = true }
     -- Should the release never come (a submap switched to mid-drag), the drag ends
     -- here after this long.
     local FOLLOW_FOR_S = 120
@@ -254,16 +253,16 @@ part("dropping a window on a workspace", function()
         no_anim = true,
     })
 
-    hl.window_rule({
-        name = GRABBING,
-        match = { tag = GRABBING },
-        dim_around = true,
-    })
-
     local targets = {}     -- each monitor's workspace boxes, from its bar
     local separators = {}  -- and the spans between monitors' boxes there
     local dragged          -- { address, relX, relY } while the button's down
-    local grabbed          -- { tiled, fullscreen } while it's one grabbed from the widget
+    local grabbed          -- { tiled, fullscreen, w } while it's one grabbed from the widget
+    -- A press on the widget, from the press till it's let go (see Grabbing): where it
+    -- was, the box it was on and the window drawn there, if any; moved, once the
+    -- cursor's gone further than CLICK_SLACK from there.
+    local pressed
+    local heldAt           -- where the cursor was when a grabbed window was last put under it
+    local grab             -- see below
     local over             -- the box or separator under the cursor, while there's one (the window's hidden)
     -- A grabbed window is hidden before the box under the cursor's been posted.
     local HIDDEN_AT_START = {}
@@ -489,10 +488,9 @@ part("dropping a window on a workspace", function()
     -- it's being sent off out of sight (see above).
     local function endDrag(sentAway)
         local window, hidden, wasGrabbed = dragged, over ~= nil, grabbed ~= nil
-        dragged, over, grabbed = nil, nil, nil
+        dragged, over, grabbed, pressed, heldAt = nil, nil, nil, nil, nil
         if follower then follower:set_enabled(false) end
         if not window then return end
-        if wasGrabbed then tag(window.address, "-" .. GRABBING) end
         if sentAway then
             holdWhileGoing(window.address, hidden, sentAway)
         else
@@ -502,12 +500,41 @@ part("dropping a window on a workspace", function()
         dragEvent("end")
     end
 
+    local function pastSlack(from, cursor)
+        local dx, dy = cursor.x - from.x, cursor.y - from.y
+        return dx * dx + dy * dy > CLICK_SLACK * CLICK_SLACK
+    end
+
     local function follow()
+        if startedAt and os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
+        -- Pressed on the widget, not moved yet: a drag only once the cursor's gone a
+        -- little way - of the window drawn where it was pressed, picked up then.
+        if pressed and not pressed.moved and not dragged then
+            local cursor = hl.get_cursor_pos()
+            if not cursor or not pastSlack(pressed.at, cursor) then return end
+            pressed.moved = true
+            if not (pressed.window and grab(pressed.window, cursor)) then
+                follower:set_enabled(false) -- nothing to drag: its release just ends it
+                return
+            end
+        end
         if not dragged then
             follower:set_enabled(false)
             return
         end
-        if os.time() - startedAt > FOLLOW_FOR_S then return endDrag() end
+        -- One grabbed from the widget is carried here, not by Hyprland's drag: kept
+        -- under the cursor, held by its top.
+        if grabbed then
+            local cursor = hl.get_cursor_pos()
+            if cursor and not (heldAt and heldAt.x == cursor.x and heldAt.y == cursor.y) then
+                heldAt = { x = cursor.x, y = cursor.y }
+                hl.dispatch(hl.dsp.window.move({
+                    x = math.floor(cursor.x - grabbed.w / 2),
+                    y = math.floor(cursor.y - GRIP),
+                    window = "address:" .. dragged.address,
+                }))
+            end
+        end
         -- The monitor the cursor's on, whenever that changes: the bar shows its
         -- floating copy of the widget only there (Bar.qml).
         local onMonitor = hl.get_monitor_at_cursor()
@@ -562,20 +589,20 @@ part("dropping a window on a workspace", function()
         return mode == 1 and "maximized" or "fullscreen"
     end
 
-    -- Picks up the window drawn under the cursor in the widget (see above) - false
-    -- when there's none, or a special workspace is shown there, which Hyprland's drag
-    -- would look in instead.
-    local function grab(cursor)
-        local window = windowInWidget(cursor)
-        local monitor = window and hl.get_monitor_at_cursor()
+    -- Picks up that window - the one drawn where the widget was pressed - and puts it
+    -- under the cursor (see above): false when it's gone, or when a special workspace
+    -- is shown on the monitor the cursor's on, or none is.
+    grab = function(address, cursor)
+        local window = hl.get_window("address:" .. address)
+        if not isObject(window) or window.mapped == false then return false end
+        local monitor = hl.get_monitor_at_cursor()
         if not monitor or monitor.active_special_workspace then return false end
         local here = monitor.active_workspace and workspaceSelector(monitor.active_workspace)
         if not here then return false end
-        local address, selector = window.address, "address:" .. window.address
+        local selector = "address:" .. address
         settleAway(address) -- still going from a drop a moment ago
         dragged = { address = address }
         grabbed = { tiled = not window.floating, fullscreen = window.fullscreen or 0 }
-        startedAt = os.time()
         lastAt, ticksSinceAt, cursorMonitor = nil, 0, nil
         dragEvent("start," .. address)
         -- Out of sight before it moves at all, with no animations first, so its
@@ -604,16 +631,13 @@ part("dropping a window on a workspace", function()
         hl.dispatch(hl.dsp.window.alter_zorder({ mode = "top", window = selector }))
         -- Its size as a floating window, which Hyprland reports at once.
         local w = pair((hl.get_window(selector) or window).size, "x", "y")
+        grabbed.w = w
         hl.dispatch(hl.dsp.window.move({
             x = math.floor(cursor.x - w / 2),
             y = math.floor(cursor.y - GRIP),
             window = selector,
         }))
-        -- For "Drag window"'s search, next - see above.
-        tag(address, "+" .. GRABBING)
-        hl.timer(function() tag(address, "-" .. GRABBING) end, { timeout = 1, type = "oneshot" })
-        startFollowing()
-        follow() -- the box lit up and the icon shown now, not a tick later
+        heldAt = { x = cursor.x, y = cursor.y }
         return true
     end
 
@@ -645,6 +669,23 @@ part("dropping a window on a workspace", function()
             sentAway = not shown and box.workspace
             if sentAway then tag(dragged.address, "+" .. GRABBED) end
             hl.dispatch(hl.dsp.window.move({ workspace = box.workspace, window = selector, follow = false }))
+        end
+        if window and grabbed and not box then
+            -- Off the boxes, on another monitor than the one it was carried from: onto
+            -- the workspace shown there, as Hyprland's own drag puts one - it only moved
+            -- it, carrying it here.
+            local monitor = hl.get_monitor_at_cursor()
+            local active = isObject(monitor) and not monitor.active_special_workspace and monitor.active_workspace
+            local target = active and workspaceSelector(active)
+            if target and target ~= workspaceSelector(window.workspace) then
+                hl.dispatch(hl.dsp.window.move({ workspace = target, window = selector, follow = false }))
+                local cursor = hl.get_cursor_pos()
+                if cursor then
+                    hl.dispatch(hl.dsp.window.move({
+                        x = math.floor(cursor.x - grabbed.w / 2), y = math.floor(cursor.y - GRIP), window = selector,
+                    }))
+                end
+            end
         end
         if window and grabbed and grabbed.tiled then
             hl.dispatch(hl.dsp.window.float({ action = "disable", window = selector }))
@@ -698,12 +739,24 @@ part("dropping a window on a workspace", function()
         endDrag() -- one whose release never came
         if showModNow then showModNow() end -- in use: no waiting to see it
         local cursor = hl.get_cursor_pos()
-        if not cursor or grab(cursor) then return end
-        -- On the widget, though on no window drawn there - an empty workspace, a gap
-        -- between them, its edge: nothing's dragged.
-        if onWidget(cursor) then return holdOffDrag(key) end
+        if not cursor then return PASS end
+        -- On the widget: nothing's dragged, not yet - a window drawn there is picked up
+        -- once the cursor moves (follow()), and let go before then it's a click on the
+        -- box. Hyprland's drag doesn't start, and the press goes no further.
+        if onWidget(cursor) then
+            holdOffDrag(key)
+            local window = windowInWidget(cursor)
+            pressed = {
+                at = { x = cursor.x, y = cursor.y },
+                box = boxUnderCursor(),
+                window = isObject(window) and window.address or nil,
+            }
+            startedAt = os.time()
+            startFollowing()
+            return nil
+        end
         local window = windowUnderCursor(cursor)
-        if not window then return end
+        if not window then return PASS end
         settleAway(window.address) -- still going from a drop a moment ago
         local x, y = pair(window.at, "x", "y")
         local monitor = window.monitor
@@ -716,6 +769,25 @@ part("dropping a window on a workspace", function()
         lastAt, ticksSinceAt, cursorMonitor = nil, 0, nil
         dragEvent("start," .. window.address)
         startFollowing()
+        return PASS
+    end
+
+    -- Letting go, after a drag or a click (Hyprland tells the two apart by
+    -- binds:drag_threshold, 0 unless set - any move at all a drag): a grabbed window's
+    -- put down; a press on the widget let go before moving off is a click on its box,
+    -- which switches to that workspace, as a plain click there does; any other drag's
+    -- put down too. The release goes on to the app only when the press did.
+    local function release()
+        letDragsBe()
+        local p = pressed
+        if grabbed then return drop() end
+        if p then
+            endDrag()
+            if p.box and not p.moved then hl.dispatch(hl.dsp.focus({ workspace = p.box.workspace })) end
+            return nil
+        end
+        if not dragged then return PASS end
+        drop()
     end
 
     -- Holding the drag's modifier - META, for META + LMB - shows the widget too where
@@ -843,23 +915,13 @@ part("dropping a window on a workspace", function()
         if not ok then report("showing the workspace widget while the modifier's held", err) end
     end)
 
-    -- The three binds on the drag's combo (see above): the press, the release after
-    -- a drag, and the release after a click - which puts a grabbed window down even
-    -- without a move (back on its own box), and just ends any other drag; and then, on
-    -- one of the widget's boxes, switches to that workspace, as a plain click there
-    -- does. And the modifiers it needs, for the widget while they're held.
+    -- The three binds on the drag's combo (see above): the press, and the release
+    -- after a drag and after a click (see release()). And the modifiers it needs, for
+    -- the widget while they're held.
     local function bindAlong(bind, keys, key)
-        bind(keys, function() press(key) end, { non_consuming = true })
-        bind(keys, function()
-            letDragsBe()
-            drop()
-        end, { drag = true })
-        bind(keys, function()
-            letDragsBe()
-            local box = boxUnderCursor()
-            if grabbed then drop() else endDrag() end
-            if box then hl.dispatch(hl.dsp.focus({ workspace = box.workspace })) end
-        end, { click = true })
+        bind(keys, function() return press(key) end)
+        bind(keys, function() return release() end, { drag = true })
+        bind(keys, function() return release() end, { click = true })
         comboMods[key] = modifiersOf(keys)
     end
 
@@ -932,7 +994,7 @@ part("dropping a window on a workspace", function()
     hl.on("config.reloaded", function()
         for _, window in ipairs(hl.get_windows()) do
             for _, name in ipairs(window.tags or {}) do
-                if name == TAG or name == REAPPEARING or name == GRABBED or name == GRABBING then
+                if name == TAG or name == REAPPEARING or name == GRABBED or name == "purpura-grabbing" then
                     tag(window.address, "-" .. name)
                 end
             end
@@ -1538,7 +1600,8 @@ end)
 -- monitor's showing, when that's past 5, isn't pinned and holds nothing else, or else
 -- a new one, numbered from 6. A fullscreen app opening is a window that's fullscreen
 -- as it opens, or goes fullscreen within its first few seconds, as games do;
--- maximized doesn't count, nor a window going fullscreen later on. The window goes
+-- maximized doesn't count, nor a window going fullscreen later on, nor one made
+-- fullscreen by hand (META + F11, Settings > Shortcuts' Fullscreen). The window goes
 -- there, kept as fullscreen, the monitor's switched to it, and the workspace is bound
 -- to that monitor (a workspace rule, so it's made there and comes back there) - the
 -- book has it as fullscreen, for that window's app. Then
@@ -1647,9 +1710,54 @@ part("workspaces of their own", function()
         return text:find('"createFullscreenWorkspaces"%s*:%s*true') ~= nil
     end
 
+    -- Fullscreen by hand - a bind made with hl.dsp.window.fullscreen (META + F11,
+    -- Settings > Shortcuts' Fullscreen) - or put back by this file (a window let go
+    -- after a grab from the widget) isn't an app going fullscreen as it opens, so it's
+    -- left where it is. Such a fullscreen's marked on its window just before it's
+    -- dispatched, and that mark's what fullscreenOpened() goes by.
+    local BY_HAND_S = 2
+    local byHand = {} -- by address: when it was last fullscreened that way
+    local fullscreens = setmetatable({}, { __mode = "k" }) -- each such action, with what it was made with
+    local makeFullscreen = hl.dsp.window.fullscreen
+    hl.dsp.window.fullscreen = function(opts, ...)
+        local action = makeFullscreen(opts, ...)
+        if action ~= nil and type(opts) == "table" and opts.mode ~= "maximized" and opts.action ~= "unset" then
+            fullscreens[action] = opts
+        end
+        return action
+    end
+    local function markByHand(opts)
+        local window = type(opts.window) == "string" and hl.get_window(opts.window) or hl.get_active_window()
+        if isObject(window) and window.address then byHand[window.address] = os.time() end
+    end
+    local dispatch = hl.dispatch
+    hl.dispatch = function(action, ...)
+        local opts = action ~= nil and fullscreens[action]
+        if opts then pcall(markByHand, opts) end
+        return dispatch(action, ...)
+    end
+    local bindFullscreen = hl.bind
+    hl.bind = function(keys, action, ...)
+        local opts = action ~= nil and fullscreens[action]
+        if opts then
+            local fullscreen = action
+            action = function()
+                local ok, err = pcall(function()
+                    markByHand(opts)
+                    dispatch(fullscreen)
+                end)
+                if not ok then report("workspaces of their own", err) end
+            end
+        end
+        return bindFullscreen(keys, action, ...)
+    end
+
     -- A fullscreen app that's opened: its own workspace, on its own monitor - said.
     local function fullscreenOpened(address)
         opened[address] = nil
+        local by = byHand[address]
+        byHand[address] = nil
+        if by and os.time() - by <= BY_HAND_S then return end
         if not fullscreenWorkspaces() then return end
         local window = hl.get_window("address:" .. address)
         if not isObject(window) or window.fullscreen ~= 2 then return end
@@ -1718,7 +1826,7 @@ part("workspaces of their own", function()
     end)
 
     hl.on("window.close", function(window)
-        if isObject(window) and window.address then opened[window.address] = nil end
+        if isObject(window) and window.address then opened[window.address], byHand[window.address] = nil, nil end
     end)
 
     -- The default binds, for a config with none of them (see above).

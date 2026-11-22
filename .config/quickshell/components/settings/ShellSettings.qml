@@ -908,7 +908,7 @@ Item {
                         // Close under the setting it's for, like the Power category's.
                         Layout.topMargin: -Config.scaled(6, root.uiScale)
                         uiScale: root.uiScale
-                        text: "An app that starts in fullscreen - as it opens, or within its first five seconds, as games do; maximized doesn't count - is moved to an empty workspace of its own on its monitor, which the workspace OSD then shows. Off, it stays on the workspace it opened on."
+                        text: "An app that starts in fullscreen - as it opens, or within its first five seconds, as games do; maximized doesn't count, nor fullscreen by hand with META + F11 - is moved to an empty workspace of its own on its monitor, which the workspace OSD then shows. Off, it stays on the workspace it opened on."
                     }
 
                     Item {}
