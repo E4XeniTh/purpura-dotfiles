@@ -3,12 +3,12 @@ import Quickshell
 import Quickshell.Io
 import "WorkspaceRegistryLogic.js" as Logic
 
-// purpura.lua's book of Hyprland's workspaces (WORKSPACES there): every workspace's
+// workspace.lua's book of Hyprland's workspaces (WORKSPACES there): every workspace's
 // purpura number and type (pinned, spare, fullscreen, new, other) and what
 // it's for, each monitor's assigned workspaces and what Display settings' buttons
-// picked for it - from $XDG_RUNTIME_DIR/purpura-workspaces.json, which purpura.lua
+// picked for it - from $XDG_RUNTIME_DIR/purpura-workspaces.json, which workspace.lua
 // rewrites as it changes. Every copy watches the file. A read that catches it
-// mid-write keeps the last good one. With no file (purpura.lua not loaded) there's
+// mid-write keeps the last good one. With no file (workspace.lua not loaded) there's
 // no book: 1-5 still show their numbers and count as managed, as they did by number.
 Scope {
     id: root

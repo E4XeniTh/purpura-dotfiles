@@ -1,6 +1,6 @@
 .pragma library
 
-// The book purpura.lua keeps of Hyprland's workspaces (WORKSPACES there), as the
+// The book workspace.lua keeps of Hyprland's workspaces (WORKSPACES there), as the
 // shell reads it from $XDG_RUNTIME_DIR/purpura-workspaces.json:
 //   { instance,
 //     monitors: { "<name>": { workspaces: [Hyprland ids], pins: [1-5] } },
@@ -76,7 +76,7 @@ function typeOf(book, id) {
 }
 
 // One Display settings pinned - the only managed kind. With no book at all
-// (purpura.lua not loaded), 1-5 count as managed, as they did by number.
+// (workspace.lua not loaded), 1-5 count as managed, as they did by number.
 function isManaged(book, id) {
     if (!book) return isInt(id) && id >= 1 && id <= 5
     return typeOf(book, id) === "pinned"

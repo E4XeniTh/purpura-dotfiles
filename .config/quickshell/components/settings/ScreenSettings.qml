@@ -255,14 +255,14 @@ Item {
         return on.length === 1 ? on[0].name : ""
     }
 
-    // The book's monitors - purpura.lua's WORKSPACES, read through
+    // The book's monitors - workspace.lua's WORKSPACES, read through
     // WorkspaceRegistry.qml: per monitor, "workspaces", its assigned ones as
     // they're live, and "pins", what was picked with the buttons. They differ
     // while a monitor's off: its pins are kept for when it's back, its
     // workspaces are live on another monitor. Login (apply-monitors.sh) hands it
     // monitors.json's. Right after an Apply, what that handed over, until the
     // book reads back with it - or a few seconds have gone (the book never took
-    // it: purpura.lua not loaded).
+    // it: workspace.lua not loaded).
     WorkspaceRegistry {
         id: registry
         onBookChanged: {
@@ -480,7 +480,7 @@ Item {
         // already claimed by another active monitor.
         //
         // Only within 1-5, though. Once those are all another active monitor's,
-        // the monitor's left with an empty list here, and purpura.lua's book
+        // the monitor's left with an empty list here, and workspace.lua's book
         // gives it a spare of its own - numbered from 6, and an id no other
         // workspace has. This can't see the workspaces an app or a bind made
         // (a fullscreen app's own, say), so a spare picked here past 5 could have
@@ -1217,7 +1217,7 @@ Item {
             if (line) monitorLines.push(line)
         }
 
-        // The workspaces, handed to purpura.lua's book (WORKSPACES there) in one
+        // The workspaces, handed to workspace.lua's book (WORKSPACES there) in one
         // go, rather than line by line from here: each active monitor's resolved
         // list - Hyprland then keeps those on it (persistent rules), its lowest its
         // default - with what the buttons picked, for them. The book switches a

@@ -26,8 +26,9 @@ Row {
     property string screenName: ""
 
     // ---------------- dropping a dragged window on a workspace ----------------
-    // purpura.lua (~/.config/hypr/purpura.lua) follows a window dragged with
-    // the "Drag window" bind (mainMod + LMB unless it's been moved) and tells
+    // workspace.lua (~/.config/hypr/workspace.lua, which purpura.lua runs)
+    // follows a window dragged with the "Drag window" bind (mainMod + LMB
+    // unless it's been moved) and tells
     // the shell about it through custom events on Hyprland's socket - the bar
     // itself never sees the cursor during a drag, as Hyprland keeps the
     // pointer on the dragged window:
@@ -44,20 +45,20 @@ Row {
     //                                           (from the start, then on
     //                                           every change)
     //   purpura-drag,end                        it's over
-    // purpura.lua knows where this row's boxes are (sendDropTargets below),
+    // workspace.lua knows where this row's boxes are (sendDropTargets below),
     // finds the cursor in them, and sends the window to the workspace of the
     // box it's let go on, by itself - and picks up a window drawn in a box
     // pressed with the drag's combo, for Hyprland to drag from there. Here,
     // the box under the cursor just lights up.
     property bool windowDragging: false
-    // Whether this row hands purpura.lua its boxes: one row per monitor -
+    // Whether this row hands workspace.lua its boxes: one row per monitor -
     // the bar's while it's shown, Bar.qml's floating copy's whenever it
     // isn't (shown or not, so they're there the moment it appears). A
     // hidden bar's row would otherwise send its own, wrong, spans for the
     // same monitor.
     property bool sendsDropTargets: true
     // Bar.qml's floating copy only: where on the screen its window sits,
-    // { x, y, w, h } - handed over with the boxes, so purpura.lua can grab from
+    // { x, y, w, h } - handed over with the boxes, so workspace.lua can grab from
     // it before Hyprland's even mapped the window (a META + click as quick as
     // the META).
     property var floatingRect: null
@@ -193,7 +194,7 @@ Row {
             : Quickshell.iconPath("application-x-executable")
     }
 
-    // A workspace by its Hyprland id (purpura.lua's selectors go by those, not
+    // A workspace by its Hyprland id (workspace.lua's selectors go by those, not
     // by purpura's numbers), or by name when it has one (no quotes or anything
     // else that could end the Lua string).
     function workspaceSelector(workspace) {
@@ -204,9 +205,9 @@ Row {
 
     // Each box's span across the bar, in the bar's own coordinates (the gap
     // after a box counts as half its own, half the next's), its workspace,
-    // the area of the monitor that's on - for purpura.lua to land a
+    // the area of the monitor that's on - for workspace.lua to land a
     // floating window inside - and the box itself (bx/by/bw/bh), which
-    // draws that area scaled down: from it, purpura.lua finds the window
+    // draws that area scaled down: from it, workspace.lua finds the window
     // drawn under a press of the drag's combo in a box and picks that window
     // up, then and there, for Hyprland to drag like any other. Then the
     // separators' spans between monitors' boxes, where the window stays
@@ -217,13 +218,13 @@ Row {
     // The press needs them there already, so they're handed over whenever
     // they'd come out different - looked at on any change the row knows of
     // and once a second besides (dropTargetsCheck) - and again at a drag's
-    // start, and after a config reload, which starts purpura.lua over
+    // start, and after a config reload, which starts workspace.lua over
     // without them.
     property string sentDropTargets: ""
 
     // Nothing handed over for this row's monitor - no boxes, nor where its
     // window sits - while it's set (Bar.qml's floating copy, under the
-    // dashboard): purpura.lua then grabs from nothing there and drops on
+    // dashboard): workspace.lua then grabs from nothing there and drops on
     // nothing there.
     property bool withheld: false
     onWithheldChanged: {
@@ -324,12 +325,12 @@ Row {
 
     // Show Empty Workspaces In Widget (Settings > General > Shell > Main Bar): a
     // workspace that's empty and not on screen gets a box too. Display settings'
-    // pins are kept by Hyprland (persistent - purpura.lua's WORKSPACES), so they're
+    // pins are kept by Hyprland (persistent - workspace.lua's WORKSPACES), so they're
     // there whether anything's on them or not; without this, the empty ones not
     // shown are left out, as when Hyprland let them go.
     readonly property bool showEmptyWidget: !!root.barSettingsStore.showEmptyWidget
 
-    // purpura.lua's book of the workspaces - each one's purpura number and type
+    // workspace.lua's book of the workspaces - each one's purpura number and type
     // (WorkspaceRegistry.qml).
     WorkspaceRegistry {
         id: registry
@@ -432,7 +433,7 @@ Row {
     // and again a little later: Quickshell drops an ask that comes while one's
     // still out, so a burst's last ones can all be dropped - and the one
     // that's answered be from before a window moved, putting it back where it
-    // was (see HyprlandWindows.js). A fullscreen app purpura.lua sends to a
+    // was (see HyprlandWindows.js). A fullscreen app workspace.lua sends to a
     // workspace of its own the moment it opens is one: shown on the workspace
     // it opened on, till the next event, without this.
     Timer {
@@ -459,9 +460,9 @@ Row {
                 root.handleDragEvent(event.data)
                 return
             }
-            // purpura.lua starts over without the boxes (see sendDropTargets()).
+            // workspace.lua starts over without the boxes (see sendDropTargets()).
             if (event.name === "configreloaded") {
-                // Its release won't be posted by the purpura.lua there is now.
+                // Its release won't be posted by the workspace.lua there is now.
                 root.modMonitor = ""
                 root.modShown = false
                 root.sentDropTargets = ""
@@ -731,10 +732,10 @@ Row {
             // Covers the whole box (window-grid rectangles/icons and
             // the number label underneath have no MouseAreas of their
             // own to compete with). The drag's combo never reaches it:
-            // purpura.lua picks up a window drawn here once the mouse moves
+            // workspace.lua picks up a window drawn here once the mouse moves
             // with it held and carries it (see sendDropTargets()) - and that
             // combo clicked here without moving switches to this workspace
-            // too, from purpura.lua, the window left be.
+            // too, from workspace.lua, the window left be.
             MouseArea {
                 anchors.fill: parent
                 onClicked: wsBox.modelData.activate()

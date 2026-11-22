@@ -121,7 +121,7 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            // Not purpura.lua's drag events ("custom"): they change nothing
+            // Not workspace.lua's drag events ("custom"): they change nothing
             // here, and come many a second while a dragged window's over the
             // workspace widget.
             if (event.name === "custom") return
@@ -477,7 +477,7 @@ Scope {
             // while the cursor's on the workspace widget on this screen - a box,
             // or a separator between monitors' boxes - where the window itself
             // turns invisible. The icon the workspace widget draws for
-            // it (WorkspaceRow's iconSourceFor()), moving as purpura.lua
+            // it (WorkspaceRow's iconSourceFor()), moving as workspace.lua
             // reports the cursor; this bar's row follows the drag even while
             // the bar's hidden. A strip across the top of the screen, over
             // everything (the floating widget below included) and taking no
@@ -518,13 +518,13 @@ Scope {
 
             // During a window drag, on a screen this bar isn't showing on (any
             // but the primary, or the primary while something fullscreen hides
-            // it) - and only while the cursor's on that screen (purpura.lua
+            // it) - and only while the cursor's on that screen (workspace.lua
             // says which one it's on) - or while the drag's modifier is held
             // there (META, for META + LMB), so a window can be grabbed from it
             // before any drag: the same workspace widget, floating at
             // the top of the screen - over everything and reserving no room -
             // so the window can be dropped on a workspace there too. Its layer
-            // is "bar-floating", which purpura.lua looks for along with "bar".
+            // is "bar-floating", which workspace.lua looks for along with "bar".
             PanelWindow {
                 id: dragBar
                 screen: modelData
@@ -543,7 +543,7 @@ Scope {
                 // The dashboard's open on this screen (the primary, as META + D
                 // opens it - where something fullscreen hides the bar, so this
                 // would show on META's press): nothing of it then, drawn or
-                // handed over to purpura.lua (dragRow.withheld).
+                // handed over to workspace.lua (dragRow.withheld).
                 readonly property bool underDashboard: !!root.dashboard && root.dashboard.open
                     && !!root.dashboard.screen && !!modelData && root.dashboard.screen.name === modelData.name
 
@@ -557,7 +557,7 @@ Scope {
                 // screen without the bar, the cursor's or not - but see-through
                 // and letting the mouse through until shown: by then, or by the
                 // time the cursor's moved here, the window's been made, mapped
-                // and laid out. purpura.lua grabs from it from the press on,
+                // and laid out. workspace.lua grabs from it from the press on,
                 // seen yet or not. Made only once it was to be shown, it came up
                 // a moment after it was meant to, and a grab right away found
                 // nothing.
@@ -616,8 +616,8 @@ Scope {
                         uiScale: bar.uiScale
                         screenName: modelData ? modelData.name : ""
                         // Whenever the bar isn't on this screen - shown or not -
-                        // so purpura.lua has its boxes before it appears. Until
-                        // it's shown they're never matched (purpura.lua only
+                        // so workspace.lua has its boxes before it appears. Until
+                        // it's shown they're never matched (workspace.lua only
                         // looks at a shown "bar-floating" layer under the
                         // cursor), and the bar's own row sends in their place
                         // whenever the bar's on this screen.

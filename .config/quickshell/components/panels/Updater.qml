@@ -628,7 +628,7 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            // Not purpura.lua's drag events (see Bar.qml's).
+            // Not workspace.lua's drag events (see Bar.qml's).
             if (event.name === "custom") return
             fullscreenCheckProcess.running = true
         }

@@ -9,8 +9,8 @@
 # `eval` is the only working write path here.
 #
 # Then hands each monitor's "workspaces" (the ones pinned to it with the
-# numbered buttons, 1-5) to purpura.lua's book of workspaces, in one
-# purpura.workspaces.assign() call - see WORKSPACES in ~/.config/hypr/purpura.lua.
+# numbered buttons, 1-5) to workspace.lua's book of workspaces, in one
+# purpura.workspaces.assign() call - see WORKSPACES in ~/.config/hypr/workspace.lua.
 # The book makes them persistent rules on their monitors, each monitor's lowest
 # its default, so Hyprland itself keeps them there, makes the missing ones and
 # moves the misplaced ones home; gives a monitor with none of 1-5 a spare; and,

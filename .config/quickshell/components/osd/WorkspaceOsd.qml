@@ -30,7 +30,7 @@ Scope {
     // multiplied into every window's Config.uiScale below.
     property real shellScale: 1.0
 
-    // purpura.lua's book of the workspaces (WorkspaceRegistry.qml): which are
+    // workspace.lua's book of the workspaces (WorkspaceRegistry.qml): which are
     // pinned to which monitor, and each one's purpura number. Read once here and
     // shared by every screen's own window below.
     WorkspaceRegistry {
@@ -110,7 +110,7 @@ Scope {
     // fullscreen app given a workspace of its own still does (below).
     readonly property bool showOnSwitch: root.barSettingsStore.showWorkspaceOsdOnSwitch !== false
 
-    // purpura.lua's "purpura-workspace,fullscreen,<monitor>,<workspace>": a
+    // workspace.lua's "purpura-workspace,fullscreen,<monitor>,<workspace>": a
     // fullscreen app that opened has been sent to a workspace of its own
     // there (with Create Workspace For Fullscreen Apps on). That monitor's
     // OSD shows it, that workspace in the row - dashed, even should it be the
@@ -120,7 +120,7 @@ Scope {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            // Not purpura.lua's drag events (see Bar.qml's).
+            // Not workspace.lua's drag events (see Bar.qml's).
             if (event.name === "custom") {
                 const parts = String(event.data).split(",")
                 if (parts.length === 4 && parts[0] === "purpura-workspace" && parts[1] === "fullscreen"
@@ -129,7 +129,7 @@ Scope {
                     // The row's looked at again once it's settled, that one in it.
                     renderSettleTimer.restart()
                 } else if (parts.length === 3 && parts[0] === "purpura-workspace" && parts[1] === "shown") {
-                    // purpura.lua's "purpura-workspace,shown,<monitor>": META + Tab
+                    // workspace.lua's "purpura-workspace,shown,<monitor>": META + Tab
                     // or META + CTRL + Tab switched the monitor under the cursor
                     // while another had the focus - which Hyprland says nothing
                     // of, so every monitor's workspace (this OSD's, the bar's) is
@@ -184,7 +184,7 @@ Scope {
             // A workspace Hyprland's only just made has no monitor yet - not
             // until Quickshell's asked for the list again, a moment after it
             // shows - so the one this monitor's showing counts as its own
-            // here, as does the one purpura.lua's said a fullscreen app's
+            // here, as does the one workspace.lua's said a fullscreen app's
             // been given here.
             function workspacesNow() {
                 if (!osdWindow.hyprMonitor) return []

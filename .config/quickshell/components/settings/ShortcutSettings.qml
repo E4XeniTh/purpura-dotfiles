@@ -148,7 +148,7 @@ Item {
         { label: "Maximize", lua: "hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })" },
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
         { label: "Go to workspace", workspace: "hl.dsp.focus({ workspace = %1 })" },
-        // purpura.lua's (see A workspace of its own there): both on the monitor under
+        // workspace.lua's (see A workspace of its own there): both on the monitor under
         // the cursor.
         { label: "Next workspace", lua: "hl.dsp.workspace.next_on_hovered()" },
         { label: "New workspace", lua: "hl.dsp.workspace.new_on_hovered()" },
@@ -244,7 +244,7 @@ Item {
                 locals[name] !== undefined ? "(" + JSON.stringify(locals[name]) + ")" : call)
         }
         // A hyprland.lua from before Next and New workspace has no binds for them,
-        // so purpura.lua makes them (see A workspace of its own there): each on its
+        // so workspace.lua makes them (see A workspace of its own there): each on its
         // own combo, unless something else is bound there or that action is bound
         // somewhere already.
         const mod = locals.mainMod || "SUPER"
@@ -285,7 +285,7 @@ Item {
         const seen = {}
         for (const b of own) seen[root.comboKey(b.combo)] = true
 
-        // Several binds can share a combo - purpura.lua's drop binds share the
+        // Several binds can share a combo - workspace.lua's drop binds share the
         // window drag's, and come first - so the first of them with a
         // description stands for the lot.
         const others = []
@@ -655,8 +655,8 @@ Item {
                 try {
                     const parsed = JSON.parse(text)
                     const binds = parsed.binds || []
-                    // Reserve workspace is gone from purpura.lua: a bind of it saved
-                    // here would stop the rest of shortcuts.lua loading (purpura.lua
+                    // Reserve workspace is gone from workspace.lua: a bind of it saved
+                    // here would stop the rest of shortcuts.lua loading (workspace.lua
                     // takes it out of there too, as it loads), so it's dropped - and
                     // taken off at once, should it still be bound.
                     const kept = binds.filter(b => !(b && typeof b.lua === "string" && b.lua.indexOf("reserve_workspace") !== -1))

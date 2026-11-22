@@ -116,7 +116,7 @@ Item {
     readonly property bool showFullscreenHint: root.barStore.showFullscreenHint !== false
     // On unless turned off, as it always showed before - WorkspaceOsd.qml reads it back.
     readonly property bool showWorkspaceOsdOnSwitch: root.barStore.showWorkspaceOsdOnSwitch !== false
-    // Off unless turned on - purpura.lua reads it back from barsettings.json each
+    // Off unless turned on - workspace.lua reads it back from barsettings.json each
     // time a fullscreen app opens (A workspace of its own there).
     readonly property bool createFullscreenWorkspaces: root.barStore.createFullscreenWorkspaces === true
 
