@@ -659,58 +659,16 @@ Scope {
         }
     }
 
-    // Whether the currently-focused window is genuinely fullscreen, and
-    // which monitor it's on - so dashWindow below can ignore the bar's
-    // reserved exclusive zone (and sit flush at the true top of that
-    // screen) while the bar itself is hidden behind a fullscreen client
-    // anyway, rather than leaving a bar-height gap at the top for
-    // nothing. Same detection FullscreenHintOsd.qml already uses:
-    // there's no reactive "fullscreen" property on Quickshell's Hyprland
-    // toplevel type, so this re-verifies via `hyprctl activewindow -j`'s
-    // fullscreenClient field (0=none/1=maximized/2=fullscreen/3=both)
-    // rather than trusting any single IPC event's own data - confirmed
-    // live there that "fullscreen>>1" also fires for META+W's plain
-    // floating toggle, nothing to do with real fullscreen at all.
-    //
-    // Reacts to every raw event, not just "fullscreen>>0/1" - same
-    // unfiltered convention WorkspaceOsd.qml/WorkspaceRow.qml's own
-    // Connections already use. Switching workspaces (or focus) away from
-    // a fullscreen window never fires its own "fullscreen" event (that
-    // window's fullscreen flag hasn't changed, only which workspace is
-    // active has), so filtering to "fullscreen" only left this convinced
-    // a fullscreen client was still active on a workspace that had
-    // switched away from it entirely.
-    property bool activeIsFullscreen: false
-    property string fullscreenMonitorName: ""
-
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            // Not workspace.lua's drag events (see Bar.qml's).
-            if (event.name === "custom") return
-            fullscreenCheckProcess.running = true
-        }
-    }
-
-    Process {
-        id: fullscreenCheckProcess
-        command: ["hyprctl", "activewindow", "-j"]
-
-        stdout: StdioCollector {
-            id: fullscreenCheckCollector
-            onStreamFinished: {
-                let parsed = null
-                try {
-                    parsed = JSON.parse(fullscreenCheckCollector.text)
-                } catch (e) {
-                    parsed = null
-                }
-                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
-                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
-                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
-            }
-        }
-    }
+    // Whether the focused window is in real fullscreen, and which monitor
+    // it's on (system/FullscreenState.qml, from shell.qml - one check shared
+    // with the bar, the notifications and the updater) - so dashWindow below
+    // can ignore the bar's reserved exclusive zone (and sit flush at the true
+    // top of that screen) while the bar itself is hidden behind a fullscreen
+    // client anyway, rather than leaving a bar-height gap at the top for
+    // nothing.
+    property var fullscreenState: null
+    readonly property bool activeIsFullscreen: !!root.fullscreenState && root.fullscreenState.activeIsFullscreen
+    readonly property string fullscreenMonitorName: root.fullscreenState ? root.fullscreenState.monitorName : ""
 
     Variants {
         model: Quickshell.screens
@@ -746,7 +704,12 @@ Scope {
 
             readonly property bool ignoresBarPadding: root.activeIsFullscreen && root.fullscreenMonitorName === modelData.name
 
-            visible: root.open && root.screen === modelData
+            // Open here: every screen has its own dashboard, made once, but
+            // only the one it's open on is shown - the system monitor and the
+            // visualizer below run only then, not on every screen all along.
+            readonly property bool shownHere: root.open && root.screen === modelData
+
+            visible: dashWindow.shownHere
 
             WlrLayershell.namespace: "dashboard"
             WlrLayershell.layer: WlrLayer.Overlay
@@ -999,7 +962,14 @@ Scope {
                                         anchors.fill: parent
                                         anchors.margins: Config.scaled(2, dashWindow.uiScale)
 
-                                        source: "file://" + Quickshell.env("HOME") + "/.face"
+                                        // Decoded at twice the size it's
+                                        // drawn at (for a HiDPI screen), not
+                                        // the picture's own - a photo can be
+                                        // thousands of pixels across - once
+                                        // it has that size.
+                                        sourceSize: Qt.size(Math.ceil(width * 2), Math.ceil(height * 2))
+                                        source: width > 0 && height > 0 ? "file://" + Quickshell.env("HOME") + "/.face" : ""
+                                        asynchronous: true
                                         fillMode: Image.PreserveAspectCrop
                                         clip: true
                                     }
@@ -1034,6 +1004,17 @@ Scope {
                                     target: systemMonitorLoader.item
                                     property: "uiScale"
                                     value: dashWindow.uiScale
+                                    when: systemMonitorLoader.item !== null
+                                }
+
+                                // Its readings (each a process, twice a
+                                // second) only while it's shown - kept,
+                                // rather than unloaded, so it opens with the
+                                // last of them rather than blank.
+                                Binding {
+                                    target: systemMonitorLoader.item
+                                    property: "active"
+                                    value: dashWindow.shownHere
                                     when: systemMonitorLoader.item !== null
                                 }
                             }
@@ -1169,7 +1150,11 @@ Scope {
                             // Audio visualizer (cava), same lazy-Loader
                             // treatment as NowPlaying above - a wrong
                             // cava/pipewire assumption only blanks this
-                            // card instead of the whole shell.
+                            // card instead of the whole shell. Loaded only
+                            // while the dashboard's shown here: its helper
+                            // sends ~86 frames a second, silence included,
+                            // and one ran for every screen's dashboard all
+                            // the time.
                             DashCard {
                                 uiScale: dashWindow.uiScale
                                 width: parent.width
@@ -1180,6 +1165,7 @@ Scope {
                                     anchors.fill: parent
                                     anchors.margins: Config.scaled(10, dashWindow.uiScale)
 
+                                    active: dashWindow.shownHere
                                     source: "Cava.qml"
                                 }
 

@@ -412,6 +412,9 @@ Scope {
 
                             width: Config.scaled(192, prompt.uiScale)
                             height: Config.scaled(192, prompt.uiScale)
+                            // Decoded at twice that size (for a HiDPI
+                            // screen), not the picture's own.
+                            sourceSize: Qt.size(avatar.width * 2, avatar.height * 2)
 
                             anchors.horizontalCenter: parent.horizontalCenter
 

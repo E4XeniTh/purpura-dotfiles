@@ -15,6 +15,9 @@ Scope {
   // itself gets its value as shellScale.
   UiScale { id: uiScaleSetting }
   EdgeGaps { id: edgeGaps }
+  // Whether the focused window is in real fullscreen, and where - one check
+  // for the bar, the dashboard, the notifications and the updater.
+  FullscreenState { id: fullscreenState }
 
   PowerMenu { id: powerMenu; dashboard: dashboard; lockScreen: lockScreen; shellScale: uiScaleSetting.value }
   LockScreen {
@@ -45,10 +48,11 @@ Scope {
     id: dashboard
     powerMenu: powerMenu
     settingsScreen: settingsScreen
+    fullscreenState: fullscreenState
     shellScale: uiScaleSetting.value
   }
-  Notification { id: notification; updater: updater; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
-  Updater { id: updater; notification: notification; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
+  Notification { id: notification; updater: updater; edgeGaps: edgeGaps; fullscreenState: fullscreenState; shellScale: uiScaleSetting.value }
+  Updater { id: updater; notification: notification; edgeGaps: edgeGaps; fullscreenState: fullscreenState; shellScale: uiScaleSetting.value }
   Clipboard { id: clipboard; edgeGaps: edgeGaps; shellScale: uiScaleSetting.value }
   Screenshot { id: screenshot; shellScale: uiScaleSetting.value }
 
@@ -68,6 +72,7 @@ Scope {
     dashboard: dashboard
     notification: notification
     updater: updater
+    fullscreenState: fullscreenState
     shellScale: uiScaleSetting.value
   }
 

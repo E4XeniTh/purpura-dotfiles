@@ -51,7 +51,13 @@ Item {
 
             Image {
                 anchors.fill: parent
-                source: root.player && root.player.trackArtUrl ? root.player.trackArtUrl : ""
+                // Decoded at twice the size it's drawn at (cropped to fill
+                // it), not the cover's own, which can be thousands of pixels
+                // across - twice, as Qt doesn't scale a photo's sourceSize up
+                // for a HiDPI screen itself. And only once the layout's given
+                // it that size, as a load before then would be the whole cover.
+                sourceSize: Qt.size(Math.ceil(width * 2), Math.ceil(height * 2))
+                source: width > 0 && height > 0 && root.player && root.player.trackArtUrl ? root.player.trackArtUrl : ""
                 fillMode: Image.PreserveAspectCrop
                 visible: source != ""
                 asynchronous: true

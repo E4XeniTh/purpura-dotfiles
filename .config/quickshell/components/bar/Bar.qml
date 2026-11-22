@@ -23,16 +23,13 @@ Scope {
     property bool powerMenuOpen: false
 
     // Re-checks fullscreen state right as the bar is about to reappear -
-    // nothing else re-triggers fullscreenCheckProcess just because the
-    // lock screen closed (no new "fullscreen" IPC event fires for a
-    // window that was already fullscreen going into the lock), so
-    // without this the bar's visible binding below could act on a stale
-    // activeIsFullscreen from before the lock.
+    // nothing else re-triggers the check just because the lock screen
+    // closed (no new "fullscreen" IPC event fires for a window that was
+    // already fullscreen going into the lock), so without this the bar's
+    // visible binding below could act on a stale activeIsFullscreen from
+    // before the lock.
     onLockedChanged: {
-        if (!root.locked) {
-            fullscreenCheckProcess.running = false
-            fullscreenCheckProcess.running = true
-        }
+        if (!root.locked && root.fullscreenState) root.fullscreenState.check()
     }
 
     // Dashboard/Notification instances, also passed down from shell.qml -
@@ -91,63 +88,21 @@ Scope {
         ? (root.dashboard ? root.dashboard.primaryMonitor : "")
         : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "")
 
-    // Whether the currently-focused window is genuinely fullscreen, and
-    // which monitor it's on - same detection Dashboard.qml/
-    // FullscreenHintOsd.qml already use (see there for why this
-    // re-verifies via `hyprctl activewindow -j` rather than trusting any
-    // single IPC event's own data). Normally redundant - Hyprland's own
-    // layer stacking already visually occludes a "top"-layer bar behind a
-    // genuine fullscreen client - but unlocking out of LockScreen doesn't
-    // reliably restore that occlusion even when the fullscreened app is
-    // still there, so the bar needs its own explicit check rather than
-    // relying on the compositor to keep hiding it.
-    //
-    // Reacts to every raw event, not just "fullscreen>>0/1" - same
-    // unfiltered convention WorkspaceOsd.qml/WorkspaceRow.qml's own
-    // Connections already use. Switching workspaces (or focus) away from
-    // a fullscreen window never fires its own "fullscreen" event (that
-    // window's fullscreen flag hasn't changed, only which workspace is
-    // active has), so filtering to "fullscreen" only left the bar
-    // convinced a fullscreen client was still active - and itself hidden
-    // - even after switching to an empty workspace with nothing
-    // fullscreen on it at all.
-    property bool activeIsFullscreen: false
-    property string fullscreenMonitorName: ""
+    // Whether the focused window is in real fullscreen, and which monitor
+    // it's on (system/FullscreenState.qml, from shell.qml - one check shared
+    // with the dashboard, the notifications and the updater). Normally
+    // redundant - Hyprland's own layer stacking already visually occludes a
+    // "top"-layer bar behind a genuine fullscreen client - but unlocking out
+    // of LockScreen doesn't reliably restore that occlusion even when the
+    // fullscreened app is still there, so the bar needs its own explicit
+    // check rather than relying on the compositor to keep hiding it.
+    property var fullscreenState: null
+    readonly property bool activeIsFullscreen: !!root.fullscreenState && root.fullscreenState.activeIsFullscreen
+    readonly property string fullscreenMonitorName: root.fullscreenState ? root.fullscreenState.monitorName : ""
 
     // Tells the dropdown console to close, as it can't show without the bar.
     readonly property bool hiddenOnPrimary: root.locked || root.powerMenuOpen
         || (root.activeIsFullscreen && root.fullscreenMonitorName === root.effectivePrimaryName)
-
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            // Not workspace.lua's drag events ("custom"): they change nothing
-            // here, and come many a second while a dragged window's over the
-            // workspace widget.
-            if (event.name === "custom") return
-            fullscreenCheckProcess.running = true
-        }
-    }
-
-    Process {
-        id: fullscreenCheckProcess
-        command: ["hyprctl", "activewindow", "-j"]
-
-        stdout: StdioCollector {
-            id: fullscreenCheckCollector
-            onStreamFinished: {
-                let parsed = null
-                try {
-                    parsed = JSON.parse(fullscreenCheckCollector.text)
-                } catch (e) {
-                    parsed = null
-                }
-                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
-                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
-                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
-            }
-        }
-    }
 
     // Falls back to a sane default until hyprctl responds
     Variants {

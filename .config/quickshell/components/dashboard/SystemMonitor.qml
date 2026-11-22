@@ -16,6 +16,12 @@ Item {
 
     property real uiScale: 1.0
 
+    // Whether it's read at all: each reading below is a process of its own,
+    // twice a second, so they're only taken while someone can see them -
+    // Dashboard.qml sets this to whether that screen's dashboard is shown.
+    // What was last read stays meanwhile.
+    property bool active: true
+
     anchors.fill: parent
 
     // ---------------- CPU ----------------
@@ -24,9 +30,17 @@ Item {
     property real _lastCpuTotal: -1
     property real _lastCpuIdle: -1
 
+    // Usage is the change since the last sample, and that one's from before
+    // the pause: the first sample after one only starts the count again.
+    onActiveChanged: {
+        if (!root.active) return
+        root._lastCpuTotal = -1
+        root._lastCpuIdle = -1
+    }
+
     Timer {
         interval: 500
-        running: true
+        running: root.active
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -79,7 +93,7 @@ Item {
 
     Timer {
         interval: 500
-        running: true
+        running: root.active
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -146,7 +160,7 @@ Item {
 
     Timer {
         interval: 500
-        running: true
+        running: root.active
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -185,7 +199,7 @@ Item {
 
     Timer {
         interval: 500
-        running: true
+        running: root.active
         repeat: true
         triggeredOnStart: true
         onTriggered: {
@@ -194,7 +208,8 @@ Item {
         }
     }
 
-    // NVIDIA: nvidia-smi. AMD: the amdgpu driver's sysfs files
+    // NVIDIA: nvidia-smi, run once a sample (it's slow to start, and it was
+    // run twice: once to see whether it answers). AMD: the amdgpu driver's sysfs files
     // (gpu_busy_percent, mem_info_vram_used/total, hwmon temp1_input in
     // millidegrees). Both branches print the same one-line CSV
     // "usage%, tempC, vramUsedMiB, vramTotalMiB" so the parser below
@@ -207,10 +222,12 @@ Item {
     Process {
         id: nvidiaProcess
         command: ["sh", "-c", `
-            if command -v nvidia-smi >/dev/null 2>&1 &&
-               nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1 | grep -q .; then
-                nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits | head -n1
-                exit 0
+            if command -v nvidia-smi >/dev/null 2>&1; then
+                line=$(nvidia-smi --query-gpu=utilization.gpu,temperature.gpu,memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -n1)
+                if [ -n "$line" ]; then
+                    echo "$line"
+                    exit 0
+                fi
             fi
             best=""; bestTotal=0
             for d in /sys/class/drm/card*/device; do

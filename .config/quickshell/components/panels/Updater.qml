@@ -610,49 +610,18 @@ Scope {
         Quickshell.execDetached(["kitty", "bash", "-c", script, "purpura-updater", Quickshell.shellDir])
     }
 
-    // Whether the currently-focused window is genuinely fullscreen - see
-    // Notification.qml's own identical block for the full reasoning
-    // (same detection). A genuinely separate copy, not a shared
-    // property, for the same reason Notification.qml's own copy is
-    // separate from Dashboard.qml/Bar.qml's - each top-level dropdown
-    // needs this independently of the others.
-    property bool activeIsFullscreen: false
-    property string fullscreenMonitorName: ""
+    // Whether the focused window is in real fullscreen, and which monitor
+    // it's on (system/FullscreenState.qml, from shell.qml - one check shared
+    // with the bar, the dashboard and the notifications).
+    property var fullscreenState: null
+    readonly property bool activeIsFullscreen: !!root.fullscreenState && root.fullscreenState.activeIsFullscreen
+    readonly property string fullscreenMonitorName: root.fullscreenState ? root.fullscreenState.monitorName : ""
     // Neither PanelWindow below is given an explicit `screen:` (unlike
     // Dashboard/Bar/etc.'s per-monitor Variants), so - same as
     // Notification.qml's own fallback - this only ever compares against
     // Quickshell.screens[0], which is where an unscreened PanelWindow
     // ends up here too.
     readonly property bool ignoresBarPadding: root.activeIsFullscreen && Quickshell.screens.length > 0 && root.fullscreenMonitorName === Quickshell.screens[0].name
-
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            // Not workspace.lua's drag events (see Bar.qml's).
-            if (event.name === "custom") return
-            fullscreenCheckProcess.running = true
-        }
-    }
-
-    Process {
-        id: fullscreenCheckProcess
-        command: ["hyprctl", "activewindow", "-j"]
-
-        stdout: StdioCollector {
-            id: fullscreenCheckCollector
-            onStreamFinished: {
-                let parsed = null
-                try {
-                    parsed = JSON.parse(fullscreenCheckCollector.text)
-                } catch (e) {
-                    parsed = null
-                }
-                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
-                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
-                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
-            }
-        }
-    }
 
     PanelWindow {
         id: dropdownWindow

@@ -18,6 +18,7 @@ Item {
     property real uiScale: 1.0
     readonly property int barCount: 25
     property var levels: []
+    property string lastFrame: ""
 
     Component.onCompleted: {
         const initial = []
@@ -33,6 +34,10 @@ Item {
 
         stdout: SplitParser {
             onRead: (line) => {
+                // ~86 frames a second come, silence included: one just like
+                // the last changes nothing, so it's not parsed again.
+                if (line === root.lastFrame) return
+                root.lastFrame = line
                 // Read whatever count actually comes in rather than
                 // requiring an exact match to barCount - a mismatch
                 // (wrong config picked up, stereo vs mono, etc.) used to

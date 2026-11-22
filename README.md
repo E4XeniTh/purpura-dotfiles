@@ -317,6 +317,17 @@ package lists are the exact set):
   against each item's own id/title, since apps aren't consistent about
   which of the two they actually set.
 - Weather refreshes every 15 minutes via `wttr.in` — no API key needed.
+- What's out of sight does nothing. Every screen has a dashboard of its own,
+  but its system monitor (a process for each reading, twice a second) and
+  its visualizer (~86 frames a second) only run on the one that's open. One
+  check of whether the focused window is fullscreen serves the bar, the
+  dashboard, the notifications and the updater, and a window's title
+  changing - some apps do it many times a second - has the shell ask
+  Hyprland nothing. Album covers, your avatar, and notification and
+  clipboard images are decoded at the size they're shown (twice it, for
+  HiDPI screens), not their own. Quickshell itself is best built with
+  jemalloc (`ldd "$(command -v quickshell)" | grep jemalloc` says whether it
+  is): without it the QML engine's memory fragments, which looks like a leak.
 - The shell's own side of Hyprland lives in `hypr/purpura.lua` and
   `hypr/workspace.lua`, not in your `hyprland.lua`. `purpura.lua` has Close
   Window closing what's under the mouse (the dropdown console included), no

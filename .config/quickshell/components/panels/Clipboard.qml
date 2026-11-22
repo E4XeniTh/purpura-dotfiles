@@ -642,6 +642,11 @@ Scope {
                                         Layout.preferredWidth: Config.scaled(80, clipWindow.uiScale)
                                         Layout.preferredHeight: Config.scaled(80, clipWindow.uiScale)
                                         Layout.alignment: Qt.AlignTop
+                                        // Decoded at twice that size (for a
+                                        // HiDPI screen), not the picture's
+                                        // own - a screenshot is the whole
+                                        // screen, for each row.
+                                        sourceSize: Qt.size(Config.scaled(160, clipWindow.uiScale), Config.scaled(160, clipWindow.uiScale))
                                         // Fit the whole image within the
                                         // thumbnail bounds instead of
                                         // cropping it to fill - letterboxed
@@ -923,6 +928,9 @@ Scope {
                         visible: root.previewedIsImage
                         anchors.fill: parent
                         anchors.margins: Config.scaled(10, previewWindow.uiScale)
+                        // Decoded to fit twice the pane (for a HiDPI screen),
+                        // not at the picture's own size.
+                        sourceSize: Qt.size(previewWindow.paneMaxSize * 2, previewWindow.paneMaxSize * 2)
                         source: (root.previewedIsImage && !previewImage.reloading) ? ("file://" + root.previewedImagePath) : ""
                         onStatusChanged: {
                             if (status !== Image.Error) return

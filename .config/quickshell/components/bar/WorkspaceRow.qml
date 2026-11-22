@@ -7,6 +7,7 @@ import "../../Config.js" as Config
 import "../common"
 import "../common/WorkspaceRegistryLogic.js" as RegistryLogic
 import "../common/HyprlandWindows.js" as HyprlandWindows
+import "../common/HyprlandEvents.js" as HyprlandEvents
 
 // One rectangle per current Hyprland workspace, sorted by owning
 // monitor position first and workspace number second - meant to sit
@@ -453,6 +454,9 @@ Row {
     // update live - re-requested on every Hyprland event so the little
     // per-window rectangles track real opens/closes/moves/resizes
     // instead of a one-off snapshot from whenever quickshell started.
+    // Every event but the quiet ones (HyprlandEvents.js) - a title
+    // changing, above all, which some apps do many times a second.
+    readonly property var seenEvents: ({})
     Connections {
         target: Hyprland
         function onRawEvent(event) {
@@ -468,6 +472,7 @@ Row {
                 root.sentDropTargets = ""
                 Qt.callLater(root.refreshDropTargets)
             }
+            if (HyprlandEvents.quiet(event, root.seenEvents)) return
             Hyprland.refreshToplevels()
             renderSettleTimer.restart()
             windowsRefresh.left = 2

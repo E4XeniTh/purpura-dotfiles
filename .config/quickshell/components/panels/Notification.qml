@@ -250,6 +250,9 @@ Scope {
                             Layout.preferredHeight: Config.scaled(36, toastWindow.uiScale)
                             Layout.preferredWidth: Config.scaled(36, toastWindow.uiScale)
                             Layout.alignment: Qt.AlignTop
+                            // Decoded at twice that size (for a HiDPI
+                            // screen), not the image's own.
+                            sourceSize: Qt.size(Config.scaled(72, toastWindow.uiScale), Config.scaled(72, toastWindow.uiScale))
                             fillMode: Image.PreserveAspectFit
                             visible: source.toString() !== ""
                             source: card.modelData.image || card.modelData. appIcon || ""
@@ -366,25 +369,13 @@ Scope {
         }
     }
 
-    // Whether the currently-focused window is genuinely fullscreen - so
-    // both PanelWindows here can ignore the bar's reserved exclusive
-    // zone (and sit flush at the true top of the screen) while the bar
-    // itself is hidden behind a fullscreen client anyway, rather than
-    // leaving a bar-height gap at the top for nothing. Same detection
-    // Dashboard.qml/FullscreenHintOsd.qml already use: there's no
-    // reactive "fullscreen" property on Quickshell's Hyprland toplevel
-    // type, so this re-verifies via `hyprctl activewindow -j`'s
-    // fullscreenClient field (0=none/1=maximized/2=fullscreen/3=both)
-    // rather than trusting any single IPC event's own data.
-    //
-    // Reacts to every raw event, not just "fullscreen>>0/1" - same
-    // unfiltered convention WorkspaceOsd.qml/WorkspaceRow.qml's own
-    // Connections already use. Switching workspaces (or focus) away from
-    // a fullscreen window never fires its own "fullscreen" event (that
-    // window's fullscreen flag hasn't changed, only which workspace is
-    // active has), so filtering to "fullscreen" only left this convinced
-    // a fullscreen client was still active on a workspace that had
-    // switched away from it entirely.
+    // Whether the focused window is in real fullscreen, and which monitor
+    // it's on (system/FullscreenState.qml, from shell.qml - one check shared
+    // with the bar, the dashboard and the updater) - so both PanelWindows
+    // here can ignore the bar's reserved exclusive zone (and sit flush at
+    // the true top of the screen) while the bar itself is hidden behind a
+    // fullscreen client anyway, rather than leaving a bar-height gap at the
+    // top for nothing.
     //
     // Neither PanelWindow below is given an explicit `screen:` (unlike
     // Dashboard/Bar/etc.'s per-monitor Variants), so - same as
@@ -392,38 +383,10 @@ Scope {
     // fallback for its GlobalShortcut toggle - this only ever compares
     // against Quickshell.screens[0], which is where an unscreened
     // PanelWindow ends up here too.
-    property bool activeIsFullscreen: false
-    property string fullscreenMonitorName: ""
+    property var fullscreenState: null
+    readonly property bool activeIsFullscreen: !!root.fullscreenState && root.fullscreenState.activeIsFullscreen
+    readonly property string fullscreenMonitorName: root.fullscreenState ? root.fullscreenState.monitorName : ""
     readonly property bool ignoresBarPadding: root.activeIsFullscreen && Quickshell.screens.length > 0 && root.fullscreenMonitorName === Quickshell.screens[0].name
-
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            // Not workspace.lua's drag events (see Bar.qml's).
-            if (event.name === "custom") return
-            fullscreenCheckProcess.running = true
-        }
-    }
-
-    Process {
-        id: fullscreenCheckProcess
-        command: ["hyprctl", "activewindow", "-j"]
-
-        stdout: StdioCollector {
-            id: fullscreenCheckCollector
-            onStreamFinished: {
-                let parsed = null
-                try {
-                    parsed = JSON.parse(fullscreenCheckCollector.text)
-                } catch (e) {
-                    parsed = null
-                }
-                const mon = Hyprland.activeToplevel && Hyprland.activeToplevel.monitor
-                root.activeIsFullscreen = !!(parsed && parsed.fullscreenClient === 2 && mon)
-                root.fullscreenMonitorName = (root.activeIsFullscreen && mon) ? mon.name : ""
-            }
-        }
-    }
 
     PanelWindow {
         id: centerWindow
@@ -583,6 +546,10 @@ Scope {
                                     Layout.preferredHeight: Config.scaled(36, centerWindow.uiScale)
                                     Layout.preferredWidth: Config.scaled(36, centerWindow.uiScale)
                                     Layout.alignment: Qt.AlignTop
+                                    // Decoded at twice that size (for a HiDPI
+                                    // screen), not the image's own - kept for
+                                    // every row of the history.
+                                    sourceSize: Qt.size(Config.scaled(72, centerWindow.uiScale), Config.scaled(72, centerWindow.uiScale))
                                     fillMode: Image.PreserveAspectFit
                                     visible: source.toString() !== ""
                                     source: model.image || model.appIcon || ""
