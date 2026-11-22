@@ -3,7 +3,8 @@
 --##                                                                                    #
 --## Hyprland's side of the workspaces and of the bar's workspace widget: a window      #
 --## dropped on a workspace there or grabbed from it, the book of every workspace, and  #
---## the workspaces of their own, with Next workspace and New workspace.                #
+--## the workspaces of their own, with Next unmanaged workspace and Send window to      #
+--## empty workspace.                                                                   #
 --#######################################################################################
 --
 -- Installed and updated with the dotfiles (~/.config/hypr/workspace.lua), beside
@@ -1440,13 +1441,13 @@ part("workspaces", function()
         return id
     end
 
-    -- That monitor's workspaces, by number.
+    -- That monitor's workspaces, by number, each with how many windows it holds.
     function api.onMonitor(name)
         local list = {}
         for _, ws in ipairs(live()) do
             if isObject(ws.monitor) and ws.monitor.name == name then
                 local e = register(ws)
-                list[#list + 1] = { id = ws.id, number = e and e.number or ws.id }
+                list[#list + 1] = { id = ws.id, number = e and e.number or ws.id, windows = ws.windows or 0 }
             end
         end
         table.sort(list, function(a, b) return a.number < b.number end)
@@ -1505,15 +1506,25 @@ end)
 -- time a fullscreen app opens, so it counts the moment it's changed, with no reload;
 -- off (or with no shell to have saved it), the app's left where it opened.
 --
--- "Next workspace" (META + TAB) switches the monitor under the cursor to its next
--- workspace by the book's numbers - left to right in the workspace widget - round to
--- the first after the last. "New workspace" (META + CTRL + TAB) makes an empty one,
--- numbered from 6, on the monitor under the cursor, bound to it, and switches that
--- monitor to it. On the focused monitor - which the cursor's nearly always on, as
--- moving onto a monitor focuses it - each is an ordinary switch; on another (something
--- else took the focus while the cursor rested there), one without the focus going
--- there or the cursor moving, and the next move of the mouse focuses that monitor as
--- any does (see WORKSPACES).
+-- "Next unmanaged workspace" (META + TAB) goes through the unmanaged workspaces of the
+-- monitor under the cursor - every one but what Display settings pinned there - by
+-- the book's numbers, left to right in the workspace widget, and then to a new, empty
+-- one, numbered from 6 and bound to that monitor; round to the first after that. One
+-- of them empty already is that empty one, so there's no new one besides. A monitor
+-- with none goes to a new one. From a pinned workspace, it's the first of them. On the
+-- focused monitor - which the cursor's nearly always on, as moving onto a monitor
+-- focuses it - it's an ordinary switch; on another (something else took the focus
+-- while the cursor rested there), one without the focus going there or the cursor
+-- moving, and the next move of the mouse focuses that monitor as any does (see
+-- WORKSPACES).
+--
+-- "Send window to empty workspace" (META + CTRL + TAB) sends the focused window to the
+-- first empty unmanaged workspace on its monitor, by number - or a new one, numbered
+-- from 6 and bound to that monitor, when there's none - and the view stays where it
+-- is. A window that's alone on an unmanaged workspace already is left there. It's
+-- hl.dsp.workspace.send_to_empty(); new_on_hovered(), what META + CTRL + TAB was bound
+-- to before (a new workspace, gone to), now makes the same, and binds of either with
+-- the descriptions they had then ("Next workspace", "New workspace") get the ones above.
 --
 -- hyprland.lua.example binds both; a hyprland.lua from before doesn't. So each is
 -- made here once the config has loaded, unless hyprland.lua or shortcuts.lua bound
@@ -1662,20 +1673,32 @@ part("workspaces of their own", function()
 
     if type(hl.dsp.workspace) ~= "table" then hl.dsp.workspace = {} end
 
+    -- Next unmanaged workspace (see above): those of the monitor under the cursor, then
+    -- a new one - unless one of them's empty already.
     local nextActions = setmetatable({}, { __mode = "k" }) -- every action next_on_hovered() has made
     hl.dsp.workspace.next_on_hovered = function()
         local action = function()
             local ok, err = pcall(function()
                 local monitor = hoveredMonitor()
                 if not monitor then return end
-                local list = book.onMonitor(monitor.name)
-                if #list < 2 then return end
+                local own, empty = {}, false
+                for _, ws in ipairs(book.onMonitor(monitor.name)) do
+                    if book.unmanaged(ws.id) then
+                        own[#own + 1] = ws
+                        if ws.windows == 0 then empty = true end
+                    end
+                end
                 local active = monitor.active_workspace
-                local at = 0
-                for i, ws in ipairs(list) do
+                local at = 0 -- a pinned one: before the first
+                for i, ws in ipairs(own) do
                     if isObject(active) and ws.id == active.id then at = i end
                 end
-                book.showOn(monitor, tostring(list[at % #list + 1].id))
+                local i = at % (#own + (empty and 0 or 1)) + 1
+                if i > #own then
+                    book.showOn(monitor, tostring(book.make(monitor, "new")))
+                elseif not (isObject(active) and own[i].id == active.id) then
+                    book.showOn(monitor, tostring(own[i].id))
+                end
             end)
             if not ok then report("workspaces of their own", err) end
         end
@@ -1683,19 +1706,40 @@ part("workspaces of their own", function()
         return action
     end
 
-    local newActions = setmetatable({}, { __mode = "k" }) -- every action new_on_hovered() has made
-    hl.dsp.workspace.new_on_hovered = function()
+    -- Send window to empty workspace (see above).
+    local sendActions = setmetatable({}, { __mode = "k" }) -- every action send_to_empty() has made
+    local function sendToEmpty()
         local action = function()
             local ok, err = pcall(function()
-                local monitor = hoveredMonitor()
-                if not monitor then return end
-                book.showOn(monitor, tostring(book.make(monitor, "new")))
+                local window = hl.get_active_window()
+                if not isObject(window) or not window.address or window.mapped == false then return end
+                local workspace = isObject(window.workspace) and window.workspace or nil
+                local monitor = workspace and isObject(workspace.monitor) and workspace.monitor or window.monitor
+                if not isObject(monitor) or not monitor.name then return end
+                local here = workspace and workspace.id or nil
+                if here and not workspace.special and book.unmanaged(here) and (workspace.windows or 0) <= 1 then return end
+                local target
+                for _, ws in ipairs(book.onMonitor(monitor.name)) do
+                    if ws.id ~= here and ws.windows == 0 and book.unmanaged(ws.id) then
+                        target = ws.id
+                        break
+                    end
+                end
+                target = target or book.make(monitor, "new")
+                moving = true
+                local sent, failed = pcall(hl.dispatch, hl.dsp.window.move({
+                    workspace = tostring(target), window = "address:" .. window.address, follow = false,
+                }))
+                moving = false
+                if not sent then error(failed, 0) end
             end)
             if not ok then report("workspaces of their own", err) end
         end
-        newActions[action] = true
+        sendActions[action] = true
         return action
     end
+    hl.dsp.workspace.send_to_empty = sendToEmpty
+    hl.dsp.workspace.new_on_hovered = sendToEmpty -- what META + CTRL + TAB was bound to before
 
     hl.on("window.open", function(window)
         if not isObject(window) or not window.address then return end
@@ -1736,19 +1780,34 @@ part("workspaces of their own", function()
         return table.concat(mods, "+") .. "+" .. key
     end
     local defaults = {
-        { keys = mainMod .. " + Tab", description = "Next workspace", made = nextActions,
-          action = function() return hl.dsp.workspace.next_on_hovered() end },
-        { keys = mainMod .. " + CTRL + Tab", description = "New workspace", made = newActions,
-          action = function() return hl.dsp.workspace.new_on_hovered() end },
+        { keys = mainMod .. " + Tab", description = "Next unmanaged workspace", was = "Next workspace",
+          made = nextActions, action = function() return hl.dsp.workspace.next_on_hovered() end },
+        { keys = mainMod .. " + CTRL + Tab", description = "Send window to empty workspace", was = "New workspace",
+          made = sendActions, action = function() return hl.dsp.workspace.send_to_empty() end },
     }
     for _, default in ipairs(defaults) do default.combo = comboOf(default.keys) end
 
+    -- A bind of one of them with the description it had before (hyprland.lua.example's
+    -- from then, or Settings > Shortcuts') is given the one it has now.
+    local function described(default, opts)
+        if type(opts) ~= "table" or opts.description ~= default.was then return nil end
+        local copy = {}
+        for k, v in pairs(opts) do copy[k] = v end
+        copy.description = default.description
+        return copy
+    end
+
     local bind = hl.bind
     hl.bind = function(keys, action, ...)
+        local opts
         for _, default in ipairs(defaults) do
-            if action ~= nil and default.made and default.made[action] then default.bound = true end
+            if action ~= nil and default.made and default.made[action] then
+                default.bound = true
+                opts = described(default, (...))
+            end
             if type(keys) == "string" and comboOf(keys) == default.combo then default.used = true end
         end
+        if opts then return bind(keys, action, opts, select(2, ...)) end
         return bind(keys, action, ...)
     end
     local unbind = hl.unbind

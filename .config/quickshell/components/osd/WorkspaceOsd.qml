@@ -130,7 +130,7 @@ Scope {
                     renderSettleTimer.restart()
                 } else if (parts.length === 3 && parts[0] === "purpura-workspace" && parts[1] === "shown") {
                     // workspace.lua's "purpura-workspace,shown,<monitor>": META + Tab
-                    // or META + CTRL + Tab switched the monitor under the cursor
+                    // (or Display settings' Apply) switched a monitor
                     // while another had the focus - which Hyprland says nothing
                     // of, so every monitor's workspace (this OSD's, the bar's) is
                     // asked for again. Done here, once for the whole shell.

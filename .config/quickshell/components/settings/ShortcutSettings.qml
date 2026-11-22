@@ -137,6 +137,13 @@ Item {
         return MouseLayout.prettyCombo(combo, root.mouseNames)
     }
 
+    // Actions renamed since a bind of them could have been saved here: what that
+    // bind's lua and label are now (see the store's loading below).
+    readonly property var renamedActions: ({
+        "hl.dsp.workspace.next_on_hovered()": { lua: "hl.dsp.workspace.next_on_hovered()", label: "Next unmanaged workspace" },
+        "hl.dsp.workspace.new_on_hovered()": { lua: "hl.dsp.workspace.send_to_empty()", label: "Send window to empty workspace" }
+    })
+
     // ---------------- actions offered for a new bind ----------------
     // `button` ones only for mouse buttons: they follow the mouse while it's held.
     readonly property var actions: [
@@ -148,10 +155,11 @@ Item {
         { label: "Maximize", lua: "hl.dsp.window.fullscreen({ mode = \"maximized\", action = \"toggle\" })" },
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
         { label: "Go to workspace", workspace: "hl.dsp.focus({ workspace = %1 })" },
-        // workspace.lua's (see A workspace of its own there): both on the monitor under
-        // the cursor.
-        { label: "Next workspace", lua: "hl.dsp.workspace.next_on_hovered()" },
-        { label: "New workspace", lua: "hl.dsp.workspace.new_on_hovered()" },
+        // workspace.lua's (see A workspace of its own there): the unmanaged workspaces
+        // of the monitor under the cursor, then a new one; and the focused window sent
+        // to an empty one on its monitor.
+        { label: "Next unmanaged workspace", lua: "hl.dsp.workspace.next_on_hovered()" },
+        { label: "Send window to empty workspace", lua: "hl.dsp.workspace.send_to_empty()" },
         { label: "Move window to workspace", workspace: "hl.dsp.window.move({ workspace = %1, follow = false })" },
         { label: "Lock screen", lua: "hl.dsp.global(\"quickshell:lockscreen\")" },
         { label: "Power menu", lua: "hl.dsp.global(\"quickshell:powermenu\")" },
@@ -243,20 +251,22 @@ Item {
             found[id] = bind[2].slice(0, end).replace(/\((\w+)\)$/, (call, name) =>
                 locals[name] !== undefined ? "(" + JSON.stringify(locals[name]) + ")" : call)
         }
-        // A hyprland.lua from before Next and New workspace has no binds for them,
-        // so workspace.lua makes them (see A workspace of its own there): each on its
-        // own combo, unless something else is bound there or that action is bound
-        // somewhere already.
+        // A hyprland.lua from before Next unmanaged workspace and Send window to
+        // empty workspace has no binds for them, so workspace.lua makes them (see A
+        // workspace of its own there): each on its own combo, unless something else
+        // is bound there or that action is bound somewhere already - Send window to
+        // empty workspace under its old name too (new_on_hovered(), New workspace's
+        // from before, which makes the same now).
         const mod = locals.mainMod || "SUPER"
         const defaults = [
-            { combo: mod + " + Tab", lua: "hl.dsp.workspace.next_on_hovered()" },
-            { combo: mod + " + CTRL + Tab", lua: "hl.dsp.workspace.new_on_hovered()" }
+            { combo: mod + " + Tab", lua: ["hl.dsp.workspace.next_on_hovered()"] },
+            { combo: mod + " + CTRL + Tab", lua: ["hl.dsp.workspace.send_to_empty()", "hl.dsp.workspace.new_on_hovered()"] }
         ]
         const bound = Object.keys(found).map(id => found[id])
         for (const d of defaults) {
             const id = root.comboKey(d.combo)
-            if (found[id] !== undefined || bound.indexOf(d.lua) !== -1) continue
-            found[id] = d.lua
+            if (found[id] !== undefined || d.lua.some(lua => bound.indexOf(lua) !== -1)) continue
+            found[id] = d.lua[0]
         }
         return found
     }
@@ -660,9 +670,20 @@ Item {
                     // takes it out of there too, as it loads), so it's dropped - and
                     // taken off at once, should it still be bound.
                     const kept = binds.filter(b => !(b && typeof b.lua === "string" && b.lua.indexOf("reserve_workspace") !== -1))
-                    root.store = { binds: kept, removed: parsed.removed || [], descriptions: parsed.descriptions || {} }
+                    // Next and New workspace became Next unmanaged workspace and Send
+                    // window to empty workspace (workspace.lua): a bind of either saved
+                    // here is given the label it has now - and the new name, though the
+                    // old one makes the same.
+                    let relabelled = false
+                    const binds2 = kept.map(b => {
+                        const now = b && root.renamedActions[b.lua]
+                        if (!now || (b.lua === now.lua && b.label === now.label)) return b
+                        relabelled = true
+                        return Object.assign({}, b, now)
+                    })
+                    root.store = { binds: binds2, removed: parsed.removed || [], descriptions: parsed.descriptions || {} }
+                    if (kept.length !== binds.length || relabelled) root.saveStore(root.store)
                     if (kept.length !== binds.length) {
-                        root.saveStore(root.store)
                         root.applyLive(binds.filter(b => kept.indexOf(b) === -1).map(b => "hl.unbind(" + root.luaString(b.combo) + ")"))
                     }
                 } catch (e) {

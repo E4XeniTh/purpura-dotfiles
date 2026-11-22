@@ -12,16 +12,16 @@
 --
 --     pcall(loadfile(os.getenv("HOME") .. "/.config/hypr/purpura.lua") or function() end, mainMod)
 --
--- Before the binds, since Close Window works by replacing the action every close
--- bind is made from, a maximize bind is checked by No maximizing a window on its own
--- here, dropping a window on a workspace (workspace.lua) makes its binds along with
--- every "Drag window" bind made after it, and "Next workspace" and "New workspace" are
--- actions made there. (The mainMod handed over is only for the default binds made
--- there for a hyprland.lua without them - see A workspace of its own in
--- workspace.lua.) loadfile rather than require: Hyprland watches each file require
--- loads and reloads the whole config when one changes - an update of this file would
--- put the monitors back to hyprland.lua's MONITORS rule. And a missing or broken file
--- leaves hyprland.lua loading as if the line weren't there.
+-- Before the binds, since Close Window works by replacing the action every close bind is
+-- made from, a maximize bind is checked by No maximizing a window on its own here,
+-- dropping a window on a workspace (workspace.lua) makes its binds along with every
+-- "Drag window" bind made after it, and "Next unmanaged workspace" and "Send window to
+-- empty workspace" are actions made there. (The mainMod handed over is only for the
+-- default binds made there for a hyprland.lua without them - see A workspace of its own
+-- in workspace.lua.) loadfile rather than require: Hyprland watches each file require
+-- loads and reloads the whole config when one changes - an update of this file would put
+-- the monitors back to hyprland.lua's MONITORS rule. And a missing or broken file leaves
+-- hyprland.lua loading as if the line weren't there.
 --
 -- Each part below runs on its own: should one fail (a Hyprland update renaming
 -- something it uses), a notification says which, and the rest still load.
@@ -149,11 +149,11 @@ end)
 --#######################################################################################
 -- In workspace.lua, beside this file: a window dropped on a workspace in the bar's
 -- workspace widget or grabbed from it, the book of every workspace, and the workspaces
--- of their own, with Next workspace and New workspace. Run here, where it makes its
--- binds and actions in time (see the top of this file) - with loadfile, as this file
--- is, so an update of it reloads nothing either - and handed what the two share. Its
--- parts run on their own, as these do; should the file be missing or not load at all,
--- a notification says so, and the rest of this file still loads.
+-- of their own, with Next unmanaged workspace and Send window to empty workspace. Run
+-- here, where it makes its binds and actions in time (see the top of this file) - with
+-- loadfile, as this file is, so an update of it reloads nothing either - and handed what
+-- the two share. Its parts run on their own, as these do; should the file be missing or
+-- not load at all, a notification says so, and the rest of this file still loads.
 
 part("workspace.lua", function()
     local info = debug and debug.getinfo and debug.getinfo(1, "S")
