@@ -156,8 +156,8 @@ Item {
         { label: "Fullscreen", lua: "hl.dsp.window.fullscreen({ mode = \"fullscreen\", action = \"toggle\" })" },
         { label: "Go to workspace", workspace: "hl.dsp.focus({ workspace = %1 })" },
         // workspace.lua's (see A workspace of its own there): the unmanaged workspaces
-        // of the monitor under the cursor, then a new one; and the focused window sent
-        // to an empty one on its monitor.
+        // with windows of the monitor under the cursor (a new one when it has none);
+        // and the focused window sent to an empty one on its monitor.
         { label: "Next unmanaged workspace", lua: "hl.dsp.workspace.next_on_hovered()" },
         { label: "Send window to empty workspace", lua: "hl.dsp.workspace.send_to_empty()" },
         { label: "Move window to workspace", workspace: "hl.dsp.window.move({ workspace = %1, follow = false })" },

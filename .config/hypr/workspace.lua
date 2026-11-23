@@ -1507,16 +1507,16 @@ end)
 -- off (or with no shell to have saved it), the app's left where it opened.
 --
 -- "Next unmanaged workspace" (META + TAB) goes through the unmanaged workspaces of the
--- monitor under the cursor - every one but what Display settings pinned there - by
--- the book's numbers, left to right in the workspace widget, and then to a new, empty
--- one, numbered from 6 and bound to that monitor; round to the first after that. One
--- of them empty already is that empty one, so there's no new one besides. A monitor
--- with none goes to a new one. From a pinned workspace, it's the first of them. On the
--- focused monitor - which the cursor's nearly always on, as moving onto a monitor
--- focuses it - it's an ordinary switch; on another (something else took the focus
--- while the cursor rested there), one without the focus going there or the cursor
--- moving, and the next move of the mouse focuses that monitor as any does (see
--- WORKSPACES).
+-- monitor under the cursor - every one but what Display settings pinned there - that
+-- have windows on them, by the book's numbers, left to right in the workspace widget,
+-- round to the first after the last; empty ones are passed over. From a pinned
+-- workspace, or an empty one, it's the first of them. Only a monitor with no unmanaged
+-- workspace at all goes to a new one, empty, numbered from 6 and bound to that
+-- monitor; one with only empty ones goes to the first of those. On the focused monitor
+-- - which the cursor's nearly always on, as moving onto a monitor focuses it - it's an
+-- ordinary switch; on another (something else took the focus while the cursor rested
+-- there), one without the focus going there or the cursor moving, and the next move of
+-- the mouse focuses that monitor as any does (see WORKSPACES).
 --
 -- "Send window to empty workspace" (META + CTRL + TAB) sends the focused window to the
 -- first empty unmanaged workspace on its monitor, by number - or a new one, numbered
@@ -1673,32 +1673,41 @@ part("workspaces of their own", function()
 
     if type(hl.dsp.workspace) ~= "table" then hl.dsp.workspace = {} end
 
-    -- Next unmanaged workspace (see above): those of the monitor under the cursor, then
-    -- a new one - unless one of them's empty already.
+    -- Next unmanaged workspace (see above): those of the monitor under the cursor with
+    -- windows on them - a new one only when it has no unmanaged one at all.
     local nextActions = setmetatable({}, { __mode = "k" }) -- every action next_on_hovered() has made
     hl.dsp.workspace.next_on_hovered = function()
         local action = function()
             local ok, err = pcall(function()
                 local monitor = hoveredMonitor()
                 if not monitor then return end
-                local own, empty = {}, false
+                local own, filled = {}, {}
                 for _, ws in ipairs(book.onMonitor(monitor.name)) do
                     if book.unmanaged(ws.id) then
                         own[#own + 1] = ws
-                        if ws.windows == 0 then empty = true end
+                        if ws.windows > 0 then filled[#filled + 1] = ws end
                     end
                 end
                 local active = monitor.active_workspace
-                local at = 0 -- a pinned one: before the first
-                for i, ws in ipairs(own) do
-                    if isObject(active) and ws.id == active.id then at = i end
-                end
-                local i = at % (#own + (empty and 0 or 1)) + 1
-                if i > #own then
+                local shown = isObject(active) and active.id or nil
+                if #own == 0 then
                     book.showOn(monitor, tostring(book.make(monitor, "new")))
-                elseif not (isObject(active) and own[i].id == active.id) then
-                    book.showOn(monitor, tostring(own[i].id))
+                    return
                 end
+                if #filled == 0 then
+                    -- Only empty ones: the first of them, unless one's shown already.
+                    for _, ws in ipairs(own) do
+                        if ws.id == shown then return end
+                    end
+                    book.showOn(monitor, tostring(own[1].id))
+                    return
+                end
+                local at = 0 -- a pinned one, or an empty one: before the first
+                for i, ws in ipairs(filled) do
+                    if ws.id == shown then at = i end
+                end
+                local target = filled[at % #filled + 1]
+                if target.id ~= shown then book.showOn(monitor, tostring(target.id)) end
             end)
             if not ok then report("workspaces of their own", err) end
         end
